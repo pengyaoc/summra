@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summra - Classic Book Summaries</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo">
+                <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon"> Summra
+            </h1>
+            <p class="tagline">Discover Classic Literature Through AI-Powered Summaries</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Books List Section -->
+            <section class="books-section" id="books-section">
+                <h2>Available Books</h2>
+                <div class="books-grid" id="books-grid">
+                    <div class="loading">Loading books...</div>
+                </div>
+            </section>
+
+            <!-- Summary Display Section -->
+            <section class="summary-section hidden" id="summary-section">
+                <div class="summary-header">
+                    <button class="back-button" id="back-button">← Back to Books</button>
+                    <div class="book-info">
+                        <img id="book-info-cover" class="book-info-cover hidden" alt="Book cover">
+                        <h2 id="book-title"></h2>
+                        <p class="author" id="book-author"></p>
+                    </div>
+                </div>
+
+                <!-- Summary Type Selection -->
+                <div class="summary-options">
+                    <div class="option-cards">
+                        <div class="option-card" data-type="concise">
+                            <div class="option-icon">⚡</div>
+                            <h4>Concise</h4>
+                            <p>~500 words</p>
+                            <p class="option-desc">Quick overview without spoilers for fiction</p>
+                        </div>
+                        <div class="option-card" data-type="medium">
+                            <div class="option-icon">📖</div>
+                            <h4>Medium</h4>
+                            <p>2000-3000 words</p>
+                            <p class="option-desc">Comprehensive summary with key details</p>
+                        </div>
+                        <div class="option-card" data-type="comprehensive">
+                            <div class="option-icon">📚</div>
+                            <h4>Comprehensive</h4>
+                            <p>Chapter-by-chapter</p>
+                            <p class="option-desc">Deep dive with chapter summaries and analysis</p>
+                        </div>
+                        <div class="option-card" data-type="full">
+                            <div class="option-icon">📄</div>
+                            <h4>Full Length</h4>
+                            <p>Complete text</p>
+                            <p class="option-desc">Full book text with chapter summaries</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Content -->
+                <div class="summary-content hidden" id="summary-content">
+                    <div class="summary-controls">
+                        <button class="tts-button" id="tts-button">
+                            🔊 Listen to Summary
+                        </button>
+                        <div class="audio-player hidden" id="audio-player">
+                            <audio controls id="audio-element"></audio>
+                        </div>
+                    </div>
+
+                    <!-- Comprehensive view with chapters -->
+                    <div class="comprehensive-view hidden" id="comprehensive-view">
+                        <div class="overall-summary chapter-item">
+                            <div class="chapter-header">
+                                <h3>Overall Analysis</h3>
+                                <button class="chapter-toggle expanded" aria-label="Toggle overall summary">▼</button>
+                            </div>
+                            <div class="chapter-content expanded" id="overall-summary-content">
+                                <div class="summary-text" id="overall-summary-text"></div>
+                            </div>
+                        </div>
+
+                        <div class="chapters-list">
+                            <h3>Chapter Summaries</h3>
+                            <div id="chapters-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- Regular summary view -->
+                    <div class="regular-summary hidden" id="regular-summary">
+                        <div class="summary-text" id="summary-text"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Summra - Exploring public domain classics with AI assistance</p>
+            <p class="small">Summaries generated using Google Gemini AI | TTS powered by VITS</p>
+        </footer>
+    </div>
+
+    <!-- Persistent Audio Player (Fixed at Bottom) -->
+    <div class="persistent-audio-player hidden" id="persistent-player">
+        <div class="player-content">
+            <div class="player-info">
+                <div class="now-playing-icon">🎵</div>
+                <div class="player-text">
+                    <div class="player-title" id="player-title">No audio playing</div>
+                    <div class="player-subtitle" id="player-subtitle"></div>
+                </div>
+            </div>
+            <div class="player-controls">
+                <audio id="persistent-audio-element"></audio>
+                <button class="player-btn" id="player-stop" title="Stop and clear">⏹</button>
+                <button class="player-btn" id="player-play-pause" title="Play/Pause">▶</button>
+                <div class="player-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="player-time">
+                        <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Markdown parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
