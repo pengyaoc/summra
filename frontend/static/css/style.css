@@ -113,7 +113,6 @@ body {
     border-radius: 8px;
     margin: 0 auto 16px auto;
     display: block;
-    background: var(--background-color);
 }
 
 .book-card h3 {
@@ -196,7 +195,6 @@ body {
     border-radius: 8px;
     margin: 0 auto 20px auto;
     display: block;
-    background: var(--background-color);
 }
 
 .book-info h2 {

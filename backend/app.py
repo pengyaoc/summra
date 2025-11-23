@@ -105,7 +105,8 @@ def get_summary(book_id, summary_type):
             summary = db.get_summary(book_id, 'comprehensive')
             chapters = db.get_chapters(book_id)
 
-            if not summary or not chapters:
+            # Show partial content if chapters exist, even if overall summary doesn't
+            if not chapters:
                 return jsonify({
                     'success': False,
                     'error': 'Full-length view requires comprehensive summary. Please generate summaries first.'
@@ -151,7 +152,16 @@ def get_summary(book_id, summary_type):
         if summary_type == 'comprehensive':
             chapters = db.get_chapters(book_id)
 
-        if not summary:
+            # Show partial content if chapters exist, even if overall summary doesn't
+            # This handles the case where chapters are still being generated
+            if not summary and not chapters:
+                return jsonify({
+                    'success': False,
+                    'error': 'Summary not found. Please generate summaries first.'
+                }), 404
+
+        # For other summary types (concise, medium), require the summary
+        if not summary and summary_type != 'comprehensive':
             return jsonify({
                 'success': False,
                 'error': 'Summary not found. Please generate summaries first.'
