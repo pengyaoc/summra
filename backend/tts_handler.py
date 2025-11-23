@@ -66,18 +66,14 @@ class TTSHandler:
 
     def clean_text_for_speech(self, text: str) -> str:
         """
-        Clean text for TTS by removing formatting and non-speech characters
+        Clean text for TTS by removing ALL formatting, styling, and punctuation
+        Keeps only alphanumeric characters and spaces for cleaner speech
         """
         import re
 
         cleaned = text
 
-        # Replace curly quotes and apostrophes with straight ones
-        cleaned = cleaned.replace('"', '"').replace('"', '"')  # Curly double quotes
-        cleaned = cleaned.replace(''', "'").replace(''', "'")  # Curly single quotes/apostrophes
-        cleaned = cleaned.replace('«', '"').replace('»', '"')  # Guillemets
-        cleaned = cleaned.replace('…', '...')  # Ellipsis
-
+        # First, remove markdown and HTML formatting
         # Remove markdown headers
         cleaned = re.sub(r'^#{1,6}\s+', '', cleaned, flags=re.MULTILINE)
 
@@ -106,22 +102,30 @@ class TTSHandler:
         # Remove HTML tags
         cleaned = re.sub(r'<[^>]+>', '', cleaned)
 
-        # Remove special characters that don't make sense in speech
-        cleaned = re.sub(r'[\[\]{}]', '', cleaned)
+        # Replace special typography with simple equivalents before removing punctuation
+        cleaned = cleaned.replace('"', '"').replace('"', '"')  # Curly double quotes
+        cleaned = cleaned.replace(''', "'").replace(''', "'")  # Curly single quotes
+        cleaned = cleaned.replace('«', '"').replace('»', '"')  # Guillemets
+        cleaned = cleaned.replace('…', '...')  # Ellipsis
+        cleaned = cleaned.replace('—', '-').replace('–', '-')  # Em/en dashes
 
-        # Replace multiple punctuation with single
-        cleaned = re.sub(r'!+', '!', cleaned)      # Multiple exclamation
-        cleaned = re.sub(r'\?+', '?', cleaned)     # Multiple question marks
-        cleaned = re.sub(r'\.{4,}', '...', cleaned) # More than 3 dots
+        # Remove ALL punctuation marks
+        # This includes: . , ! ? ; : " ' ` - _ ( ) [ ] { } / \ | @ # $ % ^ & * + = ~ < >
+        cleaned = re.sub(r'[.,:;!?\'"`\-_(){}\[\]/\\|@#$%^&*+=~<>]', ' ', cleaned)
 
         # Remove zero-width characters and other invisible Unicode
         cleaned = re.sub(r'[\u200B-\u200D\uFEFF]', '', cleaned)
 
-        # Normalize whitespace
+        # Normalize whitespace (multiple spaces to single space)
         cleaned = re.sub(r'\s+', ' ', cleaned)
-        cleaned = re.sub(r'\n+', ' ', cleaned)
 
-        # Trim
+        # Remove any remaining newlines or tabs
+        cleaned = cleaned.replace('\n', ' ').replace('\t', ' ').replace('\r', ' ')
+
+        # Normalize whitespace again after replacements
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+
+        # Trim leading/trailing whitespace
         cleaned = cleaned.strip()
 
         return cleaned
@@ -176,39 +180,27 @@ class TTSHandler:
             print(text)
             print(f"\n{'-' * 60}")
 
-            # Sanitize text to prevent TTS quality issues
-            # Remove problematic punctuation combinations that cause weird sounds
-            text = re.sub(r'[?!]{2,}', '!', text)  # Replace ?!?! or similar with single !
-            text = re.sub(r'[.]{4,}', '...', text)  # Replace many dots with ellipsis
-
-            # Remove multiple spaces (can cause TTS pauses/issues)
+            # Final whitespace normalization (already done in clean_text_for_speech, but ensure it's clean)
             text = re.sub(r'\s{2,}', ' ', text)
-
-            # Remove any leading/trailing whitespace aggressively
             text = text.strip()
-
-            # Remove any stray newlines or tabs that might have survived
-            text = text.replace('\n', ' ').replace('\t', ' ').replace('\r', ' ')
-            text = re.sub(r'\s{2,}', ' ', text)  # Clean up again after replacements
 
             # Validate text is not empty or whitespace-only
             if not text or text.isspace():
                 print("Warning: Text is empty or whitespace-only after cleaning")
                 return None
 
-            # Ensure text ends with proper punctuation
-            if text and text[-1] not in '.!?':
-                text = text + '.'
-
-            # Limit text length to avoid issues - truncate at sentence boundary
-            max_chars = 20000  # Increased from 5000 to handle full chapters
+            # Limit text length to avoid issues - truncate at word boundary
+            max_chars = 20000  # Handle long chapters
             if len(text) > max_chars:
-                text = self.truncate_at_sentence_boundary(text, max_chars)
-                print(f"\nText truncated to {len(text)} characters at sentence boundary for TTS")
-
-            # Final check: ensure it ends with punctuation after truncation
-            if text and text[-1] not in '.!?':
-                text = text + '.'
+                # Truncate at word boundary (find last space before max_chars)
+                truncated = text[:max_chars]
+                last_space = truncated.rfind(' ')
+                if last_space > max_chars * 0.8:  # Only use word boundary if it's reasonably close
+                    text = truncated[:last_space]
+                else:
+                    text = truncated
+                text = text.strip()
+                print(f"\nText truncated to {len(text)} characters at word boundary for TTS")
 
             # Debug: Log final text sent to TTS engine
             print(f"\nFinal text sent to TTS engine ({len(text)} chars):")

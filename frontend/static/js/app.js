@@ -557,26 +557,61 @@ class SummraApp {
                     const chapterItem = this.createFullChapterElement(chapter);
                     fullChaptersContainer.appendChild(chapterItem);
                 });
+            } else {
+                // No chapters yet - show loading message
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'generation-notice';
+                loadingDiv.style.cssText = 'background: #fff3e0; border-left: 4px solid #FF9800; padding: 16px; border-radius: 4px;';
+                loadingDiv.innerHTML = `
+                    <h4 style="margin: 0 0 8px 0; color: #F57C00;">⏳ Generating Chapters...</h4>
+                    <p style="margin: 0; font-size: 0.95rem;">The full-length summary is being generated. This may take several minutes. Please check back soon or refresh the page to see progress.</p>
+                `;
+                fullChaptersContainer.appendChild(loadingDiv);
             }
         } else if (summaryType === 'comprehensive') {
             // Display comprehensive view
             document.getElementById('comprehensive-view').classList.remove('hidden');
             const chaptersContainer = document.getElementById('chapters-container');
 
-            // Add overall summary as first "chapter" (collapsed by default)
-            const overallChapter = this.createChapterElement({
-                chapter_number: 0,
-                chapter_title: 'Overall Analysis',
-                summary: data.summary.content
-            });
-            chaptersContainer.appendChild(overallChapter);
+            // Check if we have overall summary
+            if (data.summary && data.summary.content) {
+                // Add overall summary as first "chapter" (collapsed by default)
+                const overallChapter = this.createChapterElement({
+                    chapter_number: 0,
+                    chapter_title: 'Overall Analysis',
+                    summary: data.summary.content
+                });
+                chaptersContainer.appendChild(overallChapter);
+            }
 
-            // Display chapters
+            // Display chapters or in-progress message
             if (data.chapters && data.chapters.length > 0) {
+                // Show in-progress notice if we don't have an overall summary yet
+                if (!data.summary || !data.summary.content) {
+                    const noticeDiv = document.createElement('div');
+                    noticeDiv.className = 'generation-notice';
+                    noticeDiv.style.cssText = 'background: #e3f2fd; border-left: 4px solid #2196F3; padding: 16px; margin-bottom: 24px; border-radius: 4px;';
+                    noticeDiv.innerHTML = `
+                        <h4 style="margin: 0 0 8px 0; color: #1976D2;">📝 Summary Generation In Progress</h4>
+                        <p style="margin: 0; font-size: 0.95rem;">Chapters are being generated and will appear here as they complete. This page will automatically update. You can refresh to see the latest chapters.</p>
+                    `;
+                    chaptersContainer.appendChild(noticeDiv);
+                }
+
                 data.chapters.forEach(chapter => {
                     const chapterItem = this.createChapterElement(chapter);
                     chaptersContainer.appendChild(chapterItem);
                 });
+            } else {
+                // No chapters yet - show loading message
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'generation-notice';
+                loadingDiv.style.cssText = 'background: #fff3e0; border-left: 4px solid #FF9800; padding: 16px; border-radius: 4px;';
+                loadingDiv.innerHTML = `
+                    <h4 style="margin: 0 0 8px 0; color: #F57C00;">⏳ Generating Chapters...</h4>
+                    <p style="margin: 0; font-size: 0.95rem;">The comprehensive summary is being generated. This may take several minutes. Please check back soon or refresh the page to see progress.</p>
+                `;
+                chaptersContainer.appendChild(loadingDiv);
             }
         } else {
             // Display regular summary
