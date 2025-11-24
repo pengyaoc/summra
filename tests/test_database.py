@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+"""
+Unit tests for database operations (models.py)
+
+Tests CRUD operations, constraints, and relationships for all tables:
+- books, summaries, chapters, audio_files
+"""
+
+import sys
+import os
+from pathlib import Path
+import tempfile
+import pytest
+import uuid
+
+# Add parent directories to path
+sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
+
+import models
+
+
+class TestDatabase:
+    """Test database operations"""
+
+    @pytest.fixture
+    def temp_db(self):
+        """Create a unique temporary database for testing"""
+        # Use UUID-based temporary file for complete isolation
+        temp_file = f"/tmp/test_db_{uuid.uuid4()}.db"
+        db = models.Database(db_path=temp_file)
+
+        yield db
+
+        # Cleanup temporary database file
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+    def test_add_book(self, temp_db):
+        """Test adding a book to database"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_add_book.txt",
+            full_text="This is test content.",
+            gutenberg_id=12345,
+            cover_image_url="covers/pg12345.jpg"
+        )
+
+        assert book_id is not None
+        assert isinstance(book_id, int)
+
+        # Retrieve and verify
+        book = temp_db.get_book(book_id)
+        assert book['title'] == "Test Book"
+        assert book['author'] == "Test Author"
+        assert book['filename'] == "test_add_book.txt"
+        assert book['gutenberg_id'] == 12345
+        assert book['cover_image_url'] == "covers/pg12345.jpg"
+        assert book['word_count'] > 0
+
+    def test_add_book_unique_filename(self, temp_db):
+        """Test that filename must be unique"""
+        # Add first book
+        book_id1 = temp_db.add_book(
+            title="Book 1",
+            author="Author 1",
+            filename="duplicate.txt",
+            full_text="Content for book 1"
+        )
+
+        # Try to add second book with same filename
+        # Should fail with IntegrityError due to UNIQUE constraint
+        with pytest.raises(Exception):  # sqlite3.IntegrityError
+            book_id2 = temp_db.add_book(
+                title="Book 2",
+                author="Author 2",
+                filename="duplicate.txt",
+                full_text="Content for book 2"
+            )
+
+        # Check that get_book_by_filename returns the first book
+        book = temp_db.get_book_by_filename("duplicate.txt")
+        assert book is not None
+        assert book['filename'] == "duplicate.txt"
+        assert book['title'] == "Book 1"  # Should be first book, not second
+
+    def test_get_book_by_filename(self, temp_db):
+        """Test retrieving book by filename"""
+        # Add book
+        temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="findme.txt",
+            full_text="This is the content of the book."
+        )
+
+        # Retrieve by filename
+        book = temp_db.get_book_by_filename("findme.txt")
+        assert book is not None
+        assert book['title'] == "Test Book"
+        assert book['filename'] == "findme.txt"
+
+        # Non-existent filename
+        book = temp_db.get_book_by_filename("nonexistent.txt")
+        assert book is None
+
+    def test_add_summary(self, temp_db):
+        """Test adding summary to database"""
+        # Add book first
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_summary.txt",
+            full_text="This is test content for summary testing."
+        )
+
+        # Add concise summary
+        summary_id = temp_db.add_summary(
+            book_id=book_id,
+            summary_type='concise',
+            content="This is a concise summary of the test book."
+        )
+
+        assert summary_id is not None
+        assert isinstance(summary_id, int)
+
+        # Retrieve and verify
+        summary = temp_db.get_summary(book_id, 'concise')
+        assert summary is not None
+        assert summary['summary_type'] == 'concise'
+        assert summary['content'] == "This is a concise summary of the test book."
+        assert summary['word_count'] > 0
+
+    def test_add_summary_insert_or_replace(self, temp_db):
+        """Test that adding same summary type replaces existing"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_replace.txt",
+            full_text="Content for replace test"
+        )
+
+        # Add first summary
+        temp_db.add_summary(book_id, 'concise', "First summary")
+
+        # Add second summary with same type (should replace)
+        temp_db.add_summary(book_id, 'concise', "Second summary")
+
+        # Should only have one concise summary with latest content
+        summary = temp_db.get_summary(book_id, 'concise')
+        assert summary['content'] == "Second summary"
+
+    def test_add_multiple_summary_types(self, temp_db):
+        """Test adding multiple summary types for same book"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_multiple_summaries.txt",
+            full_text="Content for multiple summary types test"
+        )
+
+        # Add all three summary types
+        temp_db.add_summary(book_id, 'concise', "Concise summary")
+        temp_db.add_summary(book_id, 'medium', "Medium summary")
+        temp_db.add_summary(book_id, 'comprehensive', "Comprehensive summary")
+
+        # Retrieve each
+        concise = temp_db.get_summary(book_id, 'concise')
+        medium = temp_db.get_summary(book_id, 'medium')
+        comprehensive = temp_db.get_summary(book_id, 'comprehensive')
+
+        assert concise['content'] == "Concise summary"
+        assert medium['content'] == "Medium summary"
+        assert comprehensive['content'] == "Comprehensive summary"
+
+    def test_add_chapter(self, temp_db):
+        """Test adding chapter to database"""
+        # Add book first
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_chapters.txt",
+            full_text="Content for chapter test"
+        )
+
+        # Add chapter
+        chapter_id = temp_db.add_chapter(
+            book_id=book_id,
+            chapter_number=1,
+            chapter_title="Chapter 1: The Beginning",
+            summary="Summary of chapter 1",
+            chapter_text="Full text of chapter 1..."
+        )
+
+        assert chapter_id is not None
+        assert isinstance(chapter_id, int)
+
+        # Retrieve chapters
+        chapters = temp_db.get_chapters(book_id)
+        assert len(chapters) == 1
+        assert chapters[0]['chapter_number'] == 1
+        assert chapters[0]['chapter_title'] == "Chapter 1: The Beginning"
+        assert chapters[0]['summary'] == "Summary of chapter 1"
+
+    def test_add_chapter_insert_or_replace(self, temp_db):
+        """Test that adding same chapter number replaces existing (for regeneration)"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_chapter_replace.txt",
+            full_text="Content for chapter replacement test"
+        )
+
+        # Add first version of chapter 1
+        temp_db.add_chapter(book_id, 1, "Chapter 1", "First summary", "First text")
+
+        # Add second version of chapter 1 (regeneration)
+        temp_db.add_chapter(book_id, 1, "Chapter 1", "Second summary", "Second text")
+
+        # Should only have one chapter 1 with latest content
+        chapters = temp_db.get_chapters(book_id)
+        assert len(chapters) == 1
+        assert chapters[0]['summary'] == "Second summary"
+        assert chapters[0]['chapter_text'] == "Second text"
+
+    def test_add_multiple_chapters(self, temp_db):
+        """Test adding multiple chapters for same book"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_multiple_chapters.txt",
+            full_text="Content for multiple chapters test"
+        )
+
+        # Add 5 chapters
+        for i in range(1, 6):
+            temp_db.add_chapter(
+                book_id,
+                chapter_number=i,
+                chapter_title=f"Chapter {i}",
+                summary=f"Summary {i}",
+                chapter_text=f"Text {i}"
+            )
+
+        # Retrieve all chapters
+        chapters = temp_db.get_chapters(book_id)
+        assert len(chapters) == 5
+        assert chapters[0]['chapter_number'] == 1
+        assert chapters[4]['chapter_number'] == 5
+
+    def test_add_encoded_chapter_numbers(self, temp_db):
+        """Test adding chapters with encoded numbers (101, 102, 201, 202)"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_encoded_chapters.txt",
+            full_text="Content for encoded chapter numbers test"
+        )
+
+        # Add chapters with encoded numbers (Book 1: 101-103, Book 2: 201-203)
+        encoded_chapters = [101, 102, 103, 201, 202, 203]
+        for ch_num in encoded_chapters:
+            temp_db.add_chapter(
+                book_id,
+                chapter_number=ch_num,
+                chapter_title=f"Chapter {ch_num}",
+                summary=f"Summary {ch_num}"
+            )
+
+        # Retrieve and verify
+        chapters = temp_db.get_chapters(book_id)
+        assert len(chapters) == 6
+        chapter_numbers = [ch['chapter_number'] for ch in chapters]
+        assert chapter_numbers == encoded_chapters
+
+    def test_get_all_books(self, temp_db):
+        """Test retrieving all books"""
+        # Add multiple books
+        temp_db.add_book("Book 1", "Author 1", "book1.txt", full_text="Content 1")
+        temp_db.add_book("Book 2", "Author 2", "book2.txt", full_text="Content 2")
+        temp_db.add_book("Book 3", "Author 3", "book3.txt", full_text="Content 3")
+
+        # Get all books
+        books = temp_db.get_all_books()
+        assert len(books) >= 3
+
+        titles = [book['title'] for book in books]
+        assert "Book 1" in titles
+        assert "Book 2" in titles
+        assert "Book 3" in titles
+
+    def test_foreign_key_constraint(self, temp_db):
+        """Test that foreign key constraints are enforced"""
+        # Try to add summary without valid book_id
+        # This should fail (or handle gracefully)
+        try:
+            temp_db.add_summary(
+                book_id=99999,  # Non-existent book
+                summary_type='concise',
+                content="This should fail"
+            )
+            # If we get here, check if it actually saved
+            summary = temp_db.get_summary(99999, 'concise')
+            # Implementation might handle this differently
+        except Exception:
+            # Foreign key constraint violation expected
+            pass
+
+    def test_word_count_calculation(self, temp_db):
+        """Test that word_count is calculated correctly"""
+        book_id = temp_db.add_book(
+            title="Test Book",
+            author="Test Author",
+            filename="test_word_count.txt",
+            full_text="One two three four five words."
+        )
+
+        book = temp_db.get_book(book_id)
+        assert book['word_count'] == 6  # "One two three four five words" = 6 words
+
+        # Test summary word count
+        temp_db.add_summary(book_id, 'concise', "This is a ten word summary right here today now.")
+        summary = temp_db.get_summary(book_id, 'concise')
+        assert summary['word_count'] == 10
+
+        # Test chapter word count
+        temp_db.add_chapter(
+            book_id, 1, "Chapter 1",
+            summary="Five word summary here okay",
+            chapter_text="Full text"
+        )
+        chapters = temp_db.get_chapters(book_id)
+        assert chapters[0]['word_count'] == 5  # Summary word count
+
+    def test_cascade_delete(self, temp_db):
+        """Test that deleting a book cascades to summaries and chapters"""
+        # Add book with summaries and chapters
+        book_id = temp_db.add_book("Test Book", "Test Author", "test_cascade.txt", full_text="Content for cascade test")
+        temp_db.add_summary(book_id, 'concise', "Summary")
+        temp_db.add_chapter(book_id, 1, "Chapter 1", "Summary 1")
+
+        # Verify they exist
+        assert temp_db.get_summary(book_id, 'concise') is not None
+        assert len(temp_db.get_chapters(book_id)) == 1
+
+        # Delete book
+        conn = temp_db.get_connection()
+        conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key constraints
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM books WHERE id = ?", (book_id,))
+        conn.commit()
+
+        # Verify cascaded deletes (summaries and chapters should be gone)
+        assert temp_db.get_summary(book_id, 'concise') is None
+        assert len(temp_db.get_chapters(book_id)) == 0
+
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])

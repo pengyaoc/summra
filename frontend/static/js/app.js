@@ -219,62 +219,118 @@ class SummraApp {
         }
     }
 
-    handleAudioEnded() {
+    async handleAudioEnded() {
         // Move to next chunk if available
         this.currentPlayback.currentChunk++;
         if (this.currentPlayback.currentChunk < this.currentPlayback.audioUrls.length) {
-            this.playNextChunk();
+            await this.playNextChunk();
         } else {
-            // Playback complete
+            // Playback complete - clean up temporary chunk files
+            console.log('Playback complete - cleaning up temporary files');
             const playPauseBtn = document.getElementById('player-play-pause');
             playPauseBtn.textContent = '▶';
             this.currentPlayback.isPlaying = false;
-            console.log('Playback complete');
+
+            // Get audio_id for cleanup before resetting
+            const audioIdToCleanup = this.currentPlayback.audioId;
+
+            // Call backend to cleanup temporary chunk files
+            if (audioIdToCleanup) {
+                try {
+                    await fetch(`${this.apiBase}/tts/stop`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            audio_id: audioIdToCleanup
+                        })
+                    });
+                    console.log('Temporary chunk files cleaned up');
+                } catch (error) {
+                    console.error('Error cleaning up temporary files:', error);
+                }
+            }
         }
     }
 
     async playNextChunk() {
         const persistentAudio = document.getElementById('persistent-audio-element');
         const chunkUrl = this.currentPlayback.audioUrls[this.currentPlayback.currentChunk];
+        const chunkIndex = this.currentPlayback.currentChunk;
+        const totalChunks = this.currentPlayback.audioUrls.length;
 
-        console.log(`Playing chunk ${this.currentPlayback.currentChunk + 1}/${this.currentPlayback.audioUrls.length}`);
+        console.log(`[Playback] Playing chunk ${chunkIndex + 1}/${totalChunks}: ${chunkUrl}`);
 
         // Wait for chunk to be available if it's still being generated
-        if (this.currentPlayback.currentChunk > 0) {
+        // First chunk should be ready immediately, subsequent chunks might need time
+        if (chunkIndex > 0) {
+            console.log(`[Playback] Waiting for chunk ${chunkIndex + 1} to be available...`);
             const isReady = await this.waitForChunk(chunkUrl);
             if (!isReady) {
-                console.error('Chunk not available');
-                this.stopPlayback();
+                console.error(`[Playback] ERROR: Chunk ${chunkIndex + 1} not available after waiting`);
+                alert(`Audio playback failed: Chunk ${chunkIndex + 1} could not be loaded. This might be due to TTS generation taking longer than expected.`);
+                await this.stopPlayback();
                 return;
             }
+            console.log(`[Playback] Chunk ${chunkIndex + 1} is ready`);
         }
 
         // Load and play the chunk
+        console.log(`[Playback] Loading chunk ${chunkIndex + 1}...`);
         persistentAudio.src = chunkUrl;
+
         try {
             await persistentAudio.play();
             const playPauseBtn = document.getElementById('player-play-pause');
             playPauseBtn.textContent = '⏸';
             this.currentPlayback.isPlaying = true;
+            console.log(`[Playback] Successfully playing chunk ${chunkIndex + 1}/${totalChunks}`);
         } catch (error) {
-            console.error('Error playing chunk:', error);
-            this.stopPlayback();
+            console.error(`[Playback] ERROR playing chunk ${chunkIndex + 1}:`, error);
+            console.error('[Playback] Error details:', {
+                name: error.name,
+                message: error.message,
+                code: error.code
+            });
+
+            // Try to provide helpful error message
+            let errorMsg = `Failed to play audio chunk ${chunkIndex + 1}/${totalChunks}`;
+            if (error.name === 'NotSupportedError') {
+                errorMsg += '\nThe audio format is not supported by your browser.';
+            } else if (error.name === 'NotAllowedError') {
+                errorMsg += '\nPlayback was prevented by the browser. Try clicking play again.';
+            }
+
+            alert(errorMsg);
+            await this.stopPlayback();
         }
     }
 
-    async waitForChunk(url, retries = 20) {
+    async waitForChunk(url, retries = 30) {
+        // Wait up to 15 seconds (30 retries * 500ms) for chunk to be available
         for (let i = 0; i < retries; i++) {
             try {
                 const response = await fetch(url, { method: 'HEAD' });
                 if (response.ok) {
-                    console.log(`Chunk ready after ${i} retries`);
+                    if (i > 0) {
+                        console.log(`[Playback] Chunk ready after ${i} retries (${i * 0.5}s wait)`);
+                    }
                     return true;
                 }
+                // Log every 5 retries to avoid console spam
+                if (i > 0 && i % 5 === 0) {
+                    console.log(`[Playback] Still waiting for chunk... (${i * 0.5}s elapsed)`);
+                }
             } catch (error) {
-                // Chunk not ready yet
+                // Chunk not ready yet - this is expected for background-generated chunks
+                if (i === 0) {
+                    console.log('[Playback] Chunk not yet available, waiting...');
+                }
             }
             await new Promise(resolve => setTimeout(resolve, 500));
         }
+        console.error(`[Playback] Chunk failed to become available after ${retries * 0.5}s`);
         return false;
     }
 
@@ -586,18 +642,6 @@ class SummraApp {
 
             // Display chapters or in-progress message
             if (data.chapters && data.chapters.length > 0) {
-                // Show in-progress notice if we don't have an overall summary yet
-                if (!data.summary || !data.summary.content) {
-                    const noticeDiv = document.createElement('div');
-                    noticeDiv.className = 'generation-notice';
-                    noticeDiv.style.cssText = 'background: #e3f2fd; border-left: 4px solid #2196F3; padding: 16px; margin-bottom: 24px; border-radius: 4px;';
-                    noticeDiv.innerHTML = `
-                        <h4 style="margin: 0 0 8px 0; color: #1976D2;">📝 Summary Generation In Progress</h4>
-                        <p style="margin: 0; font-size: 0.95rem;">Chapters are being generated and will appear here as they complete. This page will automatically update. You can refresh to see the latest chapters.</p>
-                    `;
-                    chaptersContainer.appendChild(noticeDiv);
-                }
-
                 data.chapters.forEach(chapter => {
                     const chapterItem = this.createChapterElement(chapter);
                     chaptersContainer.appendChild(chapterItem);
@@ -627,9 +671,13 @@ class SummraApp {
         const chapterId = `chapter-${chapter.chapter_number}`;
 
         // Handle chapter 0 (Overall Analysis) specially
-        const headerText = chapter.chapter_number === 0
-            ? chapter.chapter_title  // "Overall Analysis"
-            : `Chapter ${chapter.chapter_number}: ${this.escapeHtml(chapter.chapter_title || '')}`;
+        let headerText;
+        if (chapter.chapter_number === 0 && chapter.chapter_title === 'Overall Analysis') {
+            headerText = 'Overall Analysis';
+        } else {
+            const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
+            headerText = `${chapter.chapter_number} | ${this.escapeHtml(title)}`;
+        }
 
         chapterItem.innerHTML = `
             <div class="chapter-header">
@@ -681,7 +729,8 @@ class SummraApp {
         chapterItem.className = 'full-chapter-item';
 
         const chapterId = `full-chapter-${chapter.chapter_number}`;
-        const headerText = `Chapter ${chapter.chapter_number}: ${this.escapeHtml(chapter.chapter_title || '')}`;
+        const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
+        const headerText = `${chapter.chapter_number} | ${this.escapeHtml(title)}`;
 
         // Vertical layout: Summary on top (collapsed), Full text below
         chapterItem.innerHTML = `
