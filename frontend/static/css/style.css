@@ -472,8 +472,8 @@ body {
 }
 
 .chapter-item {
-    margin-bottom: 32px;
-    padding: 24px;
+    margin-bottom: 16px;
+    padding: 12px;
     background: var(--background-color);
     border-radius: 8px;
     border-left: 4px solid var(--secondary-color);
@@ -483,7 +483,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 }
 
 .chapter-header h4 {
@@ -689,8 +689,8 @@ body {
 
 /* Full-Length View */
 .full-view .full-chapter-item {
-    margin-bottom: 32px;
-    padding: 24px;
+    margin-bottom: 16px;
+    padding: 12px;
     background: var(--background-color);
     border-radius: 8px;
     border-left: 4px solid var(--secondary-color);

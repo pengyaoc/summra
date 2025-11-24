@@ -12,7 +12,9 @@
       "Bash(python:*)",
       "Bash(pyenv versions:*)",
       "Bash(pyenv local:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(cat:*)",
+      "Bash(pytest:*)"
     ],
     "deny": [],
     "ask": []

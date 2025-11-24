@@ -1,5 +1,9 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Base directory
 BASE_DIR = Path(__file__).parent.parent
@@ -47,9 +51,19 @@ BULK_SUMMARY_CONFIG = {
     'max_chapters_per_batch': 10,  # Maximum chapters per batch (safety limit)
 }
 
-# TTS configuration (using gTTS - Google Text-to-Speech)
+# TTS configuration (using VITS for real-time, Gemini for offline)
 TTS_OUTPUT_DIR = BASE_DIR / 'frontend' / 'static' / 'audio'
 TTS_LANGUAGE = 'en'  # Default language for TTS
+
+# Gemini TTS API configuration (for offline generation only)
+GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts'
+GEMINI_TTS_VOICE = 'Kore'  # Default voice (options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
+GEMINI_TTS_MAX_REQUESTS_PER_MINUTE = 3
+GEMINI_TTS_MAX_TOKENS_PER_MINUTE = 10000
+GEMINI_TTS_CHUNK_SIZE_WORDS = 800  # Larger chunks for API-based TTS
+
+# VITS TTS configuration (for real-time generation)
+VITS_TTS_CHUNK_SIZE_WORDS = 20  # Much smaller chunks for local TTS processing
 
 # Flask configuration
 FLASK_HOST = '0.0.0.0'

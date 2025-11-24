@@ -426,8 +426,12 @@ class SummaryGenerator:
             r'Chapter\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',
             r'SCENE\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # SCENE I. A public place (for plays)
             r'Scene\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # Scene I. or Scene 1. (for plays)
+            r'^([IVXLCDM]+)\.$',  # Roman numeral only format: "I." with title on next line (must be checked first)
             r'^([IVXLCDM]+)\.\s+(.+)$',  # Roman numeral only format: "I. TITLE" (must have title after period)
-            # Introductory material patterns (all become Chapter 0)
+            r'^(EPILOGUE)$',  # Standalone "EPILOGUE"
+            r'^(Epilogue)$',  # Standalone "Epilogue"
+            # Introductory material patterns (only if not numbered in TOC)
+            # These are checked last and validated against TOC
             r'^(INTRODUCTION)$',  # Standalone "INTRODUCTION"
             r'^(Introduction)$',  # Standalone "Introduction"
             r'^(PREFACE)(?:\s+.*)?$',  # "PREFACE" or "PREFACE By The Editor" etc.
@@ -450,7 +454,14 @@ class SummaryGenerator:
         # Track illustration blocks to skip chapter markers inside them
         in_illustration = False
 
+        # Track lines that have been consumed as chapter title continuations
+        # These should be skipped in the main loop to avoid double-processing
+        consumed_lines = set()
+
         for i, line in enumerate(lines):
+            # Skip lines that were already consumed as title continuations
+            if i in consumed_lines:
+                continue
             line_stripped = line.strip()
 
             # Track illustration blocks (update state before processing)
@@ -560,41 +571,52 @@ class SummaryGenerator:
                     # Clean up title: remove trailing periods, brackets, and other punctuation
                     chapter_title = re.sub(r'[.\]\[]+$', '', chapter_title).strip()
 
+                    # Track which line was used as title continuation (will be marked consumed if chapter validates)
+                    continuation_line_idx = None
+                    part_marker_line_idx = None
+
                     # Check if next line is a continuation of the title (for multi-line titles)
                     # Do this BEFORE removing part markers so we can check if continuation is part of the marker
                     if i + 1 < len(lines):
                         next_line = lines[i + 1].strip()
 
                         # Check if next line is just a part marker continuation (e.g., " I.", "II.", etc.)
-                        # These should be removed, not appended to title
+                        # These should be concatenated to the title for regex removal, but consumed to prevent re-detection
                         is_part_marker_continuation = re.match(r'^[IVXLCDM]+\.$', next_line)
 
-                        # Check if next line looks like a title continuation:
-                        # - Not a part marker continuation
-                        # - Not another chapter marker
-                        # - Not illustration or footnote markers
-                        # - Relatively short (< 100 chars)
-                        # - Either starts with lowercase or looks like a title word
-                        is_continuation = (
-                            next_line and
-                            not is_part_marker_continuation and
-                            not re.match(r'(CHAPTER|Chapter|SCENE|Scene|PREFACE|Preface|INTRODUCTION|Introduction|BOOK|VOLUME|ACT|PART)\s+', next_line) and
-                            not re.match(r'^[IVXLCDM]+\.\s+', next_line) and  # Not Roman numeral-only chapter format
-                            not next_line.startswith('[Illustration') and
-                            not next_line.startswith('By ') and
-                            len(next_line) < 100 and
-                            len(next_line) > 1 and
-                            (next_line[0].islower() or next_line[0] in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' or next_line.startswith('Æ'))
-                        )
-
-                        # If title is empty OR looks like continuation, use next line
-                        if not chapter_title:
-                            # Title is empty - use next line as title
-                            if is_continuation and len(next_line) > 3:
-                                chapter_title = next_line
-                        elif is_continuation:
-                            # Title exists but next line is likely a continuation - append it
+                        # If this is a part marker continuation, mark it for consumption
+                        if is_part_marker_continuation:
+                            part_marker_line_idx = i + 1
+                            # Also concatenate it to the title so the part marker removal regex can find it
                             chapter_title = chapter_title + ' ' + next_line
+                            continuation_line_idx = i + 1
+                        else:
+                            # Check if next line looks like a title continuation:
+                            # - Not another chapter marker
+                            # - Not illustration or footnote markers
+                            # - Relatively short (< 100 chars)
+                            # - Either starts with lowercase or looks like a title word
+                            is_continuation = (
+                                next_line and
+                                not re.match(r'(CHAPTER|Chapter|SCENE|Scene|PREFACE|Preface|INTRODUCTION|Introduction|BOOK|VOLUME|ACT|PART)\s+', next_line) and
+                                not re.match(r'^[IVXLCDM]+\.\s+', next_line) and  # Not Roman numeral-only chapter format
+                                not next_line.startswith('[Illustration') and
+                                not next_line.startswith('By ') and
+                                len(next_line) < 100 and
+                                len(next_line) > 1 and
+                                (next_line[0].islower() or next_line[0] in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' or next_line.startswith('Æ'))
+                            )
+
+                            # If title is empty OR looks like continuation, use next line
+                            if not chapter_title:
+                                # Title is empty - use next line as title
+                                if is_continuation and len(next_line) > 3:
+                                    chapter_title = next_line
+                                    continuation_line_idx = i + 1
+                            elif is_continuation:
+                                # Title exists but next line is likely a continuation - append it
+                                chapter_title = chapter_title + ' ' + next_line
+                                continuation_line_idx = i + 1
 
                     # Remove part markers from titles (e.g., "—Part I", ".—Part II", ". Part IV", etc.)
                     # Do this AFTER concatenation so we handle multi-line part markers
@@ -605,11 +627,35 @@ class SummaryGenerator:
 
                     # Determine base chapter number from marker
                     base_chapter_num = None
-                    # Special handling for PREFACE and INTRODUCTION (no number)
+                    # Special handling for PREFACE, INTRODUCTION, and EPILOGUE
+                    # BUT check TOC first - if they appear as numbered chapters in TOC, use that number
                     if chapter_marker.upper() in ['PREFACE', 'INTRODUCTION']:
-                        base_chapter_num = 0  # Preface/Introduction comes before chapter 1
+                        # Check if Introduction/Preface is in TOC as a numbered chapter
+                        toc_number = None
+                        if toc:
+                            # Look for Introduction/Preface in TOC values
+                            for roman_num, toc_title in toc.items():
+                                if chapter_marker.upper() in toc_title.upper():
+                                    # Found in TOC with a number - use that number
+                                    toc_number = self.roman_to_int(roman_num)
+                                    chapter_title = toc_title  # Use TOC title
+                                    print(f"Found '{chapter_marker}' in TOC as Chapter {roman_num} ({toc_number})")
+                                    break
+
+                        if toc_number is not None:
+                            # Use the TOC number (e.g., "I Introduction" -> Chapter 1)
+                            base_chapter_num = toc_number
+                        else:
+                            # Not in TOC or no TOC - treat as preface (Chapter 0)
+                            base_chapter_num = 0
+                            if not chapter_title:
+                                chapter_title = "Introduction & Prefaces"
+                    elif chapter_marker.upper() == 'EPILOGUE':
+                        # Epilogue will be renumbered at the end to be sequential
+                        # For now, use a placeholder that will be replaced
+                        base_chapter_num = 999  # Temporary placeholder
                         if not chapter_title:
-                            chapter_title = "Introduction & Prefaces"  # Generic title for merged introductory content
+                            chapter_title = "Epilogue"
                     elif chapter_marker.isdigit():
                         base_chapter_num = int(chapter_marker)
                     else:
@@ -661,6 +707,13 @@ class SummaryGenerator:
                     break
 
             if is_chapter and chapter_num is not None:
+                # Chapter detection succeeded - mark continuation line as consumed if we used one
+                if 'continuation_line_idx' in locals() and continuation_line_idx is not None:
+                    consumed_lines.add(continuation_line_idx)
+                # Also consume part marker continuation lines to prevent them from being detected as chapters
+                if 'part_marker_line_idx' in locals() and part_marker_line_idx is not None:
+                    consumed_lines.add(part_marker_line_idx)
+
                 # Save previous chapter (only if it has substantial content)
                 if current_chapter is not None and current_text:
                     # Preserve original formatting including paragraph breaks and spacing
@@ -871,6 +924,21 @@ class SummaryGenerator:
         if not chapters:
             chapters = [(1, "Full Text", text)]
 
+        # Renumber Epilogue (chapter 999) to be sequential after the last numbered chapter
+        # This ensures Epilogue appears at the end in proper order
+        if chapters:
+            # Find Epilogue (chapter 999)
+            epilogue_idx = next((i for i, (num, title, _) in enumerate(chapters) if num == 999), None)
+            if epilogue_idx is not None:
+                # Find the highest non-Epilogue chapter number
+                max_chapter = max((num for num, title, _ in chapters if num != 999), default=0)
+                next_chapter_num = max_chapter + 1
+
+                # Renumber Epilogue
+                epilogue_chapter = chapters[epilogue_idx]
+                chapters[epilogue_idx] = (next_chapter_num, epilogue_chapter[1], epilogue_chapter[2])
+                print(f"Renumbered Epilogue from 999 to {next_chapter_num}")
+
         return chapters
 
     def generate_concise_summary(self, text: str, title: str, author: str, dry_run: bool = False) -> str:
@@ -992,30 +1060,48 @@ Cover all major plot points, themes, and character developments in chronological
 
         return batches
 
-    def parse_bulk_summary_response(self, response_text: str, chapter_numbers: List[int]) -> Dict[int, str]:
+    def parse_bulk_summary_response(self, response_text: str, index_to_chapter: Dict[int, int]) -> Dict[int, str]:
         """
         Parse bulk summary response to extract individual chapter summaries.
         Returns dict mapping chapter_number -> summary_text
+
+        Args:
+            response_text: Raw LLM response text
+            index_to_chapter: Dict mapping sequential index (1, 2, 3...) to actual chapter number
+
+        Note: This function expects the LLM to use sequential indices (1, 2, 3...) in the response,
+        not the actual chapter numbers. This makes parsing more defensive and independent of
+        chapter numbering schemes (Arabic vs Roman numerals, encoded numbers like 101, 201, etc.)
         """
         summaries = {}
 
         # Split by chapter markers
         # Expected format: ### CHAPTER N: TITLE\n[content]\n### END CHAPTER N
-        pattern = r'###\s*CHAPTER\s+(\d+):\s*[^\n]*\n(.*?)(?=###\s*(?:CHAPTER\s+\d+:|END\s+CHAPTER\s+\d+)|$)'
+        # N should be sequential indices (1, 2, 3...) as specified in the prompt
+        pattern = r'###\s*CHAPTER\s+(\d+):\s*[^\n]*\n(.*?)(?=###\s*(?:CHAPTER\s+|END\s+CHAPTER\s+)|$)'
 
         matches = re.finditer(pattern, response_text, re.DOTALL | re.IGNORECASE)
 
         for match in matches:
-            chapter_num = int(match.group(1))
+            index_str = match.group(1).strip()
             summary_text = match.group(2).strip()
+
+            # Convert index to integer
+            index = int(index_str)
 
             # Remove the END CHAPTER marker if present
             summary_text = re.sub(r'###\s*END\s+CHAPTER\s+\d+\s*$', '', summary_text, flags=re.IGNORECASE).strip()
 
-            summaries[chapter_num] = summary_text
+            # Map index back to actual chapter number
+            if index in index_to_chapter:
+                chapter_num = index_to_chapter[index]
+                summaries[chapter_num] = summary_text
+            else:
+                print(f"  ⚠️  Warning: Parsed index {index} not found in index_to_chapter mapping")
 
         # Verify we got all expected chapters
-        missing = set(chapter_numbers) - set(summaries.keys())
+        expected_chapters = set(index_to_chapter.values())
+        missing = expected_chapters - set(summaries.keys())
         if missing:
             print(f"  ⚠️  Warning: Missing summaries for chapters: {sorted(missing)}")
 
@@ -1027,6 +1113,9 @@ Cover all major plot points, themes, and character developments in chronological
         """
         Generate summaries for multiple chapters in a single API call.
         Returns dict mapping chapter_number -> summary_text
+
+        Uses sequential indices (1, 2, 3...) in the LLM prompt for defensive parsing,
+        independent of actual chapter numbering schemes (Arabic, Roman, encoded, etc.)
         """
         model_name = config.SUMMARY_CONFIGS['comprehensive']['model']
         max_words = config.SUMMARY_CONFIGS['comprehensive']['words_per_chapter']
@@ -1035,12 +1124,14 @@ Cover all major plot points, themes, and character developments in chronological
         # Calculate dynamic target words for each chapter (same as regular mode)
         chapters_text = []
         chapter_numbers = []
+        index_to_chapter = {}  # Map sequential index (1, 2, 3...) to actual chapter number
         chapter_targets = {}  # Map chapter_num -> target_words
         total_words = 0
         total_target_words = 0
 
-        for chapter_num, chapter_title, chapter_text in chapters_batch:
+        for idx, (chapter_num, chapter_title, chapter_text) in enumerate(chapters_batch, start=1):
             chapter_numbers.append(chapter_num)
+            index_to_chapter[idx] = chapter_num  # Create index mapping
             chapter_word_count = len(chapter_text.split())
             total_words += chapter_word_count
 
@@ -1051,8 +1142,9 @@ Cover all major plot points, themes, and character developments in chronological
             chapter_targets[chapter_num] = target_words
             total_target_words += target_words
 
-            # Format: CHAPTER N: TITLE\n[content]\n\n
-            chapter_section = f"CHAPTER {chapter_num}: {chapter_title}\n\n{chapter_text}"
+            # Format using sequential index (not actual chapter number)
+            # Include actual chapter info in the section header for context
+            chapter_section = f"CHAPTER {idx} (Book Chapter {chapter_num}: {chapter_title})\n\n{chapter_text}"
             chapters_text.append(chapter_section)
 
         # Build context section
@@ -1060,25 +1152,33 @@ Cover all major plot points, themes, and character developments in chronological
         if medium_summary:
             context = f"""## CONTEXT: Overall Book Summary (for reference)\n\n{medium_summary[:5000]}\n\n"""
 
-        # Build chapter-specific word count instructions
+        # Build chapter-specific word count instructions using sequential indices
         chapter_instructions = []
-        for chapter_num, chapter_title, _ in chapters_batch:
+        for idx, (chapter_num, chapter_title, _) in enumerate(chapters_batch, start=1):
             target = chapter_targets[chapter_num]
-            chapter_instructions.append(f"  - Chapter {chapter_num}: {chapter_title} (~{target} words)")
+            # Show both index and actual chapter info for clarity
+            chapter_instructions.append(f"  - Chapter {idx} (Book Chapter {chapter_num}: {chapter_title}) (~{target} words)")
 
         # Build structured prompt
         prompt = f"""Summarize the following {len(chapters_batch)} chapters from "{book_title}".
 
-IMPORTANT: Format your response EXACTLY as shown below. Use the exact chapter numbers provided. Follow the word count targets for each chapter:
+IMPORTANT: Format your response EXACTLY as shown below. Use sequential chapter numbers (1, 2, 3...) in your response markers, NOT the book chapter numbers. Follow the word count targets for each chapter:
 
 {chr(10).join(chapter_instructions)}
 
-FORMAT:
-### CHAPTER N: TITLE
+FORMAT (use sequential numbers 1, 2, 3... in the markers):
+### CHAPTER 1: TITLE
 [Your summary here following the word count target above]
 Cover important events, dialogues, and developments. Analyze character development and relationships. Identify key themes and symbols. Note important quotes. Explain how this chapter advances the overall narrative.
 
-### END CHAPTER N
+### END CHAPTER 1
+
+### CHAPTER 2: TITLE
+[Your summary for the second chapter...]
+
+### END CHAPTER 2
+
+... and so on for all {len(chapters_batch)} chapters.
 
 {context}## CHAPTERS TO SUMMARIZE:
 
@@ -1086,7 +1186,7 @@ Cover important events, dialogues, and developments. Analyze character developme
 {chr(10).join(chapters_text)}
 {"=" * 80}
 
-Now provide summaries for all {len(chapters_batch)} chapters above, following the exact format and word count targets specified."""
+Now provide summaries for all {len(chapters_batch)} chapters above, following the exact format and word count targets specified. Remember to use sequential numbers (1, 2, 3...) in the ### CHAPTER markers."""
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate bulk summary for {len(chapters_batch)} chapters")
@@ -1121,14 +1221,20 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(response_text)
             print(f"{'='*60}\n")
 
-        # Parse response
-        summaries = self.parse_bulk_summary_response(response_text, chapter_numbers)
+        # Parse response using index-to-chapter mapping
+        summaries = self.parse_bulk_summary_response(response_text, index_to_chapter)
 
         # Verify we got all summaries
         if len(summaries) == len(chapter_numbers):
             print(f"  ✓ Successfully parsed all {len(summaries)} chapter summaries")
         else:
             print(f"  ⚠️  Parsed {len(summaries)}/{len(chapter_numbers)} summaries")
+            # Debug: Print raw response when parsing fails
+            print(f"\n{'='*60}")
+            print(f"DEBUG: Raw LLM response that failed to parse:")
+            print(f"{'='*60}")
+            print(response_text)
+            print(f"{'='*60}\n")
 
         return summaries
 

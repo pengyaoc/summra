@@ -66,8 +66,8 @@ class TTSHandler:
 
     def clean_text_for_speech(self, text: str) -> str:
         """
-        Clean text for TTS by removing ALL formatting, styling, and punctuation
-        Keeps only alphanumeric characters and spaces for cleaner speech
+        Clean text for TTS by removing markdown/HTML formatting structures
+        Keeps natural punctuation (., !, ?, ,, ;, :, ', ") for proper speech phrasing
         """
         import re
 
@@ -102,16 +102,17 @@ class TTSHandler:
         # Remove HTML tags
         cleaned = re.sub(r'<[^>]+>', '', cleaned)
 
-        # Replace special typography with simple equivalents before removing punctuation
+        # Replace special typography with simple equivalents
         cleaned = cleaned.replace('"', '"').replace('"', '"')  # Curly double quotes
         cleaned = cleaned.replace(''', "'").replace(''', "'")  # Curly single quotes
         cleaned = cleaned.replace('«', '"').replace('»', '"')  # Guillemets
         cleaned = cleaned.replace('…', '...')  # Ellipsis
-        cleaned = cleaned.replace('—', '-').replace('–', '-')  # Em/en dashes
+        cleaned = cleaned.replace('—', ' - ').replace('–', ' - ')  # Em/en dashes (add spaces for natural pause)
 
-        # Remove ALL punctuation marks
-        # This includes: . , ! ? ; : " ' ` - _ ( ) [ ] { } / \ | @ # $ % ^ & * + = ~ < >
-        cleaned = re.sub(r'[.,:;!?\'"`\-_(){}\[\]/\\|@#$%^&*+=~<>]', ' ', cleaned)
+        # Remove only formatting-related characters, KEEP natural punctuation
+        # Remove: backticks, underscores (formatting), brackets, braces, pipes, special symbols
+        # Keep: . , ! ? ; : ' " - (for natural speech phrasing and pauses)
+        cleaned = re.sub(r'[`_(){}\[\]/\\|@#$%^&*+=~<>]', ' ', cleaned)
 
         # Remove zero-width characters and other invisible Unicode
         cleaned = re.sub(r'[\u200B-\u200D\uFEFF]', '', cleaned)
@@ -169,6 +170,18 @@ class TTSHandler:
             print(f"Original text length: {len(text)} chars")
             print(f"\nFull original text:")
             print(text)
+
+            # Debug: Show special characters in original text
+            non_ascii_chars = [(i, char, ord(char)) for i, char in enumerate(text) if ord(char) > 127]
+            if non_ascii_chars:
+                print(f"\nNon-ASCII characters found in original text ({len(non_ascii_chars)} total):")
+                for pos, char, code in non_ascii_chars[:20]:  # Show first 20
+                    print(f"  Position {pos}: '{char}' (Unicode: U+{code:04X}, Decimal: {code})")
+                if len(non_ascii_chars) > 20:
+                    print(f"  ... and {len(non_ascii_chars) - 20} more")
+
+            # Debug: Show repr() to reveal hidden characters
+            print(f"\nRepr view (first 500 chars): {repr(text[:500])}")
             print(f"\n{'-' * 60}")
 
             # Clean text for TTS (remove markdown and formatting)
@@ -178,6 +191,24 @@ class TTSHandler:
             print(f"\nCleaned text length: {len(text)} chars")
             print(f"\nFull cleaned text:")
             print(text)
+
+            # Debug: Check for remaining special characters after cleaning
+            non_ascii_cleaned = [(i, char, ord(char)) for i, char in enumerate(text) if ord(char) > 127]
+            if non_ascii_cleaned:
+                print(f"\nWARNING: Non-ASCII characters still present after cleaning ({len(non_ascii_cleaned)} total):")
+                for pos, char, code in non_ascii_cleaned[:20]:
+                    print(f"  Position {pos}: '{char}' (Unicode: U+{code:04X}, Decimal: {code})")
+                if len(non_ascii_cleaned) > 20:
+                    print(f"  ... and {len(non_ascii_cleaned) - 20} more")
+
+            # Debug: Check for other problematic characters
+            problematic_chars = [(i, char) for i, char in enumerate(text) if char in ['\n', '\r', '\t', '\x00']]
+            if problematic_chars:
+                print(f"\nWARNING: Problematic whitespace/control chars found ({len(problematic_chars)} total):")
+                for pos, char in problematic_chars[:20]:
+                    print(f"  Position {pos}: {repr(char)}")
+
+            print(f"\nRepr view of cleaned text (first 500 chars): {repr(text[:500])}")
             print(f"\n{'-' * 60}")
 
             # Final whitespace normalization (already done in clean_text_for_speech, but ensure it's clean)
@@ -190,7 +221,7 @@ class TTSHandler:
                 return None
 
             # Limit text length to avoid issues - truncate at word boundary
-            max_chars = 20000  # Handle long chapters
+            max_chars = 30000  # Handle long chapters with higher limit for TTS
             if len(text) > max_chars:
                 # Truncate at word boundary (find last space before max_chars)
                 truncated = text[:max_chars]
@@ -228,7 +259,16 @@ class TTSHandler:
         Returns:
             List of paths to generated audio files
         """
+        print(f"\n{'='*60}")
+        print(f"TTS CHUNK DEBUG - Starting chunk generation")
+        print(f"{'='*60}")
+        print(f"Total text length: {len(text)} chars")
+        print(f"Chunk size: {chunk_size} words")
+
         words = text.split()
+        print(f"Total words: {len(words)}")
+        print(f"Expected chunks: {(len(words) + chunk_size - 1) // chunk_size}")
+
         chunks = []
         audio_files = []
 
@@ -236,13 +276,27 @@ class TTSHandler:
         for i in range(0, len(words), chunk_size):
             chunk = ' '.join(words[i:i + chunk_size])
             chunks.append(chunk)
+            print(f"\nChunk {len(chunks)}: {len(chunk)} chars, {len(chunk.split())} words")
+            print(f"  First 100 chars: {chunk[:100]}...")
 
         # Generate audio for each chunk
+        print(f"\n{'-'*60}")
+        print(f"Generating audio for {len(chunks)} chunks...")
+        print(f"{'-'*60}\n")
+
         for i, chunk in enumerate(chunks):
+            print(f"\nProcessing chunk {i+1}/{len(chunks)}...")
             chunk_hash = hashlib.md5(f"{text[:50]}_{i}".encode()).hexdigest()
             audio_path = self.generate_audio(chunk, f"chunk_{chunk_hash}")
             if audio_path:
                 audio_files.append(audio_path)
+                print(f"✓ Chunk {i+1} generated successfully")
+            else:
+                print(f"✗ Chunk {i+1} failed to generate")
+
+        print(f"\n{'='*60}")
+        print(f"Chunk generation complete: {len(audio_files)}/{len(chunks)} succeeded")
+        print(f"{'='*60}\n")
 
         return audio_files
 
