@@ -24,20 +24,27 @@ MAX_TOKENS_PER_MINUTE = 250000
 SUMMARY_CONFIGS = {
     'concise': {
         'max_words': 500,
-        'model': 'gemini-2.5-pro',  # Pro model for higher quality concise summaries
+        'model': 'gemini-2.5-flash',  # Flash model for higher quota and cost efficiency
         'description': 'Most concise summary - get the gist with no spoilers for fiction'
     },
     'medium': {
         'max_words': 2500,  # Target middle of 2000-3000 range
-        'model': 'gemini-2.5-pro',  # Pro model for higher quality medium summaries
+        'model': 'gemini-2.5-flash',  # Flash model for higher quota and cost efficiency
         'description': 'Medium length summary - comprehensive overview'
     },
     'comprehensive': {
         'words_per_chapter': 1000,
         'overall_summary_words': 2500,
-        'model': 'gemini-2.5-flash',  # Using flash model for chapters (cost efficiency)
+        'model': 'gemini-2.5-flash',  # Flash model for higher quota and cost efficiency
         'description': 'Most comprehensive - chapter-by-chapter breakdown with connections'
     }
+}
+
+# Bulk processing configuration for chapter summaries
+BULK_SUMMARY_CONFIG = {
+    'enabled': True,  # Enable bulk summary generation to reduce API calls
+    'max_batch_words': 10000,  # Maximum total words per batch (input content)
+    'max_chapters_per_batch': 10,  # Maximum chapters per batch (safety limit)
 }
 
 # TTS configuration (using gTTS - Google Text-to-Speech)
