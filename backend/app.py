@@ -1,245 +1,21 @@
-from flask import Flask, jsonify, request, send_from_directory, render_template
-from flask_cors import CORS
+"""
+Development Flask application with full TTS generation support.
+Imports common routes from app_base and adds development-specific features.
+"""
+from flask import jsonify, request
 from pathlib import Path
-import os
-import sys
 
-# Add backend directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import config
-import models
-
-app = Flask(__name__,
-            static_folder='../frontend/static',
-            template_folder='../frontend/templates')
-CORS(app)
-
-# Initialize database
-db = models.Database()
+# Handle both direct execution and module execution
+try:
+    from . import config
+    from .app_base import app, logger, ensure_directories
+except ImportError:
+    import config
+    from app_base import app, logger, ensure_directories
 
 # Track active TTS generations and their chunk files for cleanup
 # Format: {audio_id: [chunk_file_paths]}
 active_tts_generations = {}
-
-
-@app.route('/')
-def index():
-    """Serve the main page"""
-    return render_template('index.html')
-
-
-@app.route('/api/books', methods=['GET'])
-def get_books():
-    """Get all books"""
-    try:
-        books = db.get_all_books()
-
-        # Convert cover image paths to URLs for frontend
-        for book in books:
-            if book.get('cover_image_url') and not book['cover_image_url'].startswith('http'):
-                # It's a local path, prepend /static/
-                book['cover_image_url'] = f"/static/{book['cover_image_url']}"
-
-        return jsonify({
-            'success': True,
-            'books': books
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/books/<int:book_id>', methods=['GET'])
-def get_book(book_id):
-    """Get book details"""
-    try:
-        book = db.get_book(book_id)
-        if not book:
-            return jsonify({
-                'success': False,
-                'error': 'Book not found'
-            }), 404
-
-        # Don't return full text in API response (too large)
-        book_data = {k: v for k, v in book.items() if k != 'full_text'}
-
-        # Convert cover image path to URL for frontend
-        if book_data.get('cover_image_url') and not book_data['cover_image_url'].startswith('http'):
-            # It's a local path, prepend /static/
-            book_data['cover_image_url'] = f"/static/{book_data['cover_image_url']}"
-
-        return jsonify({
-            'success': True,
-            'book': book_data
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/books/<int:book_id>/summary/<summary_type>', methods=['GET'])
-def get_summary(book_id, summary_type):
-    """Get summary for a book"""
-    try:
-        # Validate summary type
-        if summary_type not in ['concise', 'medium', 'comprehensive', 'full']:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid summary type. Must be: concise, medium, comprehensive, or full'
-            }), 400
-
-        book = db.get_book(book_id)
-        if not book:
-            return jsonify({
-                'success': False,
-                'error': 'Book not found'
-            }), 404
-
-        # For full-length view, use comprehensive summary with chapter text
-        if summary_type == 'full':
-            summary = db.get_summary(book_id, 'comprehensive')
-            chapters = db.get_chapters(book_id)
-
-            # Show partial content if chapters exist, even if overall summary doesn't
-            if not chapters:
-                return jsonify({
-                    'success': False,
-                    'error': 'Full-length view requires comprehensive summary. Please generate summaries first.'
-                }), 404
-
-            # Check if chapters have text (for backwards compatibility)
-            if chapters and not chapters[0].get('chapter_text'):
-                return jsonify({
-                    'success': False,
-                    'error': 'Chapter text not available. Please regenerate summaries to include full text.'
-                }), 404
-
-            # Prepare book data with cover image path conversion
-            book_data = {
-                'id': book['id'],
-                'title': book['title'],
-                'author': book['author']
-            }
-
-            # Add cover image if available
-            if book.get('cover_image_url'):
-                cover_url = book['cover_image_url']
-                if not cover_url.startswith('http'):
-                    # It's a local path, prepend /static/
-                    cover_url = f"/static/{cover_url}"
-                book_data['cover_image_url'] = cover_url
-
-            response_data = {
-                'success': True,
-                'book': book_data,
-                'summary': summary,
-                'summary_type': 'full',
-                'chapters': chapters
-            }
-
-            return jsonify(response_data)
-
-        # For other summary types
-        summary = db.get_summary(book_id, summary_type)
-
-        # For comprehensive summary, also get chapters
-        chapters = None
-        if summary_type == 'comprehensive':
-            chapters = db.get_chapters(book_id)
-
-            # Show partial content if chapters exist, even if overall summary doesn't
-            # This handles the case where chapters are still being generated
-            if not summary and not chapters:
-                return jsonify({
-                    'success': False,
-                    'error': 'Summary not found. Please generate summaries first.'
-                }), 404
-
-        # For other summary types (concise, medium), require the summary
-        if not summary and summary_type != 'comprehensive':
-            return jsonify({
-                'success': False,
-                'error': 'Summary not found. Please generate summaries first.'
-            }), 404
-
-        # Prepare book data with cover image path conversion
-        book_data = {
-            'id': book['id'],
-            'title': book['title'],
-            'author': book['author']
-        }
-
-        # Add cover image if available
-        if book.get('cover_image_url'):
-            cover_url = book['cover_image_url']
-            if not cover_url.startswith('http'):
-                # It's a local path, prepend /static/
-                cover_url = f"/static/{cover_url}"
-            book_data['cover_image_url'] = cover_url
-
-        response_data = {
-            'success': True,
-            'book': book_data,
-            'summary': summary,
-            'summary_type': summary_type
-        }
-
-        if chapters:
-            response_data['chapters'] = chapters
-
-        return jsonify(response_data)
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/books/<int:book_id>/chapters', methods=['GET'])
-def get_chapters(book_id):
-    """Get all chapter summaries for a book"""
-    try:
-        book = db.get_book(book_id)
-        if not book:
-            return jsonify({
-                'success': False,
-                'error': 'Book not found'
-            }), 404
-
-        chapters = db.get_chapters(book_id)
-
-        # Prepare book data with cover image path conversion
-        book_data = {
-            'id': book['id'],
-            'title': book['title'],
-            'author': book['author']
-        }
-
-        # Add cover image if available
-        if book.get('cover_image_url'):
-            cover_url = book['cover_image_url']
-            if not cover_url.startswith('http'):
-                # It's a local path, prepend /static/
-                cover_url = f"/static/{cover_url}"
-            book_data['cover_image_url'] = cover_url
-
-        return jsonify({
-            'success': True,
-            'book': book_data,
-            'chapters': chapters
-        })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 
 @app.route('/api/tts/generate', methods=['POST'])
@@ -258,7 +34,10 @@ def generate_tts():
             }), 400
 
         # Import TTS handler
-        from tts_handler import TTSHandler
+        try:
+            from .tts_handler import TTSHandler
+        except ImportError:
+            from tts_handler import TTSHandler
         import threading
         import hashlib
         import wave
@@ -270,7 +49,7 @@ def generate_tts():
             # Priority 1: Check for Gemini TTS (pre-generated offline)
             gemini_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
             if gemini_audio_path.exists():
-                print(f"Using Gemini TTS audio: {gemini_audio_path}")
+                logger.info(f"Using Gemini TTS audio: {gemini_audio_path}")
                 relative_path = str(gemini_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
                 return jsonify({
                     'success': True,
@@ -283,7 +62,7 @@ def generate_tts():
             # Priority 2: Check for VITS TTS (previously generated)
             vits_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_vits.wav"
             if vits_audio_path.exists():
-                print(f"Using VITS TTS audio: {vits_audio_path}")
+                logger.info(f"Using VITS TTS audio: {vits_audio_path}")
                 relative_path = str(vits_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
                 return jsonify({
                     'success': True,
@@ -296,7 +75,7 @@ def generate_tts():
             # Priority 3: Check for legacy concatenated audio (backward compatibility)
             cached_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_complete.wav"
             if cached_audio_path.exists():
-                print(f"Using legacy cached audio: {cached_audio_path}")
+                logger.info(f"Using legacy cached audio: {cached_audio_path}")
                 relative_path = str(cached_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
                 return jsonify({
                     'success': True,
@@ -389,13 +168,13 @@ def generate_tts():
                 if audio_id and len(all_chunk_files) > 0:
                     try:
                         concatenate_audio_files(all_chunk_files, config.TTS_OUTPUT_DIR / f"{audio_id}_complete.wav")
-                        print(f"Concatenated {len(all_chunk_files)} chunks into {audio_id}_complete.wav")
+                        logger.info(f"Concatenated {len(all_chunk_files)} chunks into {audio_id}_complete.wav")
 
                         # Keep chunks available for streaming playback
                         # They will be cleaned up when user stops playback or on next request
-                        print(f"Keeping {len(all_chunk_files)} chunks available for streaming")
+                        logger.debug(f"Keeping {len(all_chunk_files)} chunks available for streaming")
                     except Exception as e:
-                        print(f"Error concatenating audio files: {e}")
+                        logger.error(f"Error concatenating audio files: {e}")
 
             if remaining_chunks or audio_id:
                 thread = threading.Thread(target=generate_and_concatenate, daemon=True)
@@ -414,7 +193,7 @@ def generate_tts():
             # Track chunk files for cleanup if user stops playback
             if audio_id:
                 active_tts_generations[audio_id] = chunk_file_paths
-                print(f"Tracking {len(chunk_file_paths)} chunks for audio_id: {audio_id}")
+                logger.debug(f"Tracking {len(chunk_file_paths)} chunks for audio_id: {audio_id}")
 
             return jsonify({
                 'success': True,
@@ -442,6 +221,7 @@ def generate_tts():
                 }), 500
 
     except Exception as e:
+        logger.error(f"Error generating TTS: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -485,11 +265,11 @@ def stop_tts():
                         os.remove(chunk_file)
                         cleanup_count += 1
                 except Exception as cleanup_error:
-                    print(f"Error cleaning up chunk {chunk_file}: {cleanup_error}")
+                    logger.error(f"Error cleaning up chunk {chunk_file}: {cleanup_error}")
 
             # Remove from tracking
             del active_tts_generations[audio_id]
-            print(f"Cleaned up {cleanup_count} temporary chunk files for audio_id: {audio_id}")
+            logger.info(f"Cleaned up {cleanup_count} temporary chunk files for audio_id: {audio_id}")
 
             return jsonify({
                 'success': True,
@@ -503,44 +283,16 @@ def stop_tts():
             })
 
     except Exception as e:
+        logger.error(f"Error stopping TTS: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 
-@app.route('/api/summary-configs', methods=['GET'])
-def get_summary_configs():
-    """Get available summary configurations"""
-    return jsonify({
-        'success': True,
-        'configs': config.SUMMARY_CONFIGS
-    })
-
-
-# Error handlers
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({
-        'success': False,
-        'error': 'Not found'
-    }), 404
-
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({
-        'success': False,
-        'error': 'Internal server error'
-    }), 500
-
-
 if __name__ == '__main__':
     # Ensure data directories exist
-    config.BOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    config.SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
-    config.TTS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    config.COVERS_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_directories()
 
     # Run the app
     app.run(
