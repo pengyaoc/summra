@@ -153,11 +153,18 @@ Users can browse a curated collection of classic books with cover images and met
 - **Interaction:** Click card to open book details
 - **Responsive:** Adapts to mobile, tablet, desktop
 
-**Book Detail Page:**
-- **Header:** Large cover image, title, author
-- **Summary Options:** Three-option selector
-- **Content Area:** Selected summary displayed
-- **Actions:** Listen button, back to library
+**Book Detail Page (Redesigned 2025-11-25):**
+- **Minimal Header:** Smaller cover image (120px) with title and author side-by-side
+- **Quick Summary:** Concise summary shown by default with inline Listen button
+- **Detailed Overview Preview:** Medium summary with fade effect (300px max height)
+  - Shows full formatted text with gradient fade at bottom
+  - "Read Full Summary →" link navigates to dedicated page
+  - No layout shift when expanding
+- **Chapter Navigation:** Full-width chapter boxes (one per row)
+  - 4px blue left border for visual accent
+  - Hover effects (slide right, light blue background)
+  - Click to navigate to dedicated chapter page
+- **No Option Cards:** Removed to reduce visual clutter
 
 **UI Requirements:**
 - Professional, clean design
@@ -189,9 +196,9 @@ Each book and summary type has a unique URL that can be bookmarked and shared.
 **URL Structure:**
 ```
 /                                    → Home page (book library)
-/#/book/alice-in-wonderland          → Book page (default: concise summary)
-/#/book/alice-in-wonderland/medium   → Specific summary type
-/#/book/alice-in-wonderland/comprehensive → Chapter-by-chapter view
+/#/book/alice-in-wonderland          → Book overview (concise + medium preview + chapters)
+/#/book/alice-in-wonderland/medium   → Full medium summary page
+/#/book/alice-in-wonderland/chapter/3 → Individual chapter page (chapter 3)
 ```
 
 **Navigation:**
@@ -209,76 +216,97 @@ Each book and summary type has a unique URL that can be bookmarked and shared.
 - [ ] URLs can be bookmarked
 - [ ] URLs can be shared and open correctly
 
-### 5. Chapter Navigation (Comprehensive View)
+### 5. Chapter Navigation (Redesigned 2025-11-25)
 
 **Feature Description:**
-In comprehensive view, users can expand/collapse individual chapters to focus on specific parts of the book.
+Users can navigate to dedicated pages for each chapter, with full text displayed and summary protected from spoilers.
 
 **User Stories:**
 - As a student, I want to jump to specific chapters so I can focus on relevant sections
-- As a reader, I want to collapse chapters I've read so I can manage visual clutter
+- As a reader, I want to avoid spoilers, so chapter summaries should be hidden by default
 - As a learner, I want to see chapter titles so I can understand book structure
+- As a user, I want to read full chapter text while having summary available if needed
 
 **Specifications:**
 
-**Chapter List:**
-- **Structure:** Vertical list of collapsible sections
-- **Default State:** All chapters collapsed (including overview)
-- **Chapter Item Includes:**
-  - Chapter number and title
-  - Expand/collapse icon
-  - Word count (optional)
-  - Individual "Listen" button (planned)
+**Chapter List (Book Overview):**
+- **Structure:** Vertical list of full-width chapter boxes (one per row)
+- **Styling:** White background, 4px blue left border, subtle hover effects
+- **Chapter Box Includes:**
+  - Chapter number and title combined (e.g., "3. The Time Traveller Returns")
+  - Hover: Light blue background, slide right animation, subtle shadow
+- **Spacing:** 12px gap between boxes
+- **Interaction:** Click box to navigate to dedicated chapter page
 
-**Interaction:**
-- Click chapter header to expand/collapse
-- Click "Listen" to generate TTS for that chapter only
-- Smooth animation on expand/collapse
-- Only one chapter expanded at a time (optional behavior)
+**Chapter Detail Page:**
+- **Navigation:** Accessible via `#/book/{slug}/chapter/{num}`
+- **Auto-scroll:** Page scrolls to top on navigation
+- **Layout:**
+  - White background card with 32px padding
+  - Collapsed chapter summary box (yellow/beige, "may contain spoilers" warning)
+  - Full chapter text section below summary
+  - Inline TTS buttons for both summary and full text
+- **Summary Toggle:**
+  - Default: Collapsed to protect from spoilers
+  - Click "Show Summary" to expand
+  - Click "Hide Summary" to collapse again
 
 **UI Requirements:**
 - Clear visual hierarchy
-- Consistent spacing and typography
-- Accessible expand/collapse controls
-- Mobile-friendly tap targets
-- Overview treated same as regular chapters (no special styling)
+- Consistent spacing and typography (1.75 line-height)
+- Mobile-friendly tap targets (44x44 minimum)
+- Smooth page transitions
+- White reading background for better readability
+- Automatic scroll to top on chapter navigation
 
 **Acceptance Criteria:**
-- [ ] All chapters are collapsed by default
-- [ ] Click chapter to expand content
-- [ ] Click expanded chapter to collapse
-- [ ] Expand/collapse is animated smoothly
-- [ ] Chapter numbers and titles are visible when collapsed
-- [ ] Individual chapter TTS buttons work (planned)
-- [ ] Overview appears as first chapter in list
+- [✅] Chapter boxes displayed one per row
+- [✅] Click chapter box navigates to dedicated page
+- [✅] Page scrolls to top on navigation
+- [✅] Chapter summary collapsed by default
+- [✅] User can toggle summary visibility
+- [✅] Full chapter text always visible
+- [✅] Individual TTS buttons for summary and full text
+- [✅] Back button returns to book overview
+- [✅] Browser back/forward work correctly
 
 ## User Workflows
 
-### Workflow 1: Discovering a New Book
+### Workflow 1: Discovering a New Book (Updated 2025-11-25)
 
 ```
 1. User lands on home page
 2. User browses book grid with cover images
 3. User clicks on interesting book cover
-4. User arrives at book detail page (concise summary shown by default)
-5. User reads concise summary (500 words, no spoilers)
-6. User decides:
-   - Interested → switches to medium or comprehensive
+4. User arrives at book overview page showing:
+   - Quick Summary (concise, 500 words, no spoilers)
+   - Detailed Overview preview (first ~300px of medium summary with fade)
+   - Chapter boxes (one per row, full width)
+5. User reads concise summary
+6. User scrolls to see medium preview (first ~200 words visible with fade)
+7. User decides:
+   - Want more detail → clicks "Read Full Summary →" (navigates to medium page)
+   - Want specific chapter → clicks chapter box (navigates to chapter page)
    - Not interested → back to library
 ```
 
-### Workflow 2: Studying a Book in Depth
+### Workflow 2: Studying a Book in Depth (Updated 2025-11-25)
 
 ```
 1. User searches for specific book in library
-2. User opens book detail page
-3. User selects "Comprehensive" summary type
-4. User sees list of chapters (all collapsed)
-5. User expands "Overview" to get context
-6. User expands Chapter 1 to read detailed summary
-7. User clicks "Listen" to hear chapter summary
-8. User continues through chapters as needed
-9. User bookmarks URL for later reference
+2. User opens book overview page
+3. User scrolls to chapters section
+4. User clicks "Chapter 1" box to navigate to dedicated chapter page
+5. Page scrolls to top automatically
+6. User sees:
+   - Collapsed chapter summary box (yellow warning: may contain spoilers)
+   - Full chapter text displayed below
+7. User reads full chapter text
+8. If needed, user clicks "Show Summary" to reveal chapter summary
+9. User clicks "Listen" to hear either summary or full text
+10. User clicks "Back to Book" to return to overview
+11. User clicks next chapter box to continue
+12. Browser back/forward buttons work correctly
 ```
 
 ### Workflow 3: Quick Reference
@@ -345,12 +373,15 @@ In comprehensive view, users can expand/collapse individual chapters to focus on
 - ✅ Project Gutenberg integration
 - ✅ Responsive web design
 
-### Phase 2: Enhanced UX (PLANNED)
-- ⏳ URL routing for books and summaries
-- ⏳ Persistent audio player (stays across navigation)
-- ⏳ Individual chapter TTS buttons
-- ⏳ Overview collapsed by default
-- ⏳ Unified chapter styling
+### Phase 2: Enhanced UX (COMPLETED - 2025-11-25)
+- ✅ URL routing for books, summaries, and chapters
+- ✅ BeFreed-inspired minimal UI redesign
+- ✅ Removed unnecessary bounding boxes
+- ✅ Content-first presentation
+- ✅ Separate pages for medium summary and chapters
+- ✅ Chapter summary collapsed by default (spoiler protection)
+- ✅ Scroll to top on page navigation
+- ⏳ Persistent audio player (stays across navigation) - PARTIAL (player exists but resets on navigation)
 
 ### Phase 3: Full-Length Option (PLANNED)
 - 📋 Display full chapter text (collapsible)
@@ -509,7 +540,7 @@ In comprehensive view, users can expand/collapse individual chapters to focus on
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2025-11-24
+**Document Version:** 1.1
+**Last Updated:** 2025-11-25
 **Author:** Summra Team
 **Status:** Living Document
