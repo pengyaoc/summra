@@ -16,7 +16,11 @@
       "Bash(cat:*)",
       "Bash(pytest:*)",
       "Bash(xargs:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(source ../venv/bin/activate)",
+      "Bash(timeout 3 python:*)",
+      "Bash(source:*)"
     ],
     "deny": [],
     "ask": []

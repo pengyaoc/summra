@@ -153,8 +153,30 @@ body {
 /* Summary Section */
 .summary-section {
     animation: fadeIn 0.3s ease;
+    background: var(--card-background);
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    padding: 0;
+}
+
+.summary-section > * {
     max-width: 800px;
-    margin: 0 auto;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.summary-section > *:first-child {
+    padding-top: 40px;
+}
+
+.summary-section > *:last-child {
+    padding-bottom: 40px;
 }
 
 @keyframes fadeIn {
@@ -175,9 +197,12 @@ body {
     padding: 8px 0;
     font-size: 0.95rem;
     cursor: pointer;
-    margin-bottom: 24px;
     transition: color 0.2s;
     font-weight: 500;
+}
+
+.back-button-container {
+    margin-bottom: 24px;
 }
 
 .back-button:hover {
@@ -220,9 +245,6 @@ body {
 }
 
 /* Book Content Sections */
-.book-content {
-    max-width: 100%;
-}
 
 .concise-summary-section,
 .medium-preview-section,
@@ -240,7 +262,7 @@ body {
     font-size: 1.5rem;
     color: var(--primary-color);
     font-weight: 600;
-    margin: 0 0 16px 0;
+    margin: 16px 0 32px 0;
 }
 
 .section-header {
@@ -371,8 +393,30 @@ body {
 /* Medium Detail Section */
 .medium-detail-section {
     animation: fadeIn 0.3s ease;
+    background: var(--card-background);
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    padding: 0;
+}
+
+.medium-detail-section > * {
     max-width: 800px;
-    margin: 0 auto;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.medium-detail-section > *:first-child {
+    padding-top: 40px;
+}
+
+.medium-detail-section > *:last-child {
+    padding-bottom: 40px;
 }
 
 .medium-detail-header {
@@ -392,17 +436,36 @@ body {
 }
 
 .medium-detail-content {
-    background: var(--card-background);
-    border-radius: 8px;
-    padding: 32px;
     margin-top: 24px;
 }
 
 /* Chapter Detail Section */
 .chapter-detail-section {
     animation: fadeIn 0.3s ease;
+    background: var(--card-background);
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+    padding: 0;
+}
+
+.chapter-detail-section > * {
     max-width: 800px;
-    margin: 0 auto;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.chapter-detail-section > *:first-child {
+    padding-top: 40px;
+}
+
+.chapter-detail-section > *:last-child {
+    padding-bottom: 40px;
 }
 
 .chapter-detail-header {
@@ -422,9 +485,7 @@ body {
 }
 
 .chapter-detail-content {
-    background: var(--card-background);
-    border-radius: 8px;
-    padding: 32px;
+    /* Content is already contained within chapter-detail-section which has edge-to-edge white background */
 }
 
 .chapter-summary-box {
@@ -454,20 +515,27 @@ body {
     font-weight: normal;
 }
 
+.chapter-summary-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
 .toggle-summary-btn {
-    background: var(--secondary-color);
-    color: white;
+    background: transparent;
+    color: var(--secondary-color);
     border: none;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 0.85rem;
+    padding: 0;
+    font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.2s;
-    font-weight: 500;
+    font-weight: normal;
+    line-height: 1;
 }
 
 .toggle-summary-btn:hover {
-    background: #2980b9;
+    color: #2980b9;
+    transform: scale(1.1);
 }
 
 .chapter-summary-content {
@@ -543,7 +611,8 @@ body {
 .summary-text p,
 .chapter-summary p,
 .full-text-content p,
-.summary-content p {
+.summary-content p,
+.chapter-fulltext p {
     margin-bottom: 1em;
 }
 
@@ -872,10 +941,7 @@ body {
 /* Summary Section */
 .summary-section {
     margin-bottom: 16px;
-    background: white;
-    padding: 16px 16px 0px 16px;
-    border-radius: 8px;
-    border: 2px solid var(--secondary-color);
+    padding: 0px 16px 0px 16px;
 }
 
 .summary-section-header {
@@ -1034,6 +1100,28 @@ body {
 
     .book-info h2 {
         font-size: 1.5rem;
+    }
+
+    /* Edge-to-edge white background is already applied via main section styles */
+    .summary-section > *,
+    .medium-detail-section > *,
+    .chapter-detail-section > * {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    /* Reduce book detail header gap on mobile */
+    .book-detail-header {
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    /* Reduce margins between sections */
+    .concise-summary-section,
+    .medium-preview-section,
+    .chapters-section {
+        margin-bottom: 32px;
+        padding-bottom: 24px;
     }
 
     /* Persistent player mobile layout */

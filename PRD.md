@@ -238,7 +238,7 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - **Spacing:** 12px gap between boxes
 - **Interaction:** Click box to navigate to dedicated chapter page
 
-**Chapter Detail Page:**
+**Chapter Detail Page (Updated 2025-11-25):**
 - **Navigation:** Accessible via `#/book/{slug}/chapter/{num}`
 - **Auto-scroll:** Page scrolls to top on navigation
 - **Layout:**
@@ -246,10 +246,16 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
   - Collapsed chapter summary box (yellow/beige, "may contain spoilers" warning)
   - Full chapter text section below summary
   - Inline TTS buttons for both summary and full text
+- **Summary Header (Polished 2025-11-25):**
+  - Summary title with spoiler warning on left
+  - Button group on right: "🔊 Listen" + chevron toggle
+  - Flexbox layout with 12px gap between buttons
+  - Minimal chevron-only toggle (no border or background)
+  - Listen button simplified: "🔊 Listen" (not "Listen to Summary")
 - **Summary Toggle:**
   - Default: Collapsed to protect from spoilers
-  - Click "Show Summary" to expand
-  - Click "Hide Summary" to collapse again
+  - Click "▼" chevron to expand, shows "▲" when expanded
+  - Transparent design with hover effects (color change + scale)
 
 **UI Requirements:**
 - Clear visual hierarchy
@@ -269,6 +275,9 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - [✅] Individual TTS buttons for summary and full text
 - [✅] Back button returns to book overview
 - [✅] Browser back/forward work correctly
+- [✅] Back button properly aligned with text content (2025-11-25)
+- [✅] Listen button in summary header alongside toggle (2025-11-25)
+- [✅] Toggle button simplified to chevron-only design (2025-11-25)
 
 ## User Workflows
 
@@ -381,6 +390,8 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - ✅ Separate pages for medium summary and chapters
 - ✅ Chapter summary collapsed by default (spoiler protection)
 - ✅ Scroll to top on page navigation
+- ✅ Chapter summary UI polish (button reorganization, minimal toggle design)
+- ✅ Back button alignment fix (container-based layout)
 - ⏳ Persistent audio player (stays across navigation) - PARTIAL (player exists but resets on navigation)
 
 ### Phase 3: Full-Length Option (PLANNED)
