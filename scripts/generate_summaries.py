@@ -81,6 +81,14 @@ class RateLimiter:
 class SummaryGenerator:
     """Generate book summaries using Gemini API"""
 
+    # Maximum characters per API call (900K chars ~= 225K tokens, fits free tier 250K/min)
+    MAX_CHARS_PER_CALL = 900000
+    MAX_TOKENS_PER_CALL = MAX_CHARS_PER_CALL // 4  # ~225K tokens
+
+    # Threshold for "large" calls that trigger rate limiting (100K tokens)
+    LARGE_CALL_THRESHOLD = 100000
+    LARGE_CALL_WAIT_SECONDS = 60  # Wait 1 minute between large calls
+
     def __init__(self, api_key: str):
         # Initialize Gemini client with API key
         self.client = genai.Client(api_key=api_key)
@@ -89,6 +97,34 @@ class SummaryGenerator:
             config.MAX_REQUESTS_PER_MINUTE,
             config.MAX_TOKENS_PER_MINUTE
         )
+        self.last_large_call_time = None  # Track last large API call
+
+    def wait_if_needed_for_large_call(self, estimated_tokens: int):
+        """
+        Wait if a large API call was recently made to avoid rate limits.
+
+        Args:
+            estimated_tokens: Estimated tokens for the upcoming call
+        """
+        if estimated_tokens < self.LARGE_CALL_THRESHOLD:
+            return  # Small call, no wait needed
+
+        if self.last_large_call_time is None:
+            # First large call, just record the time
+            self.last_large_call_time = time.time()
+            return
+
+        # Calculate time since last large call
+        elapsed = time.time() - self.last_large_call_time
+        wait_needed = self.LARGE_CALL_WAIT_SECONDS - elapsed
+
+        if wait_needed > 0:
+            print(f"\n⏱️  Large API call detected ({estimated_tokens:,} tokens)")
+            print(f"   Waiting {wait_needed:.1f}s to avoid rate limits...")
+            time.sleep(wait_needed)
+
+        # Update last large call time
+        self.last_large_call_time = time.time()
 
     def clean_llm_response(self, text: str) -> str:
         """
@@ -479,7 +515,8 @@ class SummaryGenerator:
                     if line_stripped and (line_stripped[0].islower() or line_stripped.startswith('"')):
                         break
 
-        return titles
+        # Deduplicate titles while preserving order (dict keys maintain insertion order in Python 3.7+)
+        return list(dict.fromkeys(titles))
 
     def detect_chapters(self, text: str) -> List[Tuple[int, str, str]]:
         """
@@ -576,6 +613,65 @@ class SummaryGenerator:
             # Case-sensitive to avoid false positives
             volume_book_match = re.match(volume_book_pattern, line_stripped)
             if volume_book_match:
+                # Check if this BOOK marker is embedded in a paragraph
+                # by looking at surrounding lines for substantial content
+                # IMPORTANT: Only treat as embedded if substantial content is on ADJACENT lines
+                # (no blank lines in between), to avoid false positives where BOOK markers
+                # appear between sections separated by blank lines
+                is_embedded = False
+
+                # Look at 3 lines before and after for context
+                context_range = 3
+                for offset in range(-context_range, context_range + 1):
+                    if offset == 0:
+                        continue  # Skip current line
+
+                    context_idx = i + offset
+                    if 0 <= context_idx < len(lines):
+                        context_line = lines[context_idx].strip()
+
+                        # Check if this is substantial content (not a marker, not empty)
+                        # Substantial = has lowercase letters and is longer than 20 chars
+                        has_lowercase = any(c.islower() for c in context_line)
+                        is_long_enough = len(context_line) > 20
+                        is_not_marker = not re.match(r'^(CHAPTER|BOOK|VOLUME|PART|ACT)\s+', context_line)
+
+                        if has_lowercase and is_long_enough and is_not_marker:
+                            # Found substantial content - check if there are blank lines in between
+                            # If all lines between current and context line are non-empty, it's truly embedded
+                            has_blank_between = False
+                            start_check = min(i, context_idx)
+                            end_check = max(i, context_idx)
+                            for check_idx in range(start_check + 1, end_check):
+                                if not lines[check_idx].strip():
+                                    has_blank_between = True
+                                    break
+
+                            # Only treat as embedded if no blank lines between
+                            if not has_blank_between:
+                                is_embedded = True
+                                break
+
+                # If embedded in a paragraph, treat as content not a chapter boundary
+                # ALSO: If we're currently inside a numbered chapter (not preface/intro) AND we haven't
+                # seen any BOOK markers yet, treat BOOK markers as content. This handles cases like
+                # Moby Dick's Cetology chapter where BOOK markers are part of the discussion
+                # (BOOK I Folio, BOOK II Octavo, etc.)
+                # BUT: If we already have BOOK markers, this is a nested BOOK/CHAPTER structure
+                # and we should process BOOK markers as book boundaries
+                # ALSO: Preface (Chapter 0) doesn't prevent BOOK markers from being processed
+                is_embedded_in_chapter = (current_chapter is not None and
+                                         current_chapter[0] != 0 and  # Not preface/intro
+                                         len(book_markers) == 0)
+                if is_embedded or is_embedded_in_chapter:
+                    # This is content within a chapter (e.g., Moby Dick's Cetology chapter)
+                    # Add to current chapter text instead of treating as boundary
+                    if current_chapter is not None and not in_illustration:
+                        current_text.append(line)
+                    elif not found_first_chapter and not in_illustration:
+                        preface_text.append(line)
+                    continue
+
                 has_book_markers = True  # Mark that we found BOOK/VOLUME markers
                 marker_type = volume_book_match.group(1)  # "BOOK" or "VOLUME"
                 marker_numeral = volume_book_match.group(2)  # Roman/Arabic numeral
@@ -676,6 +772,8 @@ class SummaryGenerator:
                             # Also concatenate it to the title so the part marker removal regex can find it
                             chapter_title = chapter_title + ' ' + next_line
                             continuation_line_idx = i + 1
+                            # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                            consumed_lines.add(i + 1)
                         else:
                             # Check if next line looks like a title continuation:
                             # - Not another chapter marker
@@ -699,10 +797,14 @@ class SummaryGenerator:
                                 if is_continuation and len(next_line) > 3:
                                     chapter_title = next_line
                                     continuation_line_idx = i + 1
+                                    # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                                    consumed_lines.add(i + 1)
                             elif is_continuation:
                                 # Title exists but next line is likely a continuation - append it
                                 chapter_title = chapter_title + ' ' + next_line
                                 continuation_line_idx = i + 1
+                                # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                                consumed_lines.add(i + 1)
 
                     # Remove part markers from titles (e.g., "—Part I", ".—Part II", ". Part IV", etc.)
                     # Do this AFTER concatenation so we handle multi-line part markers
@@ -735,7 +837,8 @@ class SummaryGenerator:
                             # Not in TOC or no TOC - treat as preface (Chapter 0)
                             base_chapter_num = 0
                             if not chapter_title:
-                                chapter_title = "Introduction & Prefaces"
+                                # Use the marker name itself as title (capitalize first letter only)
+                                chapter_title = chapter_marker.capitalize()
                     elif 'CHAPTER' in chapter_marker.upper() and 'THE' in chapter_marker.upper() and 'LAST' in chapter_marker.upper():
                         # "CHAPTER THE LAST" - assign chapter number 43
                         base_chapter_num = 43
@@ -812,11 +915,16 @@ class SummaryGenerator:
 
                 # Also check: if the next few lines are also chapter markers, we're in TOC
                 # Extended window (15 lines) to catch TOC entries near the end of the TOC
+                # EXCEPTION: Never skip PREFACE/INTRODUCTION as TOC - they should always be saved as Chapter 0
                 is_likely_toc = False
-                if accumulated_content_size < 1000:
+                is_preface_intro = chapter_num == 0  # Chapter 0 is PREFACE/INTRODUCTION
+                if accumulated_content_size < 1000 and not is_preface_intro:
                     # Look ahead to see if next few lines are also chapter markers
                     lookahead_chapter_count = 0
                     for lookahead_idx in range(i + 1, min(i + 16, len(lines))):
+                        # Skip lines that have already been consumed as continuation lines
+                        if lookahead_idx in consumed_lines:
+                            continue
                         lookahead_line = lines[lookahead_idx].strip()
                         if not lookahead_line:  # Skip empty lines
                             continue
@@ -838,12 +946,8 @@ class SummaryGenerator:
                     # This is a TOC entry - skip it entirely (don't add to preface)
                     continue
 
-                # Chapter detection succeeded - mark continuation line as consumed if we used one
-                if 'continuation_line_idx' in locals() and continuation_line_idx is not None:
-                    consumed_lines.add(continuation_line_idx)
-                # Also consume part marker continuation lines to prevent them from being detected as chapters
-                if 'part_marker_line_idx' in locals() and part_marker_line_idx is not None:
-                    consumed_lines.add(part_marker_line_idx)
+                # Note: continuation lines are now consumed immediately when detected (see lines 769, 795, 801)
+                # No need to consume them again here
 
                 # If this is the first numbered chapter, save all preface content as Chapter 0
                 if not found_first_chapter and preface_text:
@@ -1020,8 +1124,10 @@ class SummaryGenerator:
                 print(f"Converting {book_markers[0]['marker_type']} markers to chapters with simple numbering")
 
         if should_convert_books:
-            # Clear existing chapters (they're just merged preface/intro content)
-            chapters = []
+            # Preserve Chapter 0 (preface) if it exists, clear the rest
+            # (they're just merged intro content that won't be used)
+            preface_chapter = next((ch for ch in chapters if ch[0] == 0), None)
+            chapters = [preface_chapter] if preface_chapter else []
 
             # Deduplicate book_markers - keep only LAST occurrence of each book number
             # (BOOK markers often appear twice: once in TOC, once in actual content)
@@ -1085,15 +1191,22 @@ class SummaryGenerator:
                 for title in title_toc:
                     # Search for exact title match (case-sensitive, on its own line)
                     # Use a pattern that matches the title at start of line, possibly with leading whitespace
-                    pattern = r'^\s*' + re.escape(title) + r'\s*$'
+                    # Also allow optional prefix words like "IN" before the title
+                    exact_pattern = r'^\s*' + re.escape(title) + r'\s*$'
+                    fuzzy_pattern = r'^\s*(?:IN\s+)?' + re.escape(title) + r'\s*$'
+
+                    # Find ALL occurrences, then keep the last one (most likely actual chapter, not TOC)
+                    matches = []
                     for i, line in enumerate(lines):
-                        if re.match(pattern, line):
-                            # Found title - record position (skip TOC occurrence, keep content occurrence)
-                            # TOC is usually within first 100 lines
-                            if i > 100:  # Skip TOC, only keep actual content occurrences
-                                title_positions.append((i, title))
-                                print(f"  Found '{title}' at line {i}")
-                                break  # Only use first occurrence after TOC
+                        # Try exact match first, then fuzzy match
+                        if re.match(exact_pattern, line) or re.match(fuzzy_pattern, line):
+                            matches.append(i)
+
+                    # Use the last occurrence (skips TOC, gets actual chapter)
+                    if matches:
+                        last_match = matches[-1]
+                        title_positions.append((last_match, title))
+                        print(f"  Found '{title}' at line {last_match}")
 
                 # If we found most of the titles, create chapters from them
                 if len(title_positions) >= len(title_toc) * 0.6:  # Found at least 60% of titles
@@ -1148,15 +1261,17 @@ class SummaryGenerator:
         """Generate concise 500-word summary without spoilers for fiction"""
         model_name = config.SUMMARY_CONFIGS['concise']['model']
 
+        # Cap text at maximum chars per call, preserving smaller limits
+        max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
+
         # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
-        # Cap at 1 million characters to avoid exceeding token limit
-        estimated_tokens = min(len(text), 1000000) // 4 + 500
+        estimated_tokens = max_chars // 4 + 500
 
         prompt = f"""Generate a concise 500-word summary of "{title}" by {author}.
 
 Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers (no plot twists, endings, or major reveals). For non-fiction, cover main arguments and key takeaways. Write in an engaging, accessible style.
 
-{text[:1000000]}"""
+{text[:max_chars]}"""
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate concise summary using {model_name}")
@@ -1166,6 +1281,9 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
             print("-" * 60)
             return "[DRY RUN] Summary would be generated here"
 
+        # Wait if needed for large API calls
+        self.wait_if_needed_for_large_call(estimated_tokens)
+
         self.rate_limiter.wait_if_needed(estimated_tokens)
 
         # Log input word count
@@ -1173,12 +1291,48 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
         print(f"Generating concise summary using {model_name}...")
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-        response = self.client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
+        # Make API call with retry logic for retriable errors
+        max_retries = 2  # Allow more retries for rate limits
+        retry_count = 0
+        result = None
 
-        result = self.clean_llm_response(response.text)
+        while retry_count <= max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                result = self.clean_llm_response(response.text)
+                break  # Success - exit retry loop
+            except Exception as e:
+                error_message = str(e)
+
+                # Check if error is retriable (503, UNAVAILABLE, or 429 RESOURCE_EXHAUSTED)
+                is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
+                               'UNAVAILABLE' in error_message or '429' in error_message or
+                               'RESOURCE_EXHAUSTED' in error_message)
+
+                # Extract retry delay from error message if present
+                wait_time = 10  # Default
+                if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
+                    # Try to extract retry delay from error message
+                    import re
+                    retry_match = re.search(r'Please retry in ([\d.]+)s', error_message)
+                    if retry_match:
+                        wait_time = int(float(retry_match.group(1))) + 1
+                    else:
+                        wait_time = 60  # Default to 1 minute for rate limits
+
+                if is_retriable and retry_count < max_retries:
+                    retry_count += 1
+                    print(f"  ⚠️  API error (retriable): Rate limit or server issue")
+                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
+                    time.sleep(wait_time)
+                else:
+                    if retry_count > 0:
+                        print(f"  ❌ Max retries exceeded")
+                    raise
+
         output_words = len(result.split())
         print(f"  ← Output: {output_words:,} words")
 
@@ -1188,15 +1342,17 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
         """Generate medium-length 2000-3000 word summary"""
         model_name = config.SUMMARY_CONFIGS['medium']['model']
 
+        # Cap text at maximum chars per call, preserving smaller limits
+        max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
+
         # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
-        # Cap at 1 million characters to avoid exceeding token limit
-        estimated_tokens = min(len(text), 1000000) // 4 + 3000
+        estimated_tokens = max_chars // 4 + 3000
 
         prompt = f"""Generate a comprehensive 2000-3000 word summary of "{title}" by {author}.
 
 Cover all major plot points, themes, and character developments in chronological order. Discuss the author's writing style and analyze major themes. Spoilers are acceptable. For non-fiction, cover all main arguments, evidence, and conclusions.
 
-{text[:1000000]}"""
+{text[:max_chars]}"""
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate medium summary using {model_name}")
@@ -1206,6 +1362,9 @@ Cover all major plot points, themes, and character developments in chronological
             print("-" * 60)
             return "[DRY RUN] Summary would be generated here"
 
+        # Wait if needed for large API calls
+        self.wait_if_needed_for_large_call(estimated_tokens)
+
         self.rate_limiter.wait_if_needed(estimated_tokens)
 
         # Log input word count
@@ -1213,12 +1372,48 @@ Cover all major plot points, themes, and character developments in chronological
         print(f"Generating medium summary using {model_name}...")
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-        response = self.client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
+        # Make API call with retry logic for retriable errors
+        max_retries = 2  # Allow more retries for rate limits
+        retry_count = 0
+        result = None
 
-        result = self.clean_llm_response(response.text)
+        while retry_count <= max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                result = self.clean_llm_response(response.text)
+                break  # Success - exit retry loop
+            except Exception as e:
+                error_message = str(e)
+
+                # Check if error is retriable (503, UNAVAILABLE, or 429 RESOURCE_EXHAUSTED)
+                is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
+                               'UNAVAILABLE' in error_message or '429' in error_message or
+                               'RESOURCE_EXHAUSTED' in error_message)
+
+                # Extract retry delay from error message if present
+                wait_time = 10  # Default
+                if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
+                    # Try to extract retry delay from error message
+                    import re
+                    retry_match = re.search(r'Please retry in ([\d.]+)s', error_message)
+                    if retry_match:
+                        wait_time = int(float(retry_match.group(1))) + 1
+                    else:
+                        wait_time = 60  # Default to 1 minute for rate limits
+
+                if is_retriable and retry_count < max_retries:
+                    retry_count += 1
+                    print(f"  ⚠️  API error (retriable): Rate limit or server issue")
+                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
+                    time.sleep(wait_time)
+                else:
+                    if retry_count > 0:
+                        print(f"  ❌ Max retries exceeded")
+                    raise
+
         output_words = len(result.split())
         print(f"  ← Output: {output_words:,} words")
 
@@ -1406,13 +1601,36 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         print(f"Generating bulk summary for {len(chapters_batch)} chapters: {chapter_numbers}")
         print(f"  → Input: {total_words:,} words (~{len(prompt):,} chars)")
 
-        # Make API call
-        response = self.client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
+        # Make API call with retry logic for retriable errors
+        max_retries = 1
+        retry_count = 0
+        response_text = None
 
-        response_text = response.text
+        while retry_count <= max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                response_text = response.text
+                break  # Success - exit retry loop
+            except Exception as e:
+                error_message = str(e)
+                # Check if this is a retriable error (503 or other server errors)
+                is_retriable = '503' in error_message or 'overloaded' in error_message.lower() or 'UNAVAILABLE' in error_message
+
+                if is_retriable and retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = 10  # Wait 10 seconds before retry
+                    print(f"  ⚠️  API error (retriable): {error_message}")
+                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
+                    time.sleep(wait_time)
+                else:
+                    # Non-retriable error or max retries exceeded
+                    if retry_count > 0:
+                        print(f"  ❌ Max retries exceeded")
+                    raise  # Re-raise the exception
+
         output_words = len(response_text.split())
         print(f"  ← Output: {output_words:,} words")
 
@@ -1504,11 +1722,33 @@ Cover important events, dialogues, and developments. Analyze character developme
         print(f"Generating summary for Chapter {chapter_num}: {chapter_title}...")
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-        response = self.client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
-        summary_text = response.text
+        # Make API call with retry logic for retriable errors
+        max_retries = 1
+        retry_count = 0
+        summary_text = None
+
+        while retry_count <= max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                summary_text = response.text
+                break  # Success - exit retry loop
+            except Exception as e:
+                error_message = str(e)
+                is_retriable = '503' in error_message or 'overloaded' in error_message.lower() or 'UNAVAILABLE' in error_message
+
+                if is_retriable and retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = 10
+                    print(f"  ⚠️  API error (retriable): {error_message}")
+                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
+                    time.sleep(wait_time)
+                else:
+                    if retry_count > 0:
+                        print(f"  ❌ Max retries exceeded")
+                    raise
 
         output_words = len(summary_text.split())
         print(f"  ← Output: {output_words:,} words")
@@ -1701,15 +1941,22 @@ Cover important events, dialogues, and developments. Analyze character developme
             print("Will skip concise/medium/comprehensive overall summaries")
             print("=" * 60 + "\n")
 
-        # Check if book already exists
-        existing_book = self.db.get_book_by_filename(file_path.name)
-        if existing_book:
-            print(f"Book already exists in database (ID: {existing_book['id']})")
-            book_id = existing_book['id']
-        else:
-            # Add book to database with local cover image path
-            book_id = self.db.add_book(title, author, file_path.name, text, gutenberg_id, cover_image_path)
+        # Check if book already exists (skip database operations in dry-run mode)
+        if dry_run:
+            # In dry-run mode, use a fake book ID
+            existing_book = None
+            book_id = 999  # Dummy ID for dry-run
+            print(f"[DRY RUN] Would check if book exists in database")
             print(f"Book added to database (ID: {book_id})\n")
+        else:
+            existing_book = self.db.get_book_by_filename(file_path.name)
+            if existing_book:
+                print(f"Book already exists in database (ID: {existing_book['id']})")
+                book_id = existing_book['id']
+            else:
+                # Add book to database with local cover image path
+                book_id = self.db.add_book(title, author, file_path.name, text, gutenberg_id, cover_image_path)
+                print(f"Book added to database (ID: {book_id})\n")
 
         results = {
             'book_id': book_id,

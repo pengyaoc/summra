@@ -6,6 +6,389 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-11-25
 
+### Summary Generation Script Major Improvements - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-25
+**Completed:** 2025-11-25
+
+**Objective:** Improve the chapter detection, rate limiting, and API reliability of the summary generation system through multiple enhancements addressing edge cases found in complex books like Moby Dick.
+
+**Problems Addressed:**
+
+1. **Rate Limit Bursts:** Large API calls (>100K tokens) could trigger rate limits even within quota
+2. **Duplicate TOC Titles:** Some books had duplicate titles in table of contents
+3. **BOOK Markers in Content:** Moby Dick's Cetology chapter has BOOK markers as part of the narrative, not chapter boundaries
+4. **API Transient Failures:** 503/429 errors caused complete failures without retry
+5. **Character Limit Inconsistency:** Different methods used different character limits
+
+**Changes Made:**
+
+1. **Large Call Throttling System** (`scripts/generate_summaries.py:84-127`):
+   - Added `MAX_CHARS_PER_CALL = 900000` (900K chars ~= 225K tokens)
+   - Added `LARGE_CALL_THRESHOLD = 100000` tokens
+   - Added `LARGE_CALL_WAIT_SECONDS = 60` (1 minute spacing)
+   - New `wait_if_needed_for_large_call()` method enforces spacing between large calls
+   - Prevents burst rate limit errors from consecutive large API calls
+
+2. **TOC Title Deduplication** (`scripts/generate_summaries.py:518`):
+   - Changed `return titles` to `return list(dict.fromkeys(titles))`
+   - Preserves order while removing duplicate chapter titles
+   - Handles books with repeated TOC entries
+
+3. **BOOK Marker Embedded Detection** (`scripts/generate_summaries.py:617-673`):
+   - Sophisticated logic to distinguish embedded BOOK markers from actual chapter boundaries
+   - Checks for substantial content (>20 chars, has lowercase) on adjacent lines
+   - Requires no blank lines between marker and content for "embedded" classification
+   - Special handling for first BOOK markers in numbered chapters
+   - **Impact:** Correctly handles Moby Dick's Cetology chapter (Chapter 32) where "BOOK I (Folio)", "BOOK II (Octavo)" are part of whale classification discussion
+
+4. **Immediate Continuation Line Consumption** (`scripts/generate_summaries.py:775, 800, 806`):
+   - Added `consumed_lines.add(i + 1)` immediately when detecting continuation lines
+   - Prevents continuation lines from being detected as separate chapters
+   - Fixes duplicate chapter detection bugs
+
+5. **Improved Chapter Title Handling** (`scripts/generate_summaries.py:842-844`):
+   - Uses marker name itself when no explicit title provided
+   - Changes "Introduction & Prefaces" to capitalized marker name (e.g., "Preface")
+   - More accurate default titles
+
+6. **Enhanced TOC Detection** (`scripts/generate_summaries.py:921-948`):
+   - Skips consumed lines when looking ahead for TOC detection
+   - Never skips PREFACE/INTRODUCTION as TOC (Chapter 0 always saved)
+   - More reliable TOC vs content distinction
+
+7. **BOOK-to-Chapter Conversion** (`scripts/generate_summaries.py:1127-1133`):
+   - Preserves Chapter 0 (preface) when converting BOOK markers to chapters
+   - Clears only merged intro content (chapters that won't be used)
+   - Better handling of anthology-style books
+
+8. **Title Position Matching** (`scripts/generate_summaries.py:1194-1212`):
+   - Fuzzy pattern with optional "IN" prefix: `r'^\s*(?:IN\s+)?' + re.escape(title)`
+   - Uses LAST occurrence instead of first (skips TOC, gets actual chapter)
+   - Finds all matches, then keeps last one (most likely actual chapter location)
+   - More reliable title-to-content mapping
+
+9. **Character Limit Enforcement** (`scripts/generate_summaries.py:1264-1270, 1345-1351`):
+   - Consistent use of `max_chars = min(len(text), self.MAX_CHARS_PER_CALL)`
+   - Applied to `generate_concise_summary()` and `generate_medium_summary()`
+   - Caps at 900K chars (225K tokens) to fit free tier 250K/min limit
+
+10. **API Retry Logic with Exponential Backoff** (`scripts/generate_summaries.py:1291-1334, 1372-1414, 1604-1654, 1725-1752`):
+    - Added retry loops to all API calls (concise, medium, bulk, single chapter)
+    - Handles retriable errors: 503, UNAVAILABLE, 429, RESOURCE_EXHAUSTED
+    - Extracts retry delay from error message: `Please retry in ([\d.]+)s`
+    - Default wait times: 10s (503), 60s (429)
+    - Max retries: 2 for summaries, 1 for chapter calls
+    - Graceful degradation with clear error messages
+
+11. **Dry Run Database Skip** (`scripts/generate_summaries.py:1944-1961`):
+    - In dry-run mode, skip all database operations
+    - Use dummy book_id = 999 for testing
+    - Prevents database pollution during testing
+
+**Technical Details:**
+
+**Rate Limiting Call Sequence:**
+```
+1. wait_if_needed_for_large_call(estimated_tokens)  # 100K+ token spacing
+2. rate_limiter.wait_if_needed(estimated_tokens)     # Standard rate limiting
+3. Make API call with retry logic
+```
+
+**BOOK Marker Embedded Detection Algorithm:**
+```
+1. Check 3 lines before and after for substantial content
+2. Substantial = has lowercase + >20 chars + not a marker
+3. Must be ADJACENT (no blank lines between)
+4. OR: Currently in numbered chapter AND no BOOK markers seen yet
+5. If embedded: Add to current chapter text, skip boundary creation
+```
+
+**Retry Logic Pattern:**
+```python
+max_retries = 2
+retry_count = 0
+while retry_count <= max_retries:
+    try:
+        response = self.client.models.generate_content(...)
+        result = self.clean_llm_response(response.text)
+        break  # Success
+    except Exception as e:
+        is_retriable = ('503' in str(e) or '429' in str(e) or ...)
+        if is_retriable and retry_count < max_retries:
+            retry_count += 1
+            wait_time = parse_wait_time(e) or default_wait
+            print(f"Retrying in {wait_time}s...")
+            time.sleep(wait_time)
+        else:
+            raise
+```
+
+**Files Modified:**
+- `scripts/generate_summaries.py` - Multiple sections updated (see line numbers above)
+
+**Impact:**
+
+1. **Reliability:**
+   - 503/429 errors now automatically retry instead of failing
+   - Large calls properly spaced to avoid burst rate limits
+   - More robust against transient API failures
+
+2. **Accuracy:**
+   - Correctly handles Moby Dick's embedded BOOK markers
+   - No duplicate chapters from TOC title repetition
+   - Better title matching (last occurrence vs first)
+   - More accurate default chapter titles
+
+3. **Performance:**
+   - Character limits enforced consistently across all methods
+   - Fits within free tier 250K tokens/min limit
+   - Large call spacing prevents quota exhaustion
+
+4. **Testability:**
+   - Dry run mode skips database operations
+   - Easier to test chapter detection without side effects
+
+**Example Books Improved:**
+- **Moby Dick:** Cetology chapter (32) no longer fragmented into 100+ sub-chapters
+- **Books with duplicate TOC entries:** No duplicate chapters created
+- **Large books:** Retry logic handles transient API errors gracefully
+
+**Next Steps/Notes:**
+- Monitor API retry frequency to tune wait times if needed
+- Consider adding retry metrics/logging for production debugging
+- May want to make LARGE_CALL_THRESHOLD configurable per book size
+
+---
+
+## 2025-11-25
+
+### Flask App Refactoring and Production Navigation Fix - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-25
+**Completed:** 2025-11-25
+
+**Objective:** Refactor Flask application architecture to eliminate code duplication between app.py and app_prod.py by extracting common logic into app_base.py, and fix production navigation bug preventing users from clicking on books.
+
+**Problems Identified:**
+1. ~300 lines of duplicated code between app.py (551 lines) and app_prod.py (336 lines)
+2. Risk of divergence: changes to routes need to be manually copied between files
+3. Production navigation crash: "Cannot read properties of null (reading 'classList')" at app.js:477
+4. Books not clickable on production home page (works locally)
+5. Import errors when running with module execution (`python -m backend.app`)
+
+**Root Cause Analysis:**
+
+**Backend Duplication:**
+- Both app.py and app_prod.py contained identical implementations of:
+  - Flask app initialization and configuration
+  - Database initialization
+  - All common API routes: /api/books, /api/books/<id>, /api/books/<id>/summary/<type>, /api/books/<id>/chapters
+  - Error handlers (404, 500)
+  - Directory setup utilities
+  - Cover image serving
+
+**Frontend Navigation Bug:**
+- Production environment running old code (commit aeda28e) before UI redesign
+- UI redesign (commit d034498) added `book-info-cover` element to template
+- Production template missing this element
+- JavaScript attempted to access null element at line 477: `bookCoverEl.classList.remove('hidden')`
+- Caused uncaught TypeError preventing book selection
+
+**Import System Issues:**
+- Used absolute imports (`import config`) which only work with direct execution
+- Failed with module execution (`python -m backend.app`) expecting relative imports
+- Error: `ModuleNotFoundError: No module named 'config'`
+
+**Changes Made:**
+
+1. **Created `backend/app_base.py`** (302 lines):
+   - Extracted all common Flask routes and logic
+   - Flask app initialization with static/template folders
+   - CORS configuration
+   - Database initialization: `db = models.Database()`
+   - Common API routes:
+     - `GET /` - Serve main page
+     - `GET /api/books` - Get all books with cover URL conversion
+     - `GET /api/books/<int:book_id>` - Get book details
+     - `GET /api/books/<int:book_id>/summary/<summary_type>` - Get summary with chapters
+     - `GET /api/books/<int:book_id>/chapters` - Get all chapters
+     - `GET /api/summary-configs` - Get summary configurations
+     - `GET /covers/<path:filename>` - Serve cover images
+   - Error handlers (404, 500)
+   - `ensure_directories()` utility function
+   - Dual import pattern for both execution methods:
+     ```python
+     try:
+         from . import config
+         from . import models
+     except ImportError:
+         import config
+         import models
+     ```
+
+2. **Refactored `backend/app.py`** (295 lines, down from 551):
+   - Removed all common routes (now imported from app_base)
+   - Imports Flask app: `from app_base import app, logger, ensure_directories`
+   - Retained dev-specific TTS routes:
+     - `POST /api/tts/generate` - Full TTS generation with streaming support
+     - `POST /api/tts/stop` - Stop active TTS generation
+   - Retained TTS handler initialization and active generations tracking
+   - Dual import pattern:
+     ```python
+     try:
+         from . import config
+         from .app_base import app, logger, ensure_directories
+     except ImportError:
+         import config
+         from app_base import app, logger, ensure_directories
+     ```
+
+3. **Refactored `backend/app_prod.py`** (104 lines, down from 336):
+   - Removed all common routes (now imported from app_base)
+   - Imports Flask app: `from app_base import app, logger, ensure_directories`
+   - Retained prod-specific routes:
+     - `POST /api/tts/generate` - Pre-generated audio only (no real-time generation)
+     - `GET /health` - Health check endpoint for monitoring
+   - Production TTS endpoint checks for existing audio files:
+     - Priority 1: Gemini TTS (`*_gemini.wav`)
+     - Priority 2: VITS TTS (`*_vits.wav`)
+     - Priority 3: Legacy (`*_complete.wav`)
+   - Dual import pattern for flexibility
+
+4. **Fixed Production Navigation Bug** (`frontend/static/js/app.js:384`):
+   - Added defensive null check before accessing DOM element:
+     ```javascript
+     const bookCoverEl = document.getElementById('book-info-cover');
+     if (bookCoverEl) {  // ✅ Defensive check added
+         if (book.cover_image_url) {
+             bookCoverEl.src = book.cover_image_url;
+             bookCoverEl.alt = `${book.title} cover`;
+             bookCoverEl.classList.remove('hidden');
+         } else {
+             bookCoverEl.classList.add('hidden');
+         }
+     }
+     ```
+   - Prevents crash when element doesn't exist in older templates
+   - Allows backward compatibility with production environment
+
+**Technical Details:**
+
+**Import Pattern - Both Execution Methods Supported:**
+```python
+# Supports both:
+# 1. Direct execution: python backend/app.py
+# 2. Module execution: python -m backend.app
+
+try:
+    from . import config  # Relative import for module execution
+    from . import models
+except ImportError:
+    import config  # Absolute import for direct execution
+    import models
+```
+
+**Code Reduction:**
+- app_base.py: 302 lines (new)
+- app.py: 551 → 295 lines (256 lines removed, 46% reduction)
+- app_prod.py: 336 → 104 lines (232 lines removed, 69% reduction)
+- Total lines eliminated: 488 lines of duplication
+- Total backend lines: 701 (vs 887 before, 21% reduction)
+
+**Architecture Pattern:**
+```
+app_base.py         (Common Flask app and routes)
+     ↑                     ↑
+     |                     |
+app.py              app_prod.py
+(Dev-specific       (Prod-specific
+ TTS routes)        health checks)
+```
+
+**Testing Verification:**
+```bash
+# Both execution methods work:
+python backend/app.py                    # ✅ Works
+python -m backend.app                    # ✅ Works (after import fix)
+python backend/app_prod.py               # ✅ Works
+python -m backend.app_prod               # ✅ Works
+```
+
+**Production Environment Differences:**
+- **Local**: Commit 7889e71 (latest, includes UI redesign with book-info-cover element)
+- **Production**: Commit aeda28e (old, missing book-info-cover element)
+- **Deployment Gap**: Production needs to pull latest code and restart service
+- **Fix Applied**: Defensive JavaScript prevents crash until production is updated
+
+**Files Created:**
+- `backend/app_base.py` (302 lines) - Shared Flask application module
+
+**Files Modified:**
+- `backend/app.py` (lines 1-295) - Refactored to import from app_base
+- `backend/app_prod.py` (lines 1-104) - Refactored to import from app_base
+- `frontend/static/js/app.js` (line 384) - Added defensive null check
+
+**Git Commits:**
+- Commit 7889e71: "update db with new book data"
+- Commit d034498: "Redesign UI with BeFreed-inspired minimal reading experience"
+- Commit 3a4e04a: "Fix production bugs in app_prod.py"
+- Additional commit needed for app_base.py refactoring (pending)
+
+**Impact:**
+1. **Code Maintainability:**
+   - Single source of truth for common routes
+   - Changes to API routes only need to be made once
+   - Eliminates risk of divergence between dev and prod
+   - Easier to review and understand codebase
+
+2. **Development Workflow:**
+   - Both execution methods supported (direct and module)
+   - Flexible import system for different deployment scenarios
+   - Easier testing with module execution
+
+3. **Production Stability:**
+   - Navigation bug fixed with defensive programming
+   - Backward compatible with older templates
+   - Graceful degradation when elements missing
+   - Production can be updated independently of JavaScript
+
+4. **Architecture:**
+   - Clear separation: common vs environment-specific logic
+   - app.py: 46% smaller (dev-specific TTS features only)
+   - app_prod.py: 69% smaller (prod-specific health checks only)
+   - Easier onboarding for new developers
+
+**Verification:**
+- ✅ Local development server works (port 5001)
+- ✅ Module execution works (`python -m backend.app`)
+- ✅ Direct execution works (`python backend/app.py`)
+- ✅ All API routes functional
+- ✅ TTS generation works in development
+- ✅ Navigation works locally with defensive check
+- ⏳ Production deployment pending (need to pull latest code)
+
+**Next Steps:**
+- Commit app_base.py refactoring changes
+- Push to GitHub
+- Deploy to production GCP instance:
+  ```bash
+  cd /path/to/summra
+  git pull origin main
+  sudo systemctl restart summra
+  ```
+- Verify navigation works in production after deployment
+- Monitor production logs for any issues
+
+**Lessons Learned:**
+- Duplication leads to divergence - extract common logic early
+- Defensive programming prevents crashes from environmental differences
+- Production/development parity requires attention and testing
+- Import flexibility important for different execution contexts
+- Git deployment lag can cause unexpected bugs (old code + new assets)
+
+---
+
 ### UI Redesign - BeFreed-Inspired Reading Experience - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-11-25
@@ -359,6 +742,142 @@ if cached_audio_path.exists():
 - Test comprehensive summary view on production
 - Test pre-generated audio playback on production
 - Monitor production logs after deployment
+
+---
+
+## 2025-11-25
+
+### Chapter Summary UI Polish - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-25
+**Completed:** 2025-11-25
+
+**Objective:** Improve chapter summary UI/UX in the chapter detail view by reorganizing button layout and simplifying the toggle button design for a cleaner, more minimal interface.
+
+**Changes Made:**
+
+1. **Moved Listen Button to Summary Header** (`frontend/templates/index.html:110-113`):
+   - Created new `chapter-summary-actions` wrapper div in header
+   - Moved "🔊 Listen" button from bottom of summary content to header
+   - Placed Listen button alongside Show/Hide toggle button
+   - Simplified button text from "🔊 Listen to Summary" to "🔊 Listen"
+   - Both buttons now side-by-side in header for better accessibility
+
+2. **Simplified Toggle Button Design** (`frontend/static/css/style.css:524-539`):
+   - Changed from styled button with border/background to minimal chevron-only design
+   - Removed blue background (`background: transparent`)
+   - Removed border and padding
+   - Removed rounded corners
+   - Increased font size to 1.2rem for better visibility
+   - Button now displays just chevron: "▼" (collapsed) or "▲" (expanded)
+   - Hover effect: color change and slight scale transform
+   - Cleaner, more minimal aesthetic
+
+3. **Updated JavaScript Toggle Logic** (`frontend/static/js/app.js:628-632`):
+   - Changed button text from "Show Summary ▼" / "Hide Summary ▲" to just "▼" / "▲"
+   - Maintains same functionality with simplified visual presentation
+
+4. **Added Flexbox Layout for Button Container** (`frontend/static/css/style.css:518-522`):
+   - New `.chapter-summary-actions` class with flexbox layout
+   - 12px gap between buttons
+   - Centered alignment for professional appearance
+
+**Technical Details:**
+
+**HTML Structure:**
+```html
+<div class="chapter-summary-header" id="chapter-summary-header">
+    <h4>📝 Chapter Summary <span class="spoiler-warning">(may contain spoilers)</span></h4>
+    <div class="chapter-summary-actions">
+        <button class="tts-button-inline" id="chapter-summary-tts-button">🔊 Listen</button>
+        <button class="toggle-summary-btn" id="toggle-summary-btn">▼</button>
+    </div>
+</div>
+```
+
+**CSS Styling:**
+```css
+.toggle-summary-btn {
+    background: transparent;
+    color: var(--secondary-color);
+    border: none;
+    padding: 0;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: normal;
+    line-height: 1;
+}
+
+.toggle-summary-btn:hover {
+    color: #2980b9;
+    transform: scale(1.1);
+}
+
+.chapter-summary-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+```
+
+**JavaScript Toggle:**
+```javascript
+toggleBtn.onclick = () => {
+    if (isSummaryExpanded) {
+        summaryContent.classList.add('hidden');
+        toggleBtn.textContent = '▼';
+        isSummaryExpanded = false;
+    } else {
+        summaryContent.classList.remove('hidden');
+        toggleBtn.textContent = '▲';
+        isSummaryExpanded = true;
+    }
+};
+```
+
+**Files Modified:**
+- `frontend/templates/index.html` (lines 110-113) - Restructured header layout
+- `frontend/static/css/style.css` (lines 518-522, 524-539) - Added container, simplified button
+- `frontend/static/js/app.js` (lines 628-632) - Updated toggle text
+
+**Design Improvements:**
+1. **Better Organization:**
+   - All chapter summary controls now in header
+   - Listen and toggle buttons grouped together
+   - Clearer visual hierarchy
+
+2. **Reduced Visual Clutter:**
+   - Minimal chevron-only toggle (no border, no background)
+   - Consistent with overall minimal design philosophy
+   - Less visual weight in UI
+
+3. **Improved Accessibility:**
+   - Listen button more discoverable (in header vs bottom)
+   - Larger clickable chevron (1.2rem font size)
+   - Clear hover states for both buttons
+
+4. **Consistent with BeFreed Design:**
+   - Minimal UI elements
+   - Clean, unobtrusive controls
+   - Focus on content first
+
+**User Experience:**
+- Users can now see both Listen and toggle options immediately when viewing chapter
+- Simplified chevron is less distracting than full button
+- Hover feedback provides clear indication of interactivity
+- Layout matches other summary sections with Listen buttons in headers
+
+**Impact:**
+- Cleaner, more professional chapter detail page
+- Better alignment with overall design system
+- Improved button discoverability and usability
+- Reduced visual noise in reading interface
+
+**Next Steps/Notes:**
+- Consider applying similar button simplification to other UI elements if needed
+- Monitor user feedback on new layout
+- May want to add keyboard shortcuts for toggle in future
 
 ---
 

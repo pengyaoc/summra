@@ -515,6 +515,22 @@ def extract_toc(self, text: str) -> Dict[str, str]:
     return toc
 ```
 
+**TOC Title Deduplication (2025-11-25):**
+
+Titles extracted from title-only TOC are deduplicated while preserving order:
+
+**Location:** `scripts/generate_summaries.py:518`
+
+```python
+# Deduplicate titles while preserving order (dict keys maintain insertion order in Python 3.7+)
+return list(dict.fromkeys(titles))
+```
+
+**Rationale:**
+- Some books repeat titles in TOC (e.g., multiple editions, errata sections)
+- `dict.fromkeys()` preserves first occurrence of each title
+- Prevents duplicate chapter entries in parsed results
+
 **Solution 2:** Validate detected chapters against TOC
 
 ```python
@@ -631,6 +647,111 @@ if pattern == r'^([IVXLCDM]+)\.\s+(.+)$':
     if first_word and not first_word.isupper():
         continue
 ```
+
+### BOOK Marker Embedded Detection (2025-11-25)
+
+**Problem:** Some books like "Moby-Dick" have BOOK markers embedded within chapter content rather than as actual chapter boundaries.
+
+**Example:** In Moby Dick's "Cetology" chapter:
+```
+CHAPTER 32. Cetology.
+
+Already we have encountered whole Whales of various sizes...
+
+BOOK I. (Folio)
+CHAPTER I. (Sperm Whale).
+BOOK II. (Octavo)
+CHAPTER I. (Grampus).
+...
+```
+
+These BOOK markers are part of Ishmael's classification system discussion, NOT separate chapters.
+
+**Solution:** Sophisticated embedded marker detection
+
+**Location:** `scripts/generate_summaries.py:617-673`
+
+```python
+# Check if this BOOK marker is embedded in a paragraph
+# by looking at surrounding lines for substantial content
+# IMPORTANT: Only treat as embedded if substantial content is on ADJACENT lines
+# (no blank lines in between), to avoid false positives where BOOK markers
+# appear between sections separated by blank lines
+is_embedded = False
+
+# Look at 3 lines before and after for context
+context_range = 3
+for offset in range(-context_range, context_range + 1):
+    if offset == 0:
+        continue  # Skip current line
+
+    context_idx = i + offset
+    if 0 <= context_idx < len(lines):
+        context_line = lines[context_idx].strip()
+
+        # Check if this is substantial content (not a marker, not empty)
+        # Substantial = has lowercase letters and is longer than 20 chars
+        has_lowercase = any(c.islower() for c in context_line)
+        is_long_enough = len(context_line) > 20
+        is_not_marker = not re.match(r'^(CHAPTER|BOOK|VOLUME|PART|ACT)\s+', context_line)
+
+        if has_lowercase and is_long_enough and is_not_marker:
+            # Found substantial content - check if there are blank lines in between
+            # If all lines between current and context line are non-empty, it's truly embedded
+            has_blank_between = False
+            start_check = min(i, context_idx)
+            end_check = max(i, context_idx)
+            for check_idx in range(start_check + 1, end_check):
+                if not lines[check_idx].strip():
+                    has_blank_between = True
+                    break
+
+            # Only treat as embedded if no blank lines between
+            if not has_blank_between:
+                is_embedded = True
+                break
+
+# If embedded in a paragraph, treat as content not a chapter boundary
+# ALSO: If we're currently inside a numbered chapter (not preface/intro) AND we haven't
+# seen any BOOK markers yet, treat BOOK markers as content. This handles cases like
+# Moby Dick's Cetology chapter where BOOK markers are part of the discussion
+# (BOOK I Folio, BOOK II Octavo, etc.)
+# BUT: If we already have BOOK markers, this is a nested BOOK/CHAPTER structure
+# and we should process BOOK markers as book boundaries
+# ALSO: Preface (Chapter 0) doesn't prevent BOOK markers from being processed
+is_embedded_in_chapter = (current_chapter is not None and
+                         current_chapter[0] != 0 and  # Not preface/intro
+                         len(book_markers) == 0)
+if is_embedded or is_embedded_in_chapter:
+    # This is content within a chapter (e.g., Moby Dick's Cetology chapter)
+    # Add to current chapter text instead of treating as boundary
+    if current_chapter is not None and not in_illustration:
+        current_text.append(line)
+    elif not found_first_chapter and not in_illustration:
+        preface_text.append(line)
+    continue
+```
+
+**Detection Criteria:**
+
+1. **Substantial Content Check:**
+   - Surrounding lines must have lowercase letters
+   - Surrounding lines must be longer than 20 characters
+   - Surrounding lines must not be other markers (CHAPTER, BOOK, etc.)
+
+2. **Adjacency Check:**
+   - Content must be ADJACENT (no blank lines between marker and content)
+   - Prevents false positives where BOOK markers separate sections
+
+3. **Chapter Context Check:**
+   - If currently inside a numbered chapter (not Chapter 0)
+   - AND no BOOK markers have been seen yet
+   - THEN treat BOOK markers as embedded content
+
+**Impact:**
+- Correctly handles Moby Dick's Cetology chapter (Chapter 32) where BOOK markers are part of the whale classification discussion
+- Prevents fragmentation of narrative chapters that discuss book/volume structures
+- Still correctly detects BOOK-based chapter structures like "The Odyssey"
 
 ### BOOK Markers as Chapters
 
@@ -1438,11 +1559,16 @@ if audio:
 - Requests: 10 per minute
 - Tokens: 250,000 per minute (input + output)
 
+**Call Size Limits:**
+- Maximum: 900,000 characters per call (~225K tokens)
+- Large Call Threshold: 100,000 tokens
+- Large Call Spacing: 60 seconds between large calls
+
 ### Rate Limiter Implementation
 
 **Location:** `scripts/generate_summaries.py:40-79`
 
-**Algorithm:** Rolling window token bucket
+**Algorithm:** Rolling window token bucket with large call throttling
 
 ```python
 class RateLimiter:
@@ -1485,10 +1611,49 @@ class RateLimiter:
             self.token_counts.append((current_time, estimated_tokens))
 ```
 
+**Large Call Throttling:**
+
+**Location:** `scripts/generate_summaries.py:102-127`
+
+In addition to the standard rate limiter, large API calls (>100K tokens) trigger additional spacing to prevent burst rate limit errors:
+
+```python
+def wait_if_needed_for_large_call(self, estimated_tokens: int):
+    """Wait if a large API call was recently made to avoid rate limits"""
+    if estimated_tokens < self.LARGE_CALL_THRESHOLD:  # 100K tokens
+        return  # Small call, no wait needed
+
+    if self.last_large_call_time is None:
+        # First large call, just record the time
+        self.last_large_call_time = time.time()
+        return
+
+    # Calculate time since last large call
+    elapsed = time.time() - self.last_large_call_time
+    wait_needed = self.LARGE_CALL_WAIT_SECONDS - elapsed  # 60 seconds
+
+    if wait_needed > 0:
+        print(f"\n⏱️  Large API call detected ({estimated_tokens:,} tokens)")
+        print(f"   Waiting {wait_needed:.1f}s to avoid rate limits...")
+        time.sleep(wait_needed)
+
+    # Update last large call time
+    self.last_large_call_time = time.time()
+```
+
+**Call Sequence:**
+```
+1. wait_if_needed_for_large_call(estimated_tokens)  # Large call spacing
+2. rate_limiter.wait_if_needed(estimated_tokens)     # Standard rate limiting
+3. Make API call
+```
+
 **Token Estimation:**
 ```python
 # Rough estimate: 1 token ≈ 4 characters
-estimated_tokens = len(prompt) // 4 + expected_output_words
+# Cap at maximum call size
+max_chars = min(len(text), self.MAX_CHARS_PER_CALL)  # 900K chars
+estimated_tokens = max_chars // 4 + expected_output_words
 ```
 
 **Example Timeline:**
@@ -1501,6 +1666,12 @@ Time 45s: Request 10 (30k tokens) - total = 300k tokens
 Time 46s: Request 11 would exceed 250k limit
           → Wait 14s (until Time 60s, when Request 1 expires)
 Time 60s: Request 11 proceeds (only counting Requests 2-11 = 300k - 30k = 270k)
+
+Large Call Example:
+Time 0s:  Large call (150K tokens) - first large call
+Time 30s: Another large call attempted (120K tokens)
+          → Wait 30s (60s - 30s elapsed)
+Time 60s: Large call proceeds
 ```
 
 ### LLM Client Initialization
@@ -1525,7 +1696,7 @@ class SummaryGenerator:
 
 **Model:** `gemini-2.0-flash-exp`
 
-**Location:** `scripts/generate_summaries.py:876-914`
+**Location:** `scripts/generate_summaries.py:1261-1335`
 
 ```python
 def generate_concise_summary(self, text: str, title: str, author: str,
@@ -1533,31 +1704,91 @@ def generate_concise_summary(self, text: str, title: str, author: str,
     """Generate concise 500-word summary without spoilers for fiction"""
     model_name = config.SUMMARY_CONFIGS['concise']['model']
 
-    # Estimate tokens (rough: 1 token ≈ 4 chars)
-    # Cap at 1M chars to avoid exceeding context window
-    estimated_tokens = min(len(text), 1000000) // 4 + 500
+    # Cap text at maximum chars per call, preserving smaller limits
+    max_chars = min(len(text), self.MAX_CHARS_PER_CALL)  # 900K chars
+
+    # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
+    estimated_tokens = max_chars // 4 + 500
 
     prompt = f"""Generate a concise 500-word summary of "{title}" by {author}.
 
 Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers (no plot twists, endings, or major reveals). For non-fiction, cover main arguments and key takeaways. Write in an engaging, accessible style.
 
-{text[:1000000]}"""
+{text[:max_chars]}"""
 
-    # Wait for rate limit if needed
+    if dry_run:
+        print(f"\n[DRY RUN] Would generate concise summary using {model_name}")
+        print(f"Estimated tokens: {estimated_tokens:,}")
+        print(f"Prompt length: {len(prompt):,} chars")
+        print("-" * 60)
+        return "[DRY RUN] Summary would be generated here"
+
+    # Wait if needed for large API calls
+    self.wait_if_needed_for_large_call(estimated_tokens)
+
     self.rate_limiter.wait_if_needed(estimated_tokens)
 
-    # Make API call
-    response = self.client.models.generate_content(
-        model=model_name,
-        contents=prompt
-    )
+    # Log input word count
+    input_words = len(text.split())
+    print(f"Generating concise summary using {model_name}...")
+    print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-    # Clean response
-    result = self.clean_llm_response(response.text)
+    # Make API call with retry logic for retriable errors
+    max_retries = 2  # Allow more retries for rate limits
+    retry_count = 0
+    result = None
+
+    while retry_count <= max_retries:
+        try:
+            response = self.client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            result = self.clean_llm_response(response.text)
+            break  # Success - exit retry loop
+        except Exception as e:
+            error_message = str(e)
+
+            # Check if error is retriable (503, UNAVAILABLE, or 429 RESOURCE_EXHAUSTED)
+            is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
+                           'UNAVAILABLE' in error_message or '429' in error_message or
+                           'RESOURCE_EXHAUSTED' in error_message)
+
+            # Extract retry delay from error message if present
+            wait_time = 10  # Default
+            if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
+                # Try to extract retry delay from error message
+                import re
+                retry_match = re.search(r'Please retry in ([\d.]+)s', error_message)
+                if retry_match:
+                    wait_time = int(float(retry_match.group(1))) + 1
+                else:
+                    wait_time = 60  # Default to 1 minute for rate limits
+
+            if is_retriable and retry_count < max_retries:
+                retry_count += 1
+                print(f"  ⚠️  API error (retriable): Rate limit or server issue")
+                print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
+                time.sleep(wait_time)
+            else:
+                if retry_count > 0:
+                    print(f"  ❌ Max retries exceeded")
+                raise
+
+    output_words = len(result.split())
+    print(f"  ← Output: {output_words:,} words")
+
     return result
 ```
 
 **Context Window:** 2M tokens (Gemini 2.0 Flash)
+
+**Character Limit:** 900K characters (~225K tokens) per call
+
+**Retry Logic:**
+- Max retries: 2
+- Retriable errors: 503, UNAVAILABLE, 429, RESOURCE_EXHAUSTED
+- Wait times: 10s (default), 60s (rate limits), or parsed from error message
 
 **Typical Usage:**
 - Input: 100k-300k words (book)
@@ -2407,6 +2638,238 @@ def main():
 
 ---
 
+## Backend Architecture
+
+### Flask Application Structure (Refactored 2025-11-25)
+
+**Purpose:** Eliminate code duplication between development and production Flask applications while maintaining environment-specific functionality.
+
+**Architecture Pattern:**
+
+```
+┌─────────────────────────────────────────┐
+│         backend/app_base.py             │
+│   (Common Flask App & Routes - 302L)    │
+├─────────────────────────────────────────┤
+│ • Flask app initialization              │
+│ • CORS configuration                    │
+│ • Database initialization               │
+│ • Common API routes:                    │
+│   - GET /                                │
+│   - GET /api/books                       │
+│   - GET /api/books/<id>                  │
+│   - GET /api/books/<id>/summary/<type>   │
+│   - GET /api/books/<id>/chapters         │
+│   - GET /api/summary-configs             │
+│   - GET /covers/<filename>               │
+│ • Error handlers (404, 500)             │
+│ • Directory setup utilities             │
+└─────────────────────────────────────────┘
+         ↑                       ↑
+         │                       │
+         │                       │
+┌────────┴─────────┐    ┌────────┴──────────┐
+│  backend/app.py  │    │ backend/app_prod  │
+│   (295 lines)    │    │    (104 lines)    │
+├──────────────────┤    ├───────────────────┤
+│ Dev-Specific:    │    │ Prod-Specific:    │
+│ • POST /api/tts/ │    │ • POST /api/tts/  │
+│   generate       │    │   generate        │
+│   (Full TTS with │    │   (Pre-generated  │
+│    streaming)    │    │    files only)    │
+│ • POST /api/tts/ │    │ • GET /health     │
+│   stop           │    │   (Monitoring)    │
+│ • TTS handler    │    │                   │
+│   initialization │    │                   │
+│ • Active TTS     │    │                   │
+│   tracking       │    │                   │
+└──────────────────┘    └───────────────────┘
+```
+
+**Code Reduction:**
+- **Before Refactoring:**
+  - app.py: 551 lines
+  - app_prod.py: 336 lines
+  - Total: 887 lines (with ~300 lines duplicated)
+- **After Refactoring:**
+  - app_base.py: 302 lines (new)
+  - app.py: 295 lines
+  - app_prod.py: 104 lines
+  - Total: 701 lines (21% reduction, zero duplication)
+
+### Dual Import System
+
+**Problem:** Python requires different import styles for different execution methods:
+- **Direct execution:** `python backend/app.py` → Requires absolute imports (`import config`)
+- **Module execution:** `python -m backend.app` → Requires relative imports (`from . import config`)
+
+**Solution:** Try/except pattern in all backend modules:
+
+**Location:** `backend/app_base.py:16-21`, `backend/app.py:11-16`, `backend/app_prod.py:11-16`
+
+```python
+# Handle both direct execution and module execution
+try:
+    from . import config
+    from . import models
+except ImportError:
+    import config
+    import models
+```
+
+**Benefits:**
+- Works with both `python backend/app.py` and `python -m backend.app`
+- Flexible for different deployment scenarios
+- Supports both development and testing workflows
+- No runtime overhead (import happens once at startup)
+
+### Flask App Initialization
+
+**Location:** `backend/app_base.py:30-37`
+
+```python
+# Create Flask app
+app = Flask(__name__,
+            static_folder='../frontend/static',
+            template_folder='../frontend/templates')
+CORS(app)
+
+# Initialize database
+db = models.Database()
+```
+
+**Exported Symbols:**
+- `app` - Flask application instance (imported by app.py and app_prod.py)
+- `db` - Database instance (used by routes in app_base.py)
+- `logger` - Logging instance (imported by app.py and app_prod.py)
+- `ensure_directories()` - Utility function (called at startup)
+
+### Environment-Specific Routes
+
+**Development (app.py) - TTS Generation Enabled:**
+
+```python
+@app.route('/api/tts/generate', methods=['POST'])
+def generate_tts():
+    """
+    Generate TTS audio with streaming support.
+    - Full VITS TTS model loaded in memory
+    - Supports chunked generation for long text
+    - Returns streaming status updates
+    - Memory intensive (~500MB for model)
+    """
+    # Implementation: lines 70-243
+```
+
+**Production (app_prod.py) - TTS Generation Disabled:**
+
+```python
+@app.route('/api/tts/generate', methods=['POST'])
+def generate_tts():
+    """
+    Check for pre-generated TTS audio only.
+    TTS generation disabled to conserve memory on e2-micro (1GB RAM).
+    - Checks for Gemini TTS files (_gemini.wav)
+    - Checks for VITS TTS files (_vits.wav)
+    - Checks for legacy files (_complete.wav)
+    - Returns 404 if no pre-generated audio exists
+    """
+    # Implementation: lines 31-88
+```
+
+### Route Coverage
+
+**Common Routes (app_base.py):**
+- ✅ `GET /` - Main page
+- ✅ `GET /api/books` - All books
+- ✅ `GET /api/books/<id>` - Book details
+- ✅ `GET /api/books/<id>/summary/<type>` - Summary with chapters
+- ✅ `GET /api/books/<id>/chapters` - All chapters
+- ✅ `GET /api/summary-configs` - Summary configurations
+- ✅ `GET /covers/<filename>` - Cover images
+- ✅ Error handlers (404, 500)
+
+**Development-Only Routes (app.py):**
+- ✅ `POST /api/tts/generate` - Full TTS generation
+- ✅ `POST /api/tts/stop` - Stop TTS generation
+
+**Production-Only Routes (app_prod.py):**
+- ✅ `POST /api/tts/generate` - Pre-generated audio lookup (overrides base)
+- ✅ `GET /health` - Health check for monitoring
+
+### Defensive Programming Pattern
+
+**Problem:** Production environment may lag behind in deployments, causing template/JavaScript version mismatches.
+
+**Example:** Production template missing `book-info-cover` element added in UI redesign.
+
+**Solution:** Defensive null checks before DOM access.
+
+**Location:** `frontend/static/js/app.js:384-394`
+
+```javascript
+const bookCoverEl = document.getElementById('book-info-cover');
+if (bookCoverEl) {  // ✅ Defensive check
+    if (book.cover_image_url) {
+        bookCoverEl.src = book.cover_image_url;
+        bookCoverEl.alt = `${book.title} cover`;
+        bookCoverEl.classList.remove('hidden');
+    } else {
+        bookCoverEl.classList.add('hidden');
+    }
+}
+```
+
+**Benefits:**
+- Prevents crashes from missing DOM elements
+- Backward compatible with older templates
+- Graceful degradation
+- Production can be updated independently
+- No user-facing errors during deployment transitions
+
+### Development vs Production Differences
+
+| Aspect | Development (app.py) | Production (app_prod.py) |
+|--------|---------------------|-------------------------|
+| **TTS Generation** | Full VITS model loaded | Disabled (pre-generated only) |
+| **Memory Usage** | ~500-800 MB | ~150-200 MB |
+| **API Calls** | Real-time generation | File lookup only |
+| **Health Endpoint** | None | `/health` for monitoring |
+| **Server** | Flask dev server | Gunicorn WSGI |
+| **Debug Mode** | Enabled | Disabled |
+| **Auto-Reload** | Yes | No (requires restart) |
+| **Target Environment** | Local MacOS | GCP e2-micro (Debian 12) |
+
+### Deployment Workflow
+
+**Local Development:**
+```bash
+cd /Users/pengyao/Documents/dev/summra
+source venv/bin/activate
+python backend/app.py  # or: python -m backend.app
+# Server runs on http://localhost:5001
+```
+
+**Production Deployment:**
+```bash
+# On GCP e2-micro instance
+cd /path/to/summra
+git pull origin main
+sudo systemctl restart summra
+sudo systemctl status summra
+# Server runs behind Nginx on http://summra.pengyaochen.com
+```
+
+**Production Stack:**
+- OS: Debian 12 (bookworm)
+- Python: 3.11
+- Web Server: Nginx (reverse proxy + static files)
+- App Server: Gunicorn with gevent workers (1 worker, 400MB memory limit)
+- Service Manager: systemd
+- Database: SQLite (47MB)
+
+---
+
 ## Frontend Architecture (Redesigned 2025-11-25)
 
 ### Overview
@@ -2628,10 +3091,12 @@ class SummraApp {
 
 #### Chapter Detail Page
 
-**HTML Structure:**
+**HTML Structure (Updated 2025-11-25):**
 ```html
 <section class="chapter-detail-section" id="chapter-detail-section">
-    <button class="back-button">← Back to Book</button>
+    <div class="back-button-container">
+        <button class="back-button">← Back to Book</button>
+    </div>
 
     <div class="chapter-detail-header">
         <h2>1. Introduction</h2>
@@ -2643,11 +3108,13 @@ class SummraApp {
         <div class="chapter-summary-box">
             <div class="chapter-summary-header">
                 <h4>📝 Chapter Summary <span class="spoiler-warning">(may contain spoilers)</span></h4>
-                <button class="toggle-summary-btn">Show Summary ▼</button>
+                <div class="chapter-summary-actions">
+                    <button class="tts-button-inline">🔊 Listen</button>
+                    <button class="toggle-summary-btn">▼</button>
+                </div>
             </div>
             <div class="chapter-summary-content hidden">
                 <div class="summary-text"></div>
-                <button class="tts-button-inline">🔊 Listen to Summary</button>
             </div>
         </div>
 
@@ -2662,6 +3129,26 @@ class SummraApp {
     </div>
 </section>
 ```
+
+**UI Polish Changes (2025-11-25):**
+
+1. **Back Button Container:**
+   - Wrapped in `.back-button-container` div for proper alignment
+   - Inherits padding from parent section rules
+   - Maintains consistent left alignment with text content
+
+2. **Chapter Summary Header Reorganization:**
+   - Created `.chapter-summary-actions` wrapper div
+   - Moved "Listen" button from bottom of summary to header
+   - Placed side-by-side with toggle button
+   - Simplified button text: "🔊 Listen to Summary" → "🔊 Listen"
+
+3. **Toggle Button Simplification:**
+   - Changed from full button to minimal chevron-only design
+   - Removed border, background, and padding
+   - Displays just "▼" (collapsed) or "▲" (expanded)
+   - Transparent background with color-only hover effect
+   - Larger font size (1.2rem) for better visibility
 
 **JavaScript Logic:**
 ```javascript
@@ -2750,12 +3237,15 @@ async loadConciseSummary() {
 - Flexbox for headers and controls
 
 **Key CSS Classes:**
-- `.summary-section` - Main content container, max-width 800px
+- `.summary-section` - Main content container, max-width 800px (1200px for header)
 - `.book-detail-header` - Flexbox layout, cover + info side-by-side
 - `.section-header` - Flexbox, h3 + button aligned
 - `.chapter-box` - Full-width with left border accent
 - `.preview-fade` - Gradient overlay for medium preview
 - `.chapter-detail-content` - White background card with padding
+- `.back-button-container` - Wrapper for back button alignment (added 2025-11-25)
+- `.chapter-summary-actions` - Flexbox container for header buttons (added 2025-11-25)
+- `.toggle-summary-btn` - Minimal chevron-only toggle button (redesigned 2025-11-25)
 
 ### Navigation Flow
 
