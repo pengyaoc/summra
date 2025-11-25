@@ -6,6 +6,45 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-11-24
 
+### Offline TTS Default Mode Change - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-24
+**Completed:** 2025-11-24
+
+**Objective:** Update the `generate_offline_tts.py` script to change the default mode from generating both concise and medium summaries to only generating concise summary audio.
+
+**Changes Made:**
+1. Updated `scripts/generate_offline_tts.py` (lines 227-230):
+   - Changed default from `['concise', 'medium']` to `['concise']`
+   - Updated comment from "generate concise and medium summaries" to "generate concise summary"
+   - Updated print message to reflect new default: "concise summary only"
+
+**Rationale:**
+- Reduces default API usage and cost
+- Concise summaries are the most commonly listened-to format
+- Users can still explicitly request medium or all summaries via command-line flags
+
+**Usage Examples:**
+```bash
+# Default mode (concise only)
+python scripts/generate_offline_tts.py --book "The Time Machine"
+
+# Explicit modes still work
+python scripts/generate_offline_tts.py --book "Book Title" --summaries concise medium
+python scripts/generate_offline_tts.py --book "Book Title" --all-summaries
+python scripts/generate_offline_tts.py --book "Book Title" --comprehensive-chapters 1-5
+```
+
+**Files Modified:**
+- `scripts/generate_offline_tts.py` (lines 227-230)
+
+**Impact:**
+- Faster default TTS generation
+- Lower API costs for batch processing
+- More economical use of Gemini TTS API quota
+
+---
+
 ### Documentation System Enhancement - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-11-24
@@ -735,3 +774,158 @@ python scripts/generate_offline_tts.py --book "The Odyssey" --summaries concise 
 - Professional voice options (5 different voices)
 - Efficient batch processing with rate limiting
 - Seamless UI integration (same audio_files table)
+
+---
+
+### Huckleberry Finn Chapter Title Backfill - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-24
+**Completed:** 2025-11-24
+
+**Objective:** Fix incorrect chapter titles for "Adventures of Huckleberry Finn" by parsing table of contents and updating database without making any LLM calls.
+
+**Problem:**
+- Initial chapter detection created generic titles ("Chapter 1", "Chapter 2", etc.)
+- Table of contents contained descriptive multi-line titles that should be used
+- User explicitly requested: "Don't make any LLM calls. Let's backfill the Chapter names based on the table of content"
+
+**Solution:**
+Created `scripts/fix_huck_finn_chapters.py` to parse TOC and update database directly.
+
+**Changes Made:**
+
+1. **Created `scripts/fix_huck_finn_chapters.py`** (165 lines):
+   - `roman_to_int()`: Converts Roman numerals to integers (lines 19-38)
+     - Handles subtraction rule (IV=4, IX=9, XL=40, etc.)
+   - `parse_toc_from_book()`: Extracts chapter titles from table of contents (lines 41-98)
+     - Detects TOC start with `CONTENTS.` marker
+     - Detects TOC end with `ILLUSTRATIONS.` marker
+     - Matches chapter headers: `CHAPTER [ROMAN_NUMERAL].`
+     - Collects multi-line title parts
+     - Joins title parts with `.—` separator
+     - Special handling for "CHAPTER THE LAST" as chapter 43
+   - `main()`: Updates database with TOC titles (lines 101-164)
+     - Parses TOC from book file
+     - Gets book ID from database
+     - Compares current titles with TOC titles
+     - Updates only changed titles
+     - Reports all updates
+
+**Technical Details:**
+
+**TOC Format:**
+```
+CONTENTS.
+
+CHAPTER I.
+Civilizing Huck.—Miss Watson.—Tom Sawyer Waits.
+
+CHAPTER II.
+The Boys Escape Jim.—Torn Sawyer's Gang.—Deep-laid Plans.
+...
+```
+
+**Multi-line Parsing:**
+- Chapter marker: `CHAPTER I.`
+- Title lines collected until next chapter or end marker
+- Parts joined with `.—` to preserve formatting
+- Example: `"Civilizing Huck.—Miss Watson.—Tom Sawyer Waits"`
+
+**Database Update:**
+```python
+cursor.execute(
+    "UPDATE chapters SET chapter_title = ? WHERE book_id = ? AND chapter_number = ?",
+    (toc_title, book_id, chapter_num)
+)
+```
+
+**Results:**
+- Found 43 chapters in TOC (I through XLII plus "CHAPTER THE LAST")
+- Updated all 42 chapters in database (CHAPTER THE LAST not present as separate chapter)
+- No LLM calls made (as explicitly requested)
+- Processing time: <1 second
+
+**Example Updates:**
+- Chapter 1: "Chapter 1" → "Civilizing Huck.—Miss Watson.—Tom Sawyer Waits"
+- Chapter 2: "Chapter 2" → "The Boys Escape Jim.—Torn Sawyer's Gang.—Deep-laid Plans"
+- Chapter 10: "Chapter 10" → "What Comes of Handlin' Snakeskin.—The Vigilantes.—And a Steamboat Fight"
+- Chapter 42: Generic → "Tom Sawyer Wounded.—The Doctor's Story.—Tom Confesses.—Aunt Polly.—Arrives.—Hand Out Them Letters"
+
+**Files Created:**
+- `scripts/fix_huck_finn_chapters.py` (165 lines) - TOC parser and database updater
+
+**Files Modified:**
+- Database: Updated 42 chapter titles in `chapters` table
+
+**Verification:**
+All chapter titles now match the table of contents exactly.
+
+**Next Steps/Notes:**
+- This is a one-time backfill script specific to Huckleberry Finn
+- Similar approach can be used for other books if chapter detection fails
+- Consider improving chapter detection logic in `generate_summaries.py` to handle multi-line TOC entries automatically
+
+---
+
+### Huckleberry Finn "CHAPTER THE LAST" Detection - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-24
+**Completed:** 2025-11-24
+
+**Objective:** Add Chapter 43 detection for "CHAPTER THE LAST" marker in Huckleberry Finn and regenerate the missing chapter summary.
+
+**Problem:**
+- Initial chapter detection only found 42 chapters, missing Chapter 43
+- Book uses "CHAPTER THE LAST" instead of "CHAPTER XLIII" for the final chapter
+- User requested: "Parse the book for 'CHAPTER THE LAST' as the Chapter 43."
+
+**Solution:**
+Extended chapter detection regex patterns and special handling logic in `generate_summaries.py`.
+
+**Changes Made:**
+
+1. **Modified `scripts/generate_summaries.py`**:
+   - **Line 431** - Added regex pattern to detect "CHAPTER THE LAST":
+     ```python
+     r'^(CHAPTER\s+THE\s+LAST)\.?$',  # "CHAPTER THE LAST" or "CHAPTER THE LAST."
+     ```
+   - **Lines 654-658** - Added special handling logic:
+     ```python
+     elif 'CHAPTER' in chapter_marker.upper() and 'THE' in chapter_marker.upper() and 'LAST' in chapter_marker.upper():
+         # "CHAPTER THE LAST" - assign chapter number 43
+         base_chapter_num = 43
+         if not chapter_title:
+             chapter_title = "Chapter the Last"
+     ```
+
+2. **Regenerated Chapter 43**:
+   - Command: `python scripts/generate_summaries.py data/books/huckleberry_finn.txt --title "Adventures of Huckleberry Finn" --author "Mark Twain" --regenerate-chapters "43"`
+   - Successfully generated chapter summary with 361 words (2,318 chars)
+
+**Technical Details:**
+- Pattern matching order ensures "CHAPTER THE LAST" is matched before generic patterns
+- Special chapter numbering (43) assigned to avoid conflict with Roman numeral conversion
+- Chapter title from TOC: "Out of Bondage.—Paying the Captive.—Yours Truly, Huck Finn."
+
+**Results:**
+- Chapter 43 successfully added to database
+- Book now has complete set of 43 chapters (1-43)
+- All chapter titles match table of contents
+
+**Files Modified:**
+- `scripts/generate_summaries.py` (lines 431, 654-658)
+- Database: Added Chapter 43 to `chapters` table
+
+**Final Book Status:**
+"Adventures of Huckleberry Finn" (Book ID: 29) is now fully processed:
+- Concise summary: 404 words
+- Medium summary: 2,960 words
+- Comprehensive summary: 43 chapter summaries with descriptive TOC titles
+- Cover image: from Project Gutenberg (eBook #76)
+
+**Impact:**
+- Improved chapter detection for books with non-standard ending chapters
+- Pattern can be reused for other classic literature with similar formatting
+- Demonstrates ability to handle special cases without reprocessing entire book
+
+---

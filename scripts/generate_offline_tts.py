@@ -93,11 +93,11 @@ def generate_summary_audio(db: Database, tts_handler: GeminiTTSHandler,
         print(f"{'-'*60}")
         print(cleaned_text)
         print(f"{'-'*60}\n")
-        print(f"[DRY RUN] Would generate audio with ID: summary_{book_id}_{summary_type}")
+        print(f"[DRY RUN] Would generate audio with ID: book_{book_id}_{summary_type}")
         return True
 
     # Generate audio
-    audio_id = f"summary_{book_id}_{summary_type}"
+    audio_id = f"book_{book_id}_{summary_type}"
     audio_path = tts_handler.generate_audio(summary['content'], audio_id=audio_id)
 
     if audio_path:
@@ -165,12 +165,12 @@ def generate_chapter_audio(db: Database, tts_handler: GeminiTTSHandler,
             if len(cleaned_text) > 300:
                 print(f"  ... ({len(cleaned_text) - 300} more characters)")
             print(f"  {'-'*58}\n")
-            print(f"  [DRY RUN] Would generate audio with ID: chapter_{book_id}_{chapter['chapter_number']}")
+            print(f"  [DRY RUN] Would generate audio with ID: book_{book_id}_chapter_{chapter['chapter_number']}")
             stats["success"] += 1
             continue
 
         # Generate audio
-        audio_id = f"chapter_{book_id}_{chapter['chapter_number']}"
+        audio_id = f"book_{book_id}_chapter_{chapter['chapter_number']}"
         audio_path = tts_handler.generate_audio(chapter['summary'], audio_id=audio_id)
 
         if audio_path:
@@ -224,10 +224,10 @@ def main():
 
     args = parser.parse_args()
 
-    # Default mode: generate concise and medium summaries if nothing specified
+    # Default mode: generate concise summary if nothing specified
     if not any([args.summaries, args.all_summaries, args.comprehensive_chapters]):
-        args.summaries = ['concise', 'medium']
-        print("No generation mode specified - using default mode (concise + medium summaries)")
+        args.summaries = ['concise']
+        print("No generation mode specified - using default mode (concise summary only)")
 
     # Initialize database
     db = Database()

@@ -370,7 +370,9 @@ class SummaryGenerator:
     def extract_toc(self, text: str) -> Dict[str, str]:
         """
         Extract table of contents from the text.
-        Returns dict mapping roman numerals to expected chapter titles.
+        Returns dict mapping chapter markers to expected chapter titles.
+        Supports both Roman numerals (I, II, III) and Arabic numerals (1, 2, 3).
+        Also supports patterns like "Chapter 1", "Letter 1", etc.
         """
         toc = {}
         lines = text.split('\n')
@@ -394,12 +396,29 @@ class SummaryGenerator:
 
             # Parse TOC entries
             if in_toc and line_stripped:
-                # Match patterns like "LVI. Old and New Tables" or "LVII.  The Convalescent."
+                # Pattern 1: Roman numerals with title (e.g., "LVI. Old and New Tables")
                 match = re.match(r'^([IVXLCDM]+)\.\s+(.+?)\.?\s*$', line_stripped)
                 if match:
                     roman_num = match.group(1)
                     title = match.group(2).strip('. ')
                     toc[roman_num] = title
+                    continue
+
+                # Pattern 2: "Chapter" + number (e.g., "Chapter 1", "Chapter 12")
+                match = re.match(r'^Chapter\s+([IVXLCDM]+|[0-9]+)(?:\.\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
+                if match:
+                    chapter_marker = match.group(1)
+                    title = match.group(2).strip('. ') if match.group(2) else ""
+                    toc[chapter_marker] = title
+                    continue
+
+                # Pattern 3: "Letter" + number (e.g., "Letter 1", "Letter 4")
+                match = re.match(r'^Letter\s+([IVXLCDM]+|[0-9]+)(?:\.\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
+                if match:
+                    letter_marker = match.group(1)
+                    title = match.group(2).strip('. ') if match.group(2) else ""
+                    toc[letter_marker] = title
+                    continue
 
         return toc
 
@@ -428,6 +447,7 @@ class SummaryGenerator:
             r'Scene\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # Scene I. or Scene 1. (for plays)
             r'^([IVXLCDM]+)\.$',  # Roman numeral only format: "I." with title on next line (must be checked first)
             r'^([IVXLCDM]+)\.\s+(.+)$',  # Roman numeral only format: "I. TITLE" (must have title after period)
+            r'^(CHAPTER\s+THE\s+LAST)\.?$',  # "CHAPTER THE LAST" or "CHAPTER THE LAST." (special ending chapter)
             r'^(EPILOGUE)$',  # Standalone "EPILOGUE"
             r'^(Epilogue)$',  # Standalone "Epilogue"
             # Introductory material patterns (only if not numbered in TOC)
@@ -453,6 +473,11 @@ class SummaryGenerator:
 
         # Track illustration blocks to skip chapter markers inside them
         in_illustration = False
+
+        # Track if we've found the first numbered chapter
+        # Everything before the first numbered chapter goes into Chapter 0 (Preface)
+        found_first_chapter = False
+        preface_text = []
 
         # Track lines that have been consumed as chapter title continuations
         # These should be skipped in the main loop to avoid double-processing
@@ -484,6 +509,8 @@ class SummaryGenerator:
             if not line_stripped:
                 if current_chapter is not None and not in_illustration:
                     current_text.append(line)
+                elif not found_first_chapter and not in_illustration:
+                    preface_text.append(line)
                 continue
 
             # Check if this line is a BOOK/VOLUME marker (e.g., "BOOK I", "VOLUME II")
@@ -650,6 +677,11 @@ class SummaryGenerator:
                             base_chapter_num = 0
                             if not chapter_title:
                                 chapter_title = "Introduction & Prefaces"
+                    elif 'CHAPTER' in chapter_marker.upper() and 'THE' in chapter_marker.upper() and 'LAST' in chapter_marker.upper():
+                        # "CHAPTER THE LAST" - assign chapter number 43
+                        base_chapter_num = 43
+                        if not chapter_title:
+                            chapter_title = "Chapter the Last"
                     elif chapter_marker.upper() == 'EPILOGUE':
                         # Epilogue will be renumbered at the end to be sequential
                         # For now, use a placeholder that will be replaced
@@ -714,6 +746,20 @@ class SummaryGenerator:
                 if 'part_marker_line_idx' in locals() and part_marker_line_idx is not None:
                     consumed_lines.add(part_marker_line_idx)
 
+                # If this is the first numbered chapter, save all preface content as Chapter 0
+                if not found_first_chapter and preface_text:
+                    preface_content = '\n'.join(preface_text)
+                    # Normalize preface text
+                    preface_content = self.normalize_chapter_text(preface_content)
+                    # Only save if substantial content (same threshold as regular chapters: 100 chars)
+                    if len(preface_content) > 100:
+                        chapters.append((0, "Preface", preface_content))
+                        print(f"Created Chapter 0 (Preface) with {len(preface_content)} characters")
+                    else:
+                        print(f"Preface content too small ({len(preface_content)} chars), skipping Chapter 0")
+                    found_first_chapter = True
+                    preface_text = []  # Clear preface text
+
                 # Save previous chapter (only if it has substantial content)
                 if current_chapter is not None and current_text:
                     # Preserve original formatting including paragraph breaks and spacing
@@ -749,6 +795,10 @@ class SummaryGenerator:
                 # Add to current chapter (skip illustration content)
                 if not in_illustration:
                     current_text.append(line)
+            else:
+                # No chapter started yet - collect into preface if we haven't found first chapter
+                if not found_first_chapter and not in_illustration:
+                    preface_text.append(line)
 
         # Add last chapter
         if current_chapter is not None and current_text:

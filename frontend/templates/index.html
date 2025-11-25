@@ -11,17 +11,16 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1 class="logo">
-                <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon"> Summra
-            </h1>
-            <p class="tagline">Discover Classic Literature Through AI-Powered Summaries</p>
+            <div class="header-content">
+                <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
+                <h1 class="logo">Summra</h1>
+            </div>
         </header>
 
         <!-- Main Content -->
         <main class="main-content">
             <!-- Books List Section -->
             <section class="books-section" id="books-section">
-                <h2>Available Books</h2>
                 <div class="books-grid" id="books-grid">
                     <div class="loading">Loading books...</div>
                 </div>

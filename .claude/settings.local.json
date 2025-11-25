@@ -14,7 +14,9 @@
       "Bash(pyenv local:*)",
       "WebSearch",
       "Bash(cat:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(xargs:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
