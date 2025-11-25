@@ -412,15 +412,74 @@ class SummaryGenerator:
                     toc[chapter_marker] = title
                     continue
 
-                # Pattern 3: "Letter" + number (e.g., "Letter 1", "Letter 4")
-                match = re.match(r'^Letter\s+([IVXLCDM]+|[0-9]+)(?:\.\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
-                if match:
-                    letter_marker = match.group(1)
-                    title = match.group(2).strip('. ') if match.group(2) else ""
-                    toc[letter_marker] = title
-                    continue
+                # NOTE: "Letter" patterns intentionally removed
+                # Per user requirement: "anything before Chapter 1 or Chapter I or Book 1 etc
+                # are grouped together into a single Preface chapter"
+                # Letters should not be treated as numbered chapters, but as preface content
 
         return toc
+
+    def extract_title_only_toc(self, text: str) -> List[str]:
+        """
+        Extract title-only table of contents (no chapter numbers).
+        For books like "The King in Yellow" that use story titles without numbers.
+        Returns list of story/chapter titles in order.
+        """
+        titles = []
+        lines = text.split('\n')
+
+        # Look for CONTENTS section
+        in_toc = False
+        consecutive_empty_lines = 0
+        found_any_titles = False
+
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+
+            # Start of TOC
+            if re.match(r'^\s*CONTENTS\.?\s*$', line_stripped, re.IGNORECASE):
+                in_toc = True
+                consecutive_empty_lines = 0
+                continue
+
+            # Track consecutive empty lines to detect section breaks
+            if in_toc:
+                if not line_stripped:
+                    consecutive_empty_lines += 1
+                    # If we've found some titles and hit 2+ consecutive empty lines, TOC is done
+                    # This separates TOC from epigraphs/poetry that might follow
+                    if found_any_titles and consecutive_empty_lines >= 2:
+                        break
+                    continue
+                else:
+                    consecutive_empty_lines = 0
+
+                # Check if line looks like a title entry
+                # Title-only entries are typically in ALL CAPS or Title Case
+                # Must be substantial (>5 chars) and not too long (<60 chars)
+                # Must not contain common non-title markers
+                is_title = (
+                    5 < len(line_stripped) < 60 and
+                    not line_stripped.startswith('By ') and
+                    not line_stripped.startswith('PART ') and
+                    not line_stripped.startswith('BOOK ') and
+                    not re.match(r'^[IVXLCDM]+\.', line_stripped) and  # Not numbered
+                    not re.match(r'^Chapter', line_stripped, re.IGNORECASE) and
+                    # Exclude lines that look like poetry (start with lowercase after quote, or end with comma)
+                    not (line_stripped.startswith('"') and len(line_stripped) > 1 and line_stripped[1].islower()) and
+                    not line_stripped.endswith(',')
+                )
+
+                if is_title:
+                    titles.append(line_stripped)
+                    found_any_titles = True
+                elif found_any_titles:
+                    # After finding titles, if we hit a non-title line (poetry, etc.), stop
+                    # This handles cases where there's no blank separator
+                    if line_stripped and (line_stripped[0].islower() or line_stripped.startswith('"')):
+                        break
+
+        return titles
 
     def detect_chapters(self, text: str) -> List[Tuple[int, str, str]]:
         """
@@ -709,24 +768,32 @@ class SummaryGenerator:
                         if not chapter_title:
                             chapter_title = f"Chapter {base_chapter_num}"
 
-                    # TOC-based validation (if TOC exists)
+                    # TOC-based validation (if TOC exists and has content)
+                    # Skip TOC validation if TOC entries are empty (e.g., Frankenstein's simple TOC)
                     if toc:
                         # Check if this chapter marker is in the TOC
-                        if chapter_marker not in toc:
-                            # Chapter marker not in TOC - skip this false positive
+                        if chapter_marker in toc:
+                            toc_title = toc[chapter_marker]
+                            # Only use TOC validation if the TOC title is not empty
+                            # Empty TOC titles indicate a simple TOC format that shouldn't override detection
+                            if toc_title and toc_title.strip():
+                                # Use the TOC title as the authoritative title
+                                # Only replace if the detected title is significantly different
+                                # Allow for minor differences (case, punctuation)
+                                detected_normalized = chapter_title.upper().strip('. ')
+                                toc_normalized = toc_title.upper().strip('. ')
+                                if detected_normalized != toc_normalized:
+                                    # Titles don't match - use TOC title
+                                    print(f"Chapter {chapter_marker}: Using TOC title '{toc_title}' instead of detected '{chapter_title}'")
+                                    chapter_title = toc_title
+                            # If TOC title is empty, just skip TOC validation and use detected chapter
+                        elif all(not v or not v.strip() for v in toc.values()):
+                            # All TOC entries are empty - skip TOC validation entirely
+                            pass
+                        else:
+                            # Chapter marker not in TOC and TOC has content - skip this false positive
                             is_chapter = False
                             continue
-
-                        # Use the TOC title as the authoritative title
-                        toc_title = toc[chapter_marker]
-                        # Only replace if the detected title is significantly different
-                        # Allow for minor differences (case, punctuation)
-                        detected_normalized = chapter_title.upper().strip('. ')
-                        toc_normalized = toc_title.upper().strip('. ')
-                        if detected_normalized != toc_normalized:
-                            # Titles don't match - use TOC title
-                            print(f"Chapter {chapter_marker}: Using TOC title '{toc_title}' instead of detected '{chapter_title}'")
-                            chapter_title = toc_title
 
                     # Record potential chapter
                     potential_chapters.append({
@@ -739,6 +806,38 @@ class SummaryGenerator:
                     break
 
             if is_chapter and chapter_num is not None:
+                # Skip TOC entries: If we haven't accumulated substantial content yet (< 1000 chars)
+                # and this looks like a chapter marker, it's likely a TOC entry
+                accumulated_content_size = sum(len(line) for line in preface_text) if not found_first_chapter else sum(len(line) for line in current_text)
+
+                # Also check: if the next few lines are also chapter markers, we're in TOC
+                # Extended window (15 lines) to catch TOC entries near the end of the TOC
+                is_likely_toc = False
+                if accumulated_content_size < 1000:
+                    # Look ahead to see if next few lines are also chapter markers
+                    lookahead_chapter_count = 0
+                    for lookahead_idx in range(i + 1, min(i + 16, len(lines))):
+                        lookahead_line = lines[lookahead_idx].strip()
+                        if not lookahead_line:  # Skip empty lines
+                            continue
+                        # Check if this looks like a chapter marker
+                        if any(re.match(pattern, lookahead_line) for pattern in chapter_patterns):
+                            lookahead_chapter_count += 1
+                        else:
+                            break  # Hit non-chapter content
+
+                    # If we see 1+ more chapter markers ahead, we're in TOC
+                    # (Reduced from 2 to handle cases where only 1-2 chapters remain at end of TOC)
+                    # ALSO: If we have very small accumulated content (< 200 chars), treat as TOC
+                    # even if no markers ahead (handles last TOC entry before actual content)
+                    if lookahead_chapter_count >= 1 or accumulated_content_size < 200:
+                        is_likely_toc = True
+                        print(f"Skipping TOC entry: {line_stripped}")
+
+                if is_likely_toc:
+                    # This is a TOC entry - skip it entirely (don't add to preface)
+                    continue
+
                 # Chapter detection succeeded - mark continuation line as consumed if we used one
                 if 'continuation_line_idx' in locals() and continuation_line_idx is not None:
                     consumed_lines.add(continuation_line_idx)
@@ -749,8 +848,10 @@ class SummaryGenerator:
                 # If this is the first numbered chapter, save all preface content as Chapter 0
                 if not found_first_chapter and preface_text:
                     preface_content = '\n'.join(preface_text)
+                    raw_length = len(preface_content)
                     # Normalize preface text
                     preface_content = self.normalize_chapter_text(preface_content)
+                    normalized_length = len(preface_content)
                     # Only save if substantial content (same threshold as regular chapters: 100 chars)
                     if len(preface_content) > 100:
                         chapters.append((0, "Preface", preface_content))
@@ -970,7 +1071,59 @@ class SummaryGenerator:
 
             print(f"Created {len(chapters)} chapters from {book_markers[0]['marker_type']} markers")
 
-        # If no chapters detected, treat the whole book as one chapter
+        # If no chapters detected (or very few), try title-only TOC extraction
+        # This handles books like "The King in Yellow" with story titles but no numbers
+        if len(chapters) <= 2:
+            # Try extracting title-only TOC
+            title_toc = self.extract_title_only_toc(text)
+            if len(title_toc) >= 3:  # Must have at least 3 titles to be worth using
+                print(f"No numbered chapters found. Trying title-only TOC extraction...")
+                print(f"Found {len(title_toc)} titles in TOC: {title_toc}")
+
+                # Search for each title in the text and use as chapter boundaries
+                title_positions = []
+                for title in title_toc:
+                    # Search for exact title match (case-sensitive, on its own line)
+                    # Use a pattern that matches the title at start of line, possibly with leading whitespace
+                    pattern = r'^\s*' + re.escape(title) + r'\s*$'
+                    for i, line in enumerate(lines):
+                        if re.match(pattern, line):
+                            # Found title - record position (skip TOC occurrence, keep content occurrence)
+                            # TOC is usually within first 100 lines
+                            if i > 100:  # Skip TOC, only keep actual content occurrences
+                                title_positions.append((i, title))
+                                print(f"  Found '{title}' at line {i}")
+                                break  # Only use first occurrence after TOC
+
+                # If we found most of the titles, create chapters from them
+                if len(title_positions) >= len(title_toc) * 0.6:  # Found at least 60% of titles
+                    print(f"Creating {len(title_positions)} chapters from title positions")
+                    chapters = []
+
+                    for idx, (line_idx, title) in enumerate(title_positions):
+                        chapter_num = idx + 1
+
+                        # Determine end line (next title or end of text)
+                        if idx + 1 < len(title_positions):
+                            end_line = title_positions[idx + 1][0]
+                        else:
+                            end_line = len(lines)
+
+                        # Extract content between this title and next
+                        # Skip the title line itself
+                        chapter_lines = lines[line_idx + 1:end_line]
+                        chapter_content = '\n'.join(chapter_lines)
+
+                        # Normalize the content
+                        chapter_content = self.normalize_chapter_text(chapter_content)
+
+                        if len(chapter_content) > 100:  # Only add if substantial
+                            chapters.append((chapter_num, title, chapter_content))
+                            print(f"  Chapter {chapter_num}: {title} ({len(chapter_content)} chars)")
+                else:
+                    print(f"Only found {len(title_positions)}/{len(title_toc)} titles in content - not using TOC extraction")
+
+        # If still no chapters detected, treat the whole book as one chapter
         if not chapters:
             chapters = [(1, "Full Text", text)]
 
