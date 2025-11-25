@@ -381,12 +381,14 @@ class SummraApp {
         document.getElementById('book-author').textContent = `by ${book.author}`;
 
         const bookCoverEl = document.getElementById('book-info-cover');
-        if (book.cover_image_url) {
-            bookCoverEl.src = book.cover_image_url;
-            bookCoverEl.alt = `${book.title} cover`;
-            bookCoverEl.classList.remove('hidden');
-        } else {
-            bookCoverEl.classList.add('hidden');
+        if (bookCoverEl) {
+            if (book.cover_image_url) {
+                bookCoverEl.src = book.cover_image_url;
+                bookCoverEl.alt = `${book.title} cover`;
+                bookCoverEl.classList.remove('hidden');
+            } else {
+                bookCoverEl.classList.add('hidden');
+            }
         }
 
         // Show book detail section
