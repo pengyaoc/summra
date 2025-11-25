@@ -6,6 +6,232 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-11-24
 
+### Title-Only TOC Extraction for Books Without Chapter Numbers - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-24
+**Completed:** 2025-11-24
+
+**Objective:** Implement TOC-based chapter extraction for books like "The King in Yellow" that use story titles without numbered chapter markers (no "Chapter 1", no Roman numerals).
+
+**Problem:**
+- "The King in Yellow" is a collection of 10 short stories with title-only TOC format
+- Normal chapter detection only found 2 chapters (98.5% of content in one chunk)
+- Book structure uses story titles directly without "Chapter" prefixes:
+  ```
+  CONTENTS
+
+  THE REPAIRER OF REPUTATIONS
+  THE MASK
+  THE COURT OF THE DRAGON
+  ...
+  ```
+- Initial TOC extraction was too permissive and included 29 entries (poetry epigraph mixed with actual titles)
+
+**Solution:**
+Created `extract_title_only_toc()` method with improved end-of-TOC detection and added fallback logic in `detect_chapters()`.
+
+**Changes Made:**
+
+1. **Enhanced `extract_title_only_toc()` method** (`scripts/generate_summaries.py:422-482`):
+   - Detects CONTENTS section start
+   - Tracks consecutive empty lines to detect section breaks
+   - Stops after 2+ consecutive empty lines (separates TOC from epigraphs/poetry)
+   - Excludes poetry patterns:
+     - Lines ending with commas
+     - Lines starting with quotes + lowercase
+   - Stops early when hitting non-title lines (lowercase start, quotes)
+   - Length filters: 5-60 characters
+   - Excludes numbered patterns (Roman numerals, "Chapter X")
+
+2. **Fallback logic in `detect_chapters()`** (`scripts/generate_summaries.py:1062-1112`):
+   - Triggers when `len(chapters) <= 2` (very few chapters detected)
+   - Extracts title-only TOC
+   - Requires at least 3 titles to proceed
+   - Searches for each title in content (skips TOC occurrence at lines <100)
+   - Creates chapters from title positions
+   - Requires finding at least 60% of titles to use TOC extraction
+   - Uses `normalize_chapter_text()` for content cleanup
+
+**Testing Results:**
+- TOC extraction correctly found 10 story titles (validated with test script)
+- No poetry/epigraph content included
+- All 10 titles match expected story names:
+  1. THE REPAIRER OF REPUTATIONS
+  2. THE MASK
+  3. THE COURT OF THE DRAGON
+  4. THE YELLOW SIGN
+  5. THE DEMOISELLE D'YS
+  6. THE PROPHETS' PARADISE
+  7. THE STREET OF THE FOUR WINDS
+  8. THE STREET OF THE FIRST SHELL
+  9. THE STREET OF OUR LADY OF THE FIELDS
+  10. RUE BARRÉE
+
+**Technical Details:**
+
+**End-of-TOC Detection:**
+```python
+if found_any_titles and consecutive_empty_lines >= 2:
+    break  # TOC section ended
+```
+
+**Poetry Exclusion Patterns:**
+```python
+not (line_stripped.startswith('"') and len(line_stripped) > 1 and line_stripped[1].islower()) and
+not line_stripped.endswith(',')
+```
+
+**Early Stop Logic:**
+```python
+elif found_any_titles:
+    if line_stripped and (line_stripped[0].islower() or line_stripped.startswith('"')):
+        break  # Hit non-title content (poetry, etc.)
+```
+
+**Files Modified:**
+- `scripts/generate_summaries.py` (lines 422-482, 1062-1112)
+
+**Files Created:**
+- `/tmp/test_toc_extraction.py` - Test script to validate TOC extraction logic
+
+**Impact:**
+- Enables proper chapter detection for anthology-style books
+- Handles title-only TOC format without numbered chapters
+- Robust separation of TOC from epigraphs/poetry/front matter
+- Applicable to similar classic literature collections
+
+**Next Steps:**
+- Ready to process "The King in Yellow" with full summary generation
+- TOC-based extraction can be used for other anthology books
+
+---
+
+## 2025-11-24
+
+### Production Deployment Setup for GCP e2-micro - IN PROGRESS
+**Status:** ⏳ In Progress
+**Started:** 2025-11-24
+
+**Objective:** Deploy Summra to GCP e2-micro instance (Debian 12 bookworm) for production use on free tier with TTS disabled to conserve memory.
+
+**Changes Made:**
+
+1. **Created e2-micro deployment configuration** (`deploy/setup-e2micro.sh`):
+   - Automated setup script for Debian 12 (bookworm) and Ubuntu 22.04
+   - Auto-detects OS and uses appropriate Python version
+   - Installs dependencies WITHOUT TTS library (saves ~800MB memory)
+   - Creates Python virtual environment with production packages
+   - Configures Nginx reverse proxy
+   - Sets up systemd service with memory limits (400MB max)
+   - Enables 1GB swap file (critical for 1GB RAM environment)
+   - Configures firewall (ports 22, 80, 443)
+   - Prompts for domain name and Gemini API key
+   - Total setup time: ~10-15 minutes
+
+2. **Created quick start guide** (`deploy/QUICKSTART_E2MICRO.md`):
+   - Step-by-step deployment instructions
+   - GitHub clone via token or direct upload options
+   - SSL setup with Let's Encrypt
+   - Monitoring and maintenance commands
+   - Troubleshooting section
+   - Memory optimization tips
+
+3. **Updated .gitignore**:
+   - Commented out database and audio exclusions to allow deployment via GitHub
+   - Database, audio files, and covers now included in repository
+   - Enables simple `git clone` deployment without separate uploads
+
+4. **Production deployment files**:
+   - `requirements-prod.txt` - Minimal dependencies without TTS
+   - `gunicorn_config.py` - Memory-optimized config (1 worker)
+   - `backend/app_prod.py` - TTS-disabled Flask app
+   - `deploy/nginx-summra.conf` - Nginx configuration
+   - `deploy/systemd-summra.service` - Systemd service with memory limits
+
+**Technical Details:**
+
+**Memory Budget (e2-micro):**
+```
+System:           ~250 MB
+Nginx:            ~20 MB
+Summra (1 worker): ~150-200 MB
+Swap (backup):     1GB
+-----------------------
+Total:            ~420-470 MB / 1024 MB ✅
+Free:             ~550 MB
+```
+
+**Production Stack:**
+- OS: Debian 12 (bookworm)
+- Python: 3.11 (default in Debian 12)
+- Web Server: Nginx (reverse proxy + static files)
+- App Server: Gunicorn with gevent workers
+- Database: SQLite (47MB)
+- Assets: Audio files (266MB), Covers (38MB)
+
+**Deployment Method:**
+- GitHub clone with personal access token
+- All data (database, audio, covers) in repository
+- One-command setup via setup script
+- No manual file uploads needed
+
+**Current Status:**
+- Setup script created and tested locally
+- Script uploaded to VM via GitHub
+- Fixed line ending issue (CRLF → LF) with dos2unix
+- Setup script completed on VM
+- Fixed `app_prod.py` import errors and Database API mismatches
+- **✓ Local verification complete - app_prod.py working correctly**
+- Ready to deploy fixed version to VM
+
+**Issues Resolved:**
+- ✓ Windows line endings (fixed with dos2unix)
+- ✓ GitHub authentication (personal access token)
+- ✓ ModuleNotFoundError for config (try/except pattern in models.py)
+- ✓ ImportError for init_db (Database class instantiation)
+- ✓ Wrong Database API (complete rewrite of app_prod.py)
+
+**app_prod.py Rewrite:**
+- **Problem**: Original version imported non-existent classes (`Book`, `Summary`, `Chapter`)
+- **Problem**: Used incorrect methods (`Book.get_all()` instead of `Database.get_all_books()`)
+- **Solution**: Complete rewrite to match working `app.py` API
+- **Imports**: Uses `import models` and `import config` (not `from backend.models`)
+- **Database**: Creates `db = models.Database()` instance
+- **Methods**: Uses correct API (`get_all_books()`, `get_book()`, `get_summary()`, `get_chapters()`)
+- **Testing**: All 10 routes defined, database operations verified with test script
+
+**Files Created:**
+- `deploy/setup-e2micro.sh` (155 lines) - Automated setup script
+- `deploy/QUICKSTART_E2MICRO.md` (280 lines) - Deployment guide
+- `test_app_prod.py` - Local verification test script
+
+**Files Modified:**
+- `.gitignore` - Commented out database/audio exclusions for deployment
+- `backend/app_prod.py` - Complete rewrite with correct Database API
+- `WORK_LOG.md` - This entry
+
+**Next Steps:**
+- Commit and push fixed app_prod.py to GitHub
+- Pull changes on VM
+- Restart summra service on VM
+- Test health endpoint and API on VM
+- Set up DNS (summra.pengyaochen.com → 35.203.172.2)
+- Set up SSL certificate with Let's Encrypt
+- Configure Nginx for multiple services (blog + Summra)
+- Verify memory usage is within limits
+
+**Cost:**
+- E2-micro: $0/month (GCP free tier)
+- Storage: $0/month (30GB included)
+- Bandwidth: $0-5/month (1GB free, then $0.12/GB)
+- Total: **FREE** (within free tier limits)
+
+**Alternative Deployment (not chosen):**
+- E2-small with TTS: ~$13/month (2GB RAM, full TTS support)
+- Documentation created for both options
+
+---
+
 ### Offline TTS Default Mode Change - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-11-24
