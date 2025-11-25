@@ -2407,6 +2407,420 @@ def main():
 
 ---
 
+## Frontend Architecture (Redesigned 2025-11-25)
+
+### Overview
+
+The Summra frontend is a vanilla JavaScript single-page application (SPA) with hash-based routing. The redesign focuses on minimalist UI, content-first presentation, and dedicated pages for reading experiences.
+
+### Technology Stack
+
+- **Framework:** Vanilla JavaScript (no framework dependencies)
+- **Styling:** Custom CSS with CSS variables for theming
+- **Markdown:** Marked.js v11.1.1 for rendering summaries
+- **Routing:** Hash-based client-side routing
+- **Audio:** HTML5 Audio API for TTS playback
+
+### File Structure
+
+```
+frontend/
+├── templates/
+│   └── index.html              # Main HTML template (single page)
+├── static/
+│   ├── js/
+│   │   └── app.js              # Main application logic (820 lines)
+│   ├── css/
+│   │   └── style.css           # All styling (900+ lines)
+│   ├── audio/                  # Generated TTS audio files
+│   ├── covers/                 # Book cover images
+│   └── (marked.js loaded via CDN)
+```
+
+### Routing System
+
+**Type:** Hash-based SPA routing (no server-side routing required)
+
+**Route Patterns:**
+```javascript
+/                                  → Books library (grid view)
+#/book/{slug}                      → Book overview page
+#/book/{slug}/medium               → Full medium summary page
+#/book/{slug}/chapter/{num}        → Individual chapter page
+```
+
+**Route Handling Implementation:**
+```javascript
+async handleRoute() {
+    const hash = window.location.hash;
+
+    // Route matching with regex
+    const bookMatch = hash.match(/#\/book\/([^\/]+)$/);
+    const mediumMatch = hash.match(/#\/book\/([^\/]+)\/medium$/);
+    const chapterMatch = hash.match(/#\/book\/([^\/]+)\/chapter\/(\d+)$/);
+
+    // Navigate to appropriate view
+    if (chapterMatch) {
+        await this.showChapterDetail(book, chapterNum);
+    } else if (mediumMatch) {
+        await this.showMediumDetail(book);
+    } else if (bookMatch) {
+        await this.selectBook(book);
+    }
+}
+```
+
+**Slug Generation:**
+```javascript
+slugify(text) {
+    return text
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')      // Remove special chars
+        .replace(/\s+/g, '-')          // Spaces to hyphens
+        .replace(/--+/g, '-')          // Collapse multiple hyphens
+        .trim();
+}
+```
+
+**URL Updates:**
+```javascript
+updateURL(book, page = null) {
+    const slug = this.slugify(book.title);
+    let newHash = `#/book/${slug}`;
+
+    if (page === 'medium') {
+        newHash = `#/book/${slug}/medium`;
+    } else if (typeof page === 'number') {
+        newHash = `#/book/${slug}/chapter/${page}`;
+    }
+
+    window.history.pushState(null, '', newHash);
+}
+```
+
+### Page Sections & State Management
+
+**Main Application Class:**
+```javascript
+class SummraApp {
+    constructor() {
+        this.apiBase = '/api';
+        this.currentBook = null;           // Selected book object
+        this.currentChapter = null;        // Current chapter number
+        this.mediumSummaryContent = null;  // Cached medium summary
+        this.chapters = [];                // Loaded chapters
+        this.allBooks = [];                // All available books
+        this.booksLoaded = false;          // Loading state
+        this.currentPlayback = {           // TTS playback state
+            isPlaying: false,
+            currentChunk: 0,
+            audioUrls: [],
+            bookTitle: '',
+            chapterTitle: '',
+            audioId: null
+        };
+    }
+}
+```
+
+**Page Sections (mutually exclusive visibility):**
+
+1. **Books Section** (`#books-section`)
+   - Grid of book cards
+   - Default view
+
+2. **Summary Section** (`#summary-section`)
+   - Book overview page
+   - Contains: concise summary, medium preview, chapter boxes
+
+3. **Medium Detail Section** (`#medium-detail-section`)
+   - Full medium summary page
+   - Dedicated reading view
+
+4. **Chapter Detail Section** (`#chapter-detail-section`)
+   - Individual chapter page
+   - Full text + collapsible summary
+
+### UI Components
+
+#### Book Overview Page
+
+**HTML Structure:**
+```html
+<section class="summary-section" id="summary-section">
+    <button class="back-button">← Back to Books</button>
+
+    <!-- Book header with small cover -->
+    <div class="book-detail-header">
+        <img class="book-detail-cover" />
+        <div class="book-detail-info">
+            <h2>Book Title</h2>
+            <p class="book-author">by Author</p>
+        </div>
+    </div>
+
+    <!-- Concise summary -->
+    <div class="concise-summary-section">
+        <div class="section-header">
+            <h3>Quick Summary</h3>
+            <button class="tts-button-inline">🔊 Listen</button>
+        </div>
+        <div class="summary-text"></div>
+    </div>
+
+    <!-- Medium summary preview with fade -->
+    <div class="medium-preview-section">
+        <div class="section-header">
+            <h3>Detailed Overview</h3>
+        </div>
+        <div class="medium-preview-container">
+            <div class="summary-text"></div>
+            <div class="preview-fade"></div>
+        </div>
+        <button class="expand-link">Read Full Summary →</button>
+    </div>
+
+    <!-- Chapter boxes -->
+    <div class="chapters-section">
+        <h3>Chapters</h3>
+        <div class="chapters-list"></div>
+    </div>
+</section>
+```
+
+**CSS Styling:**
+```css
+/* Fade effect for medium preview */
+.medium-preview-container {
+    position: relative;
+    max-height: 300px;
+    overflow: hidden;
+}
+
+.preview-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+    pointer-events: none;
+}
+
+/* Chapter boxes */
+.chapter-box {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--secondary-color);
+    padding: 16px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chapter-box:hover {
+    background: #e8f4f8;
+    border-left-color: #2980b9;
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+```
+
+#### Chapter Detail Page
+
+**HTML Structure:**
+```html
+<section class="chapter-detail-section" id="chapter-detail-section">
+    <button class="back-button">← Back to Book</button>
+
+    <div class="chapter-detail-header">
+        <h2>1. Introduction</h2>
+        <p class="chapter-detail-subtitle">The Time Machine</p>
+    </div>
+
+    <div class="chapter-detail-content">
+        <!-- Collapsed summary (spoiler protection) -->
+        <div class="chapter-summary-box">
+            <div class="chapter-summary-header">
+                <h4>📝 Chapter Summary <span class="spoiler-warning">(may contain spoilers)</span></h4>
+                <button class="toggle-summary-btn">Show Summary ▼</button>
+            </div>
+            <div class="chapter-summary-content hidden">
+                <div class="summary-text"></div>
+                <button class="tts-button-inline">🔊 Listen to Summary</button>
+            </div>
+        </div>
+
+        <!-- Full chapter text -->
+        <div class="chapter-fulltext-section">
+            <div class="section-header">
+                <h4>📖 Full Chapter Text</h4>
+                <button class="tts-button-inline">🔊 Listen</button>
+            </div>
+            <div class="chapter-fulltext"></div>
+        </div>
+    </div>
+</section>
+```
+
+**JavaScript Logic:**
+```javascript
+async showChapterDetail(book, chapterNum) {
+    // Scroll to top for better reading experience
+    window.scrollTo(0, 0);
+
+    // Hide other sections
+    document.getElementById('books-section').classList.add('hidden');
+    document.getElementById('summary-section').classList.add('hidden');
+    document.getElementById('medium-detail-section').classList.add('hidden');
+    document.getElementById('chapter-detail-section').classList.remove('hidden');
+
+    // Load chapter data
+    const chapter = this.chapters.find(c => c.chapter_number === chapterNum);
+
+    // Update header
+    document.getElementById('chapter-detail-title').textContent =
+        `${chapterNum}. ${chapter.chapter_title}`;
+
+    // Render summary (collapsed by default)
+    document.getElementById('chapter-summary-text').innerHTML =
+        this.renderMarkdown(chapter.summary);
+
+    // Render full text
+    document.getElementById('chapter-fulltext').innerHTML =
+        this.formatChapterText(chapter.chapter_text);
+}
+```
+
+### Data Loading Strategy
+
+**Parallel Loading:**
+```javascript
+async selectBook(book) {
+    this.currentBook = book;
+
+    // Load all data in parallel for faster page load
+    await Promise.all([
+        this.loadConciseSummary(),
+        this.loadMediumSummary(),
+        this.loadChapters()
+    ]);
+
+    this.updateURL(book);
+}
+```
+
+**API Integration:**
+```javascript
+async loadConciseSummary() {
+    const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/summary/concise`);
+    const data = await response.json();
+
+    if (data.success && data.summary) {
+        document.getElementById('concise-summary-text').innerHTML =
+            this.renderMarkdown(data.summary.content);
+    }
+}
+```
+
+### CSS Architecture
+
+**Design System Variables:**
+```css
+:root {
+    --primary-color: #2c3e50;       /* Dark blue-gray for headers */
+    --secondary-color: #3498db;     /* Bright blue for accents */
+    --accent-color: #e74c3c;        /* Red for errors */
+    --background-color: #ecf0f1;    /* Light gray background */
+    --card-background: #ffffff;     /* White for cards */
+    --text-color: #2c3e50;          /* Main text color */
+    --text-light: #7f8c8d;          /* Light text for metadata */
+    --border-color: #bdc3c7;        /* Borders */
+    --shadow: 0 2px 4px rgba(0,0,0,0.1);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,0.15);
+}
+```
+
+**Layout Principles:**
+- Max-width: 800px for optimal reading
+- Padding: 32px inside white content cards
+- Line-height: 1.75 for body text
+- Font-size: 1.05rem for readable text
+- Responsive grid for book cards
+- Flexbox for headers and controls
+
+**Key CSS Classes:**
+- `.summary-section` - Main content container, max-width 800px
+- `.book-detail-header` - Flexbox layout, cover + info side-by-side
+- `.section-header` - Flexbox, h3 + button aligned
+- `.chapter-box` - Full-width with left border accent
+- `.preview-fade` - Gradient overlay for medium preview
+- `.chapter-detail-content` - White background card with padding
+
+### Navigation Flow
+
+**User Journey:**
+```
+Books Grid
+    ↓ (click book)
+Book Overview (concise + medium preview + chapters)
+    ↓ (click "Read Full Summary")
+    Medium Detail Page (full medium summary)
+    ↓ (click "Back to Book")
+    Book Overview
+    ↓ (click chapter box)
+    Chapter Detail Page (full text + collapsible summary)
+    ↓ (click "Back to Book")
+    Book Overview
+```
+
+**Scroll Behavior:**
+- Automatic scroll to top when navigating to medium/chapter pages
+- Prevents user confusion when content loads mid-scroll
+- Implemented with `window.scrollTo(0, 0)` at start of page methods
+
+### Text Rendering
+
+**Markdown Rendering:**
+```javascript
+renderMarkdown(text) {
+    if (typeof marked !== 'undefined') {
+        return marked.parse(text);
+    }
+    return this.escapeHtml(text).replace(/\n/g, '<br>');
+}
+```
+
+**Chapter Text Formatting:**
+```javascript
+formatChapterText(text) {
+    const paragraphs = text.split(/\n/);
+    return paragraphs
+        .filter(p => p.trim().length > 0)
+        .map(p => `<p>${this.escapeHtml(p.trim())}</p>`)
+        .join('');
+}
+```
+
+### Performance Optimizations
+
+1. **Lazy Loading:** Books loaded once, cached in `this.allBooks`
+2. **Parallel Fetching:** Concise, medium, and chapters loaded simultaneously
+3. **Medium Summary Caching:** Stored in `this.mediumSummaryContent` for reuse
+4. **Chapter Caching:** Stored in `this.chapters` array
+5. **CSS Animations:** GPU-accelerated transforms and opacity
+6. **Minimal Reflows:** Content cards prevent layout shifts
+
+### Browser Compatibility
+
+- Modern evergreen browsers (Chrome, Firefox, Safari, Edge)
+- ES6+ features (async/await, arrow functions, template literals)
+- CSS Grid and Flexbox
+- HTML5 Audio API
+- History API (pushState)
+
+---
+
 ## Summary
 
 This ERD document provides comprehensive technical details for:
@@ -2417,5 +2831,6 @@ This ERD document provides comprehensive technical details for:
 4. **LLM Integration** - Rate limiting algorithm, prompt construction, response parsing, and model selection
 5. **Bulk Processing** - Batching algorithm, index-based parsing, and cost optimization
 6. **Project Gutenberg** - Metadata extraction, content cleaning, and cover image downloading
+7. **Frontend Architecture** - SPA routing, component structure, state management, and UI/UX design patterns (added 2025-11-25)
 
 This document should provide complete context for future development and Claude Code sessions.

@@ -153,6 +153,8 @@ body {
 /* Summary Section */
 .summary-section {
     animation: fadeIn 0.3s ease;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 @keyframes fadeIn {
@@ -166,43 +168,49 @@ body {
     }
 }
 
-.summary-header {
-    margin-bottom: 32px;
-}
-
 .back-button {
-    background: var(--secondary-color);
-    color: white;
+    background: transparent;
+    color: var(--secondary-color);
     border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
+    padding: 8px 0;
+    font-size: 0.95rem;
     cursor: pointer;
-    margin-bottom: 16px;
-    transition: background 0.2s;
+    margin-bottom: 24px;
+    transition: color 0.2s;
+    font-weight: 500;
 }
 
 .back-button:hover {
-    background: #2980b9;
+    color: #2980b9;
 }
 
-.book-info {
-    text-align: center;
+/* Book Detail Header */
+.book-detail-header {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 40px;
+    align-items: flex-start;
 }
 
-.book-info-cover {
-    width: 200px;
-    height: 281px;
-    object-fit: contain;
-    border-radius: 8px;
-    margin: 0 auto 20px auto;
-    display: block;
+.book-detail-cover {
+    width: 120px;
+    height: auto;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
 }
 
-.book-info h2 {
+.book-detail-info h2 {
     font-size: 2rem;
     color: var(--primary-color);
     margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.book-author {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    font-style: italic;
 }
 
 .author {
@@ -211,109 +219,272 @@ body {
     font-style: italic;
 }
 
-/* Summary Options */
-.summary-options {
-    margin-bottom: 24px;
+/* Book Content Sections */
+.book-content {
+    max-width: 100%;
 }
 
-.option-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
+.concise-summary-section,
+.medium-preview-section,
+.chapters-section {
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid #e0e0e0;
 }
 
-.option-card {
-    background: var(--card-background);
-    border: 2px solid var(--border-color);
-    border-radius: 8px;
-    padding: 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
+.chapters-section {
+    border-bottom: none;
 }
 
-.option-card:hover {
-    border-color: var(--secondary-color);
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-hover);
-}
-
-.option-card.active {
-    border-color: var(--secondary-color);
-    background: #e3f2fd;
-    box-shadow: var(--shadow-hover);
-}
-
-.option-icon {
-    font-size: 3rem;
-    margin-bottom: 12px;
-}
-
-.option-card h4 {
-    font-size: 1.3rem;
-    margin-bottom: 8px;
+.chapters-section > h3 {
+    font-size: 1.5rem;
     color: var(--primary-color);
+    font-weight: 600;
+    margin: 0 0 16px 0;
 }
 
-.option-card p {
-    color: var(--text-light);
-    margin-bottom: 8px;
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
 }
 
-.option-desc {
+.section-header h3 {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    font-weight: 600;
+    margin: 0;
+}
+
+.section-header h4 {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    font-weight: 600;
+    margin: 0;
+}
+
+.tts-button-inline {
+    background: transparent;
+    color: var(--secondary-color);
+    border: 1px solid var(--secondary-color);
+    padding: 6px 16px;
+    border-radius: 20px;
     font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
 }
 
-/* Summary Content */
-.summary-content {
+.tts-button-inline:hover {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.expand-link {
+    background: transparent;
+    color: var(--secondary-color);
+    border: none;
+    padding: 6px 0;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    font-weight: 500;
+}
+
+.expand-link:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+/* Summary Text */
+.summary-text {
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: var(--text-color);
+}
+
+.summary-text.preview {
+    color: var(--text-color);
+}
+
+/* Medium Preview Container */
+.medium-preview-container {
+    position: relative;
+    max-height: 300px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.medium-preview-text {
+    position: relative;
+}
+
+.preview-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+    pointer-events: none;
+}
+
+.expand-link.centered {
+    display: block;
+    text-align: center;
+    margin: 0 auto;
+    width: fit-content;
+}
+
+/* Chapters List */
+.chapters-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.chapter-box {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--secondary-color);
+    padding: 16px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chapter-box:hover {
+    background: #e8f4f8;
+    border-left-color: #2980b9;
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.chapter-box-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+/* Medium Detail Section */
+.medium-detail-section {
+    animation: fadeIn 0.3s ease;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.medium-detail-header {
+    margin-bottom: 32px;
+}
+
+.medium-detail-header h2 {
+    font-size: 1.8rem;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.medium-detail-subtitle {
+    font-size: 1rem;
+    color: var(--text-light);
+}
+
+.medium-detail-content {
     background: var(--card-background);
     border-radius: 8px;
     padding: 32px;
-    box-shadow: var(--shadow);
     margin-top: 24px;
 }
 
-.summary-controls {
-    margin-bottom: 24px;
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    flex-wrap: wrap;
+/* Chapter Detail Section */
+.chapter-detail-section {
+    animation: fadeIn 0.3s ease;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
-.tts-button {
+.chapter-detail-header {
+    margin-bottom: 32px;
+}
+
+.chapter-detail-header h2 {
+    font-size: 1.8rem;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.chapter-detail-subtitle {
+    font-size: 1rem;
+    color: var(--text-light);
+}
+
+.chapter-detail-content {
+    background: var(--card-background);
+    border-radius: 8px;
+    padding: 32px;
+}
+
+.chapter-summary-box {
+    background: #fff9e6;
+    border-left: 4px solid #ffc107;
+    padding: 20px;
+    border-radius: 4px;
+    margin-bottom: 32px;
+}
+
+.chapter-summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.chapter-summary-header h4 {
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.spoiler-warning {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    font-weight: normal;
+}
+
+.toggle-summary-btn {
     background: var(--secondary-color);
     color: white;
     border: none;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 1rem;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    font-weight: 500;
 }
 
-.tts-button:hover {
+.toggle-summary-btn:hover {
     background: #2980b9;
 }
 
-.tts-button:disabled {
-    background: var(--border-color);
-    cursor: not-allowed;
+.chapter-summary-content {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0,0,0,0.1);
 }
 
-.audio-player {
-    flex: 1;
+.chapter-fulltext-section {
+    margin-top: 32px;
 }
 
-.audio-player audio {
-    width: 100%;
-    max-width: 500px;
-}
-
-.summary-text {
-    font-size: 1.1rem;
-    line-height: 1.8;
+.chapter-fulltext {
+    font-size: 1.05rem;
+    line-height: 1.75;
     color: var(--text-color);
+    margin-top: 16px;
 }
 
 /* Markdown formatting in summaries */

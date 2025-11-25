@@ -26,79 +26,96 @@
                 </div>
             </section>
 
-            <!-- Summary Display Section -->
+            <!-- Book Detail Section -->
             <section class="summary-section hidden" id="summary-section">
-                <div class="summary-header">
-                    <button class="back-button" id="back-button">← Back to Books</button>
-                    <div class="book-info">
-                        <img id="book-info-cover" class="book-info-cover hidden" alt="Book cover">
+                <button class="back-button" id="back-button">← Back to Books</button>
+
+                <div class="book-detail-header">
+                    <img id="book-info-cover" class="book-detail-cover hidden" alt="Book cover">
+                    <div class="book-detail-info">
                         <h2 id="book-title"></h2>
-                        <p class="author" id="book-author"></p>
+                        <p class="book-author" id="book-author"></p>
                     </div>
                 </div>
 
-                <!-- Summary Type Selection -->
-                <div class="summary-options">
-                    <div class="option-cards">
-                        <div class="option-card" data-type="concise">
-                            <div class="option-icon">⚡</div>
-                            <h4>Concise</h4>
-                            <p>~500 words</p>
-                            <p class="option-desc">Quick overview without spoilers for fiction</p>
+                <!-- Main Content Area -->
+                <div class="book-content" id="book-content">
+                    <!-- Concise Summary -->
+                    <div class="concise-summary-section" id="concise-summary-section">
+                        <div class="section-header">
+                            <h3>Quick Summary</h3>
+                            <button class="tts-button-inline" id="concise-tts-button">🔊 Listen</button>
                         </div>
-                        <div class="option-card" data-type="medium">
-                            <div class="option-icon">📖</div>
-                            <h4>Medium</h4>
-                            <p>2000-3000 words</p>
-                            <p class="option-desc">Comprehensive summary with key details</p>
+                        <div class="summary-text" id="concise-summary-text"></div>
+                    </div>
+
+                    <!-- Medium Summary Preview -->
+                    <div class="medium-preview-section" id="medium-preview-section">
+                        <div class="section-header">
+                            <h3>Detailed Overview</h3>
                         </div>
-                        <div class="option-card" data-type="comprehensive">
-                            <div class="option-icon">📚</div>
-                            <h4>Comprehensive</h4>
-                            <p>Chapter-by-chapter</p>
-                            <p class="option-desc">Deep dive with chapter summaries and analysis</p>
+                        <div class="medium-preview-container">
+                            <div class="summary-text medium-preview-text" id="medium-preview-text"></div>
+                            <div class="preview-fade"></div>
                         </div>
-                        <div class="option-card" data-type="full">
-                            <div class="option-icon">📄</div>
-                            <h4>Full Length</h4>
-                            <p>Complete text</p>
-                            <p class="option-desc">Full book text with chapter summaries</p>
-                        </div>
+                        <button class="expand-link centered" id="medium-expand-button">Read Full Summary →</button>
+                    </div>
+
+                    <!-- Chapters List -->
+                    <div class="chapters-section" id="chapters-section">
+                        <h3>Chapters</h3>
+                        <div class="chapters-list" id="chapters-list"></div>
                     </div>
                 </div>
+            </section>
 
-                <!-- Summary Content -->
-                <div class="summary-content hidden" id="summary-content">
-                    <div class="summary-controls">
-                        <button class="tts-button" id="tts-button">
-                            🔊 Listen to Summary
-                        </button>
-                        <div class="audio-player hidden" id="audio-player">
-                            <audio controls id="audio-element"></audio>
+            <!-- Medium Summary Detail Section -->
+            <section class="medium-detail-section hidden" id="medium-detail-section">
+                <button class="back-button" id="medium-back-button">← Back to Book</button>
+
+                <div class="medium-detail-header">
+                    <h2 id="medium-detail-title"></h2>
+                    <p class="medium-detail-subtitle" id="medium-detail-subtitle"></p>
+                </div>
+
+                <div class="medium-detail-content">
+                    <div class="section-header">
+                        <h3>Detailed Summary</h3>
+                        <button class="tts-button-inline" id="medium-detail-tts-button">🔊 Listen</button>
+                    </div>
+                    <div class="summary-text" id="medium-detail-text"></div>
+                </div>
+            </section>
+
+            <!-- Chapter Detail Section -->
+            <section class="chapter-detail-section hidden" id="chapter-detail-section">
+                <button class="back-button" id="chapter-back-button">← Back to Book</button>
+
+                <div class="chapter-detail-header">
+                    <h2 id="chapter-detail-title"></h2>
+                    <p class="chapter-detail-subtitle" id="chapter-detail-subtitle"></p>
+                </div>
+
+                <div class="chapter-detail-content" id="chapter-detail-content">
+                    <!-- Summary (Collapsed by default) -->
+                    <div class="chapter-summary-box collapsed" id="chapter-summary-box">
+                        <div class="chapter-summary-header" id="chapter-summary-header">
+                            <h4>📝 Chapter Summary <span class="spoiler-warning">(may contain spoilers)</span></h4>
+                            <button class="toggle-summary-btn" id="toggle-summary-btn">Show Summary ▼</button>
+                        </div>
+                        <div class="chapter-summary-content hidden" id="chapter-summary-content">
+                            <div class="summary-text" id="chapter-summary-text"></div>
+                            <button class="tts-button-inline" id="chapter-summary-tts-button">🔊 Listen to Summary</button>
                         </div>
                     </div>
 
-                    <!-- Comprehensive view with chapters -->
-                    <div class="comprehensive-view hidden" id="comprehensive-view">
-                        <div class="overall-summary chapter-item">
-                            <div class="chapter-header">
-                                <h3>Overall Analysis</h3>
-                                <button class="chapter-toggle expanded" aria-label="Toggle overall summary">▼</button>
-                            </div>
-                            <div class="chapter-content expanded" id="overall-summary-content">
-                                <div class="summary-text" id="overall-summary-text"></div>
-                            </div>
+                    <!-- Full Text -->
+                    <div class="chapter-fulltext-section" id="chapter-fulltext-section">
+                        <div class="section-header">
+                            <h4>📖 Full Chapter Text</h4>
+                            <button class="tts-button-inline" id="chapter-fulltext-tts-button">🔊 Listen</button>
                         </div>
-
-                        <div class="chapters-list">
-                            <h3>Chapter Summaries</h3>
-                            <div id="chapters-container"></div>
-                        </div>
-                    </div>
-
-                    <!-- Regular summary view -->
-                    <div class="regular-summary hidden" id="regular-summary">
-                        <div class="summary-text" id="summary-text"></div>
+                        <div class="chapter-fulltext" id="chapter-fulltext"></div>
                     </div>
                 </div>
             </section>
