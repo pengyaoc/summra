@@ -17,6 +17,11 @@ class SummraApp {
             chapterTitle: '',
             audioId: null
         };
+        // Store scroll positions for each page
+        this.scrollPositions = {
+            home: 0,
+            bookDetail: 0
+        };
         this.init();
     }
 
@@ -298,23 +303,28 @@ class SummraApp {
     }
 
     setupEventListeners() {
-        document.getElementById('back-button').addEventListener('click', () => {
-            this.showBooksSection();
-        });
+        const backButton = document.getElementById('back-button');
+        if (backButton) {
+            backButton.addEventListener('click', () => {
+                // Save current scroll position
+                this.scrollPositions.bookDetail = window.scrollY;
+                this.showBooksSection();
+            });
+        }
 
-        document.getElementById('medium-back-button').addEventListener('click', () => {
-            if (this.currentBook) {
-                this.updateURL(this.currentBook);
-                this.showBookDetail();
-            }
-        });
+        const mediumBackButton = document.getElementById('medium-back-button');
+        if (mediumBackButton) {
+            mediumBackButton.addEventListener('click', () => {
+                window.history.back();
+            });
+        }
 
-        document.getElementById('chapter-back-button').addEventListener('click', () => {
-            if (this.currentBook) {
-                this.updateURL(this.currentBook);
-                this.showBookDetail();
-            }
-        });
+        const chapterBackButton = document.getElementById('chapter-back-button');
+        if (chapterBackButton) {
+            chapterBackButton.addEventListener('click', () => {
+                window.history.back();
+            });
+        }
     }
 
     async loadBooks() {
@@ -376,9 +386,15 @@ class SummraApp {
     async selectBook(book) {
         this.currentBook = book;
 
+        // Save current scroll position before navigating away from home
+        this.scrollPositions.home = window.scrollY;
+
         // Update book info
-        document.getElementById('book-title').textContent = book.title;
-        document.getElementById('book-author').textContent = `by ${book.author}`;
+        const bookTitle = document.getElementById('book-title');
+        const bookAuthor = document.getElementById('book-author');
+
+        if (bookTitle) bookTitle.textContent = book.title;
+        if (bookAuthor) bookAuthor.textContent = `by ${book.author}`;
 
         const bookCoverEl = document.getElementById('book-info-cover');
         if (bookCoverEl) {
@@ -391,7 +407,7 @@ class SummraApp {
             }
         }
 
-        // Show book detail section
+        // Show book detail section (scroll to top when going forward)
         this.showBookDetail();
 
         // Load summaries and chapters
@@ -405,11 +421,23 @@ class SummraApp {
         this.updateURL(book);
     }
 
-    showBookDetail() {
-        document.getElementById('books-section').classList.add('hidden');
-        document.getElementById('medium-detail-section').classList.add('hidden');
-        document.getElementById('chapter-detail-section').classList.add('hidden');
-        document.getElementById('summary-section').classList.remove('hidden');
+    showBookDetail(restoreScroll = false) {
+        const booksSection = document.getElementById('books-section');
+        const mediumDetailSection = document.getElementById('medium-detail-section');
+        const chapterDetailSection = document.getElementById('chapter-detail-section');
+        const summarySection = document.getElementById('summary-section');
+
+        if (booksSection) booksSection.classList.add('hidden');
+        if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
+        if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
+        if (summarySection) summarySection.classList.remove('hidden');
+
+        // Restore scroll position if going back, otherwise scroll to top
+        if (restoreScroll && this.scrollPositions.bookDetail) {
+            setTimeout(() => window.scrollTo(0, this.scrollPositions.bookDetail), 0);
+        } else {
+            window.scrollTo(0, 0);
+        }
     }
 
     async loadConciseSummary() {
@@ -591,11 +619,11 @@ class SummraApp {
         toggleBtn.onclick = () => {
             if (isSummaryExpanded) {
                 summaryContent.classList.add('hidden');
-                toggleBtn.textContent = 'Show Summary ▼';
+                toggleBtn.textContent = '▼';
                 isSummaryExpanded = false;
             } else {
                 summaryContent.classList.remove('hidden');
-                toggleBtn.textContent = 'Hide Summary ▲';
+                toggleBtn.textContent = '▲';
                 isSummaryExpanded = true;
             }
         };
@@ -799,10 +827,16 @@ class SummraApp {
     }
 
     showBooksSection() {
-        document.getElementById('summary-section').classList.add('hidden');
-        document.getElementById('medium-detail-section').classList.add('hidden');
-        document.getElementById('chapter-detail-section').classList.add('hidden');
-        document.getElementById('books-section').classList.remove('hidden');
+        const summarySection = document.getElementById('summary-section');
+        const mediumDetailSection = document.getElementById('medium-detail-section');
+        const chapterDetailSection = document.getElementById('chapter-detail-section');
+        const booksSection = document.getElementById('books-section');
+
+        if (summarySection) summarySection.classList.add('hidden');
+        if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
+        if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
+        if (booksSection) booksSection.classList.remove('hidden');
+
         this.currentBook = null;
         this.currentSummaryType = null;
         this.currentChapter = null;
@@ -810,6 +844,11 @@ class SummraApp {
 
         if (window.location.hash !== '' && window.location.hash !== '#/') {
             window.history.pushState(null, '', '/');
+        }
+
+        // Restore scroll position when going back to home
+        if (this.scrollPositions.home) {
+            setTimeout(() => window.scrollTo(0, this.scrollPositions.home), 0);
         }
     }
 
