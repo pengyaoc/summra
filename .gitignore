@@ -30,22 +30,22 @@ build/
 Thumbs.db
 
 # Database (don't commit large databases to git)
-*.db
-*.db-journal
-*.sqlite
-*.sqlite3
+# *.db
+# *.db-journal
+# *.sqlite
+# *.sqlite3
 
 # Audio files (too large for git)
-frontend/static/audio/*.wav
-frontend/static/audio/*.mp3
-frontend/static/tts/*.wav
+# frontend/static/audio/*.wav
+# frontend/static/audio/*.mp3
+# frontend/static/tts/*.wav
 
 # Book text files (too large, download from Gutenberg)
 data/books/*.txt
 !data/books/.gitkeep
 
 # Cover images from Gutenberg (can re-download)
-frontend/static/covers/pg*.jpg
+# frontend/static/covers/pg*.jpg
 
 # Summaries
 data/summaries/*.json

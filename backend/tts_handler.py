@@ -149,11 +149,15 @@ class TTSHandler:
 
         # Generate unique filename based on content hash or provided ID
         if audio_id:
-            filename = f"{audio_id}.wav"
+            # Don't add _vits suffix to temporary chunk files (they're deleted after streaming)
+            if audio_id.startswith("chunk_"):
+                filename = f"{audio_id}.wav"
+            else:
+                filename = f"{audio_id}_vits.wav"
         else:
-            # Create hash of text for unique filename
+            # Create hash of text for unique filename (fallback for UI-generated TTS)
             text_hash = hashlib.md5(text.encode()).hexdigest()
-            filename = f"{text_hash}.wav"
+            filename = f"{text_hash}_vits.wav"
 
         output_path = self.output_dir / filename
 

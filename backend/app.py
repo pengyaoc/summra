@@ -265,17 +265,45 @@ def generate_tts():
 
         tts = TTSHandler()
 
-        # Check if cached concatenated audio exists
+        # Check for cached audio with prioritization: Gemini > VITS > Legacy complete
         if audio_id:
+            # Priority 1: Check for Gemini TTS (pre-generated offline)
+            gemini_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
+            if gemini_audio_path.exists():
+                print(f"Using Gemini TTS audio: {gemini_audio_path}")
+                relative_path = str(gemini_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
+                return jsonify({
+                    'success': True,
+                    'audio_url': f'/static/{relative_path}',
+                    'streaming': False,
+                    'cached': True,
+                    'provider': 'gemini'
+                })
+
+            # Priority 2: Check for VITS TTS (previously generated)
+            vits_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_vits.wav"
+            if vits_audio_path.exists():
+                print(f"Using VITS TTS audio: {vits_audio_path}")
+                relative_path = str(vits_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
+                return jsonify({
+                    'success': True,
+                    'audio_url': f'/static/{relative_path}',
+                    'streaming': False,
+                    'cached': True,
+                    'provider': 'vits'
+                })
+
+            # Priority 3: Check for legacy concatenated audio (backward compatibility)
             cached_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_complete.wav"
             if cached_audio_path.exists():
-                print(f"Using cached audio: {cached_audio_path}")
+                print(f"Using legacy cached audio: {cached_audio_path}")
                 relative_path = str(cached_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
                 return jsonify({
                     'success': True,
                     'audio_url': f'/static/{relative_path}',
                     'streaming': False,
-                    'cached': True
+                    'cached': True,
+                    'provider': 'vits_legacy'
                 })
 
         # Use streaming for better UX (immediate playback)

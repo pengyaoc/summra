@@ -60,7 +60,7 @@ GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts'
 GEMINI_TTS_VOICE = 'Kore'  # Default voice (options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
 GEMINI_TTS_MAX_REQUESTS_PER_MINUTE = 3
 GEMINI_TTS_MAX_TOKENS_PER_MINUTE = 10000
-GEMINI_TTS_CHUNK_SIZE_WORDS = 800  # Larger chunks for API-based TTS
+GEMINI_TTS_CHUNK_SIZE_WORDS = 900  # Larger chunks for API-based TTS
 
 # VITS TTS configuration (for real-time generation)
 VITS_TTS_CHUNK_SIZE_WORDS = 20  # Much smaller chunks for local TTS processing
