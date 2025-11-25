@@ -28,7 +28,9 @@
 
             <!-- Book Detail Section -->
             <section class="summary-section hidden" id="summary-section">
-                <button class="back-button" id="back-button">← Back to Books</button>
+                <div class="back-button-container">
+                    <button class="back-button" id="back-button">← Back to Books</button>
+                </div>
 
                 <div class="book-detail-header">
                     <img id="book-info-cover" class="book-detail-cover hidden" alt="Book cover">
@@ -71,7 +73,9 @@
 
             <!-- Medium Summary Detail Section -->
             <section class="medium-detail-section hidden" id="medium-detail-section">
-                <button class="back-button" id="medium-back-button">← Back to Book</button>
+                <div class="back-button-container">
+                    <button class="back-button" id="medium-back-button">← Back to Book</button>
+                </div>
 
                 <div class="medium-detail-header">
                     <h2 id="medium-detail-title"></h2>
@@ -89,7 +93,9 @@
 
             <!-- Chapter Detail Section -->
             <section class="chapter-detail-section hidden" id="chapter-detail-section">
-                <button class="back-button" id="chapter-back-button">← Back to Book</button>
+                <div class="back-button-container">
+                    <button class="back-button" id="chapter-back-button">← Back to Book</button>
+                </div>
 
                 <div class="chapter-detail-header">
                     <h2 id="chapter-detail-title"></h2>
@@ -101,11 +107,13 @@
                     <div class="chapter-summary-box collapsed" id="chapter-summary-box">
                         <div class="chapter-summary-header" id="chapter-summary-header">
                             <h4>📝 Chapter Summary <span class="spoiler-warning">(may contain spoilers)</span></h4>
-                            <button class="toggle-summary-btn" id="toggle-summary-btn">Show Summary ▼</button>
+                            <div class="chapter-summary-actions">
+                                <button class="tts-button-inline" id="chapter-summary-tts-button">🔊 Listen</button>
+                                <button class="toggle-summary-btn" id="toggle-summary-btn">▼</button>
+                            </div>
                         </div>
                         <div class="chapter-summary-content hidden" id="chapter-summary-content">
                             <div class="summary-text" id="chapter-summary-text"></div>
-                            <button class="tts-button-inline" id="chapter-summary-tts-button">🔊 Listen to Summary</button>
                         </div>
                     </div>
 
