@@ -4,7 +4,15 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
+env/
+ENV/
+*.egg-info/
+dist/
+build/
 
 # Environment variables
 .env
@@ -21,9 +29,45 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Generated files
+# Database (don't commit large databases to git)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Audio files (too large for git)
+frontend/static/audio/*.wav
+frontend/static/audio/*.mp3
 frontend/static/tts/*.wav
+
+# Book text files (too large, download from Gutenberg)
+data/books/*.txt
+!data/books/.gitkeep
+
+# Cover images from Gutenberg (can re-download)
+frontend/static/covers/pg*.jpg
+
+# Summaries
 data/summaries/*.json
 
 # Logs
 *.log
+logs/
+
+# TTS models cache
+.local/
+
+# Backup files
+*.backup
+*.bak
+backups/
+
+# Temporary files
+*.tmp
+tmp/
+.cache/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
