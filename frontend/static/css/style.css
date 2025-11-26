@@ -58,9 +58,9 @@ body {
 }
 
 .logo {
-    font-family: Baskerville, 'Baskerville Old Face', 'Hoefler Text', Garamond, 'Times New Roman', serif;
+    font-family: 'New York', Baskerville, 'Baskerville Old Face', 'Hoefler Text', Garamond, 'Times New Roman', serif;
     font-size: 1.5rem;
-    font-style: italic;
+    font-style: normal;
     margin: 0;
     font-weight: 600;
 }
@@ -74,7 +74,7 @@ body {
 /* Main Content */
 .main-content {
     flex: 1;
-    padding: 40px 0;
+    padding: 0 0 40px 0;
 }
 
 .hidden {
@@ -82,6 +82,10 @@ body {
 }
 
 /* Books Section */
+.books-section {
+    padding-top: 20px;
+}
+
 .books-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -172,7 +176,7 @@ body {
 }
 
 .summary-section > *:first-child {
-    padding-top: 40px;
+    padding-top: 20px;
 }
 
 .summary-section > *:last-child {
@@ -330,6 +334,38 @@ body {
     color: var(--text-color);
 }
 
+/* Concise Preview Container */
+.concise-preview-container {
+    position: relative;
+    max-height: 300px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    transition: max-height 0.4s ease;
+}
+
+.concise-preview-container.expanded {
+    max-height: none;
+}
+
+.concise-preview-text {
+    position: relative;
+}
+
+.concise-preview-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.concise-preview-fade.hidden {
+    opacity: 0;
+}
+
 /* Medium Preview Container */
 .medium-preview-container {
     position: relative;
@@ -412,7 +448,7 @@ body {
 }
 
 .medium-detail-section > *:first-child {
-    padding-top: 40px;
+    padding-top: 20px;
 }
 
 .medium-detail-section > *:last-child {
@@ -461,7 +497,7 @@ body {
 }
 
 .chapter-detail-section > *:first-child {
-    padding-top: 40px;
+    padding-top: 20px;
 }
 
 .chapter-detail-section > *:last-child {

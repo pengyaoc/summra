@@ -81,9 +81,9 @@ class RateLimiter:
 class SummaryGenerator:
     """Generate book summaries using Gemini API"""
 
-    # Maximum characters per API call (900K chars ~= 225K tokens, fits free tier 250K/min)
-    MAX_CHARS_PER_CALL = 900000
-    MAX_TOKENS_PER_CALL = MAX_CHARS_PER_CALL // 4  # ~225K tokens
+    # Maximum characters per API call (750K chars ~= 187.5K tokens, fits free tier 250K/min)
+    MAX_CHARS_PER_CALL = 750000
+    MAX_TOKENS_PER_CALL = MAX_CHARS_PER_CALL // 4  # ~187.5K tokens
 
     # Threshold for "large" calls that trigger rate limiting (100K tokens)
     LARGE_CALL_THRESHOLD = 100000
@@ -160,6 +160,129 @@ class SummaryGenerator:
         cleaned = re.sub(r'^\n+', '', cleaned)
 
         return cleaned
+
+    def generate_combined_summaries(self, text: str, title: str, author: str, dry_run: bool = False) -> tuple[str, str]:
+        """
+        Generate both concise and medium summaries in a single API call.
+        Returns (concise_summary, medium_summary)
+        """
+        model_name = config.SUMMARY_CONFIGS['concise']['model']  # Use same model for both
+
+        # Cap text at maximum chars per call
+        max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
+
+        # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
+        estimated_tokens = max_chars // 4 + 3000  # +3000 for output
+
+        prompt = f"""Generate TWO summaries of "{title}" by {author}. Follow the format exactly:
+
+### CONCISE SUMMARY (500 words)
+[Generate a concise 500-word summary here]
+
+Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers (no plot twists, endings, or major reveals). For non-fiction, cover main arguments and key takeaways. Write in an engaging, accessible style.
+
+### MEDIUM SUMMARY (2000-3000 words)
+[Generate a comprehensive 2000-3000 word summary here]
+
+Cover all major plot points, themes, and character developments in chronological order. Discuss the author's writing style and analyze major themes. Spoilers are acceptable. For non-fiction, cover all main arguments, evidence, and conclusions.
+
+### BOOK TEXT:
+{text[:max_chars]}"""
+
+        if dry_run:
+            print(f"\n[DRY RUN] Would generate combined summaries using {model_name}")
+            print(f"[DRY RUN] Prompt ({len(prompt)} chars):")
+            print("-" * 60)
+            print(prompt[:500] + "..." if len(prompt) > 500 else prompt)
+            print("-" * 60)
+            return "[DRY RUN] Concise summary", "[DRY RUN] Medium summary"
+
+        # Wait if needed for large API calls
+        self.wait_if_needed_for_large_call(estimated_tokens)
+        self.rate_limiter.wait_if_needed(estimated_tokens)
+
+        # Log input word count
+        input_words = len(prompt.split())
+        print(f"Generating combined summaries using {model_name}...")
+        print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
+
+        # Make API call with retry logic for retriable errors
+        max_retries = 2
+        retry_count = 0
+        result = None
+
+        while retry_count <= max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                result = self.clean_llm_response(response.text)
+                break  # Success - exit retry loop
+            except Exception as e:
+                error_message = str(e)
+
+                # Check if error is retriable
+                is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
+                               'UNAVAILABLE' in error_message or '429' in error_message or
+                               'RESOURCE_EXHAUSTED' in error_message)
+
+                # Extract retry delay from error message if present
+                wait_time = 10  # Default
+                if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
+                    retry_match = re.search(r'Please retry in ([\d.]+)s', error_message)
+                    if retry_match:
+                        wait_time = int(float(retry_match.group(1))) + 1
+                    else:
+                        wait_time = 60  # Default to 1 minute for rate limits
+
+                if is_retriable and retry_count < max_retries:
+                    retry_count += 1
+                    print(f"  ⚠️  API error (retriable): Rate limit or server issue")
+                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
+                    time.sleep(wait_time)
+                else:
+                    if retry_count > 0:
+                        print(f"  ❌ Max retries exceeded")
+                    raise
+
+        # Parse the response to extract concise and medium summaries
+        concise_summary = ""
+        medium_summary = ""
+
+        # Split by section markers
+        concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)(?=### MEDIUM SUMMARY|$)', result, re.DOTALL | re.IGNORECASE)
+        medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)(?=###|$)', result, re.DOTALL | re.IGNORECASE)
+
+        if concise_match:
+            concise_summary = concise_match.group(1).strip()
+        else:
+            # Fallback: try to find first section before "MEDIUM"
+            parts = re.split(r'### MEDIUM SUMMARY', result, flags=re.IGNORECASE)
+            if len(parts) > 0:
+                concise_summary = parts[0].strip()
+
+        if medium_match:
+            medium_summary = medium_match.group(1).strip()
+        else:
+            # Fallback: try to find second section after "MEDIUM"
+            parts = re.split(r'### MEDIUM SUMMARY', result, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                medium_summary = parts[1].strip()
+
+        # Clean up any remaining section markers
+        concise_summary = re.sub(r'^###.*?\n', '', concise_summary, flags=re.MULTILINE).strip()
+        medium_summary = re.sub(r'^###.*?\n', '', medium_summary, flags=re.MULTILINE).strip()
+
+        concise_words = len(concise_summary.split())
+        medium_words = len(medium_summary.split())
+        total_words = concise_words + medium_words
+
+        print(f"  ← Output: {total_words:,} words total")
+        print(f"     Concise: {concise_words:,} words")
+        print(f"     Medium: {medium_words:,} words")
+
+        return concise_summary, medium_summary
 
     def read_book(self, file_path: Path) -> str:
         """Read book text from file"""
@@ -421,7 +544,8 @@ class SummaryGenerator:
             line_stripped = line.strip()
 
             # Start of TOC
-            if re.match(r'^\s*CONTENTS\.?\s*$', line_stripped, re.IGNORECASE):
+            # Match either "CONTENTS" or a standalone "CHAPTER" line (which indicates TOC header)
+            if re.match(r'^\s*(CONTENTS|CHAPTER)\.?\s*$', line_stripped, re.IGNORECASE):
                 in_toc = True
                 continue
 
@@ -442,6 +566,14 @@ class SummaryGenerator:
 
                 # Pattern 2: "Chapter" + number (e.g., "Chapter 1", "Chapter 12")
                 match = re.match(r'^Chapter\s+([IVXLCDM]+|[0-9]+)(?:\.\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
+                if match:
+                    chapter_marker = match.group(1)
+                    title = match.group(2).strip('. ') if match.group(2) else ""
+                    toc[chapter_marker] = title
+                    continue
+
+                # Pattern 3: "Stave" + number (e.g., "Stave I", "Stave V") for A Christmas Carol
+                match = re.match(r'^Stave\s+([IVXLCDM]+|[0-9]+)(?::\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
                 if match:
                     chapter_marker = match.group(1)
                     title = match.group(2).strip('. ') if match.group(2) else ""
@@ -518,11 +650,13 @@ class SummaryGenerator:
         # Deduplicate titles while preserving order (dict keys maintain insertion order in Python 3.7+)
         return list(dict.fromkeys(titles))
 
-    def detect_chapters(self, text: str) -> List[Tuple[int, str, str]]:
+    def detect_chapters(self, text: str) -> Tuple[List[Tuple[int, str, str]], set]:
         """
         Detect chapters in the book text, skipping table of contents
         Supports nested book/chapter structure (e.g., "BOOK I", "BOOK II" with chapters)
-        Returns list of (chapter_number, chapter_title, chapter_text)
+        Returns (chapters, consumed_line_indices)
+        - chapters: list of (chapter_number, chapter_title, chapter_text)
+        - consumed_line_indices: set of line indices that were included in chapters
         Chapter numbers are encoded as: book_num * 100 + chapter_num (e.g., 101, 205, 312)
         """
         # Extract TOC for validation
@@ -539,8 +673,11 @@ class SummaryGenerator:
         chapter_patterns = [
             r'CHAPTER\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # CHAPTER I: Title or CHAPTER 1
             r'Chapter\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',
+            r'STAVE\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # STAVE I: Title (A Christmas Carol)
+            r'Stave\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # Stave I: Title
             r'SCENE\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # SCENE I. A public place (for plays)
             r'Scene\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # Scene I. or Scene 1. (for plays)
+            r'^([IVXLCDM]+)$',  # Standalone Roman numeral without period (e.g., "I", "II", "III" in The Great Gatsby)
             r'^([IVXLCDM]+)\.$',  # Roman numeral only format: "I." with title on next line (must be checked first)
             r'^([IVXLCDM]+)\.\s+(.+)$',  # Roman numeral only format: "I. TITLE" (must have title after period)
             r'^(CHAPTER\s+THE\s+LAST)\.?$',  # "CHAPTER THE LAST" or "CHAPTER THE LAST." (special ending chapter)
@@ -579,6 +716,9 @@ class SummaryGenerator:
         # These should be skipped in the main loop to avoid double-processing
         consumed_lines = set()
 
+        # Track which line indices were included in chapters (for identifying removed content)
+        consumed_line_indices = set()
+
         for i, line in enumerate(lines):
             # Skip lines that were already consumed as title continuations
             if i in consumed_lines:
@@ -605,8 +745,10 @@ class SummaryGenerator:
             if not line_stripped:
                 if current_chapter is not None and not in_illustration:
                     current_text.append(line)
+                    consumed_line_indices.add(i)
                 elif not found_first_chapter and not in_illustration:
                     preface_text.append(line)
+                    consumed_line_indices.add(i)
                 continue
 
             # Check if this line is a BOOK/VOLUME marker (e.g., "BOOK I", "VOLUME II")
@@ -668,8 +810,10 @@ class SummaryGenerator:
                     # Add to current chapter text instead of treating as boundary
                     if current_chapter is not None and not in_illustration:
                         current_text.append(line)
+                        consumed_line_indices.add(i)
                     elif not found_first_chapter and not in_illustration:
                         preface_text.append(line)
+                        consumed_line_indices.add(i)
                     continue
 
                 has_book_markers = True  # Mark that we found BOOK/VOLUME markers
@@ -706,6 +850,7 @@ class SummaryGenerator:
                 # This is a section marker within a chapter, include it in current chapter
                 if current_chapter is not None and not in_illustration:
                     current_text.append(line)
+                    consumed_line_indices.add(i)
                 continue
 
             # Skip chapter detection if inside an illustration block
@@ -735,10 +880,19 @@ class SummaryGenerator:
                         # False positives have sentence case like "II. But Fate lay behind it all"
                         title_part = match.group(2).strip()
                         # Get first word of title
-                        first_word = title_part.split()[0] if title_part else ""
+                        title_words = title_part.split() if title_part else []
+                        first_word = title_words[0] if title_words else ""
                         # Skip if first word is not all caps (allows for titles like "THE TITLE" but not "But fate")
                         if first_word and not first_word.isupper():
                             continue
+                        # Additional check: if first word is a single letter (like "I"), require at least
+                        # one more all-caps word to confirm it's a real chapter title
+                        # This prevents false positives like "I. I was wrong..." from being detected
+                        if first_word and len(first_word) == 1 and len(title_words) > 1:
+                            # Check if there's at least one more all-caps word (longer than 1 char)
+                            has_caps_word = any(word.isupper() and len(word) > 1 for word in title_words[1:])
+                            if not has_caps_word:
+                                continue
 
                     is_chapter = True
                     # Convert Roman numerals to numbers or use number directly
@@ -880,15 +1034,12 @@ class SummaryGenerator:
                             # Only use TOC validation if the TOC title is not empty
                             # Empty TOC titles indicate a simple TOC format that shouldn't override detection
                             if toc_title and toc_title.strip():
-                                # Use the TOC title as the authoritative title
-                                # Only replace if the detected title is significantly different
-                                # Allow for minor differences (case, punctuation)
-                                detected_normalized = chapter_title.upper().strip('. ')
-                                toc_normalized = toc_title.upper().strip('. ')
-                                if detected_normalized != toc_normalized:
-                                    # Titles don't match - use TOC title
-                                    print(f"Chapter {chapter_marker}: Using TOC title '{toc_title}' instead of detected '{chapter_title}'")
-                                    chapter_title = toc_title
+                                # Always use the TOC title as the authoritative title
+                                # TOC has the properly formatted version
+                                if chapter_title != toc_title:
+                                    # Title differs from TOC - use TOC version
+                                    print(f"Chapter {chapter_marker}: Using TOC title '{toc_title}' (detected: '{chapter_title}')")
+                                chapter_title = toc_title
                             # If TOC title is empty, just skip TOC validation and use detected chapter
                         elif all(not v or not v.strip() for v in toc.values()):
                             # All TOC entries are empty - skip TOC validation entirely
@@ -936,9 +1087,10 @@ class SummaryGenerator:
 
                     # If we see 1+ more chapter markers ahead, we're in TOC
                     # (Reduced from 2 to handle cases where only 1-2 chapters remain at end of TOC)
-                    # ALSO: If we have very small accumulated content (< 200 chars), treat as TOC
+                    # ALSO: If we have very small accumulated content (< 50 chars), treat as TOC
                     # even if no markers ahead (handles last TOC entry before actual content)
-                    if lookahead_chapter_count >= 1 or accumulated_content_size < 200:
+                    # (Reduced from 200 to 50 to handle books with small prefaces like A Christmas Carol)
+                    if lookahead_chapter_count >= 1 or accumulated_content_size < 50:
                         is_likely_toc = True
                         print(f"Skipping TOC entry: {line_stripped}")
 
@@ -1000,10 +1152,12 @@ class SummaryGenerator:
                 # Add to current chapter (skip illustration content)
                 if not in_illustration:
                     current_text.append(line)
+                    consumed_line_indices.add(i)
             else:
                 # No chapter started yet - collect into preface if we haven't found first chapter
                 if not found_first_chapter and not in_illustration:
                     preface_text.append(line)
+                    consumed_line_indices.add(i)
 
         # Add last chapter
         if current_chapter is not None and current_text:
@@ -1255,7 +1409,7 @@ class SummaryGenerator:
                 chapters[epilogue_idx] = (next_chapter_num, epilogue_chapter[1], epilogue_chapter[2])
                 print(f"Renumbered Epilogue from 999 to {next_chapter_num}")
 
-        return chapters
+        return chapters, consumed_line_indices
 
     def generate_concise_summary(self, text: str, title: str, author: str, dry_run: bool = False) -> str:
         """Generate concise 500-word summary without spoilers for fiction"""
@@ -1631,6 +1785,10 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                         print(f"  ❌ Max retries exceeded")
                     raise  # Re-raise the exception
 
+        # Safety check: ensure we got a response
+        if response_text is None:
+            raise RuntimeError(f"Failed to generate bulk summary for chapters {chapter_numbers}: API returned None")
+
         output_words = len(response_text.split())
         print(f"  ← Output: {output_words:,} words")
 
@@ -1749,6 +1907,10 @@ Cover important events, dialogues, and developments. Analyze character developme
                     if retry_count > 0:
                         print(f"  ❌ Max retries exceeded")
                     raise
+
+        # Safety check: ensure we got a response
+        if summary_text is None:
+            raise RuntimeError(f"Failed to generate summary for Chapter {chapter_num}: API returned None")
 
         output_words = len(summary_text.split())
         print(f"  ← Output: {output_words:,} words")
@@ -1874,9 +2036,9 @@ Cover important events, dialogues, and developments. Analyze character developme
         if partial_run:
             print(f"\n[PARTIAL RUN] Skipping overall comprehensive analysis")
             if use_bulk:
-                print(f"[PARTIAL RUN] Total API calls made: 2+ (concise + medium + bulk batches)")
+                print(f"[PARTIAL RUN] Total API calls made: 1+ (combined summaries + bulk batches)")
             else:
-                print(f"[PARTIAL RUN] Total API calls made: 5 (concise + medium + 3 chapters)")
+                print(f"[PARTIAL RUN] Total API calls made: 4 (combined summaries + 3 chapters)")
         else:
             print(f"\nSkipping overall comprehensive analysis (disabled)")
 
@@ -1929,8 +2091,8 @@ Cover important events, dialogues, and developments. Analyze character developme
             print("=" * 60 + "\n")
         elif partial_run:
             print("\n" + "=" * 60)
-            print("PARTIAL RUN MODE - Making up to 5 API calls for testing")
-            print("Will generate: Concise + Medium + First 3 Chapters")
+            print("PARTIAL RUN MODE - Making up to 4 API calls for testing")
+            print("Will generate: Combined (Concise + Medium) + First 3 Chapters")
             print("Note: Reusing existing summaries from DB when available")
             print("API outputs will be displayed to stdout")
             print("=" * 60 + "\n")
@@ -1969,7 +2131,7 @@ Cover important events, dialogues, and developments. Analyze character developme
         # Detect chapters early if in regenerate mode
         if regenerate_chapters:
             print("\n--- Detecting Chapters ---")
-            chapters = self.detect_chapters(text)
+            chapters, _ = self.detect_chapters(text)  # Ignore consumed_line_indices in regenerate mode
             print(f"Detected {len(chapters)} chapter(s)\n")
 
             # Get medium summary from database for context
@@ -2072,29 +2234,40 @@ Cover important events, dialogues, and developments. Analyze character developme
 
             return results
 
-        # Generate concise summary
-        print("\n--- Generating Concise Summary ---")
+        # Generate combined concise and medium summaries (single API call)
+        print("\n--- Generating Combined Summaries (Concise + Medium) ---")
 
-        # In partial-run mode, check if we already have this summary
+        # In partial-run mode, check if we already have both summaries
         if partial_run:
             existing_concise = self.db.get_summary(book_id, 'concise')
-            if existing_concise:
+            existing_medium = self.db.get_summary(book_id, 'medium')
+
+            if existing_concise and existing_medium:
                 concise = existing_concise['content']
-                print(f"[PARTIAL RUN] Reusing existing concise summary from database")
+                medium = existing_medium['content']
+                print(f"[PARTIAL RUN] Reusing existing summaries from database")
             else:
-                concise = self.generate_concise_summary(text, title, author, dry_run)
+                concise, medium = self.generate_combined_summaries(text, title, author, dry_run)
                 if not dry_run:
                     self.db.add_summary(book_id, 'concise', concise)
+                    self.db.add_summary(book_id, 'medium', medium)
         else:
-            concise = self.generate_concise_summary(text, title, author, dry_run)
+            concise, medium = self.generate_combined_summaries(text, title, author, dry_run)
             if not dry_run:
                 self.db.add_summary(book_id, 'concise', concise)
+                self.db.add_summary(book_id, 'medium', medium)
 
         results['summaries']['concise'] = {
             'text': concise,
             'word_count': len(concise.split())
         }
+        results['summaries']['medium'] = {
+            'text': medium,
+            'word_count': len(medium.split())
+        }
+
         print(f"✓ Concise summary: {results['summaries']['concise']['word_count']} words")
+        print(f"✓ Medium summary: {results['summaries']['medium']['word_count']} words")
 
         if partial_run and not dry_run:
             print(f"\n{'='*60}")
@@ -2102,33 +2275,7 @@ Cover important events, dialogues, and developments. Analyze character developme
             print(f"{'='*60}")
             print(concise)
             print(f"{'='*60}\n")
-
-        # Generate medium summary
-        print("\n--- Generating Medium Summary ---")
-
-        # In partial-run mode, check if we already have this summary
-        if partial_run:
-            existing_medium = self.db.get_summary(book_id, 'medium')
-            if existing_medium:
-                medium = existing_medium['content']
-                print(f"[PARTIAL RUN] Reusing existing medium summary from database")
-            else:
-                medium = self.generate_medium_summary(text, title, author, dry_run)
-                if not dry_run:
-                    self.db.add_summary(book_id, 'medium', medium)
-        else:
-            medium = self.generate_medium_summary(text, title, author, dry_run)
-            if not dry_run:
-                self.db.add_summary(book_id, 'medium', medium)
-
-        results['summaries']['medium'] = {
-            'text': medium,
-            'word_count': len(medium.split())
-        }
-        print(f"✓ Medium summary: {results['summaries']['medium']['word_count']} words")
-
-        if partial_run and not dry_run:
-            print(f"\n{'='*60}")
+            print(f"{'='*60}")
             print("MEDIUM SUMMARY OUTPUT:")
             print(f"{'='*60}")
             print(medium)
@@ -2136,7 +2283,7 @@ Cover important events, dialogues, and developments. Analyze character developme
 
         # Detect chapters
         print("\n--- Detecting Chapters ---")
-        chapters = self.detect_chapters(text)
+        chapters, consumed_line_indices = self.detect_chapters(text)
         print(f"Detected {len(chapters)} chapter(s)")
 
         # Calculate total parsed content
@@ -2157,10 +2304,84 @@ Cover important events, dialogues, and developments. Analyze character developme
             print(f"  ✓ Good coverage - parsing looks correct")
 
         if dry_run:
-            print("\n[DRY RUN] Chapter breakdown:")
+            # Calculate comprehensive statistics
+            word_counts = [len(ch_text.split()) for _, _, ch_text in chapters]
+            total_words_parsed = sum(word_counts)
+            avg_words = total_words_parsed / len(chapters) if chapters else 0
+            min_words = min(word_counts) if word_counts else 0
+            max_words = max(word_counts) if word_counts else 0
+
+            print(f"\n{'='*60}")
+            print("DRY RUN - CHAPTER DETECTION STATISTICS")
+            print(f"{'='*60}")
+            print(f"\nTotal Chapters Detected: {len(chapters)}")
+            print(f"Total Words Parsed: {total_words_parsed:,}")
+            print(f"\nWord Count Distribution:")
+            print(f"  Average: {avg_words:,.0f} words/chapter")
+            print(f"  Smallest: {min_words:,} words")
+            print(f"  Largest: {max_words:,} words")
+
+            # Calculate removed content statistics
+            original_word_count = len(text.split())
+            removed_word_count = original_word_count - total_words_parsed
+            removed_char_count = len(text) - total_parsed_chars
+
+            print(f"\nRemoved/Skipped Content:")
+            print(f"  {removed_word_count:,} words ({100 - coverage_percent:.1f}% of original)")
+            print(f"  {removed_char_count:,} characters")
+
+            # Extract and save removed/skipped content
+            # Use consumed_line_indices to find lines that weren't included in chapters
+            original_lines = text.split('\n')
+            removed_lines = []
+            for i, line in enumerate(original_lines):
+                if i not in consumed_line_indices:
+                    removed_lines.append(line)
+
+            removed_content = '\n'.join(removed_lines)
+
+            # Save both the removed content and analysis
+            removed_file = Path('data/removed_content') / f"{file_path.stem}_removed.txt"
+            removed_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(removed_file, 'w', encoding='utf-8') as f:
+                f.write(f"REMOVED/SKIPPED CONTENT FOR: {title} by {author}\n")
+                f.write(f"{'='*60}\n\n")
+                f.write(f"Total Chapters Detected: {len(chapters)}\n")
+                f.write(f"Coverage: {coverage_percent:.1f}%\n\n")
+                f.write(f"Original Content:\n")
+                f.write(f"  {original_word_count:,} words\n")
+                f.write(f"  {len(text):,} characters\n\n")
+                f.write(f"Parsed Content:\n")
+                f.write(f"  {total_words_parsed:,} words\n")
+                f.write(f"  {total_parsed_chars:,} characters\n\n")
+                f.write(f"Removed/Skipped Content:\n")
+                f.write(f"  {removed_word_count:,} words ({100 - coverage_percent:.1f}%)\n")
+                f.write(f"  {removed_char_count:,} characters\n\n")
+                f.write(f"{'='*60}\n")
+                f.write(f"WHAT SHOULD BE REMOVED (typically):\n")
+                f.write(f"{'='*60}\n\n")
+                f.write(f"- Title pages and frontmatter\n")
+                f.write(f"- Copyright notices and publication info\n")
+                f.write(f"- Table of Contents\n")
+                f.write(f"- Illustration captions ([Illustration: ...])\n")
+                f.write(f"- Project Gutenberg headers/footers\n")
+                f.write(f"- Dedications and preface poems\n")
+                f.write(f"- List of illustrations\n\n")
+                f.write(f"If coverage is >95%, the parsing is likely correct.\n")
+                f.write(f"If coverage is <90%, review the chapter detection carefully.\n\n")
+                f.write(f"{'='*60}\n")
+                f.write(f"ACTUAL REMOVED CONTENT:\n")
+                f.write(f"{'='*60}\n\n")
+                f.write(removed_content)
+            print(f"  Removed content saved to: {removed_file}")
+
+            print(f"\n{'='*60}")
+            print("CHAPTER BREAKDOWN")
+            print(f"{'='*60}\n")
             for ch_num, ch_title, ch_text in chapters:
+                ch_words = len(ch_text.split())
                 print(f"  Chapter {ch_num}: {ch_title}")
-                print(f"    Length: {len(ch_text)} chars (~{len(ch_text.split())} words)")
+                print(f"    Length: {len(ch_text):,} chars (~{ch_words:,} words)")
             print()
 
         # Generate comprehensive summary
@@ -2200,7 +2421,7 @@ Cover important events, dialogues, and developments. Analyze character developme
 
         print(f"\n{'='*60}")
         if partial_run:
-            print(f"✓ Partial run complete! (5 API calls made)")
+            print(f"✓ Partial run complete! (4 API calls made)")
             print(f"   Run without --partial-run to generate all summaries")
         else:
             print(f"✓ Book processing complete!")

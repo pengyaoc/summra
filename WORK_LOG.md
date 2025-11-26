@@ -1970,6 +1970,262 @@ All chapter titles now match the table of contents exactly.
 
 ---
 
+## 2025-11-26
+
+### Batch Gemini TTS Generation and Audio Metadata System - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-26
+**Completed:** 2025-11-26
+
+**Objective:** Create automated batch TTS generation system for generating Gemini TTS audio for all books in the library, and backfill audio metadata to database for pre-generated files.
+
+**Changes Made:**
+
+1. **Created `scripts/batch_generate_concise_audio.py`** (247 lines):
+   - Automated batch generation of Gemini TTS audio for all books without audio
+   - Finds books with concise summaries but no audio files
+   - Generates audio sequentially with rate limiting (20s delay = 3 req/min)
+   - **Features:**
+     - Query books from database that have concise summaries
+     - Check if audio file exists on disk (not just in database)
+     - Generate audio using GeminiTTSHandler
+     - Calculate audio duration using wave module
+     - Store metadata in audio_files table
+     - Progress tracking with success/failure counts
+   - **Options:**
+     - `--dry-run`: Preview what would be generated
+     - `--voice`: Choose voice (Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
+     - `--delay`: Delay between requests (default 20s)
+
+2. **Created `scripts/backfill_audio_metadata.py`** (184 lines):
+   - Backfills metadata for existing Gemini audio files to database
+   - Scans `frontend/static/audio/` for `book_*_concise_gemini.wav` files
+   - Extracts book_id from filename
+   - Looks up summary_id from database
+   - Calculates audio duration using wave module
+   - Adds entries to audio_files table if not already present
+   - **Features:**
+     - Pattern matching: `book_{book_id}_concise_gemini.wav`
+     - Duration calculation with wave.open()
+     - Duplicate detection (skips if already in database)
+     - Dry-run mode for testing
+     - Summary reporting (added/skipped/failed counts)
+
+3. **Added `import wave` to `backend/models.py`**:
+   - Required for audio duration calculation
+   - Uses wave.open() to read WAV file metadata
+   - Calculates duration: frames / framerate
+
+4. **Created cover update scripts:**
+   - `scripts/update_book_cover.py` - Generic book cover updater
+   - `scripts/update_christmas_carol_cover.py` - Specific to A Christmas Carol
+
+5. **Added `data/removed_content/*.txt` to .gitignore**:
+   - Excludes content removed from books during processing
+
+**Technical Details:**
+
+**Audio Duration Calculation:**
+```python
+import wave
+
+with wave.open(audio_path, 'rb') as wav_file:
+    frames = wav_file.getnframes()  # Total frames
+    rate = wav_file.getframerate()   # Sample rate (Hz)
+    duration = frames / float(rate)  # Duration in seconds
+```
+
+**Batch Processing Flow:**
+```
+1. Query database for books with concise summaries
+2. Check if audio file exists on disk (book_{id}_concise_gemini.wav)
+3. For each book without audio:
+   a. Get summary content from database
+   b. Clean text for speech (remove markdown)
+   c. Estimate tokens (~4 chars per token)
+   d. Generate audio with GeminiTTSHandler
+   e. Calculate duration using wave module
+   f. Save metadata to audio_files table
+   g. Wait 20 seconds before next request
+```
+
+**Backfill Flow:**
+```
+1. Scan audio directory for pattern: book_*_concise_gemini.wav
+2. Extract book_id from filename
+3. Look up summary_id for (book_id, 'concise')
+4. Check if audio_file entry already exists
+5. If not exists:
+   a. Calculate duration from WAV file
+   b. Add entry to audio_files table
+```
+
+**Files Created:**
+- `scripts/batch_generate_concise_audio.py` (247 lines)
+- `scripts/backfill_audio_metadata.py` (184 lines)
+- `scripts/update_book_cover.py`
+- `scripts/update_christmas_carol_cover.py`
+
+**Files Modified:**
+- `backend/models.py` - Added `import wave` for duration calculation
+- `.gitignore` - Added `data/removed_content/*.txt` exclusion
+
+**New Audio Files Generated:**
+- Multiple `book_*_concise_gemini.wav` files
+- Some `book_*_medium_gemini.wav` files
+- Total: ~20 audio files added to frontend/static/audio/
+
+**New Book Covers Added:**
+- Multiple custom covers (a_christmas_carol_custom.png, a_room_with_a_view_custom.png, etc.)
+- Multiple Project Gutenberg covers (pg1260.jpg, pg1400.jpg, etc.)
+
+**Impact:**
+- Automated TTS generation for entire library
+- No manual intervention needed for audio generation
+- Audio metadata properly tracked in database
+- Easy to add new books with TTS support
+- Efficient batch processing respects rate limits
+- Dry-run mode prevents accidental API usage
+
+**Next Steps/Notes:**
+- Consider adding medium summary audio generation
+- May want to add chapter audio batch generation
+- Monitor Gemini API usage and costs
+- Consider adding retry logic for failed generations
+
+---
+
+### UI Polish - Edge-to-Edge Backgrounds and Scroll Preservation - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-26
+**Completed:** 2025-11-26
+
+**Objective:** Polish the UI by reducing unnecessary padding, improving visual consistency, adding concise summary expand/collapse functionality, and preserving scroll position when navigating between pages.
+
+**Changes Made:**
+
+1. **CSS Styling Improvements** (`frontend/static/css/style.css`):
+   - **Logo font styling:**
+     - Added 'New York' as primary font (Apple's serif font)
+     - Changed from italic to normal font-style
+   - **Reduced top padding across sections:**
+     - `.main-content`: Changed from `padding: 40px 0` to `padding: 0 0 40px 0`
+     - `.books-section`: Added `padding-top: 20px`
+     - `.summary-section > *:first-child`: Changed from `40px` to `20px`
+     - `.medium-detail-section > *:first-child`: Changed from `40px` to `20px`
+     - `.chapter-detail-section > *:first-child`: Changed from `40px` to `20px`
+   - **Added Concise Preview Container (lines 337-367):**
+     - `.concise-preview-container`: Max height 300px with fade effect
+     - `.concise-preview-container.expanded`: No max height when expanded
+     - `.concise-preview-fade`: Gradient fade from transparent to white
+     - Similar to medium preview but for concise summary
+   - **Improved visual consistency:**
+     - Consistent padding across all section types
+     - Better edge-to-edge background utilization
+
+2. **JavaScript Scroll Position Preservation** (`frontend/static/js/app.js`):
+   - **New scroll position tracking system:**
+     - `scrollPositions` object tracks scroll per page
+     - `currentPage` variable tracks which page user is on
+     - `saveScrollPosition()` method saves current scroll before navigation
+     - `restoreScrollPosition(pageKey)` method restores scroll after navigation
+     - `setCurrentPage(pageKey)` method updates current page tracker
+   - **Updated navigation functions:**
+     - `selectBook()`: Added `restoreScroll` parameter
+     - `showMediumDetail()`: Added `restoreScroll` parameter
+     - `showChapterDetail()`: Added `restoreScroll` parameter
+   - **Back button scroll preservation:**
+     - All back buttons call `saveScrollPosition()` before navigation
+     - Browser back/forward navigation preserves scroll position
+     - Uses double `requestAnimationFrame` for reliable DOM rendering before scroll
+   - **Concise Summary Expand/Collapse (lines 480-517):**
+     - Detects if concise summary height exceeds 300px
+     - Shows "Read Quick Summary →" button if content is tall
+     - Toggle expands/collapses with fade effect
+     - "Show Less ↑" button scrolls back to top of Quick Summary section
+     - Similar UX to medium summary preview
+
+3. **Improved Page Key System:**
+   - Home page: `'home'`
+   - Book detail: `'book_{book_id}'`
+   - Medium detail: `'medium_{book_id}'`
+   - Chapter detail: `'chapter_{book_id}_{chapter_num}'`
+   - Each page has unique scroll position in memory
+
+**Technical Details:**
+
+**Scroll Position Preservation Algorithm:**
+```javascript
+// Save before navigation
+saveScrollPosition() {
+    this.scrollPositions[this.currentPage] = window.scrollY;
+}
+
+// Restore after navigation
+restoreScrollPosition(pageKey) {
+    const position = this.scrollPositions[pageKey] || 0;
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            window.scrollTo(0, position);
+        });
+    });
+}
+```
+
+**Double requestAnimationFrame Rationale:**
+- First frame: Allow React/DOM updates to complete
+- Second frame: Ensure layout is fully calculated
+- Prevents scroll jump or incorrect scroll position
+
+**Concise Summary Expand Logic:**
+```javascript
+setTimeout(() => {
+    const contentHeight = conciseSummaryText.scrollHeight;
+    const containerMaxHeight = 300;
+
+    if (contentHeight > containerMaxHeight) {
+        expandButton.classList.remove('hidden');
+        expandButton.onclick = () => {
+            isExpanded = !isExpanded;
+            if (isExpanded) {
+                previewContainer.classList.add('expanded');
+                previewFade.classList.add('hidden');
+                expandButton.textContent = 'Show Less ↑';
+            } else {
+                previewContainer.classList.remove('expanded');
+                previewFade.classList.remove('hidden');
+                expandButton.textContent = 'Read Quick Summary →';
+                // Scroll back to Quick Summary section
+                document.getElementById('concise-summary-section').scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        };
+    }
+}, 100);
+```
+
+**Files Modified:**
+- `frontend/static/css/style.css` (lines 61, 65, 77, 85-86, 179, 337-367, 451, 500)
+- `frontend/static/js/app.js` (lines 20-23, 69-71, 73-75, 77-79, 107-127, 328-330, 333, 344, 406-408, 445-463, 480-520, 599-610, 621-632, 671-682)
+
+**Impact:**
+- Better visual consistency with reduced padding
+- Scroll position preserved when using back button
+- Improved user experience when navigating between pages
+- Concise summary can be expanded for full reading
+- Logo uses system serif font for better integration
+- Edge-to-edge backgrounds utilized more effectively
+
+**Next Steps/Notes:**
+- Monitor user feedback on scroll preservation
+- May want to add scroll position persistence to localStorage
+- Consider adding keyboard shortcuts for expand/collapse
+- Test scroll behavior on mobile devices
+
+---
+
 ### Huckleberry Finn "CHAPTER THE LAST" Detection - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-11-24
