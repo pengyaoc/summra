@@ -18,10 +18,8 @@ class SummraApp {
             audioId: null
         };
         // Store scroll positions for each page
-        this.scrollPositions = {
-            home: 0,
-            bookDetail: 0
-        };
+        this.scrollPositions = {};
+        this.currentPage = 'home'; // Track current page for scroll saving
         this.init();
     }
 
@@ -69,19 +67,19 @@ class SummraApp {
             const chapterNum = parseInt(chapterMatch[2]);
             const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
             if (book) {
-                await this.showChapterDetail(book, chapterNum);
+                await this.showChapterDetail(book, chapterNum, true);
             }
         } else if (mediumMatch) {
             const bookSlug = mediumMatch[1];
             const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
             if (book) {
-                await this.showMediumDetail(book);
+                await this.showMediumDetail(book, true);
             }
         } else if (bookMatch) {
             const bookSlug = bookMatch[1];
             const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
             if (book) {
-                await this.selectBook(book);
+                await this.selectBook(book, true);
             }
         }
     }
@@ -104,6 +102,27 @@ class SummraApp {
             .replace(/\s+/g, '-')
             .replace(/--+/g, '-')
             .trim();
+    }
+
+    saveScrollPosition() {
+        this.scrollPositions[this.currentPage] = window.scrollY;
+        console.log(`[Scroll] Saved scroll position for ${this.currentPage}: ${window.scrollY}`);
+    }
+
+    restoreScrollPosition(pageKey) {
+        const position = this.scrollPositions[pageKey] || 0;
+        console.log(`[Scroll] Restoring scroll position for ${pageKey}: ${position}`);
+        // Use requestAnimationFrame to ensure DOM is fully rendered
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                window.scrollTo(0, position);
+                console.log(`[Scroll] Actually scrolled to: ${position}, current scroll: ${window.scrollY}`);
+            });
+        });
+    }
+
+    setCurrentPage(pageKey) {
+        this.currentPage = pageKey;
     }
 
     updateURL(book, page = null) {
@@ -306,15 +325,15 @@ class SummraApp {
         const backButton = document.getElementById('back-button');
         if (backButton) {
             backButton.addEventListener('click', () => {
-                // Save current scroll position
-                this.scrollPositions.bookDetail = window.scrollY;
-                this.showBooksSection();
+                this.saveScrollPosition();
+                window.history.back();
             });
         }
 
         const mediumBackButton = document.getElementById('medium-back-button');
         if (mediumBackButton) {
             mediumBackButton.addEventListener('click', () => {
+                this.saveScrollPosition();
                 window.history.back();
             });
         }
@@ -322,6 +341,7 @@ class SummraApp {
         const chapterBackButton = document.getElementById('chapter-back-button');
         if (chapterBackButton) {
             chapterBackButton.addEventListener('click', () => {
+                this.saveScrollPosition();
                 window.history.back();
             });
         }
@@ -383,11 +403,11 @@ class SummraApp {
         });
     }
 
-    async selectBook(book) {
+    async selectBook(book, restoreScroll = false) {
         this.currentBook = book;
 
-        // Save current scroll position before navigating away from home
-        this.scrollPositions.home = window.scrollY;
+        // Save current scroll position
+        this.saveScrollPosition();
 
         // Update book info
         const bookTitle = document.getElementById('book-title');
@@ -407,8 +427,8 @@ class SummraApp {
             }
         }
 
-        // Show book detail section (scroll to top when going forward)
-        this.showBookDetail();
+        // Show book detail section
+        this.showBookDetail(restoreScroll);
 
         // Load summaries and chapters
         await Promise.all([
@@ -422,6 +442,9 @@ class SummraApp {
     }
 
     showBookDetail(restoreScroll = false) {
+        const pageKey = `book_${this.currentBook?.id || ''}`;
+        this.setCurrentPage(pageKey);
+
         const booksSection = document.getElementById('books-section');
         const mediumDetailSection = document.getElementById('medium-detail-section');
         const chapterDetailSection = document.getElementById('chapter-detail-section');
@@ -432,9 +455,9 @@ class SummraApp {
         if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
         if (summarySection) summarySection.classList.remove('hidden');
 
-        // Restore scroll position if going back, otherwise scroll to top
-        if (restoreScroll && this.scrollPositions.bookDetail) {
-            setTimeout(() => window.scrollTo(0, this.scrollPositions.bookDetail), 0);
+        // Restore scroll position or scroll to top
+        if (restoreScroll) {
+            this.restoreScrollPosition(pageKey);
         } else {
             window.scrollTo(0, 0);
         }
@@ -454,6 +477,46 @@ class SummraApp {
                 // Setup TTS button
                 const ttsBtn = document.getElementById('concise-tts-button');
                 ttsBtn.onclick = () => this.generateTTS(data.summary.content, 'concise', ttsBtn);
+
+                // Check if content height exceeds the preview container max-height
+                const previewContainer = document.getElementById('concise-preview-container');
+                const expandButton = document.getElementById('concise-expand-button');
+                const previewFade = document.getElementById('concise-preview-fade');
+
+                // Use setTimeout to ensure content is rendered and height is calculated
+                setTimeout(() => {
+                    const contentHeight = conciseSummaryText.scrollHeight;
+                    const containerMaxHeight = 300; // Match CSS max-height
+
+                    if (contentHeight > containerMaxHeight) {
+                        // Show expand button if content is taller than container
+                        expandButton.classList.remove('hidden');
+
+                        // Setup expand/collapse toggle
+                        let isExpanded = false;
+                        expandButton.onclick = () => {
+                            isExpanded = !isExpanded;
+
+                            if (isExpanded) {
+                                // Expand
+                                previewContainer.classList.add('expanded');
+                                previewFade.classList.add('hidden');
+                                expandButton.textContent = 'Show Less ↑';
+                            } else {
+                                // Collapse
+                                previewContainer.classList.remove('expanded');
+                                previewFade.classList.remove('hidden');
+                                expandButton.textContent = 'Read Quick Summary →';
+
+                                // Scroll back to the top of the Quick Summary section
+                                document.getElementById('concise-summary-section').scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start'
+                                });
+                            }
+                        };
+                    }
+                }, 100);
             } else {
                 conciseSummaryText.innerHTML = '<p class="error">Summary not available</p>';
             }
@@ -533,11 +596,15 @@ class SummraApp {
         this.showChapterDetail(this.currentBook, chapterNum);
     }
 
-    async showMediumDetail(book) {
+    async showMediumDetail(book, restoreScroll = false) {
         this.currentBook = book;
 
-        // Scroll to top of page
-        window.scrollTo(0, 0);
+        // Save current scroll position before navigating
+        this.saveScrollPosition();
+
+        // Set current page key
+        const pageKey = `medium_${book.id}`;
+        this.setCurrentPage(pageKey);
 
         // Hide other sections
         document.getElementById('books-section').classList.add('hidden');
@@ -568,14 +635,25 @@ class SummraApp {
         // Setup TTS button
         const ttsBtn = document.getElementById('medium-detail-tts-button');
         ttsBtn.onclick = () => this.generateTTS(this.mediumSummaryContent, 'medium', ttsBtn);
+
+        // Restore scroll position or scroll to top
+        if (restoreScroll) {
+            this.restoreScrollPosition(pageKey);
+        } else {
+            window.scrollTo(0, 0);
+        }
     }
 
-    async showChapterDetail(book, chapterNum) {
+    async showChapterDetail(book, chapterNum, restoreScroll = false) {
         this.currentBook = book;
         this.currentChapter = chapterNum;
 
-        // Scroll to top of page
-        window.scrollTo(0, 0);
+        // Save current scroll position before navigating
+        this.saveScrollPosition();
+
+        // Set current page key
+        const pageKey = `chapter_${book.id}_${chapterNum}`;
+        this.setCurrentPage(pageKey);
 
         // Hide other sections
         document.getElementById('books-section').classList.add('hidden');
@@ -650,6 +728,13 @@ class SummraApp {
             };
         } else {
             fulltextTtsBtn.disabled = true;
+        }
+
+        // Restore scroll position or scroll to top
+        if (restoreScroll) {
+            this.restoreScrollPosition(pageKey);
+        } else {
+            window.scrollTo(0, 0);
         }
     }
 
@@ -827,6 +912,12 @@ class SummraApp {
     }
 
     showBooksSection() {
+        // Save current scroll position before navigating
+        this.saveScrollPosition();
+
+        // Set current page to home
+        this.setCurrentPage('home');
+
         const summarySection = document.getElementById('summary-section');
         const mediumDetailSection = document.getElementById('medium-detail-section');
         const chapterDetailSection = document.getElementById('chapter-detail-section');
@@ -847,9 +938,7 @@ class SummraApp {
         }
 
         // Restore scroll position when going back to home
-        if (this.scrollPositions.home) {
-            setTimeout(() => window.scrollTo(0, this.scrollPositions.home), 0);
-        }
+        this.restoreScrollPosition('home');
     }
 
     escapeHtml(text) {

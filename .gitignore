@@ -42,6 +42,7 @@ Thumbs.db
 
 # Book text files (too large, download from Gutenberg)
 data/books/*.txt
+data/removed_content/*.txt
 !data/books/.gitkeep
 
 # Cover images from Gutenberg (can re-download)

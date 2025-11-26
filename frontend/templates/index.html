@@ -48,13 +48,17 @@
                             <h3>Quick Summary</h3>
                             <button class="tts-button-inline" id="concise-tts-button">🔊 Listen</button>
                         </div>
-                        <div class="summary-text" id="concise-summary-text"></div>
+                        <div class="concise-preview-container" id="concise-preview-container">
+                            <div class="summary-text concise-preview-text" id="concise-summary-text"></div>
+                            <div class="concise-preview-fade" id="concise-preview-fade"></div>
+                        </div>
+                        <button class="expand-link centered hidden" id="concise-expand-button">Read Quick Summary →</button>
                     </div>
 
                     <!-- Medium Summary Preview -->
                     <div class="medium-preview-section" id="medium-preview-section">
                         <div class="section-header">
-                            <h3>Detailed Overview</h3>
+                            <h3>Full Summary</h3>
                         </div>
                         <div class="medium-preview-container">
                             <div class="summary-text medium-preview-text" id="medium-preview-text"></div>
@@ -84,7 +88,7 @@
 
                 <div class="medium-detail-content">
                     <div class="section-header">
-                        <h3>Detailed Summary</h3>
+                        <h3>Full Summary</h3>
                         <button class="tts-button-inline" id="medium-detail-tts-button">🔊 Listen</button>
                     </div>
                     <div class="summary-text" id="medium-detail-text"></div>
@@ -106,7 +110,7 @@
                     <!-- Summary (Collapsed by default) -->
                     <div class="chapter-summary-box collapsed" id="chapter-summary-box">
                         <div class="chapter-summary-header" id="chapter-summary-header">
-                            <h4>📝 Chapter Summary <span class="spoiler-warning">(may contain spoilers)</span></h4>
+                            <h4>📝 Summary</h4>
                             <div class="chapter-summary-actions">
                                 <button class="tts-button-inline" id="chapter-summary-tts-button">🔊 Listen</button>
                                 <button class="toggle-summary-btn" id="toggle-summary-btn">▼</button>
@@ -120,7 +124,7 @@
                     <!-- Full Text -->
                     <div class="chapter-fulltext-section" id="chapter-fulltext-section">
                         <div class="section-header">
-                            <h4>📖 Full Chapter Text</h4>
+                            <h4>📖 Full Text</h4>
                             <button class="tts-button-inline" id="chapter-fulltext-tts-button">🔊 Listen</button>
                         </div>
                         <div class="chapter-fulltext" id="chapter-fulltext"></div>
