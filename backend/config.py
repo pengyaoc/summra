@@ -44,13 +44,6 @@ SUMMARY_CONFIGS = {
     }
 }
 
-# Bulk processing configuration for chapter summaries
-BULK_SUMMARY_CONFIG = {
-    'enabled': True,  # Enable bulk summary generation to reduce API calls
-    'max_batch_words': 10000,  # Maximum total words per batch (input content)
-    'max_chapters_per_batch': 10,  # Maximum chapters per batch (safety limit)
-}
-
 # TTS configuration (using VITS for real-time, Gemini for offline)
 TTS_OUTPUT_DIR = BASE_DIR / 'frontend' / 'static' / 'audio'
 TTS_LANGUAGE = 'en'  # Default language for TTS

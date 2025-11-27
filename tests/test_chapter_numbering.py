@@ -72,7 +72,7 @@ that would change the course of history and our understanding of time itself.
         content = self.generator.extract_gutenberg_content(text)
 
         # Detect chapters
-        chapters = self.generator.detect_chapters(content)
+        chapters, _ = self.generator.detect_chapters(content)
 
         # Verify we detected 3 chapters
         self.assertEqual(len(chapters), 3, f"Expected 3 chapters, got {len(chapters)}")
@@ -128,7 +128,7 @@ This is the second chapter.
         content = self.generator.extract_gutenberg_content(text)
 
         # Detect chapters
-        chapters = self.generator.detect_chapters(content)
+        chapters, _ = self.generator.detect_chapters(content)
 
         # In this case, Introduction should be Chapter 0 (preface)
         # because it's not numbered in the TOC
@@ -176,7 +176,7 @@ closure to the narrative while reflecting on the themes explored earlier.
         content = self.generator.extract_gutenberg_content(text)
 
         # Detect chapters
-        chapters = self.generator.detect_chapters(content)
+        chapters, _ = self.generator.detect_chapters(content)
 
         # Find epilogue
         epilogue = next((ch for ch in chapters if 'Epilogue' in ch[1]), None)

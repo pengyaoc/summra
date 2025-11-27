@@ -6,12 +6,28 @@ This script processes book text files and generates three types of summaries
 using Google's Gemini API:
 1. Concise (500 words, no spoilers for fiction)
 2. Medium (2000-3000 words)
-3. Comprehensive (chapter-by-chapter with overall summary)
+3. Comprehensive (chapter-by-chapter summaries using bulk processing)
+
+Chapter summaries are generated using bulk processing, where consecutive chapters
+are processed in a single API call for improved efficiency and context.
 
 Usage:
+    # Generate all summaries for a book
     python generate_summaries.py <book_file.txt> [--title "Book Title"] [--author "Author Name"]
-    python generate_summaries.py <book_file.txt> --dry-run  # Preview without API calls
+
+    # Preview chapter detection without making API calls
+    python generate_summaries.py <book_file.txt> --dry-run
+
+    # Test mode: generate only concise + medium + first 3 chapters
+    python generate_summaries.py <book_file.txt> --partial-run
+
+    # Regenerate specific consecutive chapters (comma-separated)
+    python generate_summaries.py <book_file.txt> --regenerate-chapters "1,2,3"
+
+    # Process all .txt files in a directory
     python generate_summaries.py --batch <directory>
+
+Note: --regenerate-chapters requires consecutive chapter numbers (e.g., "1,2,3" works, "1,3,5" fails)
 """
 
 import os
@@ -441,6 +457,16 @@ Cover all major plot points, themes, and character developments in chronological
 
         return result
 
+    def word_to_int(self, s: str) -> int:
+        """Convert spelled-out number to integer (e.g., 'ONE' -> 1, 'TWO' -> 2)"""
+        word_map = {
+            'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5,
+            'SIX': 6, 'SEVEN': 7, 'EIGHT': 8, 'NINE': 9, 'TEN': 10,
+            'ELEVEN': 11, 'TWELVE': 12, 'THIRTEEN': 13, 'FOURTEEN': 14, 'FIFTEEN': 15,
+            'SIXTEEN': 16, 'SEVENTEEN': 17, 'EIGHTEEN': 18, 'NINETEEN': 19, 'TWENTY': 20
+        }
+        return word_map.get(s.upper(), 0)
+
     def extract_gutenberg_content(self, text: str) -> str:
         """
         Extract the actual book content from Project Gutenberg ebooks.
@@ -526,10 +552,13 @@ Cover all major plot points, themes, and character developments in chronological
 
         return result
 
-    def extract_toc(self, text: str) -> Dict[str, str]:
+    def extract_toc(self, text: str) -> Tuple[Dict[str, str], int]:
         """
         Extract table of contents from the text.
-        Returns dict mapping chapter markers to expected chapter titles.
+        Returns tuple of (toc_dict, toc_end_line):
+        - toc_dict: mapping of chapter markers to expected chapter titles
+        - toc_end_line: line number where TOC LISTING ended (0 if no TOC found)
+          This is the last line in the TOC listing section, NOT where actual chapters begin
         Supports both Roman numerals (I, II, III) and Arabic numerals (1, 2, 3).
         Also supports patterns like "Chapter 1", "Letter 1", etc.
         """
@@ -538,7 +567,16 @@ Cover all major plot points, themes, and character developments in chronological
 
         # Look for CONTENTS section
         in_toc = False
-        toc_end_markers = ['INTRODUCTION BY', 'ZARATHUSTRA\'S PROLOGUE', 'FIRST PART', 'CHAPTER I']
+        toc_start_line = 0  # Track where TOC starts
+        last_toc_entry_line = 0  # Track the last line where we found a TOC entry
+        # End markers should be unique content that signals end of TOC, not chapter markers
+        # that also appear in TOC entries.
+        toc_end_markers = ['INTRODUCTION BY', 'ZARATHUSTRA\'S PROLOGUE', 'FIRST PART']
+
+        # Track chapter markers to detect duplicates and decreases
+        # When we see a duplicate or a decrease, TOC has ended and actual content started
+        seen_markers = set()  # Track all markers we've seen (e.g., 'I', 'II', 'III')
+        highest_number = 0    # Track highest chapter number for decrease detection
 
         for i, line in enumerate(lines):
             line_stripped = line.strip()
@@ -547,12 +585,13 @@ Cover all major plot points, themes, and character developments in chronological
             # Match either "CONTENTS" or a standalone "CHAPTER" line (which indicates TOC header)
             if re.match(r'^\s*(CONTENTS|CHAPTER)\.?\s*$', line_stripped, re.IGNORECASE):
                 in_toc = True
+                toc_start_line = i
                 continue
 
             # End of TOC - when we hit the actual content
+            # End markers are unique content that signals end of TOC
             if in_toc and any(marker in line_stripped for marker in toc_end_markers):
-                if i > 100:  # Make sure we're past the TOC, not just seeing these in TOC
-                    break
+                break
 
             # Parse TOC entries
             if in_toc and line_stripped:
@@ -561,6 +600,21 @@ Cover all major plot points, themes, and character developments in chronological
                 if match:
                     roman_num = match.group(1)
                     title = match.group(2).strip('. ')
+
+                    # Check for duplicate or decrease (signals TOC ended)
+                    if roman_num in seen_markers:
+                        break  # Duplicate detected - TOC has ended
+
+                    # Convert to number for decrease detection
+                    current_number = self.roman_to_int(roman_num)
+                    if current_number > 0 and current_number < highest_number:
+                        break  # Number decreased - TOC has ended
+
+                    # Update tracking
+                    seen_markers.add(roman_num)
+                    highest_number = max(highest_number, current_number)
+                    last_toc_entry_line = i  # Update last TOC entry line
+
                     toc[roman_num] = title
                     continue
 
@@ -569,6 +623,30 @@ Cover all major plot points, themes, and character developments in chronological
                 if match:
                     chapter_marker = match.group(1)
                     title = match.group(2).strip('. ') if match.group(2) else ""
+
+                    # Check for duplicate or decrease (signals TOC ended)
+                    if chapter_marker in seen_markers:
+                        break  # Duplicate detected - TOC has ended
+
+                    # Convert to number for decrease detection
+                    if chapter_marker.isdigit():
+                        current_number = int(chapter_marker)
+                    else:
+                        current_number = self.roman_to_int(chapter_marker)
+
+                    if current_number > 0 and current_number < highest_number:
+                        break  # Number decreased - TOC has ended
+
+                    # Update tracking
+                    seen_markers.add(chapter_marker)
+                    highest_number = max(highest_number, current_number)
+                    last_toc_entry_line = i  # Update last TOC entry line
+
+                    # Don't overwrite existing TOC entries with empty titles
+                    # (prevents standalone chapter markers from overwriting detailed TOC entries)
+                    if chapter_marker in toc and toc[chapter_marker] and not title:
+                        continue
+
                     toc[chapter_marker] = title
                     continue
 
@@ -577,6 +655,25 @@ Cover all major plot points, themes, and character developments in chronological
                 if match:
                     chapter_marker = match.group(1)
                     title = match.group(2).strip('. ') if match.group(2) else ""
+
+                    # Check for duplicate or decrease (signals TOC ended)
+                    if chapter_marker in seen_markers:
+                        break  # Duplicate detected - TOC has ended
+
+                    # Convert to number for decrease detection
+                    if chapter_marker.isdigit():
+                        current_number = int(chapter_marker)
+                    else:
+                        current_number = self.roman_to_int(chapter_marker)
+
+                    if current_number > 0 and current_number < highest_number:
+                        break  # Number decreased - TOC has ended
+
+                    # Update tracking
+                    seen_markers.add(chapter_marker)
+                    highest_number = max(highest_number, current_number)
+                    last_toc_entry_line = i  # Update last TOC entry line
+
                     toc[chapter_marker] = title
                     continue
 
@@ -585,7 +682,36 @@ Cover all major plot points, themes, and character developments in chronological
                 # are grouped together into a single Preface chapter"
                 # Letters should not be treated as numbered chapters, but as preface content
 
-        return toc
+        # If we found TOC entries, scan forward to find where TOC section actually ends
+        # Instead of a fixed buffer, look for the first line with substantial content
+        # that isn't a chapter marker or blank line
+        toc_end_line = 0
+        if last_toc_entry_line > 0:
+            # Scan forward from last TOC entry to find actual end of TOC section
+            for scan_idx in range(last_toc_entry_line + 1, len(lines)):
+                scan_line = lines[scan_idx].strip()
+
+                # Skip blank lines
+                if not scan_line:
+                    continue
+
+                # Check if this looks like a chapter marker (part of TOC)
+                is_chapter_marker = (
+                    re.match(r'^([IVXLCDM]+)\.\s+', scan_line) or
+                    re.match(r'^Chapter\s+', scan_line, re.IGNORECASE) or
+                    re.match(r'^Stave\s+', scan_line, re.IGNORECASE)
+                )
+
+                # If we found a non-blank, non-chapter-marker line, this is where TOC ends
+                if not is_chapter_marker:
+                    toc_end_line = scan_idx
+                    break
+
+            # If we never found content after TOC (edge case), use last TOC entry
+            if toc_end_line == 0:
+                toc_end_line = last_toc_entry_line
+
+        return toc, toc_end_line
 
     def extract_title_only_toc(self, text: str) -> List[str]:
         """
@@ -659,15 +785,23 @@ Cover all major plot points, themes, and character developments in chronological
         - consumed_line_indices: set of line indices that were included in chapters
         Chapter numbers are encoded as: book_num * 100 + chapter_num (e.g., 101, 205, 312)
         """
-        # Extract TOC for validation
-        toc = self.extract_toc(text)
+        # Extract TOC for validation and get TOC end line
+        toc, toc_end_line = self.extract_toc(text)
         if toc:
             print(f"Found TOC with {len(toc)} chapters")
+        if toc_end_line > 0:
+            print(f"TOC ends at line {toc_end_line}, will skip TOC section during chapter detection")
 
         chapters = []
 
-        # Pattern for BOOK/VOLUME/ACT markers (e.g., "BOOK I", "BOOK II", "VOLUME I", "VOLUME II", "ACT I", "ACT II")
-        volume_book_pattern = r'(BOOK|VOLUME|ACT)\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$'
+        # Pattern for BOOK/VOLUME/ACT markers (e.g., "BOOK I", "BOOK II", "BOOK ONE", "BOOK TWO", "VOLUME I", "ACT I")
+        # IMPORTANT: Spelled-out words must come BEFORE Roman numerals in alternation to avoid partial matches
+        # (e.g., "FIFTEEN" would match as "I" if Roman numerals are tried first)
+        volume_book_pattern = r'(BOOK|VOLUME|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)[:\.\s]*(.*)$'
+
+        # Pattern for EPILOGUE markers (e.g., "FIRST EPILOGUE", "SECOND EPILOGUE")
+        # These are treated as book-level markers (like BOOK XVI, BOOK XVII)
+        epilogue_pattern = r'(FIRST|SECOND)\s+EPILOGUE[:\.\s]*(.*)$'
 
         # Common chapter patterns - must start new line
         chapter_patterns = [
@@ -696,6 +830,7 @@ Cover all major plot points, themes, and character developments in chronological
         current_text = []
         current_book_num = 1  # Track current book number for nested structure
         has_book_markers = False  # Track if we found any BOOK markers
+        expecting_first_chapter_of_book = False  # Track if we just saw a BOOK marker
 
         # Track chapter headings to detect TOC (table of contents)
         # If we see many chapter headings close together with little content, it's likely a TOC
@@ -723,6 +858,11 @@ Cover all major plot points, themes, and character developments in chronological
             # Skip lines that were already consumed as title continuations
             if i in consumed_lines:
                 continue
+
+            # Skip lines before TOC end (the entire TOC section)
+            if toc_end_line > 0 and i < toc_end_line:
+                continue
+
             line_stripped = line.strip()
 
             # Track illustration blocks (update state before processing)
@@ -825,8 +965,12 @@ Cover all major plot points, themes, and character developments in chronological
                 if marker_numeral.isdigit():
                     current_book_num = int(marker_numeral)
                 else:
-                    # Convert Roman numeral
-                    current_book_num = self.roman_to_int(marker_numeral)
+                    # Try spelled-out word first (before Roman numeral)
+                    # This prevents "FIFTEEN" from being parsed as "I" (Roman numeral 1)
+                    current_book_num = self.word_to_int(marker_numeral)
+                    # If that didn't work, try Roman numeral
+                    if current_book_num == 0:
+                        current_book_num = self.roman_to_int(marker_numeral)
 
                 # Store this BOOK marker for potential conversion to chapter later
                 book_markers.append({
@@ -838,8 +982,37 @@ Cover all major plot points, themes, and character developments in chronological
                     'line': line_stripped
                 })
 
+                # Set flag to expect first chapter after BOOK marker
+                expecting_first_chapter_of_book = True
+
                 print(f"Detected {marker_type} {current_book_num}")
                 # Don't add BOOK/VOLUME markers to text, just update tracking
+                continue
+
+            # Check if this line is an EPILOGUE marker (e.g., "FIRST EPILOGUE", "SECOND EPILOGUE")
+            # Treat these as book-level markers (Book 16, Book 17)
+            epilogue_match = re.match(epilogue_pattern, line_stripped)
+            if epilogue_match:
+                has_book_markers = True  # Mark that we found BOOK-level markers
+                epilogue_ordinal = epilogue_match.group(1)  # "FIRST" or "SECOND"
+                epilogue_title = epilogue_match.group(2).strip() if epilogue_match.group(2) else ""  # Optional subtitle
+
+                # Map FIRST -> 16, SECOND -> 17 (assuming 15 regular books)
+                epilogue_num_map = {'FIRST': 16, 'SECOND': 17}
+                current_book_num = epilogue_num_map.get(epilogue_ordinal, 16)
+
+                # Store this EPILOGUE marker as a BOOK marker
+                book_markers.append({
+                    'line_index': i,
+                    'marker_type': 'EPILOGUE',
+                    'number': current_book_num,
+                    'numeral': epilogue_ordinal,
+                    'title': epilogue_title,
+                    'line': line_stripped
+                })
+
+                print(f"Detected {epilogue_ordinal} EPILOGUE (Book {current_book_num})")
+                # Don't add EPILOGUE markers to text, just update tracking
                 continue
 
             # Explicitly ignore PART markers (e.g., "PART I", "PART II", "PART III")
@@ -1060,39 +1233,108 @@ Cover all major plot points, themes, and character developments in chronological
                     break
 
             if is_chapter and chapter_num is not None:
+                # Check if this is a TOC entry based on format
+                # TOC entries have format: "CHAPTER I. Title" (title on same line with period/punctuation)
+                # Actual chapters have format: "CHAPTER I" (standalone), then "TITLE" (on next line)
+                # We detect this by checking if the original matched line has substantial text in group(2)
+                # BEFORE the title continuation logic added more content
+
+                # Get the original matched title from the regex (before title continuation)
+                # This will be empty for standalone chapter markers, non-empty for TOC entries
+                original_matched_title = ""
+                for pattern in chapter_patterns:
+                    match = re.match(pattern, line_stripped)
+                    if match:
+                        try:
+                            # Get group(2) if it exists (the title portion)
+                            original_matched_title = match.group(2).strip() if match.group(2) else ""
+                        except IndexError:
+                            original_matched_title = ""
+                        break
+
+                # A TOC entry has substantial title text on the same line (> 10 chars)
+                # An actual chapter marker has empty or minimal text (chapter title comes from next line)
+                has_inline_title = len(original_matched_title) > 10
+
                 # Skip TOC entries: If we haven't accumulated substantial content yet (< 1000 chars)
                 # and this looks like a chapter marker, it's likely a TOC entry
                 accumulated_content_size = sum(len(line) for line in preface_text) if not found_first_chapter else sum(len(line) for line in current_text)
 
+                # Check if this is the first chapter after a BOOK/VOLUME/ACT marker
+                # If so, it's a real chapter, not a TOC entry
+                recently_saw_book_marker = expecting_first_chapter_of_book
+
+                # Look ahead to see if there's substantial content after this chapter marker
+                # If there is, it's a real chapter regardless of inline title format
+                lookahead_content_size = 0
+                # Check if current line ends with "Part" patterns (for multi-line title detection)
+                line_ends_with_part = bool(re.search(r'[—\-.]?\s*Part\s*$', line_stripped, re.IGNORECASE))
+
+                # Scan forward until we hit another chapter marker (unbounded lookahead)
+                for lookahead_idx in range(i+1, len(lines)):
+                    lookahead_line = lines[lookahead_idx].strip()
+
+                    # Check if this looks like a chapter marker
+                    is_chapter_marker = any(re.match(pattern, lookahead_line) for pattern in chapter_patterns)
+
+                    # Special case: if the current line ended with "Part" and the next line is just a
+                    # Roman numeral (like " I." or " IV."), it's likely a title continuation, not a chapter marker
+                    if is_chapter_marker and lookahead_idx == i + 1 and line_ends_with_part:
+                        # Check if this is just a standalone Roman numeral (likely title continuation)
+                        is_standalone_roman = bool(re.match(r'^\s*[IVXLCDM]+\.?\s*$', lookahead_line))
+                        if is_standalone_roman:
+                            # This is a title continuation, not a chapter marker - include it and continue
+                            lookahead_content_size += len(lookahead_line)
+                            continue
+
+                    # Stop if we hit another chapter marker (that's not a title continuation)
+                    if is_chapter_marker:
+                        break
+                    lookahead_content_size += len(lookahead_line)
+
+                has_substantial_content_ahead = lookahead_content_size > 500
+
                 # Also check: if the next few lines are also chapter markers, we're in TOC
                 # Extended window (15 lines) to catch TOC entries near the end of the TOC
                 # EXCEPTION: Never skip PREFACE/INTRODUCTION as TOC - they should always be saved as Chapter 0
+                # EXCEPTION: Never skip chapters immediately after BOOK/VOLUME/ACT markers
+                # EXCEPTION: Never skip if there's no inline title (actual chapter format)
+                # EXCEPTION: Never skip if there's substantial content ahead (> 500 chars)
                 is_likely_toc = False
                 is_preface_intro = chapter_num == 0  # Chapter 0 is PREFACE/INTRODUCTION
-                if accumulated_content_size < 1000 and not is_preface_intro:
-                    # Look ahead to see if next few lines are also chapter markers
-                    lookahead_chapter_count = 0
-                    for lookahead_idx in range(i + 1, min(i + 16, len(lines))):
-                        # Skip lines that have already been consumed as continuation lines
-                        if lookahead_idx in consumed_lines:
-                            continue
-                        lookahead_line = lines[lookahead_idx].strip()
-                        if not lookahead_line:  # Skip empty lines
-                            continue
-                        # Check if this looks like a chapter marker
-                        if any(re.match(pattern, lookahead_line) for pattern in chapter_patterns):
-                            lookahead_chapter_count += 1
-                        else:
-                            break  # Hit non-chapter content
-
-                    # If we see 1+ more chapter markers ahead, we're in TOC
-                    # (Reduced from 2 to handle cases where only 1-2 chapters remain at end of TOC)
-                    # ALSO: If we have very small accumulated content (< 50 chars), treat as TOC
-                    # even if no markers ahead (handles last TOC entry before actual content)
-                    # (Reduced from 200 to 50 to handle books with small prefaces like A Christmas Carol)
-                    if lookahead_chapter_count >= 1 or accumulated_content_size < 50:
+                if accumulated_content_size < 1000 and not is_preface_intro and not recently_saw_book_marker and not has_substantial_content_ahead:
+                    # If this line has an inline title AND no substantial content follows, it's a TOC entry
+                    if has_inline_title:
                         is_likely_toc = True
-                        print(f"Skipping TOC entry: {line_stripped}")
+                        print(f"Skipping TOC entry (inline title, no substantial content ahead): {line_stripped}")
+                    # Only use lookahead TOC detection if we actually found a TOC (toc is not empty)
+                    # This prevents false positives when a book starts with Chapter 1 (no TOC)
+                    elif toc:
+                        # No inline title - check lookahead to see if surrounded by other chapter markers
+                        # Look ahead until we hit substantial content or end of file
+                        lookahead_chapter_count = 0
+                        for lookahead_idx in range(i + 1, len(lines)):
+                            # Skip lines that have already been consumed as continuation lines
+                            if lookahead_idx in consumed_lines:
+                                continue
+                            lookahead_line = lines[lookahead_idx].strip()
+                            if not lookahead_line:  # Skip empty lines
+                                continue
+                            # Check if this looks like a chapter marker
+                            if any(re.match(pattern, lookahead_line) for pattern in chapter_patterns):
+                                lookahead_chapter_count += 1
+                            else:
+                                # Hit non-chapter content - stop looking
+                                break
+
+                        # If we see 1+ more chapter markers ahead, we're in TOC
+                        # (Reduced from 2 to handle cases where only 1-2 chapters remain at end of TOC)
+                        # ALSO: If we have very small accumulated content (< 50 chars), treat as TOC
+                        # even if no markers ahead (handles last TOC entry before actual content)
+                        # (Reduced from 200 to 50 to handle books with small prefaces like A Christmas Carol)
+                        if lookahead_chapter_count >= 1 or accumulated_content_size < 50:
+                            is_likely_toc = True
+                            print(f"Skipping TOC entry (lookahead): {line_stripped}")
 
                 if is_likely_toc:
                     # This is a TOC entry - skip it entirely (don't add to preface)
@@ -1128,13 +1370,18 @@ Cover all major plot points, themes, and character developments in chronological
                         content = content[:-1]
                     # Normalize newlines: remove single newlines, keep paragraph breaks
                     content = self.normalize_chapter_text(content)
-                    # Only save if chapter has more than 100 characters (avoid TOC entries)
-                    if len(content) > 100:
+                    # Use lower threshold for Chapter 0 (Preface/Introduction) - 20 chars instead of 100
+                    # This allows short preface sections to be preserved
+                    min_length = 20 if current_chapter[0] == 0 else 100
+                    if len(content) > min_length:
                         chapters.append((current_chapter[0], current_chapter[1], content))
 
                 # Start new chapter
                 current_chapter = (chapter_num, chapter_title)
                 current_text = []
+
+                # Clear the BOOK marker flag now that we've processed the first chapter
+                expecting_first_chapter_of_book = False
             elif current_chapter is not None:
                 # Skip table of contents entries
                 # Pattern 1: Lines starting with "Heading to"
@@ -1170,7 +1417,9 @@ Cover all major plot points, themes, and character developments in chronological
                 content = content[:-1]
             # Normalize newlines: remove single newlines, keep paragraph breaks
             content = self.normalize_chapter_text(content)
-            if len(content) > 100:  # Only save if substantial content
+            # Use lower threshold for Chapter 0 (Preface/Introduction) - 20 chars instead of 100
+            min_length = 20 if current_chapter[0] == 0 else 100
+            if len(content) > min_length:
                 chapters.append((current_chapter[0], current_chapter[1], content))
 
         # Filter out duplicate chapter numbers and merge multi-part chapters
@@ -1573,44 +1822,6 @@ Cover all major plot points, themes, and character developments in chronological
 
         return result
 
-    def batch_chapters(self, chapters: List[Tuple]) -> List[List[Tuple]]:
-        """
-        Batch chapters together for bulk processing.
-        Returns list of batches, where each batch is a list of (chapter_num, chapter_title, chapter_text) tuples.
-        """
-        if not config.BULK_SUMMARY_CONFIG['enabled']:
-            # If bulk processing disabled, return each chapter as its own batch
-            return [[ch] for ch in chapters]
-
-        max_batch_words = config.BULK_SUMMARY_CONFIG['max_batch_words']
-        max_chapters_per_batch = config.BULK_SUMMARY_CONFIG['max_chapters_per_batch']
-
-        batches = []
-        current_batch = []
-        current_batch_words = 0
-
-        for chapter_num, chapter_title, chapter_text in chapters:
-            chapter_words = len(chapter_text.split())
-
-            # Check if adding this chapter would exceed limits
-            would_exceed_words = current_batch_words + chapter_words > max_batch_words
-            would_exceed_count = len(current_batch) >= max_chapters_per_batch
-
-            if current_batch and (would_exceed_words or would_exceed_count):
-                # Start new batch
-                batches.append(current_batch)
-                current_batch = []
-                current_batch_words = 0
-
-            # Add chapter to current batch
-            current_batch.append((chapter_num, chapter_title, chapter_text))
-            current_batch_words += chapter_words
-
-        # Add final batch if not empty
-        if current_batch:
-            batches.append(current_batch)
-
-        return batches
 
     def parse_bulk_summary_response(self, response_text: str, index_to_chapter: Dict[int, int]) -> Dict[int, str]:
         """
@@ -1660,14 +1871,22 @@ Cover all major plot points, themes, and character developments in chronological
         return summaries
 
     def generate_bulk_chapter_summaries(self, chapters_batch: List[Tuple], book_title: str,
-                                       medium_summary: str = None, dry_run: bool = False,
-                                       partial_run: bool = False) -> Dict[int, str]:
+                                       medium_summary: str = None, previous_chapter_text: str = None,
+                                       dry_run: bool = False, partial_run: bool = False) -> Dict[int, str]:
         """
         Generate summaries for multiple chapters in a single API call.
         Returns dict mapping chapter_number -> summary_text
 
         Uses sequential indices (1, 2, 3...) in the LLM prompt for defensive parsing,
         independent of actual chapter numbering schemes (Arabic, Roman, encoded, etc.)
+
+        Args:
+            chapters_batch: List of (chapter_num, chapter_title, chapter_text) tuples for consecutive chapters
+            book_title: Title of the book
+            medium_summary: Optional medium summary of the book for context (truncated at 20,000 chars)
+            previous_chapter_text: Optional text of the chapter immediately before the first chapter in the batch (truncated at 100,000 chars)
+            dry_run: If True, skip API calls and return dummy data
+            partial_run: If True, display API output to stdout
         """
         model_name = config.SUMMARY_CONFIGS['comprehensive']['model']
         max_words = config.SUMMARY_CONFIGS['comprehensive']['words_per_chapter']
@@ -1700,9 +1919,21 @@ Cover all major plot points, themes, and character developments in chronological
             chapters_text.append(chapter_section)
 
         # Build context section
-        context = ""
+        context_sections = []
+
         if medium_summary:
-            context = f"""## CONTEXT: Overall Book Summary (for reference)\n\n{medium_summary[:5000]}\n\n"""
+            context_sections.append(f"""## CONTEXT: Overall Book Summary (for reference)\n\n{medium_summary[:20000]}""")
+
+        if previous_chapter_text:
+            # Get the chapter number immediately before the first chapter in the batch
+            first_chapter_num = chapters_batch[0][0] if chapters_batch else 0
+            prev_chapter_num = first_chapter_num - 1 if first_chapter_num > 0 else 0
+
+            context_sections.append(f"""## CONTEXT: Previous Chapter {prev_chapter_num} Content (for narrative continuity)
+
+{previous_chapter_text[:100000]}""")
+
+        context = "\n\n".join(context_sections) + "\n\n" if context_sections else ""
 
         # Build chapter-specific word count instructions using sequential indices
         chapter_instructions = []
@@ -1817,113 +2048,6 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
         return summaries
 
-    def generate_chapter_summary(self, chapter_text: str, chapter_num: int,
-                                chapter_title: str, book_title: str,
-                                medium_summary: str = None, previous_chapter_text: str = None,
-                                dry_run: bool = False, partial_run: bool = False) -> str:
-        """Generate summary for a single chapter"""
-        model_name = config.SUMMARY_CONFIGS['comprehensive']['model']
-        max_words = config.SUMMARY_CONFIGS['comprehensive']['words_per_chapter']
-
-        # Calculate dynamic target: min(chapter_words / 4, max_words)
-        chapter_word_count = len(chapter_text.split())
-        target_words = min(chapter_word_count // 4, max_words)
-
-        # Ensure a minimum of 200 words for very short chapters
-        target_words = max(target_words, 200)
-
-        # Build context sections
-        context_sections = []
-
-        if medium_summary:
-            context_sections.append(f"""## CONTEXT: Overall Book Summary (for reference only - do not summarize this)
-
-{medium_summary[:10000]}""")
-
-        if previous_chapter_text:
-            prev_chapter_num = chapter_num - 1
-            context_sections.append(f"""## CONTEXT: Previous Chapter {prev_chapter_num} Content (for reference only - do not summarize this)
-
-{previous_chapter_text[:20000]}""")
-
-        context = "\n\n".join(context_sections) if context_sections else ""
-
-        # Estimate tokens including context
-        estimated_tokens = (len(chapter_text) + len(context)) // 4 + target_words
-
-        prompt = f"""Summarize Chapter {chapter_num} of "{book_title}" in approximately {target_words} words.
-
-Chapter title: {chapter_title}
-
-{context}
-
-## CHAPTER {chapter_num} TO SUMMARIZE:
-
-{chapter_text}
-
-Cover important events, dialogues, and developments. Analyze character development and relationships. Identify key themes and symbols. Note important quotes. Explain how this chapter advances the overall narrative."""
-
-        if dry_run:
-            print(f"\n[DRY RUN] Would generate summary for Chapter {chapter_num}: {chapter_title}")
-            print(f"[DRY RUN] Chapter: {chapter_word_count} words → Summary target: {target_words} words (min(words/4, {max_words}))")
-            print(f"[DRY RUN] Using model: {model_name}")
-            print(f"[DRY RUN] Prompt ({len(prompt)} chars):")
-            print("-" * 60)
-            print(prompt[:500] + "..." if len(prompt) > 500 else prompt)
-            print("-" * 60)
-            return "[DRY RUN] Chapter summary would be generated here"
-
-        self.rate_limiter.wait_if_needed(estimated_tokens)
-
-        # Log input word count
-        input_words = len(prompt.split())
-        print(f"Generating summary for Chapter {chapter_num}: {chapter_title}...")
-        print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
-
-        # Make API call with retry logic for retriable errors
-        max_retries = 1
-        retry_count = 0
-        summary_text = None
-
-        while retry_count <= max_retries:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                summary_text = response.text
-                break  # Success - exit retry loop
-            except Exception as e:
-                error_message = str(e)
-                is_retriable = '503' in error_message or 'overloaded' in error_message.lower() or 'UNAVAILABLE' in error_message
-
-                if is_retriable and retry_count < max_retries:
-                    retry_count += 1
-                    wait_time = 10
-                    print(f"  ⚠️  API error (retriable): {error_message}")
-                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
-                    time.sleep(wait_time)
-                else:
-                    if retry_count > 0:
-                        print(f"  ❌ Max retries exceeded")
-                    raise
-
-        # Safety check: ensure we got a response
-        if summary_text is None:
-            raise RuntimeError(f"Failed to generate summary for Chapter {chapter_num}: API returned None")
-
-        output_words = len(summary_text.split())
-        print(f"  ← Output: {output_words:,} words")
-
-        # Display output in partial-run mode
-        if partial_run:
-            print(f"\n{'='*60}")
-            print(f"CHAPTER {chapter_num} SUMMARY OUTPUT:")
-            print(f"{'='*60}")
-            print(summary_text)
-            print(f"{'='*60}\n")
-
-        return summary_text
 
     def generate_comprehensive_summary(self, text: str, title: str,
                                       author: str, chapters: List[Tuple],
@@ -1932,8 +2056,25 @@ Cover important events, dialogues, and developments. Analyze character developme
                                       dry_run: bool = False,
                                       partial_run: bool = False) -> Tuple[str, List[Dict]]:
         """
-        Generate comprehensive summary with chapter breakdowns
-        Returns (overall_summary, chapter_summaries)
+        Generate comprehensive chapter-by-chapter summaries using bulk processing.
+
+        All chapter summaries are generated using bulk processing via generate_bulk_chapter_summaries,
+        which processes all consecutive chapters in a single API call for improved efficiency and context.
+
+        Args:
+            text: Full book text (used for reference)
+            title: Book title
+            author: Author name
+            chapters: List of (chapter_num, chapter_title, chapter_text) tuples
+            book_id: Database book ID (for saving results)
+            medium_summary: Optional medium summary for context (passed to bulk processing)
+            dry_run: If True, skip API calls and return dummy data
+            partial_run: If True, process only first 3 chapters
+
+        Returns:
+            Tuple of (overall_summary, chapter_summaries):
+            - overall_summary: Empty string (no longer generated)
+            - chapter_summaries: List of dicts with keys: chapter_number, chapter_title, summary, word_count
         """
         chapter_summaries = []
 
@@ -1943,66 +2084,36 @@ Cover important events, dialogues, and developments. Analyze character developme
         if partial_run and len(chapters) > 3:
             print(f"PARTIAL RUN: Processing first 3 of {len(chapters)} chapters\n")
 
-        # Check if bulk processing is enabled
-        use_bulk = config.BULK_SUMMARY_CONFIG['enabled'] and not partial_run
+        # Filter chapters by word count - separate long and short chapters
+        MIN_WORDS_FOR_SUMMARY = 200
+        chapters_needing_summary = []
+        short_chapters = []
 
-        if use_bulk:
-            # Batch chapters for bulk processing
-            batches = self.batch_chapters(chapters_to_process)
-            print(f"\n--- Using Bulk Chapter Summaries ({len(batches)} batches for {len(chapters_to_process)} chapters) ---")
+        for chapter_num, chapter_title, chapter_text in chapters_to_process:
+            word_count = len(chapter_text.split())
+            if word_count >= MIN_WORDS_FOR_SUMMARY:
+                chapters_needing_summary.append((chapter_num, chapter_title, chapter_text))
+            else:
+                short_chapters.append((chapter_num, chapter_title, chapter_text, word_count))
+                print(f"  Skipping summary for Chapter {chapter_num}: {chapter_title} ({word_count} words - too short)")
 
-            batch_num = 0
-            for batch in batches:
-                batch_num += 1
-                batch_chapter_nums = [ch[0] for ch in batch]
-                print(f"\nBatch {batch_num}/{len(batches)}: Chapters {batch_chapter_nums[0]}-{batch_chapter_nums[-1]} ({len(batch)} chapters)")
+        # Generate bulk summaries for all chapters (consecutive chapters only)
+        if chapters_needing_summary:
+            print(f"\n--- Generating Bulk Chapter Summaries ({len(chapters_needing_summary)} chapters) ---")
 
-                # Generate bulk summaries
-                bulk_summaries = self.generate_bulk_chapter_summaries(
-                    batch,
-                    title,
-                    medium_summary=medium_summary,
-                    dry_run=dry_run,
-                    partial_run=partial_run
-                )
+            # Generate bulk summaries for all chapters in one call
+            bulk_summaries = self.generate_bulk_chapter_summaries(
+                chapters_needing_summary,
+                title,
+                medium_summary=medium_summary,
+                dry_run=dry_run,
+                partial_run=partial_run
+            )
 
-                # Process results and save to database
-                for chapter_num, chapter_title, chapter_text in batch:
-                    summary = bulk_summaries.get(chapter_num, f"ERROR: Summary not generated for chapter {chapter_num}")
+            # Process results and save to database
+            for chapter_num, chapter_title, chapter_text in chapters_needing_summary:
+                summary = bulk_summaries.get(chapter_num, f"ERROR: Summary not generated for chapter {chapter_num}")
 
-                    chapter_summaries.append({
-                        'chapter_number': chapter_num,
-                        'chapter_title': chapter_title,
-                        'summary': summary,
-                        'word_count': len(summary.split())
-                    })
-
-                    # Commit chapter to database immediately after generation
-                    if not dry_run and not partial_run and book_id is not None:
-                        self.db.add_chapter(
-                            book_id,
-                            chapter_num,
-                            chapter_title,
-                            summary,
-                            chapter_text  # Full chapter text
-                        )
-                        print(f"  ✓ Saved chapter {chapter_num} to database")
-
-            print(f"\n✓ Completed all {len(batches)} batches")
-
-        else:
-            # Use single-chapter processing (original method)
-            print(f"\n--- Using Single Chapter Summaries ({len(chapters_to_process)} API calls) ---")
-            previous_chapter_text = None
-
-            for chapter_num, chapter_title, chapter_text in chapters_to_process:
-                summary = self.generate_chapter_summary(
-                    chapter_text, chapter_num, chapter_title, title,
-                    medium_summary=medium_summary,
-                    previous_chapter_text=previous_chapter_text,
-                    dry_run=dry_run,
-                    partial_run=partial_run
-                )
                 chapter_summaries.append({
                     'chapter_number': chapter_num,
                     'chapter_title': chapter_title,
@@ -2019,12 +2130,29 @@ Cover important events, dialogues, and developments. Analyze character developme
                         summary,
                         chapter_text  # Full chapter text
                     )
-                    print(f"✓ Saved chapter {chapter_num} to database")
-                elif partial_run:
-                    print(f"Chapter {chapter_num} complete (not saved in partial run)")
+                    print(f"  ✓ Saved chapter {chapter_num} to database")
 
-                # Update previous chapter text for next iteration
-                previous_chapter_text = chapter_text
+            print(f"\n✓ Completed bulk summary generation")
+
+        # Save short chapters to DB with empty summary (for both bulk and single modes)
+        for chapter_num, chapter_title, chapter_text, word_count in short_chapters:
+            chapter_summaries.append({
+                'chapter_number': chapter_num,
+                'chapter_title': chapter_title,
+                'summary': '',  # Empty summary
+                'word_count': 0
+            })
+
+            # Save to database with empty summary
+            if not dry_run and not partial_run and book_id is not None:
+                self.db.add_chapter(
+                    book_id,
+                    chapter_num,
+                    chapter_title,
+                    '',  # Empty summary - frontend will show full text instead
+                    chapter_text  # Still save full chapter text
+                )
+                print(f"  ✓ Saved Chapter {chapter_num} to database (no summary - {word_count} words)")
 
         # Show skipped chapters in partial run
         if partial_run and len(chapters) > 3:
@@ -2035,10 +2163,7 @@ Cover important events, dialogues, and developments. Analyze character developme
         # Skip overall analysis - no longer generating comprehensive overall summaries
         if partial_run:
             print(f"\n[PARTIAL RUN] Skipping overall comprehensive analysis")
-            if use_bulk:
-                print(f"[PARTIAL RUN] Total API calls made: 1+ (combined summaries + bulk batches)")
-            else:
-                print(f"[PARTIAL RUN] Total API calls made: 4 (combined summaries + 3 chapters)")
+            print(f"[PARTIAL RUN] Total API calls made: 2 (combined summaries + bulk chapters)")
         else:
             print(f"\nSkipping overall comprehensive analysis (disabled)")
 
@@ -2151,82 +2276,56 @@ Cover important events, dialogues, and developments. Analyze character developme
                 print(f"  - Chapter {ch_num}: {ch_title}")
             print()
 
-            # Generate summaries for specified chapters using bulk mode if enabled
+            # Validate that chapters are consecutive
+            if len(chapters_to_regenerate) > 1:
+                chapter_nums = sorted([ch[0] for ch in chapters_to_regenerate])
+                for i in range(len(chapter_nums) - 1):
+                    if chapter_nums[i+1] != chapter_nums[i] + 1:
+                        print(f"\n{'='*60}")
+                        print("ERROR: Chapters must be consecutive!")
+                        print(f"{'='*60}")
+                        print(f"Requested chapters: {regenerate_chapters}")
+                        print(f"Found chapters: {chapter_nums}")
+                        print(f"\nGap detected between Chapter {chapter_nums[i]} and {chapter_nums[i+1]}")
+                        print("\nBulk chapter summary generation requires consecutive chapters only.")
+                        print("Please provide a consecutive range of chapter numbers.")
+                        print(f"{'='*60}\n")
+                        sys.exit(1)
+
+            # Generate summaries for specified chapters using bulk processing (consecutive chapters only)
             chapter_summaries = []
 
-            # Check if bulk processing is enabled
-            use_bulk = config.BULK_SUMMARY_CONFIG['enabled']
+            print(f"\n--- Generating Bulk Chapter Summaries ({len(chapters_to_regenerate)} chapters) ---\n")
 
-            if use_bulk:
-                # Batch chapters for bulk processing
-                batches = self.batch_chapters(chapters_to_regenerate)
-                print(f"\n--- Using Bulk Chapter Summaries ({len(batches)} batches for {len(chapters_to_regenerate)} chapters) ---\n")
+            # Generate bulk summaries for all chapters in one call
+            bulk_summaries = self.generate_bulk_chapter_summaries(
+                chapters_to_regenerate,
+                title,
+                medium_summary=medium,
+                dry_run=dry_run
+            )
 
-                batch_num = 0
-                for batch in batches:
-                    batch_num += 1
-                    batch_chapter_nums = [ch[0] for ch in batch]
-                    print(f"Batch {batch_num}/{len(batches)}: Chapters {batch_chapter_nums[0]}-{batch_chapter_nums[-1]} ({len(batch)} chapters)")
+            # Process results and update database
+            for chapter_num, chapter_title, chapter_text in chapters_to_regenerate:
+                summary = bulk_summaries.get(chapter_num, f"ERROR: Summary not generated for chapter {chapter_num}")
 
-                    # Generate bulk summaries
-                    bulk_summaries = self.generate_bulk_chapter_summaries(
-                        batch,
-                        title,
-                        medium_summary=medium,
-                        dry_run=dry_run
+                chapter_summaries.append({
+                    'chapter_number': chapter_num,
+                    'chapter_title': chapter_title,
+                    'summary': summary,
+                    'word_count': len(summary.split())
+                })
+
+                # Add/update chapter in database (INSERT OR REPLACE)
+                if not dry_run:
+                    self.db.add_chapter(
+                        book_id,
+                        chapter_num,
+                        chapter_title,
+                        summary,
+                        chapter_text  # Full chapter text
                     )
-
-                    # Process results and update database
-                    for chapter_num, chapter_title, chapter_text in batch:
-                        summary = bulk_summaries.get(chapter_num, f"ERROR: Summary not generated for chapter {chapter_num}")
-
-                        chapter_summaries.append({
-                            'chapter_number': chapter_num,
-                            'chapter_title': chapter_title,
-                            'summary': summary,
-                            'word_count': len(summary.split())
-                        })
-
-                        # Add/update chapter in database (INSERT OR REPLACE)
-                        if not dry_run:
-                            self.db.add_chapter(
-                                book_id,
-                                chapter_num,
-                                chapter_title,
-                                summary,
-                                chapter_text  # Full chapter text
-                            )
-                            print(f"  ✓ Saved chapter {chapter_num} to database")
-
-                print(f"\n✓ Completed all {len(batches)} batches")
-            else:
-                # Use single-chapter processing (original method)
-                print(f"\n--- Using Single Chapter Summaries ({len(chapters_to_regenerate)} API calls) ---\n")
-                for chapter_num, chapter_title, chapter_text in chapters_to_regenerate:
-                    print(f"\n--- Regenerating Chapter {chapter_num}: {chapter_title} ---")
-                    summary = self.generate_chapter_summary(
-                        chapter_text, chapter_num, chapter_title, title,
-                        medium_summary=medium,
-                        dry_run=dry_run
-                    )
-
-                    chapter_summaries.append({
-                        'chapter_number': chapter_num,
-                        'chapter_title': chapter_title,
-                        'summary': summary,
-                        'word_count': len(summary.split())
-                    })
-
-                    # Add/update chapter in database (INSERT OR REPLACE)
-                    if not dry_run:
-                        self.db.add_chapter(
-                            book_id,
-                            chapter_num,
-                            chapter_title,
-                            summary,
-                            chapter_text  # Full chapter text
-                        )
-                        print(f"✓ Saved Chapter {chapter_num} to database")
+                    print(f"  ✓ Saved chapter {chapter_num} to database")
 
             print(f"\n{'='*60}")
             print(f"✓ Regenerated {len(chapter_summaries)} chapter summaries!")
@@ -2303,10 +2402,67 @@ Cover important events, dialogues, and developments. Analyze character developme
         else:
             print(f"  ✓ Good coverage - parsing looks correct")
 
+        # Calculate statistics for removed content (needed for all modes)
+        word_counts = [len(ch_text.split()) for _, _, ch_text in chapters]
+        total_words_parsed = sum(word_counts)
+        original_word_count = len(text.split())
+        removed_word_count = original_word_count - total_words_parsed
+        removed_char_count = len(text) - total_parsed_chars
+
+        # Extract and save removed/skipped content (for all modes, not just dry-run)
+        # Use consumed_line_indices to find lines that weren't included in chapters
+        original_lines = text.split('\n')
+        removed_lines = []
+        for i, line in enumerate(original_lines):
+            if i not in consumed_line_indices:
+                removed_lines.append(line)
+
+        removed_content = '\n'.join(removed_lines)
+
+        # Save both the removed content and analysis
+        removed_file = Path('data/removed_content') / f"{file_path.stem}_removed.txt"
+        removed_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(removed_file, 'w', encoding='utf-8') as f:
+            f.write(f"REMOVED/SKIPPED CONTENT FOR: {title} by {author}\n")
+            f.write(f"{'='*60}\n\n")
+            f.write(f"Total Chapters Detected: {len(chapters)}\n")
+            f.write(f"Coverage: {coverage_percent:.1f}%\n\n")
+            f.write(f"Original Content:\n")
+            f.write(f"  {original_word_count:,} words\n")
+            f.write(f"  {len(text):,} characters\n\n")
+            f.write(f"Parsed Content:\n")
+            f.write(f"  {total_words_parsed:,} words\n")
+            f.write(f"  {total_parsed_chars:,} characters\n\n")
+            f.write(f"Removed/Skipped Content:\n")
+            f.write(f"  {removed_word_count:,} words ({100 - coverage_percent:.1f}%)\n")
+            f.write(f"  {removed_char_count:,} characters\n\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"DETECTED CHAPTERS:\n")
+            f.write(f"{'='*60}\n\n")
+            for ch_num, ch_title, ch_text in chapters:
+                ch_words = len(ch_text.split())
+                f.write(f"Chapter {ch_num}: {ch_title} ({ch_words:,} words)\n")
+            f.write(f"\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"WHAT SHOULD BE REMOVED (typically):\n")
+            f.write(f"{'='*60}\n\n")
+            f.write(f"- Title pages and frontmatter\n")
+            f.write(f"- Copyright notices and publication info\n")
+            f.write(f"- Table of Contents\n")
+            f.write(f"- Illustration captions ([Illustration: ...])\n")
+            f.write(f"- Project Gutenberg headers/footers\n")
+            f.write(f"- Dedications and preface poems\n")
+            f.write(f"- List of illustrations\n\n")
+            f.write(f"If coverage is >95%, the parsing is likely correct.\n")
+            f.write(f"If coverage is <90%, review the chapter detection carefully.\n\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"ACTUAL REMOVED CONTENT:\n")
+            f.write(f"{'='*60}\n\n")
+            f.write(removed_content)
+        print(f"  Removed content saved to: {removed_file}")
+
+        # Display detailed statistics only in dry-run mode
         if dry_run:
-            # Calculate comprehensive statistics
-            word_counts = [len(ch_text.split()) for _, _, ch_text in chapters]
-            total_words_parsed = sum(word_counts)
             avg_words = total_words_parsed / len(chapters) if chapters else 0
             min_words = min(word_counts) if word_counts else 0
             max_words = max(word_counts) if word_counts else 0
@@ -2321,59 +2477,9 @@ Cover important events, dialogues, and developments. Analyze character developme
             print(f"  Smallest: {min_words:,} words")
             print(f"  Largest: {max_words:,} words")
 
-            # Calculate removed content statistics
-            original_word_count = len(text.split())
-            removed_word_count = original_word_count - total_words_parsed
-            removed_char_count = len(text) - total_parsed_chars
-
             print(f"\nRemoved/Skipped Content:")
             print(f"  {removed_word_count:,} words ({100 - coverage_percent:.1f}% of original)")
             print(f"  {removed_char_count:,} characters")
-
-            # Extract and save removed/skipped content
-            # Use consumed_line_indices to find lines that weren't included in chapters
-            original_lines = text.split('\n')
-            removed_lines = []
-            for i, line in enumerate(original_lines):
-                if i not in consumed_line_indices:
-                    removed_lines.append(line)
-
-            removed_content = '\n'.join(removed_lines)
-
-            # Save both the removed content and analysis
-            removed_file = Path('data/removed_content') / f"{file_path.stem}_removed.txt"
-            removed_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(removed_file, 'w', encoding='utf-8') as f:
-                f.write(f"REMOVED/SKIPPED CONTENT FOR: {title} by {author}\n")
-                f.write(f"{'='*60}\n\n")
-                f.write(f"Total Chapters Detected: {len(chapters)}\n")
-                f.write(f"Coverage: {coverage_percent:.1f}%\n\n")
-                f.write(f"Original Content:\n")
-                f.write(f"  {original_word_count:,} words\n")
-                f.write(f"  {len(text):,} characters\n\n")
-                f.write(f"Parsed Content:\n")
-                f.write(f"  {total_words_parsed:,} words\n")
-                f.write(f"  {total_parsed_chars:,} characters\n\n")
-                f.write(f"Removed/Skipped Content:\n")
-                f.write(f"  {removed_word_count:,} words ({100 - coverage_percent:.1f}%)\n")
-                f.write(f"  {removed_char_count:,} characters\n\n")
-                f.write(f"{'='*60}\n")
-                f.write(f"WHAT SHOULD BE REMOVED (typically):\n")
-                f.write(f"{'='*60}\n\n")
-                f.write(f"- Title pages and frontmatter\n")
-                f.write(f"- Copyright notices and publication info\n")
-                f.write(f"- Table of Contents\n")
-                f.write(f"- Illustration captions ([Illustration: ...])\n")
-                f.write(f"- Project Gutenberg headers/footers\n")
-                f.write(f"- Dedications and preface poems\n")
-                f.write(f"- List of illustrations\n\n")
-                f.write(f"If coverage is >95%, the parsing is likely correct.\n")
-                f.write(f"If coverage is <90%, review the chapter detection carefully.\n\n")
-                f.write(f"{'='*60}\n")
-                f.write(f"ACTUAL REMOVED CONTENT:\n")
-                f.write(f"{'='*60}\n\n")
-                f.write(removed_content)
-            print(f"  Removed content saved to: {removed_file}")
 
             print(f"\n{'='*60}")
             print("CHAPTER BREAKDOWN")

@@ -685,32 +685,41 @@ class SummraApp {
         document.getElementById('chapter-detail-title').textContent = `${chapterNum}. ${chapterTitle}`;
         document.getElementById('chapter-detail-subtitle').textContent = book.title;
 
-        // Load summary (collapsed by default)
+        // Load summary (collapsed by default) - or hide if empty
+        const summaryBox = document.getElementById('chapter-summary-box');
         const summaryText = document.getElementById('chapter-summary-text');
-        summaryText.innerHTML = this.renderMarkdown(chapter.summary);
 
-        // Setup toggle button
-        const toggleBtn = document.getElementById('toggle-summary-btn');
-        const summaryContent = document.getElementById('chapter-summary-content');
-        let isSummaryExpanded = false;
+        if (!chapter.summary || chapter.summary.trim() === '') {
+            // No summary available - hide entire summary section
+            summaryBox.style.display = 'none';
+        } else {
+            // Summary available - show and populate
+            summaryBox.style.display = '';
+            summaryText.innerHTML = this.renderMarkdown(chapter.summary);
 
-        toggleBtn.onclick = () => {
-            if (isSummaryExpanded) {
-                summaryContent.classList.add('hidden');
-                toggleBtn.textContent = '▼';
-                isSummaryExpanded = false;
-            } else {
-                summaryContent.classList.remove('hidden');
-                toggleBtn.textContent = '▲';
-                isSummaryExpanded = true;
-            }
-        };
+            // Setup toggle button
+            const toggleBtn = document.getElementById('toggle-summary-btn');
+            const summaryContent = document.getElementById('chapter-summary-content');
+            let isSummaryExpanded = false;
 
-        // Setup summary TTS button
-        const summaryTtsBtn = document.getElementById('chapter-summary-tts-button');
-        summaryTtsBtn.onclick = () => {
-            this.generateChapterTTS(chapterNum, chapter.summary, summaryTtsBtn, 'summary');
-        };
+            toggleBtn.onclick = () => {
+                if (isSummaryExpanded) {
+                    summaryContent.classList.add('hidden');
+                    toggleBtn.textContent = '▼';
+                    isSummaryExpanded = false;
+                } else {
+                    summaryContent.classList.remove('hidden');
+                    toggleBtn.textContent = '▲';
+                    isSummaryExpanded = true;
+                }
+            };
+
+            // Setup summary TTS button
+            const summaryTtsBtn = document.getElementById('chapter-summary-tts-button');
+            summaryTtsBtn.onclick = () => {
+                this.generateChapterTTS(chapterNum, chapter.summary, summaryTtsBtn, 'summary');
+            };
+        }
 
         // Load full text
         const fullTextEl = document.getElementById('chapter-fulltext');
