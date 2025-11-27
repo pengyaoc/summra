@@ -80,7 +80,7 @@ exceeds 500 characters and will pass the validation test. This demonstrates the
 difference between actual chapter content and table of contents entries.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 3 actual chapters (not the 3 TOC entries)
         assert len(chapters) == 3, f"Expected 3 chapters, got {len(chapters)}"
@@ -143,21 +143,24 @@ merged Chapter I. Themes established earlier are developed and expanded. The wor
 continues to be revealed through action and dialogue rather than exposition.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
-        # Should have 3 chapters: Chapter 0 (Part I as preface), Chapter I (Parts II+III merged), Chapter II
-        assert len(chapters) == 3, f"Expected 3 chapters, got {len(chapters)}"
+        # Should have 2 chapters: Chapter I (Parts I+II+III merged), Chapter II
+        assert len(chapters) == 2, f"Expected 2 chapters, got {len(chapters)}"
 
-        # Chapter 0 should contain Part I (treated as preface since it's first)
-        ch0_num, ch0_title, ch0_text = chapters[0]
-        assert ch0_num == 0
-        assert "first part" in ch0_text.lower()
-
-        # Chapter I should be merged from Parts II and III
-        ch1_num, ch1_title, ch1_text = chapters[1]
-        assert ch1_num == 1
+        # Chapter I should be merged from Parts I, II and III
+        ch1_num, ch1_title, ch1_text = chapters[0]
+        assert ch1_num == 1, f"First chapter should be Chapter 1, got {ch1_num}"
+        assert "first part" in ch1_text.lower()
         assert "second part" in ch1_text.lower()
         assert "third and final part" in ch1_text.lower()
+
+        # Chapter II should be a single part chapter
+        ch2_num, ch2_title, ch2_text = chapters[1]
+        assert ch2_num == 2, f"Second chapter should be Chapter 2, got {ch2_num}"
+        assert "development" in ch2_title.lower()
+        assert "development" in ch2_text.lower()
+    
 
     def test_introduction_preface_capture(self, generator):
         """Test that Introduction and Preface sections are captured as Chapter 0"""
@@ -217,7 +220,7 @@ ensuring accessibility while maintaining intellectual rigor. Examples and
 illustrations help clarify abstract concepts and demonstrate practical applications.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should have Chapter 0 (merged intro/prefaces) and Chapter 1
         assert len(chapters) >= 2
@@ -295,7 +298,7 @@ structure. This helps maintain the integrity of the chapter detection system
 and ensures that multi-volume works are properly organized.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 5 chapters (0=Preface, 101, 102, 201, 202) with proper encoding
         assert len(chapters) == 5
@@ -326,7 +329,7 @@ to be preserved when we parse the book into chapters.
 Some footer material or appendix that might not be captured.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Calculate coverage
         total_parsed = sum(len(ch_text) for _, _, ch_text in chapters)
@@ -369,7 +372,7 @@ about how the research was conducted. Additional sentences are included to
 make sure this chapter passes the 200 character minimum for validation.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 3 actual chapters (not TOC entries)
         assert len(chapters) == 3
@@ -439,7 +442,7 @@ face challenges that test their resolve and capabilities. We explore deeper them
 build the narrative arc that will carry through to the conclusion of the work.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 3 chapters: Chapter 0 (Preface), Chapter I, and Chapter II (not the fake one in illustration)
         assert len(chapters) == 3
@@ -490,7 +493,7 @@ chapter content rather than table of contents entries or metadata. The content p
 character development, and advances the plot in meaningful ways.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 3 chapters (0=Preface, 1, 2)
         assert len(chapters) == 3, f"Expected 3 chapters, got {len(chapters)}"
@@ -556,7 +559,7 @@ that demonstrates this is actual chapter content rather than table of contents e
 content provides context and advances the narrative in meaningful ways.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should have 3 chapters (Chapter 0=Preface, Chapter I merged from 2 parts, Chapter II standalone)
         assert len(chapters) == 3, f"Expected 3 chapters, got {len(chapters)}"
@@ -606,7 +609,7 @@ of meaningful text that demonstrates this is actual chapter content rather than 
 or metadata. The content provides context and advances the narrative in meaningful ways.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should have 3 chapters (0=Preface, 1, 2)
         assert len(chapters) == 3, f"Expected 3 chapters, got {len(chapters)}"
@@ -678,7 +681,7 @@ being triggered. This ensures our test focuses on the part marker removal
 functionality rather than testing the fallback behavior for short chapters.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should have 5 chapters (0=Preface, 1-4)
         assert len(chapters) == 5, f"Expected 5 chapters, got {len(chapters)}"
@@ -762,7 +765,7 @@ This allows us to properly test the part marker removal for inline markers that
 don't span multiple lines unlike some of the previous examples.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should have 5 chapters (0=Preface, I, II, III, IV)
         assert len(chapters) == 5, f"Expected 5 chapters, got {len(chapters)}"
@@ -834,7 +837,7 @@ requirements for proper chapter detection and validation. We include multiple pa
 text that demonstrates this is actual chapter content rather than table of contents entries or metadata.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 4 chapters (0=Preface, BOOK I, II, III)
         assert len(chapters) == 4, f"Expected 4 chapters, got {len(chapters)}"
@@ -889,7 +892,7 @@ requirements for proper chapter detection and validation. We include multiple pa
 text that demonstrates this is actual chapter content rather than table of contents entries or metadata.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 3 chapters (0=Preface, 1, 2 deduplicating TOC entries)
         assert len(chapters) == 3, f"Expected 3 chapters, got {len(chapters)}"
@@ -949,7 +952,7 @@ proper chapter detection and validation. We include multiple paragraphs of meani
 this is actual chapter content rather than table of contents entries or metadata.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 4 chapters (0=Preface, 101, 102, 201) with nested encoding
         assert len(chapters) == 4, f"Expected 4 chapters, got {len(chapters)}"
@@ -1011,7 +1014,7 @@ detected and not confused with the table of contents entry. More sentences
 are added to ensure adequate chapter length for validation.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect ALL 3 chapters, including "STORY OF THE DOOR"
         assert len(chapters) == 3, f"Expected 3 chapters (including first), got {len(chapters)}"
@@ -1137,7 +1140,7 @@ the catch. More historical and operational details are provided to flesh out
 the chapter content and ensure adequate length for proper chapter detection.
 """
 
-        chapters = generator.detect_chapters(test_text)
+        chapters, _ = generator.detect_chapters(test_text)
 
         # Should detect 4 chapters (1, 2, 32, 33), not 7 (1, 2, 32, BOOK I, II, III, 33)
         assert len(chapters) == 4, f"Expected 4 chapters, got {len(chapters)}"

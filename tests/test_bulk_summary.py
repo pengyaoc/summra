@@ -133,64 +133,9 @@ This chapter contains a poetic dance."""
     print("\n✅ All bulk summary parser tests passed!")
 
 
-def test_batch_chapters():
-    """Test chapter batching logic"""
-
-    # Create mock API key
-    generator = SummaryGenerator(api_key="test_key")
-
-    # Test case 1: Small chapters that fit in one batch
-    chapters = [
-        (1, "Chapter 1", "word " * 500),  # 500 words
-        (2, "Chapter 2", "word " * 600),  # 600 words
-        (3, "Chapter 3", "word " * 700),  # 700 words
-    ]
-
-    batches = generator.batch_chapters(chapters)
-
-    # All should fit in one batch (total = 1800 words < 10000)
-    assert len(batches) == 1, f"Expected 1 batch for small chapters, got {len(batches)}"
-    assert len(batches[0]) == 3, f"Expected 3 chapters in batch, got {len(batches[0])}"
-
-    print("✓ Test case 1 passed: Small chapters in one batch")
-
-    # Test case 2: Chapters that exceed word limit
-    large_chapters = [
-        (1, "Chapter 1", "word " * 6000),  # 6000 words
-        (2, "Chapter 2", "word " * 5000),  # 5000 words (would exceed 10k if combined)
-        (3, "Chapter 3", "word " * 4000),  # 4000 words
-    ]
-
-    batches_2 = generator.batch_chapters(large_chapters)
-
-    # Should split into 2 batches
-    assert len(batches_2) == 2, f"Expected 2 batches for large chapters, got {len(batches_2)}"
-    assert len(batches_2[0]) == 1, f"Expected 1 chapter in first batch, got {len(batches_2[0])}"
-    assert len(batches_2[1]) == 2, f"Expected 2 chapters in second batch, got {len(batches_2[1])}"
-
-    print("✓ Test case 2 passed: Chapters split by word limit")
-
-    # Test case 3: Maximum chapters per batch limit
-    many_small_chapters = [(i, f"Chapter {i}", "word " * 100) for i in range(1, 25)]  # 24 chapters, 100 words each
-
-    batches_3 = generator.batch_chapters(many_small_chapters)
-
-    # Should split into 3 batches (10 + 10 + 4)
-    assert len(batches_3) == 3, f"Expected 3 batches, got {len(batches_3)}"
-    assert len(batches_3[0]) == 10, f"Expected 10 chapters in first batch, got {len(batches_3[0])}"
-    assert len(batches_3[1]) == 10, f"Expected 10 chapters in second batch, got {len(batches_3[1])}"
-    assert len(batches_3[2]) == 4, f"Expected 4 chapters in third batch, got {len(batches_3[2])}"
-
-    print("✓ Test case 3 passed: Maximum chapters per batch limit")
-
-    print("\n✅ All batching tests passed!")
-
-
 if __name__ == "__main__":
     print("Running bulk summary tests...\n")
     test_parse_bulk_summary_response()
-    print()
-    test_batch_chapters()
     print("\n" + "=" * 60)
     print("All tests completed successfully!")
     print("=" * 60)

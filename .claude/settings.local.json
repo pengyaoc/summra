@@ -20,7 +20,10 @@
       "Bash(python3:*)",
       "Bash(source ../venv/bin/activate)",
       "Bash(timeout 3 python:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(sqlite3:*)",
+      "Bash(/dev/null)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []

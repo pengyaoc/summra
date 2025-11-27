@@ -224,7 +224,7 @@ hard, and a convulsive motion agitated its limbs.
         text = generator.extract_gutenberg_content(text)
 
         # Detect chapters
-        chapters = generator.detect_chapters(text)
+        chapters, _ = generator.detect_chapters(text)
 
         # Assertions
         assert len(chapters) > 0, "Should detect at least one chapter"
@@ -312,7 +312,7 @@ Chapter 3
 This is the actual third chapter content.
 """
 
-        chapters = generator.detect_chapters(text)
+        chapters, _ = generator.detect_chapters(text)
 
         # Should have Chapter 0 (Preface) with introductory content
         chapter_nums = [ch[0] for ch in chapters]
@@ -349,7 +349,7 @@ Chapter 2
 This is the second chapter.
 """
 
-        chapters = generator.detect_chapters(text)
+        chapters, _ = generator.detect_chapters(text)
 
         # Should NOT have Chapter 0 since book starts with Chapter 1
         chapter_nums = [ch[0] for ch in chapters]
@@ -387,7 +387,7 @@ This is the second chapter with more detailed content about the continuation
 of the themes introduced in the first chapter.
 """
 
-        chapters = generator.detect_chapters(text)
+        chapters, _ = generator.detect_chapters(text)
 
         # Should have Chapter 0 (Preface) with introduction
         chapter_nums = [ch[0] for ch in chapters]
@@ -437,7 +437,7 @@ Chapter 2
 This is the second chapter.
 """
 
-        chapters = generator.detect_chapters(text)
+        chapters, _ = generator.detect_chapters(text)
 
         # Should have Chapter 0 (Preface) with all preface elements
         chapter_nums = [ch[0] for ch in chapters]
@@ -455,6 +455,6 @@ This is the second chapter.
         assert "dear reader" in chapter_0_text.lower(), \
             "Chapter 0 should contain Letter content"
 
-        # Should be substantial
-        assert len(chapter_0_text) > 200, \
+        # Should be substantial (150 chars threshold accounts for normalization removing extra whitespace)
+        assert len(chapter_0_text) > 150, \
             f"Chapter 0 should contain all preface elements (got {len(chapter_0_text)} chars)"

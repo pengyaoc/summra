@@ -319,7 +319,7 @@ def roman_to_int(self, s: str) -> int:
 
 ### Finite State Machine (FSM) Logic
 
-The chapter detection uses a stateful line-by-line scan:
+The chapter detection uses a stateful line-by-line scan with explicit state tracking to avoid arbitrary distance-based heuristics.
 
 ```
 State Variables:
@@ -327,9 +327,11 @@ State Variables:
 - current_text: List[str] - lines accumulated for current chapter
 - current_book_num: int - tracks which BOOK/VOLUME we're in (for encoding)
 - has_book_markers: bool - detected any BOOK/VOLUME/ACT markers
+- expecting_first_chapter_of_book: bool - flag set when BOOK marker seen (2025-11-26)
 - in_illustration: bool - inside [Illustration: ...] block
 - potential_chapters: List[dict] - all detected chapter markers (for TOC filtering)
 - book_markers: List[dict] - all detected BOOK/VOLUME/ACT markers
+- consumed_lines: set - line indices consumed as title continuations
 ```
 
 **State Transitions:**
@@ -346,8 +348,42 @@ State 2: Active chapter (current_chapter != None)
 
 Special States:
   - in_illustration = True → Skip all lines until ']'
-  - BOOK marker detected → Update current_book_num, set has_book_markers = True
+  - BOOK marker detected → Update current_book_num, set has_book_markers = True,
+                          set expecting_first_chapter_of_book = True
+  - First chapter after BOOK → Use expecting_first_chapter_of_book flag,
+                               clear flag after processing chapter
 ```
+
+**State Tracking Pattern (Refactored 2025-11-26):**
+
+Instead of arbitrary distance-based scanning (e.g., "look back 10 lines"), the parser uses explicit boolean flags to track state:
+
+**Location:** `scripts/generate_summaries.py:817, 970, 1247-1249, 1367`
+
+```python
+# Initialize state flag
+expecting_first_chapter_of_book = False  # Line 817
+
+# Event: BOOK marker detected
+if volume_book_match:
+    # ... process BOOK marker ...
+    expecting_first_chapter_of_book = True  # Line 970
+
+# Event: Check if chapter is after BOOK marker (no backward scan needed)
+recently_saw_book_marker = expecting_first_chapter_of_book  # Line 1247-1249
+
+# Event: Chapter processed
+current_chapter = (chapter_num, chapter_title)
+current_text = []
+expecting_first_chapter_of_book = False  # Clear flag (Line 1367)
+```
+
+**Benefits:**
+- No magic numbers (removed arbitrary 10-line backward scan)
+- State is explicit, not inferred from distances
+- More robust (works regardless of spacing between BOOK markers and chapters)
+- Easier to understand and maintain
+- No risk of missing markers due to arbitrary distance limits
 
 ### Multi-Line Title Handling
 
