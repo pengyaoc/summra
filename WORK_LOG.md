@@ -4,6 +4,137 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ---
 
+## 2025-11-28
+
+### Previous Chapter Context Feature - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Enable previous chapter context feature in batch chapter summary generation to improve narrative continuity across batch boundaries.
+
+**User Request:**
+"That feature needs to be enabled" - referring to the `previous_chapter_text` parameter that existed but wasn't being used.
+
+**Problem Identified:**
+- The `generate_bulk_chapter_summaries()` function had a `previous_chapter_text` parameter (line 2460)
+- Logic to use this parameter existed in the prompt construction (lines 2513-2520)
+- BUT the parameter was never being passed when calling the function (lines 2745-2751)
+- This was a designed but not implemented feature
+
+**Changes Made:**
+
+**Location:** `scripts/generate_summaries.py:2737-2760`
+
+1. **Added state tracking** (line 2740):
+   ```python
+   previous_batch_last_chapter = None  # Track last chapter from previous batch for context
+   ```
+
+2. **Extract previous chapter text before each batch** (lines 2747-2748):
+   ```python
+   # Get previous chapter text for continuity (first 100K chars)
+   previous_chapter_text = previous_batch_last_chapter[2] if previous_batch_last_chapter else None
+   ```
+
+3. **Pass context to API call** (line 2754):
+   ```python
+   batch_summaries = self.generate_bulk_chapter_summaries(
+       batch,
+       title,
+       medium_summary=medium_summary,
+       previous_chapter_text=previous_chapter_text,  # Now being passed!
+       dry_run=dry_run,
+       partial_run=partial_run
+   )
+   ```
+
+4. **Save last chapter for next batch** (line 2760):
+   ```python
+   # Track last chapter for next batch
+   previous_batch_last_chapter = batch[-1]
+   ```
+
+**How It Works:**
+
+**Batch Processing Flow:**
+1. **Batch 1** (Chapters 1-5):
+   - `previous_chapter_text = None` (no previous batch)
+   - Generates summaries for Chapters 1-5
+   - Saves last chapter: `previous_batch_last_chapter = (5, "Chapter 5 Title", chapter_5_text)`
+
+2. **Batch 2** (Chapters 6-10):
+   - `previous_chapter_text = chapter_5_text[:100000]` (first 100K chars)
+   - Prompt now includes: "CONTEXT: Previous Chapter 5 Content (for narrative continuity)"
+   - AI can reference events/characters from Chapter 5 when summarizing Chapter 6
+   - Saves last chapter: `previous_batch_last_chapter = (10, "Chapter 10 Title", chapter_10_text)`
+
+3. **Batch 3** (Chapters 11-15):
+   - `previous_chapter_text = chapter_10_text[:100000]`
+   - AI receives Chapter 10 context for better Chapter 11 continuity
+   - And so on...
+
+**Prompt Context Section:**
+
+When `previous_chapter_text` is provided, the prompt includes (lines 2513-2520):
+
+```python
+if previous_chapter_text:
+    # Get the chapter number immediately before the first chapter in the batch
+    first_chapter_num = chapters_batch[0][0] if chapters_batch else 0
+    prev_chapter_num = first_chapter_num - 1 if first_chapter_num > 0 else 0
+
+    context_sections.append(f"""## CONTEXT: Previous Chapter {prev_chapter_num} Content (for narrative continuity)
+
+{previous_chapter_text[:100000]}""")
+```
+
+**Benefits:**
+
+1. **Improved Narrative Continuity:**
+   - AI understands character arcs continuing from previous batch
+   - Plot threads that span batch boundaries are better tracked
+   - References to events in previous chapters are clearer
+
+2. **Better Summary Quality:**
+   - Chapter 6 summary can reference Chapter 5 developments
+   - Avoids redundant context repetition
+   - More natural storytelling flow
+
+3. **No Additional Cost:**
+   - Context is limited to 100K chars (reasonable for most chapters)
+   - Only adds context once per batch, not per chapter
+   - More efficient than including full book context
+
+**Example Impact:**
+
+**Before (no context):**
+- Batch 2 summarizing Chapter 6: "The protagonist continues their journey..."
+  - Vague, doesn't connect to Chapter 5
+
+**After (with Chapter 5 context):**
+- Batch 2 summarizing Chapter 6: "Building on the revelation from Chapter 5 that [character] was hiding the truth, the protagonist now confronts..."
+  - Specific, connects narrative threads
+
+**Files Modified:**
+- `scripts/generate_summaries.py` (lines 2740, 2747-2748, 2754, 2760)
+- `ERD.md` - Added documentation for Previous Chapter Context Feature
+- `WORK_LOG.md` - This entry
+
+**Impact:**
+- Feature now fully functional for all books processed going forward
+- Improves chapter summary quality for narrative fiction
+- Maintains plot and character continuity across batch boundaries
+- No breaking changes to existing functionality
+- Previously generated summaries unaffected (but can be regenerated to benefit from feature)
+
+**Next Steps/Notes:**
+- Monitor summary quality improvements in newly generated books
+- Consider extending context to include 2-3 previous chapters for longer books
+- Could make context length configurable based on book structure
+
+---
+
 ## 2025-11-27
 
 ### Two-Level Book Structure Implementation - COMPLETED

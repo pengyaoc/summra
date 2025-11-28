@@ -70,6 +70,11 @@ Users can choose from three different summary lengths to match their needs and a
   - Key themes and symbols
   - Important quotes
   - How chapter advances narrative
+- **Narrative Continuity (Added 2025-11-28):**
+  - Each batch of chapters receives context from the previous batch's last chapter
+  - Improves plot thread tracking across batch boundaries
+  - Better character arc continuity in sequential narratives
+  - Example: When summarizing Chapters 6-10, AI receives Chapter 5 text for context
 - **Overall Analysis:** Connects all chapters and analyzes book as a whole
 - **Generation Time:** 5-30 minutes (full book)
 
