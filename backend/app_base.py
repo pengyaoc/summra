@@ -220,7 +220,7 @@ def get_summary(book_id, summary_type):
 
 @app.route('/api/books/<int:book_id>/chapters', methods=['GET'])
 def get_chapters(book_id):
-    """Get all chapter summaries for a book"""
+    """Get chapter metadata only (optimized for chapter list display)"""
     try:
         book = db.get_book(book_id)
         if not book:
@@ -229,7 +229,8 @@ def get_chapters(book_id):
                 'error': 'Book not found'
             }), 404
 
-        chapters = db.get_chapters(book_id)
+        # Get hierarchical book structure with metadata only (no full text/summaries)
+        book_structure = db.get_book_structure_metadata(book_id)
 
         # Prepare book data with cover image path conversion
         book_data = {
@@ -249,11 +250,43 @@ def get_chapters(book_id):
         return jsonify({
             'success': True,
             'book': book_data,
-            'chapters': chapters
+            'has_sections': book_structure['has_sections'],
+            'sections': book_structure['sections']
         })
 
     except Exception as e:
         logger.error(f"Error fetching chapters for book {book_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/books/<int:book_id>/chapters/<int:chapter_number>', methods=['GET'])
+def get_chapter_detail(book_id, chapter_number):
+    """Get full details for a specific chapter (summary and full text)"""
+    try:
+        book = db.get_book(book_id)
+        if not book:
+            return jsonify({
+                'success': False,
+                'error': 'Book not found'
+            }), 404
+
+        chapter = db.get_chapter(book_id, chapter_number)
+        if not chapter:
+            return jsonify({
+                'success': False,
+                'error': 'Chapter not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'chapter': chapter
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching chapter {chapter_number} for book {book_id}: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

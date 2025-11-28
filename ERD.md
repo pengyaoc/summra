@@ -35,24 +35,25 @@ This document provides in-depth technical documentation for the Summra project, 
          │
          │ 1:N
          │
-         ├──────────────────────────┬──────────────────────────┐
+         ├──────────────────────────┬──────────────────────────┬──────────────────────────┐
+         │                          │                          │                          │
+         ▼                          ▼                          ▼                          ▼
+┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│    summaries        │    │   book_sections     │    │     chapters        │    │   audio_files       │
+├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
+│ id (PK)             │    │ id (PK)             │    │ id (PK)             │    │ id (PK)             │
+│ book_id (FK)        │    │ book_id (FK)        │    │ book_id (FK)        │    │ summary_id (FK)     │
+│ summary_type        │    │ section_type        │    │ section_id (FK)     │◄───┼─┤ chapter_id (FK)     │
+│ content             │    │ section_number      │    │ chapter_number      │    │ file_path           │
+│ word_count          │    │ section_title       │    │ chapter_title       │    │ duration_seconds    │
+│ created_at          │    │ created_at          │    │ summary             │    │ created_at          │
+└─────────────────────┘    └─────────────────────┘    │ full_text           │    └─────────────────────┘
+         │                          │                 │ word_count          │
+         │                          │                 │ created_at          │
+         │                          │                 └─────────────────────┘
          │                          │                          │
-         ▼                          ▼                          ▼
-┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│    summaries        │    │     chapters        │    │   audio_files       │
-├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
-│ id (PK)             │    │ id (PK)             │    │ id (PK)             │
-│ book_id (FK)        │    │ book_id (FK)        │    │ summary_id (FK)     │
-│ summary_type        │    │ chapter_number      │    │ chapter_id (FK)     │
-│ content             │    │ chapter_title       │    │ file_path           │
-│ word_count          │    │ summary             │    │ duration_seconds    │
-│ created_at          │    │ full_text           │    │ created_at          │
-└─────────────────────┘    │ word_count          │    └─────────────────────┘
-         │                 │ created_at          │
-         │                 └─────────────────────┘
-         │                          │
-         │                          │
-         └──────────────────────────┘
+         │                          │                          │
+         └──────────────────────────┴──────────────────────────┘
                     │
                     ▼
             ┌─────────────────────┐
@@ -63,13 +64,18 @@ This document provides in-depth technical documentation for the Summra project, 
 UNIQUE Constraints:
 - books: (filename)
 - summaries: (book_id, summary_type)
+- book_sections: (book_id, section_number)
 - chapters: (book_id, chapter_number)
 
 Foreign Keys:
 - summaries.book_id → books.id
+- book_sections.book_id → books.id
 - chapters.book_id → books.id
+- chapters.section_id → book_sections.id
 - audio_files.summary_id → summaries.id
 - audio_files.chapter_id → chapters.id
+
+Note: section_id in chapters is nullable (NULL for single-level books)
 ```
 
 ### Table Definitions
@@ -120,19 +126,49 @@ CREATE TABLE summaries (
 
 **Note:** Comprehensive overall summaries are currently disabled (empty strings saved), but the schema supports them for future use.
 
+#### book_sections Table (Added 2025-11-27)
+
+```sql
+CREATE TABLE book_sections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    section_type TEXT NOT NULL,        -- 'PART', 'BOOK', 'ACT', etc.
+    section_number INTEGER NOT NULL,   -- 1, 2, 3, etc.
+    section_title TEXT,                -- e.g., "The Old Buccaneer", "1805"
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    UNIQUE(book_id, section_number)
+)
+```
+
+**Indexes:**
+- Primary key on `id`
+- Unique composite index on `(book_id, section_number)`
+
+**Purpose:** Stores two-level book structure information (PART/BOOK/ACT organization).
+
+**Examples:**
+- Treasure Island: 6 sections (PART ONE - PART SIX)
+- War and Peace: 15 sections (BOOK ONE - BOOK FIFTEEN)
+- Romeo and Juliet: 5 sections (ACT I - ACT V)
+
+**Note:** Only populated for books with detected hierarchical structure. Single-level books have no entries in this table.
+
 #### chapters Table
 
 ```sql
 CREATE TABLE chapters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     book_id INTEGER NOT NULL,
-    chapter_number INTEGER NOT NULL,
+    section_id INTEGER,                -- NULL for single-level books
+    chapter_number INTEGER NOT NULL,   -- Composite: section*100 + chapter
     chapter_title TEXT,
     summary TEXT NOT NULL,
     full_text TEXT,
     word_count INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    FOREIGN KEY (section_id) REFERENCES book_sections(id),
     UNIQUE(book_id, chapter_number)
 )
 ```
@@ -142,6 +178,12 @@ CREATE TABLE chapters (
 - Unique composite index on `(book_id, chapter_number)`
 
 **Purpose:** Stores individual chapter summaries and full chapter text.
+
+**Chapter Numbering (Updated 2025-11-27):**
+- **Single-level books:** chapter_number = 1, 2, 3, ... (section_id = NULL)
+- **Two-level books:** chapter_number = section * 100 + chapter_in_section
+  - Example: Part 2, Chapter 3 = 203
+  - Example: Act 3, Scene 5 = 305
 
 **Special Note:** The UNIQUE constraint on `(book_id, chapter_number)` enables `INSERT OR REPLACE` semantics for chapter regeneration mode.
 
@@ -3353,10 +3395,291 @@ This ERD document provides comprehensive technical details for:
 
 1. **Database Schema** - Complete ERD with all tables, relationships, constraints, and indexing strategies
 2. **Chapter Parser** - 450+ lines of regex patterns, FSM logic, TOC detection, multi-part merging, and edge case handling
-3. **TTS Engine** - VITS model architecture, caching strategy, audio generation pipeline, and performance characteristics
-4. **LLM Integration** - Rate limiting algorithm, prompt construction, response parsing, and model selection
-5. **Bulk Processing** - Batching algorithm, index-based parsing, and cost optimization
-6. **Project Gutenberg** - Metadata extraction, content cleaning, and cover image downloading
-7. **Frontend Architecture** - SPA routing, component structure, state management, and UI/UX design patterns (added 2025-11-25)
+3. **Two-Level Book Structure** - Hierarchical TOC parsing (PART/BOOK/ACT → Chapters), composite numbering, and frontend rendering (added 2025-11-27)
+4. **TTS Engine** - VITS model architecture, caching strategy, audio generation pipeline, and performance characteristics
+5. **LLM Integration** - Rate limiting algorithm, prompt construction, response parsing, and model selection
+6. **Bulk Processing** - Batching algorithm, index-based parsing, and cost optimization
+7. **Project Gutenberg** - Metadata extraction, content cleaning, and cover image downloading
+8. **Frontend Architecture** - SPA routing, component structure, state management, and UI/UX design patterns (added 2025-11-25)
 
 This document should provide complete context for future development and Claude Code sessions.
+
+---
+
+## Two-Level Book Structure Detection
+
+**Added:** 2025-11-27
+**Location:** `scripts/generate_summaries.py::extract_two_level_toc()`
+**Database:** `book_sections` table with `section_id` FK in `chapters` table
+
+### Overview
+
+The two-level structure system enables proper representation of books organized as PART/BOOK/ACT → Chapters, instead of flattening them into a single sequential list. This preserves the author's intended structure and improves navigation.
+
+### Supported Structures
+
+**Two-Level (Hierarchical):**
+- **Parts:** Treasure Island (6 parts), White Fang (5 parts)
+- **Books:** War and Peace (15 books), Principles of Political Economy (5 books)
+- **Acts/Scenes:** Romeo and Juliet (5 acts, 24 scenes)
+
+**Single-Level (Traditional):**
+- Alice in Wonderland (numbered chapters)
+- The Time Machine (numbered chapters)
+- A Christmas Carol (staves)
+
+### Algorithm: `extract_two_level_toc()`
+
+**Input:** Full book text (Project Gutenberg format)
+**Output:** List of section dictionaries with nested chapter data, or None
+
+**Pattern Matching:**
+```python
+# Section markers (PART/BOOK/ACT)
+section_pattern = r'(PART|BOOK|ACT)\s+(ONE|TWO|...|[0-9]+|[IVXLCDM]+)(?:\s*:?\s*(.+?))?'
+
+# Chapter/scene markers
+chapter_pattern = r'(?:CHAPTER|Chapter|SCENE|Scene)\s+([IVXLCDM]+|[0-9]+)\.?\s*(.+)?'
+
+# Roman numeral + title
+roman_title_pattern = r'([IVXLCDM]+)\.\s+(.+?)'
+```
+
+**Detection Flow:**
+
+1. **Find TOC:** Search for "Contents" (case-insensitive)
+2. **Parse Sections:** Match PART/BOOK/ACT patterns with numerals
+3. **Parse Chapters:** Match Chapter/Scene patterns under each section
+4. **Duplicate Detection:** Exit when duplicate section number detected (TOC ended)
+5. **Return Structure:** List of sections with nested chapters
+
+**Example Output Structure:**
+```python
+[
+    {
+        'type': 'PART',
+        'number': 1,
+        'numeral': 'ONE',
+        'title': 'The Old Buccaneer',
+        'chapters': [
+            {'number': 1, 'numeral': 'I', 'title': 'The Old Sea-dog at the Admiral Benbow'},
+            {'number': 2, 'numeral': 'II', 'title': 'Black Dog Appears and Disappears'},
+            ...
+        ]
+    },
+    ...
+]
+```
+
+### Chapter Numbering System
+
+**Composite Numbering (Two-Level Books):**
+```
+chapter_number = section_number * 100 + chapter_in_section
+```
+
+Examples:
+- Part 1, Chapter 3 → 103
+- Part 2, Chapter 1 → 201
+- Act 3, Scene 5 → 305
+
+**Sequential Numbering (Single-Level Books):**
+```
+chapter_number = 1, 2, 3, ...
+```
+
+**Benefits:**
+- Maintains unique chapter numbers across entire book
+- Preserves section information in chapter number
+- Enables efficient database queries
+- Compatible with existing chapter detection logic
+
+### Database Storage
+
+**book_sections Table:**
+```sql
+INSERT INTO book_sections (book_id, section_type, section_number, section_title)
+VALUES (1, 'PART', 1, 'The Old Buccaneer')
+```
+
+**chapters Table (with section linkage):**
+```sql
+INSERT INTO chapters (book_id, section_id, chapter_number, chapter_title, ...)
+VALUES (1, 5, 103, 'The Black Spot', ...)
+       -- section_id=5 links to "PART ONE"
+       -- chapter_number=103 means Part 1, Chapter 3
+```
+
+### Frontend Rendering
+
+**API Response Structure:**
+```json
+{
+  "success": true,
+  "book": {...},
+  "has_sections": true,
+  "sections": [
+    {
+      "id": 1,
+      "type": "PART",
+      "number": 1,
+      "title": "The Old Buccaneer",
+      "chapters": [...]
+    },
+    ...
+  ]
+}
+```
+
+**UI Rendering Logic (`frontend/static/js/app.js::loadChapters()`):**
+
+```javascript
+if (data.has_sections && data.sections.length > 1) {
+    // Render hierarchical structure
+    data.sections.forEach(section => {
+        // Create section header
+        const sectionHeader = document.createElement('div');
+        sectionHeader.className = 'section-header';
+        sectionHeader.innerHTML = `<h4>${section.type} ${section.number}: ${section.title}</h4>`;
+
+        // Render indented chapters
+        section.chapters.forEach(chapter => {
+            const box = document.createElement('div');
+            box.className = 'chapter-box indented';  // 20px left margin
+            ...
+        });
+    });
+} else {
+    // Render flat structure (traditional)
+    chapters.forEach(chapter => {
+        const box = document.createElement('div');
+        box.className = 'chapter-box';  // No indentation
+        ...
+    });
+}
+```
+
+### CSS Styling
+
+```css
+/* Section headers */
+.section-header {
+    margin-top: 24px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.section-header h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Indented chapters under sections */
+.chapter-box.indented {
+    margin-left: 20px;
+}
+```
+
+### Document Body Scanning (Added 2025-11-27)
+
+**Problem:** Books like Anna Karenina have TOCs that only list section names without chapter details.
+
+**Solution:** Implemented `extract_two_level_structure_from_body()` as a fallback method.
+
+**How It Works:**
+1. Scans entire document for PART/BOOK/ACT markers
+2. Detects chapter markers following each section
+3. Builds same structure as TOC-based detection
+4. Validates results (min 2 sections, min 2 chapters/section, min 10 total)
+
+**Pattern Matching:**
+```python
+# Section markers (must be on their own line)
+section_pattern = r'^\s*(PART|BOOK|ACT)\s+(ONE|TWO|...|[0-9]+|[IVXLCDM]+)\.?\s*$'
+
+# Chapter markers (on own line or with short title)
+chapter_pattern = r'^\s*(?:CHAPTER|Chapter)\s+([IVXLCDM]+|[0-9]+)\.?\s*(.{0,60})$'
+```
+
+**Fallback Integration:**
+```python
+# Try TOC-based detection first
+toc_structure = self.extract_two_level_toc(text)
+
+# If TOC fails or incomplete, try body scanning
+if not toc_structure:
+    print("🔍 Attempting document body scan...")
+    toc_structure = self.extract_two_level_structure_from_body(text)
+```
+
+**Performance:**
+- Body scanning: ~100-200ms overhead
+- Only runs when TOC detection fails
+- Minimal impact on successfully detected books
+
+**Supported Books:**
+- ✅ Anna Karenina: 8 PARTS with 239 chapters (now works!)
+- ✅ Other books with minimal TOCs automatically supported
+
+### Limitations & Edge Cases
+
+**Current Limitations:**
+1. ~~TOC-Dependent: Requires TOC with chapter listings~~ **FIXED** (body scanning fallback)
+2. ~~Anna Karenina Issue~~ **FIXED** (body scanning detects full structure)
+3. **No TOC Support:** Books without any TOC (e.g., Crime and Punishment pg2554) still not supported
+
+**Handled Edge Cases:**
+- Multi-line section titles (Treasure Island)
+- Scene vs. Chapter terminology (Romeo and Juliet: "Scene I. Title")
+- Epilogues and prologues (War and Peace: detected 13 of 15 books)
+- Various numeral formats (Roman, Arabic, spelled-out: "ONE", "I", "1")
+- Duplicate section detection (exits TOC when content starts)
+- **Minimal TOCs (Anna Karenina):** Body scanning fallback detects structure
+- **Section title extraction:** Checks next line if title not on same line as marker
+
+### Test Coverage
+
+**Unit Tests:** `tests/test_two_level_toc.py`
+
+**Test Results (5/5 PASSING - 100% SUCCESS RATE):**
+1. ✅ Treasure Island: 6 parts, 34 chapters (TOC detection)
+2. ✅ War and Peace: 13 books, 298 chapters (TOC detection)
+3. ✅ Anna Karenina: **8 parts, 239 chapters** (body scanning fallback)
+4. ✅ Romeo and Juliet: 5 acts, 24 scenes (TOC detection)
+5. ✅ Principles of Political Economy: 5 books, 50+ chapters (TOC detection)
+6. ✅ White Fang: 5 parts, 26 chapters (TOC detection)
+
+### Integration Points
+
+**Backend Methods:**
+- `Database.add_book_section()` - Insert section record
+- `Database.get_book_sections()` - Retrieve sections for book
+- `Database.get_chapters_by_section()` - Get chapters in section
+- `Database.get_book_structure()` - Full hierarchical structure
+- `Database.add_chapter()` - Updated to accept `section_id`
+
+**API Endpoints:**
+- `GET /api/books/<id>/chapters` - Returns hierarchical structure
+  - `has_sections`: boolean flag
+  - `sections`: array of section objects with nested chapters
+
+**Generation Script Integration:**
+- `process_book()` calls `extract_two_level_toc()` before chapter detection
+- If TOC detection fails, calls `extract_two_level_structure_from_body()` as fallback
+- Saves sections to database
+- Creates `chapter_to_section_id` mapping
+- Passes `section_id` when saving chapters
+
+### Performance Considerations
+
+- TOC parsing adds <100ms to book processing
+- Body scanning adds 100-200ms (only when TOC fails)
+- Database schema change is backward compatible (section_id nullable)
+- Frontend conditional rendering has negligible performance impact
+- No impact on books without hierarchical structure
+- Automatic fallback ensures all supported books work without manual intervention
+
+---

@@ -426,6 +426,32 @@ body {
     margin: 0;
 }
 
+/* Section Headers (for two-level structure) */
+.section-header {
+    margin-top: 24px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.section-header:first-child {
+    margin-top: 0;
+}
+
+.section-header h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--heading-color);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Indented chapters (for two-level structure) */
+.chapter-box.indented {
+    margin-left: 20px;
+}
+
 /* Medium Detail Section */
 .medium-detail-section {
     animation: fadeIn 0.3s ease;
