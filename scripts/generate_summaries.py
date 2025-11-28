@@ -785,9 +785,15 @@ Cover all major plot points, themes, and character developments in chronological
         # Patterns for section markers (PART/BOOK/ACT) - allow leading whitespace
         section_pattern = r'(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\s*:?\s*(.+?))?\.?\s*$'
 
+        # Also match decorative section markers like "— I —", "— II —", "— III —" (Ulysses)
+        decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
+
         # Patterns for chapter/scene markers within sections - allow leading whitespace
         # Matches: "Chapter I", "CHAPTER 1", "Scene I. Title", "Scene I Title", etc.
         chapter_pattern = r'(?:CHAPTER|Chapter|SCENE|Scene)\s+([IVXLCDM]+|[0-9]+)\.?\s*(.+)?\.?\s*$'
+
+        # Also match bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
+        bracket_chapter_pattern = r'^\s*\[\s*([0-9]+)\s*\]\s*$'
 
         # Also match Roman numerals followed by period and title (common in some books)
         roman_title_pattern = r'^\s*([IVXLCDM]+)\.\s+(.+?)\.?\s*$'
@@ -808,11 +814,19 @@ Cover all major plot points, themes, and character developments in chronological
             if not line_stripped:
                 continue
 
-            # Check for section marker (PART/BOOK/ACT)
+            # Check for section marker (PART/BOOK/ACT or decorative "— I —" style)
             section_match = re.match(section_pattern, line_stripped, re.IGNORECASE)
-            if section_match:
-                section_type = section_match.group(1).upper()
-                section_numeral = section_match.group(2)
+            decorative_match = re.match(decorative_section_pattern, line_stripped)
+
+            if section_match or decorative_match:
+                if decorative_match:
+                    # Decorative section marker like "— I —"
+                    section_type = 'PART'  # Treat as PART
+                    section_numeral = decorative_match.group(1)
+                else:
+                    # Standard PART/BOOK/ACT marker
+                    section_type = section_match.group(1).upper()
+                    section_numeral = section_match.group(2)
 
                 # Convert numeral to number
                 if section_numeral.isdigit():
@@ -834,14 +848,18 @@ Cover all major plot points, themes, and character developments in chronological
                 if current_section and len(current_section['chapters']) > 0:
                     toc_structure.append(current_section)
 
-                section_title = section_match.group(3).strip() if section_match.group(3) else ""
+                # Extract section title (only for standard PART/BOOK/ACT format)
+                if decorative_match:
+                    section_title = ""  # Decorative markers don't have titles
+                else:
+                    section_title = section_match.group(3).strip() if section_match.group(3) else ""
 
-                # If title is empty, check next line for title (common format)
-                if not section_title and i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    # If next line is not empty and doesn't look like a chapter marker, use it as title
-                    if next_line and not re.match(chapter_pattern, next_line) and not re.match(r'^[IVXLCDM]+\.', next_line):
-                        section_title = next_line
+                    # If title is empty, check next line for title (common format)
+                    if not section_title and i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        # If next line is not empty and doesn't look like a chapter marker, use it as title
+                        if next_line and not re.match(chapter_pattern, next_line) and not re.match(r'^[IVXLCDM]+\.', next_line):
+                            section_title = next_line
 
                 current_section = {
                     'type': section_type,
@@ -854,7 +872,21 @@ Cover all major plot points, themes, and character developments in chronological
 
             # Check for chapter/scene marker
             if current_section:
-                # Try chapter/scene pattern first
+                # Try bracket-style chapter markers first (e.g., "[ 1 ]", "[ 10 ]")
+                bracket_match = re.match(bracket_chapter_pattern, line_stripped)
+                if bracket_match:
+                    chapter_numeral = bracket_match.group(1)
+                    chapter_number = int(chapter_numeral)
+                    chapter_title = ""  # Bracket chapters don't have titles in TOC
+
+                    current_section['chapters'].append({
+                        'number': chapter_number,
+                        'numeral': chapter_numeral,
+                        'title': chapter_title
+                    })
+                    continue
+
+                # Try chapter/scene pattern
                 chapter_match = re.match(chapter_pattern, line_stripped)
                 if chapter_match:
                     chapter_numeral = chapter_match.group(1)
@@ -940,10 +972,15 @@ Cover all major plot points, themes, and character developments in chronological
         # Capture group 3 is the title (after optional period, double-dash, or space+double-dash)
         section_pattern = r'^\s*(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\.?\s*$|(?:--|\s+--)\s*(.+?)\s*$)'
 
+        # Also match decorative section markers like "— I —", "— II —", "— III —" (Ulysses)
+        decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
+
         # Patterns for chapter markers - must be on their own line or with short title
         chapter_pattern = r'^\s*(?:CHAPTER|Chapter)\s+([IVXLCDM]+|[0-9]+)\.?\s*(.{0,60})$'
         # Alternative pattern for standalone Roman numerals (Treasure Island style)
         standalone_roman_pattern = r'^\s*([IVXLCDM]+)\s*$'
+        # Bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
+        bracket_chapter_pattern = r'^\s*\[\s*([0-9]+)\s*\]\s*$'
 
         toc_structure = []
         current_section = None
@@ -957,11 +994,19 @@ Cover all major plot points, themes, and character developments in chronological
             if not line_stripped:
                 continue
 
-            # Check for section marker
+            # Check for section marker (standard or decorative)
             section_match = re.match(section_pattern, line_stripped, re.IGNORECASE)
-            if section_match:
-                section_type = section_match.group(1).upper()
-                section_numeral = section_match.group(2)
+            decorative_match = re.match(decorative_section_pattern, line_stripped)
+
+            if section_match or decorative_match:
+                if decorative_match:
+                    # Decorative section marker like "— I —"
+                    section_type = 'PART'  # Treat decorative markers as PART
+                    section_numeral = decorative_match.group(1)
+                else:
+                    # Standard PART/BOOK/ACT marker
+                    section_type = section_match.group(1).upper()
+                    section_numeral = section_match.group(2)
 
                 # Convert numeral to number
                 if section_numeral.isdigit():
@@ -990,18 +1035,22 @@ Cover all major plot points, themes, and character developments in chronological
                     toc_structure.append(current_section)
 
                 # Extract section title
-                # First try to get it from the match (group 3) if it exists on the same line
-                # (e.g., "PART ONE--The Old Buccaneer")
-                section_title = section_match.group(3).strip() if section_match.group(3) else ""
+                if decorative_match:
+                    # Decorative markers don't have titles
+                    section_title = ""
+                else:
+                    # First try to get it from the match (group 3) if it exists on the same line
+                    # (e.g., "PART ONE--The Old Buccaneer")
+                    section_title = section_match.group(3).strip() if section_match.group(3) else ""
 
-                # If not on same line, check next line for section title
-                if not section_title and i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    # If next line is not empty and doesn't look like a chapter, use as title
-                    if next_line and not re.match(chapter_pattern, next_line) and len(next_line) < 100:
-                        # Check if it looks like a title (not starting with lowercase, not too long)
-                        if next_line and (next_line[0].isupper() or next_line[0].isdigit()):
-                            section_title = next_line
+                    # If not on same line, check next line for section title
+                    if not section_title and i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        # If next line is not empty and doesn't look like a chapter, use as title
+                        if next_line and not re.match(chapter_pattern, next_line) and len(next_line) < 100:
+                            # Check if it looks like a title (not starting with lowercase, not too long)
+                            if next_line and (next_line[0].isupper() or next_line[0].isdigit()):
+                                section_title = next_line
 
                 current_section = {
                     'type': section_type,
@@ -1017,12 +1066,17 @@ Cover all major plot points, themes, and character developments in chronological
             # Check for chapter marker (only if we're inside a section)
             if current_section:
                 chapter_match = re.match(chapter_pattern, line_stripped)
-                standalone_match = re.match(standalone_roman_pattern, line_stripped) if not chapter_match else None
+                bracket_match = re.match(bracket_chapter_pattern, line_stripped) if not chapter_match else None
+                standalone_match = re.match(standalone_roman_pattern, line_stripped) if not chapter_match and not bracket_match else None
 
-                if chapter_match or standalone_match:
+                if chapter_match or bracket_match or standalone_match:
                     if chapter_match:
                         chapter_numeral = chapter_match.group(1)
                         chapter_title = chapter_match.group(2).strip() if chapter_match.group(2) else ""
+                    elif bracket_match:
+                        # Bracket-style chapter (Ulysses)
+                        chapter_numeral = bracket_match.group(1)
+                        chapter_title = ""
                     else:  # standalone_match
                         chapter_numeral = standalone_match.group(1)
                         chapter_title = ""
@@ -1106,7 +1160,7 @@ Cover all major plot points, themes, and character developments in chronological
             line_stripped = line.strip()
 
             # Start of TOC
-            if re.match(r'^\s*CONTENTS\.?\s*$', line_stripped, re.IGNORECASE):
+            if re.match(r'^\s*CONTENTS[\.:]*\s*$', line_stripped, re.IGNORECASE):
                 in_toc = True
                 consecutive_empty_lines = 0
                 continue
@@ -1132,7 +1186,9 @@ Cover all major plot points, themes, and character developments in chronological
                     not line_stripped.startswith('By ') and
                     not line_stripped.startswith('PART ') and
                     not line_stripped.startswith('BOOK ') and
-                    not re.match(r'^[IVXLCDM]+\.', line_stripped) and  # Not numbered
+                    not re.match(r'^[IVXLCDM]+\.', line_stripped) and  # Not numbered with Roman numerals
+                    not re.match(r'^\d+\.', line_stripped) and  # Not numbered with Arabic numerals (e.g., "1. HOW THEY...")
+                    not re.match(r'^(FIRST|SECOND|THIRD) STORY$', line_stripped, re.IGNORECASE) and  # Not "FIRST STORY", "SECOND STORY", etc.
                     not re.match(r'^Chapter', line_stripped, re.IGNORECASE) and
                     # Exclude lines that look like poetry (start with lowercase after quote, or end with comma)
                     not (line_stripped.startswith('"') and len(line_stripped) > 1 and line_stripped[1].islower()) and
@@ -1247,12 +1303,21 @@ Cover all major plot points, themes, and character developments in chronological
                 print(f"  Using {section_type} {section_numeral} from body scan at line {section_start_line}")
             else:
                 # Fallback: search for section marker
+                # Try standard pattern first (e.g., "PART I", "BOOK II")
                 section_pattern = rf'^\s*{section_type}\s+{section_numeral}\.?\s*'
+                # Also try decorative pattern if section has no title (e.g., "— I —")
+                decorative_pattern = rf'^\s*—+\s*{section_numeral}\s*—+\s*$'
+
                 section_start_line = None
                 for i in range(search_start_line, len(lines)):
                     if re.match(section_pattern, lines[i], re.IGNORECASE):
                         section_start_line = i
                         print(f"  Found {section_type} {section_numeral} at line {i}")
+                        break
+                    # If no title, also try decorative pattern
+                    elif not section_title and re.match(decorative_pattern, lines[i]):
+                        section_start_line = i
+                        print(f"  Found decorative {section_type} {section_numeral} at line {i}")
                         break
 
                 if section_start_line is None:
@@ -1266,8 +1331,14 @@ Cover all major plot points, themes, and character developments in chronological
                 # Find the next section to determine where this section ends
                 next_section = toc_structure[current_section_idx + 1]
                 next_section_pattern = rf'^\s*{next_section["type"]}\s+{next_section["numeral"]}\.?\s*'
+                next_decorative_pattern = rf'^\s*—+\s*{next_section["numeral"]}\s*—+\s*$'
+
                 for i in range(section_start_line + 1, len(lines)):
                     if re.match(next_section_pattern, lines[i], re.IGNORECASE):
+                        section_end_line = i
+                        break
+                    # Also try decorative pattern if next section has no title
+                    elif not next_section['title'] and re.match(next_decorative_pattern, lines[i]):
                         section_end_line = i
                         break
 
@@ -1278,16 +1349,20 @@ Cover all major plot points, themes, and character developments in chronological
                 chapter_title = chapter_info['title']
 
                 # Pattern to find this chapter
-                # Try two patterns:
+                # Try three patterns:
                 # 1. "CHAPTER <numeral>" (e.g., White Fang: "CHAPTER I")
                 # 2. Standalone "<numeral>" (e.g., Treasure Island: "I")
+                # 3. Bracket format "[ <numeral> ]" (e.g., Ulysses: "[ 1 ]")
                 chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{chapter_numeral}\.?\s*'
                 chapter_pattern_standalone = rf'^\s*{chapter_numeral}\s*$'
+                chapter_pattern_bracket = rf'^\s*\[\s*{chapter_numeral}\s*\]\s*$'
 
                 # Find where this chapter starts (between section start and section end)
                 chapter_start_line = None
                 for i in range(section_start_line + 1, section_end_line):
-                    if re.match(chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or re.match(chapter_pattern_standalone, lines[i]):
+                    if (re.match(chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or
+                        re.match(chapter_pattern_standalone, lines[i]) or
+                        re.match(chapter_pattern_bracket, lines[i])):
                         chapter_start_line = i
                         break
 
@@ -1307,9 +1382,12 @@ Cover all major plot points, themes, and character developments in chronological
                     next_chapter_numeral = next_chapter_info['numeral']
                     next_chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{next_chapter_numeral}\.?\s*'
                     next_chapter_pattern_standalone = rf'^\s*{next_chapter_numeral}\s*$'
+                    next_chapter_pattern_bracket = rf'^\s*\[\s*{next_chapter_numeral}\s*\]\s*$'
 
                     for i in range(chapter_start_line + 1, section_end_line):
-                        if re.match(next_chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or re.match(next_chapter_pattern_standalone, lines[i]):
+                        if (re.match(next_chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or
+                            re.match(next_chapter_pattern_standalone, lines[i]) or
+                            re.match(next_chapter_pattern_bracket, lines[i])):
                             chapter_end_line = i
                             break
 
@@ -1924,24 +2002,28 @@ Cover all major plot points, themes, and character developments in chronological
                 # No need to consume them again here
 
                 # If this is the first numbered chapter, save all preface content as Chapter 0
-                # Only create a preface if the first chapter is not Chapter 1
                 if not found_first_chapter and preface_text:
-                    # Only create Chapter 0 (Preface) if the first detected chapter is NOT Chapter 1
-                    if chapter_num != 1:
-                        preface_content = '\n'.join(preface_text)
-                        raw_length = len(preface_content)
-                        # Normalize preface text
-                        preface_content = self.normalize_chapter_text(preface_content)
-                        normalized_length = len(preface_content)
-                        # Only save if substantial content (same threshold as regular chapters: 100 chars)
+                    # Normalize preface text to check if it's substantial
+                    preface_content = '\n'.join(preface_text)
+                    preface_content = self.normalize_chapter_text(preface_content)
+
+                    # Create Chapter 0 if:
+                    # 1. First chapter is NOT Chapter 1 (e.g., Introduction, Prologue), OR
+                    # 2. First chapter IS Chapter 1 BUT there's substantial preface content (> 150 chars)
+                    #    This handles books like Frankenstein with Letters before Chapter 1
+                    should_create_preface = (chapter_num != 1) or (len(preface_content) > 150)
+
+                    if should_create_preface:
+                        # Only save if substantial content (minimum threshold: 100 chars)
                         if len(preface_content) > 100:
                             chapters.append((0, "Preface", preface_content))
                             print(f"Created Chapter 0 (Preface) with {len(preface_content)} characters")
                         else:
                             print(f"Preface content too small ({len(preface_content)} chars), skipping Chapter 0")
                     else:
-                        # First detected chapter is Chapter 1, so don't create a preface
-                        print(f"First detected chapter is Chapter 1, skipping preface creation")
+                        # First detected chapter is Chapter 1 with minimal preface content
+                        print(f"First detected chapter is Chapter 1 with minimal preface content ({len(preface_content)} chars), skipping preface creation")
+
                     found_first_chapter = True
                     preface_text = []  # Clear preface text
 
@@ -2670,7 +2752,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                                       medium_summary: str = None,
                                       dry_run: bool = False,
                                       partial_run: bool = False,
-                                      chapter_to_section_id: Dict[int, int] = None) -> Tuple[str, List[Dict]]:
+                                      chapter_to_section_id: Dict[int, int] = None,
+                                      regenerate_chapters: List[int] = None) -> Tuple[str, List[Dict]]:
         """
         Generate comprehensive chapter-by-chapter summaries using bulk processing.
 
@@ -2686,6 +2769,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             medium_summary: Optional medium summary for context (passed to bulk processing)
             dry_run: If True, skip API calls and return dummy data
             partial_run: If True, process only first 3 chapters
+            chapter_to_section_id: Optional dict mapping chapter numbers to section IDs (for 2-layer structures)
+            regenerate_chapters: Optional list of chapter numbers to regenerate (filters chapters)
 
         Returns:
             Tuple of (overall_summary, chapter_summaries):
@@ -2698,11 +2783,44 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
         chapter_summaries = []
 
-        # Limit to first 3 chapters in partial run mode
-        chapters_to_process = chapters[:3] if partial_run else chapters
+        # Filter chapters based on mode
+        if regenerate_chapters:
+            # Regenerate mode: filter to only requested chapters
+            chapters_to_process = [(num, title, text) for num, title, text in chapters if num in regenerate_chapters]
 
-        if partial_run and len(chapters) > 3:
-            print(f"PARTIAL RUN: Processing first 3 of {len(chapters)} chapters\n")
+            if not chapters_to_process:
+                print(f"ERROR: None of the requested chapters {regenerate_chapters} were found in the book")
+                print(f"Available chapters: {[num for num, _, _ in chapters]}")
+                return "", []
+
+            print(f"[REGENERATE MODE] Found {len(chapters_to_process)} chapter(s) to regenerate:")
+            for ch_num, ch_title, _ in chapters_to_process:
+                print(f"  - Chapter {ch_num}: {ch_title}")
+            print()
+
+            # Validate that chapters are consecutive
+            if len(chapters_to_process) > 1:
+                chapter_nums = sorted([ch[0] for ch in chapters_to_process])
+                for i in range(len(chapter_nums) - 1):
+                    if chapter_nums[i+1] != chapter_nums[i] + 1:
+                        print(f"\n{'='*60}")
+                        print("ERROR: Chapters must be consecutive!")
+                        print(f"{'='*60}")
+                        print(f"Requested chapters: {regenerate_chapters}")
+                        print(f"Found chapters: {chapter_nums}")
+                        print(f"\nGap detected between Chapter {chapter_nums[i]} and {chapter_nums[i+1]}")
+                        print("\nBulk chapter summary generation requires consecutive chapters only.")
+                        print("Please provide a consecutive range of chapter numbers.")
+                        print(f"{'='*60}\n")
+                        sys.exit(1)
+        elif partial_run:
+            # Partial run mode: first 3 chapters
+            chapters_to_process = chapters[:3]
+            if len(chapters) > 3:
+                print(f"PARTIAL RUN: Processing first 3 of {len(chapters)} chapters\n")
+        else:
+            # Normal mode: all chapters
+            chapters_to_process = chapters
 
         # Filter chapters by word count - separate long and short chapters
         MIN_WORDS_FOR_SUMMARY = 200
@@ -2800,6 +2918,14 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
             print(f"\n✓ Completed bulk summary generation")
 
+        # In regenerate mode, we're done after generating the requested chapters
+        if regenerate_chapters:
+            print(f"\n{'='*60}")
+            print(f"✓ Regenerated {len(chapter_summaries)} chapter summaries!")
+            print(f"{'='*60}\n")
+            # Return empty overall summary and the chapter summaries
+            return "", chapter_summaries
+
         # Save short chapters to DB with empty summary (for both bulk and single modes)
         for chapter_num, chapter_title, chapter_text, word_count in short_chapters:
             chapter_summaries.append({
@@ -2838,6 +2964,42 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         overall_summary = ""  # No overall summary generated
 
         return overall_summary, chapter_summaries
+
+    def _detect_book_structure(self, text: str) -> List[Dict]:
+        """
+        Helper method to detect book structure (2-layer or single-level).
+        Shared by both normal and regenerate modes.
+
+        Returns:
+            toc_structure: List of sections with chapters, or None for single-level
+        """
+        # Try body scanning FIRST (more reliable, avoids TOC end detection issues)
+        toc_structure = self.extract_two_level_structure_from_body(text)
+
+        if toc_structure:
+            return toc_structure
+
+        # Fallback to TOC-based detection if body scan failed
+        toc_structure = self.extract_two_level_toc(text)
+
+        # Validate TOC structure quality
+        if toc_structure:
+            toc_is_valid = True
+            for section in toc_structure:
+                # Check for invalid section types (should be PART, BOOK, or ACT only)
+                if section['type'] not in ['PART', 'BOOK', 'ACT']:
+                    toc_is_valid = False
+                    break
+                # Check for garbage in section titles
+                if section.get('title') and len(section['title']) > 5:
+                    if section['title'][0].islower() or section['title'].startswith('i:'):
+                        toc_is_valid = False
+                        break
+
+            if not toc_is_valid:
+                return None
+
+        return toc_structure
 
     def process_book(self, file_path: Path, title: str = None, author: str = None,
                     dry_run: bool = False, partial_run: bool = False, regenerate_chapters: List[int] = None) -> Dict:
@@ -2921,249 +3083,73 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             'summaries': {}
         }
 
-        # Detect chapters early if in regenerate mode
+        # Early return for regenerate mode - skip concise/medium generation
+        # Use the normal mode flow for everything else
         if regenerate_chapters:
-            # Detect two-level structure first
-            print("\n--- Detecting Book Structure ---")
-            toc_structure = self.extract_two_level_toc(text)
-
-            # Validate TOC structure quality
-            toc_is_valid = True
-            if toc_structure:
-                for section in toc_structure:
-                    if section['type'] not in ['PART', 'BOOK', 'ACT']:
-                        toc_is_valid = False
-                        break
-                    if section.get('title') and len(section['title']) > 5:
-                        if section['title'][0].islower() or section['title'].startswith('i:'):
-                            toc_is_valid = False
-                            break
-
-            # If TOC detection failed or returned invalid data, try scanning document body as fallback
-            if not toc_structure or not toc_is_valid:
-                if toc_structure and not toc_is_valid:
-                    print("  ℹ️  TOC-based detection returned invalid structure")
-                else:
-                    print("  ℹ️  TOC-based detection found no two-level structure")
-                print("  🔍 Attempting document body scan...")
-                toc_structure = self.extract_two_level_structure_from_body(text)
-                if toc_structure:
-                    print(f"  ✓ Body scan successful!")
-
-            # Create mapping from chapter number to section_id
-            chapter_to_section_id = {}
-
-            if toc_structure:
-                print(f"✓ Two-level structure: {len(toc_structure)} sections")
-                # Get existing sections from database
-                existing_sections = self.db.get_book_sections(book_id)
-                section_id_map = {s['section_number']: s['id'] for s in existing_sections}
-
-                # Map chapters to section IDs
-                # Use sequential numbering (1, 2, 3, ...) across all sections
-                sequential_chapter_num = 1
-                for section in toc_structure:
-                    section_id = section_id_map.get(section['number'])
-                    if section_id:
-                        for chapter in section['chapters']:
-                            chapter_to_section_id[sequential_chapter_num] = section_id
-                            sequential_chapter_num += 1
-            else:
-                print("✓ Single-level structure")
-
-            print("\n--- Detecting Chapters ---")
-            chapters, _ = self.detect_chapters(text, toc_structure)  # Ignore consumed_line_indices in regenerate mode
-            print(f"Detected {len(chapters)} chapter(s)\n")
-
-            # Get medium summary from database for context
-            medium_summary_record = self.db.get_summary(book_id, 'medium')
-            medium = medium_summary_record['content'] if medium_summary_record else None
-
-            # Filter chapters to only those we want to regenerate
-            chapters_to_regenerate = [(num, title, text) for num, title, text in chapters if num in regenerate_chapters]
-
-            if not chapters_to_regenerate:
-                print(f"ERROR: None of the requested chapters {regenerate_chapters} were found in the book")
-                print(f"Available chapters: {[num for num, _, _ in chapters]}")
-                return results
-
-            print(f"Found {len(chapters_to_regenerate)} chapter(s) to regenerate:")
-            for ch_num, ch_title, _ in chapters_to_regenerate:
-                print(f"  - Chapter {ch_num}: {ch_title}")
-            print()
-
-            # Validate that chapters are consecutive
-            if len(chapters_to_regenerate) > 1:
-                chapter_nums = sorted([ch[0] for ch in chapters_to_regenerate])
-                for i in range(len(chapter_nums) - 1):
-                    if chapter_nums[i+1] != chapter_nums[i] + 1:
-                        print(f"\n{'='*60}")
-                        print("ERROR: Chapters must be consecutive!")
-                        print(f"{'='*60}")
-                        print(f"Requested chapters: {regenerate_chapters}")
-                        print(f"Found chapters: {chapter_nums}")
-                        print(f"\nGap detected between Chapter {chapter_nums[i]} and {chapter_nums[i+1]}")
-                        print("\nBulk chapter summary generation requires consecutive chapters only.")
-                        print("Please provide a consecutive range of chapter numbers.")
-                        print(f"{'='*60}\n")
-                        sys.exit(1)
-
-            # Generate summaries for specified chapters using bulk processing (consecutive chapters only)
-            chapter_summaries = []
-
-            print(f"\n--- Generating Bulk Chapter Summaries ({len(chapters_to_regenerate)} chapters) ---\n")
-
-            # Split into batches to respect token limits (same logic as normal mode)
-            MAX_BATCH_CHARS = 400000
-            batches = []
-            current_batch = []
-            current_batch_chars = 0
-
-            for chapter_num, chapter_title, chapter_text in chapters_to_regenerate:
-                chapter_chars = len(chapter_text)
-
-                # If adding this chapter would exceed limit, start new batch
-                if current_batch and current_batch_chars + chapter_chars > MAX_BATCH_CHARS:
-                    batches.append(current_batch)
-                    current_batch = []
-                    current_batch_chars = 0
-
-                current_batch.append((chapter_num, chapter_title, chapter_text))
-                current_batch_chars += chapter_chars
-
-            # Add last batch
-            if current_batch:
-                batches.append(current_batch)
-
-            print(f"  Split into {len(batches)} batch(es) to respect token limits")
-
-            # Generate bulk summaries for each batch and save immediately
-            for batch_idx, batch in enumerate(batches, 1):
-                batch_chars = sum(len(ch[2]) for ch in batch)
-                batch_chapter_nums = [ch[0] for ch in batch]
-                print(f"\n  Batch {batch_idx}/{len(batches)}: Chapters {batch_chapter_nums[0]}-{batch_chapter_nums[-1]} ({len(batch)} chapters, ~{batch_chars:,} chars)")
-
-                bulk_summaries = self.generate_bulk_chapter_summaries(
-                    batch,
-                    title,
-                    medium_summary=medium,
-                    dry_run=dry_run
-                )
-
-                # Save batch results to database immediately
-                for chapter_num, chapter_title, chapter_text in batch:
-                    summary = bulk_summaries.get(chapter_num, f"ERROR: Summary not generated for chapter {chapter_num}")
-
-                    chapter_summaries.append({
-                        'chapter_number': chapter_num,
-                        'chapter_title': chapter_title,
-                        'summary': summary,
-                        'word_count': len(summary.split())
-                    })
-
-                    # Add/update chapter in database (INSERT OR REPLACE)
-                    if not dry_run:
-                        section_id = chapter_to_section_id.get(chapter_num)
-                        self.db.add_chapter(
-                            book_id,
-                            chapter_num,
-                            chapter_title,
-                            summary,
-                            chapter_text,  # Full chapter text
-                            section_id  # Link to section if two-level structure
-                        )
-                        print(f"  ✓ Saved chapter {chapter_num} to database")
-
             print(f"\n{'='*60}")
-            print(f"✓ Regenerated {len(chapter_summaries)} chapter summaries!")
+            print(f"REGENERATE CHAPTERS MODE - Regenerating {len(regenerate_chapters)} chapter(s)")
+            print(f"Chapters to regenerate: {regenerate_chapters}")
+            print(f"Will skip concise/medium summaries (already exist)")
             print(f"{'='*60}\n")
 
-            return results
+        # Generate combined concise and medium summaries (skip in regenerate mode)
+        if not regenerate_chapters:
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Generating Combined Summaries (Concise + Medium) ---")
 
-        # Generate combined concise and medium summaries (single API call)
-        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Generating Combined Summaries (Concise + Medium) ---")
+            # In partial-run mode, check if we already have both summaries
+            if partial_run:
+                existing_concise = self.db.get_summary(book_id, 'concise')
+                existing_medium = self.db.get_summary(book_id, 'medium')
 
-        # In partial-run mode, check if we already have both summaries
-        if partial_run:
-            existing_concise = self.db.get_summary(book_id, 'concise')
-            existing_medium = self.db.get_summary(book_id, 'medium')
-
-            if existing_concise and existing_medium:
-                concise = existing_concise['content']
-                medium = existing_medium['content']
-                print(f"[PARTIAL RUN] Reusing existing summaries from database")
+                if existing_concise and existing_medium:
+                    concise = existing_concise['content']
+                    medium = existing_medium['content']
+                    print(f"[PARTIAL RUN] Reusing existing summaries from database")
+                else:
+                    concise, medium = self.generate_combined_summaries(text, title, author, dry_run)
+                    if not dry_run:
+                        self.db.add_summary(book_id, 'concise', concise)
+                        self.db.add_summary(book_id, 'medium', medium)
             else:
                 concise, medium = self.generate_combined_summaries(text, title, author, dry_run)
                 if not dry_run:
                     self.db.add_summary(book_id, 'concise', concise)
                     self.db.add_summary(book_id, 'medium', medium)
+
+            results['summaries']['concise'] = {
+                'text': concise,
+                'word_count': len(concise.split())
+            }
+            results['summaries']['medium'] = {
+                'text': medium,
+                'word_count': len(medium.split())
+            }
+
+            print(f"✓ Concise summary: {results['summaries']['concise']['word_count']} words")
+            print(f"✓ Medium summary: {results['summaries']['medium']['word_count']} words")
+
+            if partial_run and not dry_run:
+                print(f"\n{'='*60}")
+                print("CONCISE SUMMARY OUTPUT:")
+                print(f"{'='*60}")
+                print(concise)
+                print(f"{'='*60}\n")
+                print(f"{'='*60}")
+                print("MEDIUM SUMMARY OUTPUT:")
+                print(f"{'='*60}")
+                print(medium)
+                print(f"{'='*60}\n")
         else:
-            concise, medium = self.generate_combined_summaries(text, title, author, dry_run)
-            if not dry_run:
-                self.db.add_summary(book_id, 'concise', concise)
-                self.db.add_summary(book_id, 'medium', medium)
+            # Regenerate mode: get medium summary from database for context
+            medium_summary_record = self.db.get_summary(book_id, 'medium')
+            medium = medium_summary_record['content'] if medium_summary_record else None
+            print(f"[REGENERATE MODE] Skipping concise/medium generation (using existing from database)")
+            if medium:
+                print(f"  ✓ Found medium summary ({len(medium.split())} words) for context")
 
-        results['summaries']['concise'] = {
-            'text': concise,
-            'word_count': len(concise.split())
-        }
-        results['summaries']['medium'] = {
-            'text': medium,
-            'word_count': len(medium.split())
-        }
-
-        print(f"✓ Concise summary: {results['summaries']['concise']['word_count']} words")
-        print(f"✓ Medium summary: {results['summaries']['medium']['word_count']} words")
-
-        if partial_run and not dry_run:
-            print(f"\n{'='*60}")
-            print("CONCISE SUMMARY OUTPUT:")
-            print(f"{'='*60}")
-            print(concise)
-            print(f"{'='*60}\n")
-            print(f"{'='*60}")
-            print("MEDIUM SUMMARY OUTPUT:")
-            print(f"{'='*60}")
-            print(medium)
-            print(f"{'='*60}\n")
-
-        # Try to detect two-level structure (Book/Part/Act → Chapters)
+        # Detect book structure using helper method (shared between normal and regenerate modes)
         print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Book Structure ---")
-
-        # Try body scanning FIRST (more reliable, avoids TOC end detection issues)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}]   🔍 Scanning document body for two-level structure...")
-        toc_structure = self.extract_two_level_structure_from_body(text)
-
-        if toc_structure:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}]   ✓ Body scan detected two-level structure")
-        else:
-            # Fallback to TOC-based detection if body scan failed
-            print(f"[{datetime.now().strftime('%H:%M:%S')}]   ℹ️  Body scan found no two-level structure")
-            print(f"[{datetime.now().strftime('%H:%M:%S')}]   🔍 Attempting TOC-based detection...")
-            toc_structure = self.extract_two_level_toc(text)
-
-            # Validate TOC structure quality
-            # If TOC has bad data (e.g., section types like "ACT i:" with gibberish),
-            # treat it as failed
-            toc_is_valid = True
-            if toc_structure:
-                for section in toc_structure:
-                    # Check for invalid section types (should be PART, BOOK, or ACT only)
-                    if section['type'] not in ['PART', 'BOOK', 'ACT']:
-                        toc_is_valid = False
-                        break
-                    # Check for garbage in section titles (e.g., lowercase letters at start)
-                    if section.get('title') and len(section['title']) > 5:
-                        # If title starts with lowercase or has weird punctuation, it's garbage
-                        if section['title'][0].islower() or section['title'].startswith('i:'):
-                            toc_is_valid = False
-                            break
-
-                if not toc_is_valid:
-                    print("  ⚠️  TOC-based detection returned invalid structure")
-                    toc_structure = None
-                else:
-                    print(f"  ✓ TOC-based detection successful!")
+        toc_structure = self._detect_book_structure(text)
 
         # Create mapping from chapter number to section_id
         # This will be used when saving chapters to link them to their sections
@@ -3244,6 +3230,17 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             f.write(f"{'='*60}\n\n")
             f.write(f"Total Chapters Detected: {len(chapters)}\n")
             f.write(f"Coverage: {coverage_percent:.1f}%\n\n")
+
+            # Show 2-layer structure if applicable
+            if toc_structure:
+                f.write(f"Book Structure: 2-layer ({len(toc_structure)} sections)\n")
+                for section in toc_structure:
+                    section_title_display = f": {section['title']}" if section['title'] else ""
+                    f.write(f"  {section['type']} {section['numeral']}{section_title_display} ({len(section['chapters'])} chapters)\n")
+                f.write(f"\n")
+            else:
+                f.write(f"Book Structure: Single-level (traditional chapters)\n\n")
+
             f.write(f"Original Content:\n")
             f.write(f"  {original_word_count:,} words\n")
             f.write(f"  {len(text):,} characters\n\n")
@@ -3256,10 +3253,27 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             f.write(f"{'='*60}\n")
             f.write(f"DETECTED CHAPTERS:\n")
             f.write(f"{'='*60}\n\n")
-            for ch_num, ch_title, ch_text in chapters:
-                ch_words = len(ch_text.split())
-                f.write(f"Chapter {ch_num}: {ch_title} ({ch_words:,} words)\n")
-            f.write(f"\n")
+
+            # If 2-layer structure, show chapters grouped by section
+            if toc_structure:
+                sequential_chapter_num = 1
+                for section in toc_structure:
+                    section_title_display = f": {section['title']}" if section['title'] else ""
+                    f.write(f"{section['type']} {section['numeral']}{section_title_display}\n")
+                    for chapter_info in section['chapters']:
+                        # Find the corresponding chapter in the chapters list
+                        if sequential_chapter_num <= len(chapters):
+                            ch_num, ch_title, ch_text = chapters[sequential_chapter_num - 1]
+                            ch_words = len(ch_text.split())
+                            f.write(f"  Chapter {ch_num}: {ch_title} ({ch_words:,} words)\n")
+                        sequential_chapter_num += 1
+                    f.write(f"\n")
+            else:
+                # Single-level structure: just list chapters
+                for ch_num, ch_title, ch_text in chapters:
+                    ch_words = len(ch_text.split())
+                    f.write(f"Chapter {ch_num}: {ch_title} ({ch_words:,} words)\n")
+                f.write(f"\n")
             f.write(f"{'='*60}\n")
             f.write(f"WHAT SHOULD BE REMOVED (typically):\n")
             f.write(f"{'='*60}\n\n")
@@ -3314,7 +3328,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             book_id=book_id,
             medium_summary=medium,
             dry_run=dry_run, partial_run=partial_run,
-            chapter_to_section_id=chapter_to_section_id
+            chapter_to_section_id=chapter_to_section_id,
+            regenerate_chapters=regenerate_chapters
         )
 
         # Save comprehensive summary (only if not empty)

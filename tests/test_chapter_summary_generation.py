@@ -275,8 +275,8 @@ Test summary
         assert "[DRY RUN]" in result[1]
         assert "[DRY RUN]" in result[2]
 
-        # Verify no API calls were made
-        assert not mock_genai.Client.called
+        # Verify no generate_content calls were made (Client() is called in __init__, that's ok)
+        assert not mock_genai.Client.return_value.models.generate_content.called
 
 
 class TestGenerateComprehensiveSummary:
@@ -306,7 +306,10 @@ Summary 2
 """
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
-        chapters = [(1, "Chapter 1", "text1"), (2, "Chapter 2", "text2")]
+        # Create chapters with enough words (> 200) to pass filtering
+        long_text = " ".join(["word"] * 250)
+
+        chapters = [(1, "Chapter 1", long_text), (2, "Chapter 2", long_text)]
 
         overall, chapter_summaries = generator.generate_comprehensive_summary(
             "full text",
@@ -314,7 +317,8 @@ Summary 2
             "Test Author",
             chapters,
             book_id=1,
-            dry_run=False
+            dry_run=False,
+            regenerate_chapters=None
         )
 
         # Verify bulk processing was used (only 1 API call for all chapters)
@@ -367,7 +371,8 @@ Summary 3
             chapters,
             book_id=1,
             dry_run=False,
-            partial_run=True
+            partial_run=True,
+            regenerate_chapters=None
         )
 
         # Verify only 3 chapters were processed
