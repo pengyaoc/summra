@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: Use generate_gemini_audio_batch_offline.py instead
+
+This script has been deprecated in favor of generate_gemini_audio_batch_offline.py
+which provides a unified interface for both concise and medium summaries.
+
+New usage:
+    python scripts/generate_gemini_audio_batch_offline.py --summary-type concise
+    python scripts/generate_gemini_audio_batch_offline.py --summary-type concise --dry-run
+
+---
+
 Batch generate Gemini TTS audio for concise summaries
 
 This script finds all books that don't have Gemini-generated concise summary audio
@@ -164,6 +175,13 @@ def main():
 
     args = parser.parse_args()
 
+    print("="*80)
+    print("⚠️  DEPRECATED SCRIPT")
+    print("="*80)
+    print("This script is deprecated. Please use generate_gemini_audio_batch_offline.py instead:")
+    print("  python scripts/generate_gemini_audio_batch_offline.py --summary-type concise")
+    print("="*80)
+    print()
     print("="*80)
     print("Batch Generate Gemini TTS Audio for Concise Summaries")
     print("="*80)

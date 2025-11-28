@@ -231,11 +231,18 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 
 **Chapter List (Book Overview):**
 - **Structure:** Vertical list of full-width chapter boxes (one per row)
+- **Hierarchical Display (Added 2025-11-27):**
+  - **Two-Level Structure:** Books with PART/BOOK/ACT organization show section headers
+    - Section headers: Uppercase text with border separator (e.g., "PART ONE: The Old Buccaneer")
+    - Chapters indented 20px under their respective sections
+    - Examples: Treasure Island (6 Parts), War and Peace (15 Books), Romeo and Juliet (5 Acts)
+  - **Single-Level Structure:** Traditional books show flat chapter list (no indentation)
+    - Example: Alice in Wonderland (numbered chapters only)
 - **Styling:** White background, 4px blue left border, subtle hover effects
 - **Chapter Box Includes:**
   - Chapter number and title combined (e.g., "3. The Time Traveller Returns")
   - Hover: Light blue background, slide right animation, subtle shadow
-- **Spacing:** 12px gap between boxes
+- **Spacing:** 12px gap between boxes, 24px gap before section headers
 - **Interaction:** Click box to navigate to dedicated chapter page
 
 **Chapter Detail Page (Updated 2025-11-25):**
@@ -382,7 +389,7 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - ✅ Project Gutenberg integration
 - ✅ Responsive web design
 
-### Phase 2: Enhanced UX (COMPLETED - 2025-11-25)
+### Phase 2: Enhanced UX (COMPLETED - 2025-11-27)
 - ✅ URL routing for books, summaries, and chapters
 - ✅ BeFreed-inspired minimal UI redesign
 - ✅ Removed unnecessary bounding boxes
@@ -392,6 +399,13 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - ✅ Scroll to top on page navigation
 - ✅ Chapter summary UI polish (button reorganization, minimal toggle design)
 - ✅ Back button alignment fix (container-based layout)
+- ✅ Two-level book structure support (PART/BOOK/ACT → Chapters)
+  - ✅ Hierarchical TOC detection
+  - ✅ Document body scanning fallback (for books like Anna Karenina)
+  - ✅ Database schema for sections
+  - ✅ API returns structured data
+  - ✅ Frontend displays section headers with indented chapters
+  - ✅ All 5 test books passing (Treasure Island, War and Peace, Anna Karenina, Romeo and Juliet, Principles of Political Economy)
 - ⏳ Persistent audio player (stays across navigation) - PARTIAL (player exists but resets on navigation)
 
 ### Phase 3: Full-Length Option (PLANNED)
@@ -551,7 +565,7 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** 2025-11-25
+**Document Version:** 1.3
+**Last Updated:** 2025-11-27
 **Author:** Summra Team
 **Status:** Living Document

@@ -93,6 +93,28 @@ class Database:
             # Column already exists
             pass
 
+        # Book sections table (for two-level structure: Part/Book/Act → Chapters)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS book_sections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                section_type TEXT NOT NULL,
+                section_number INTEGER NOT NULL,
+                section_title TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+                UNIQUE(book_id, section_number)
+            )
+        ''')
+
+        # Add section_id column to chapters table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE chapters ADD COLUMN section_id INTEGER REFERENCES book_sections(id)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Audio files table (for TTS)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS audio_files (
@@ -216,7 +238,8 @@ class Database:
         return None
 
     def add_chapter(self, book_id: int, chapter_number: int,
-                    chapter_title: str, summary: str, chapter_text: str = None) -> int:
+                    chapter_title: str, summary: str, chapter_text: str = None,
+                    section_id: int = None) -> int:
         """Add or update a chapter summary"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -225,9 +248,9 @@ class Database:
 
         cursor.execute('''
             INSERT OR REPLACE INTO chapters
-            (book_id, chapter_number, chapter_title, chapter_text, summary, word_count)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count))
+            (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id))
 
         chapter_id = cursor.lastrowid
         conn.commit()
@@ -250,6 +273,38 @@ class Database:
         conn.close()
 
         return [dict(row) for row in rows]
+
+    def get_chapters_metadata(self, book_id: int) -> List[Dict]:
+        """Get chapter metadata only (no summary or full text) for efficient loading"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+            FROM chapters
+            WHERE book_id = ?
+            ORDER BY chapter_number
+        ''', (book_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_chapter(self, book_id: int, chapter_number: int) -> Optional[Dict]:
+        """Get a single chapter by book ID and chapter number"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM chapters
+            WHERE book_id = ? AND chapter_number = ?
+        ''', (book_id, chapter_number))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
 
     def add_audio_file(self, summary_id: Optional[int], chapter_id: Optional[int],
                       audio_path: str, duration: float) -> int:
@@ -287,3 +342,179 @@ class Database:
         if row:
             return dict(row)
         return None
+
+    def add_book_section(self, book_id: int, section_type: str, section_number: int,
+                        section_title: str = None) -> int:
+        """Add a book section (Part/Book/Act)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT OR REPLACE INTO book_sections
+            (book_id, section_type, section_number, section_title)
+            VALUES (?, ?, ?, ?)
+        ''', (book_id, section_type, section_number, section_title))
+
+        section_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return section_id
+
+    def get_book_sections(self, book_id: int) -> List[Dict]:
+        """Get all book sections for a book, ordered by section number"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM book_sections
+            WHERE book_id = ?
+            ORDER BY section_number
+        ''', (book_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_chapters_by_section(self, section_id: int) -> List[Dict]:
+        """Get all chapters for a specific book section"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM chapters
+            WHERE section_id = ?
+            ORDER BY chapter_number
+        ''', (section_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_chapters_metadata_by_section(self, section_id: int) -> List[Dict]:
+        """Get chapter metadata only for a specific book section (no summary or full text)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+            FROM chapters
+            WHERE section_id = ?
+            ORDER BY chapter_number
+        ''', (section_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_book_structure(self, book_id: int) -> Dict:
+        """
+        Get complete book structure including sections and chapters.
+
+        Returns:
+        {
+            'has_sections': bool,
+            'sections': [
+                {
+                    'id': 1,
+                    'type': 'PART',
+                    'number': 1,
+                    'title': 'The Old Buccaneer',
+                    'chapters': [...]
+                },
+                ...
+            ]
+        }
+
+        If book has no sections, returns flat chapter list under a single default section.
+        """
+        sections = self.get_book_sections(book_id)
+
+        if sections:
+            # Book has sections - return hierarchical structure
+            result = {
+                'has_sections': True,
+                'sections': []
+            }
+
+            for section in sections:
+                chapters = self.get_chapters_by_section(section['id'])
+                result['sections'].append({
+                    'id': section['id'],
+                    'type': section['section_type'],
+                    'number': section['section_number'],
+                    'title': section['section_title'],
+                    'chapters': chapters
+                })
+
+            return result
+        else:
+            # Book has no sections - return flat chapter list
+            chapters = self.get_chapters(book_id)
+            return {
+                'has_sections': False,
+                'sections': [{
+                    'id': None,
+                    'type': None,
+                    'number': 1,
+                    'title': 'Chapters',
+                    'chapters': chapters
+                }]
+            }
+
+    def get_book_structure_metadata(self, book_id: int) -> Dict:
+        """
+        Get book structure with chapter metadata only (no summaries or full text).
+        Same structure as get_book_structure but optimized for displaying chapter lists.
+
+        Returns:
+        {
+            'has_sections': bool,
+            'sections': [
+                {
+                    'id': 1,
+                    'type': 'PART',
+                    'number': 1,
+                    'title': 'The Old Buccaneer',
+                    'chapters': [metadata only...]
+                },
+                ...
+            ]
+        }
+        """
+        sections = self.get_book_sections(book_id)
+
+        if sections:
+            # Book has sections - return hierarchical structure
+            result = {
+                'has_sections': True,
+                'sections': []
+            }
+
+            for section in sections:
+                chapters = self.get_chapters_metadata_by_section(section['id'])
+                result['sections'].append({
+                    'id': section['id'],
+                    'type': section['section_type'],
+                    'number': section['section_number'],
+                    'title': section['section_title'],
+                    'chapters': chapters
+                })
+
+            return result
+        else:
+            # Book has no sections - return flat chapter list
+            chapters = self.get_chapters_metadata(book_id)
+            return {
+                'has_sections': False,
+                'sections': [{
+                    'id': None,
+                    'type': None,
+                    'number': 1,
+                    'title': 'Chapters',
+                    'chapters': chapters
+                }]
+            }

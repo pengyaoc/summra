@@ -559,28 +559,112 @@ class SummraApp {
         chaptersList.innerHTML = '<div class="loading">Loading chapters...</div>';
 
         try {
-            const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/summary/comprehensive`);
+            const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/chapters`);
             const data = await response.json();
 
-            if (data.success && data.chapters && data.chapters.length > 0) {
-                this.chapters = data.chapters;
+            if (data.success && data.sections) {
+                // Flatten chapters from all sections for compatibility
+                this.chapters = [];
+                data.sections.forEach(section => {
+                    if (section.chapters) {
+                        this.chapters.push(...section.chapters);
+                    }
+                });
+
                 chaptersList.innerHTML = '';
 
-                this.chapters.forEach(chapter => {
-                    const box = document.createElement('div');
-                    box.className = 'chapter-box';
+                // Check if book has two-level structure (multiple sections)
+                if (data.has_sections && data.sections.length > 1) {
+                    // Count sections with chapters
+                    const totalSections = data.sections.length;
+                    const sectionsWithChapters = data.sections.filter(s => s.chapters && s.chapters.length > 0).length;
 
-                    const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
-                    const titleEl = document.createElement('h4');
-                    titleEl.className = 'chapter-box-title';
-                    titleEl.textContent = `${chapter.chapter_number}. ${title}`;
+                    // If no chapters at all yet, show section structure with processing message
+                    if (this.chapters.length === 0) {
+                        // Show section headers as placeholders
+                        data.sections.forEach(section => {
+                            const sectionHeader = document.createElement('div');
+                            sectionHeader.className = 'section-header';
+                            const sectionTitle = section.title ?
+                                `${section.type} ${section.number}: ${section.title}` :
+                                `${section.type} ${section.number}`;
+                            sectionHeader.innerHTML = `<h4 style="opacity: 0.5;">${sectionTitle} <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-light);">(processing...)</span></h4>`;
+                            chaptersList.appendChild(sectionHeader);
+                        });
 
-                    box.appendChild(titleEl);
-                    box.addEventListener('click', () => {
-                        this.showChapterDetailPage(chapter.chapter_number);
+                        const note = document.createElement('p');
+                        note.style.cssText = 'color: var(--text-light); font-size: 0.9rem; margin-top: 1rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px;';
+                        note.innerHTML = `<em>⏳ Processing in progress... 0/${totalSections} sections complete. Refresh to see newly added chapters.</em>`;
+                        chaptersList.appendChild(note);
+                        return;
+                    }
+
+                    // Render hierarchical structure (Book/Part/Act → Chapters)
+                    data.sections.forEach(section => {
+                        // Create section header (always show, even if no chapters yet)
+                        const sectionHeader = document.createElement('div');
+                        sectionHeader.className = 'section-header';
+                        const sectionTitle = section.title ?
+                            `${section.type} ${section.number}: ${section.title}` :
+                            `${section.type} ${section.number}`;
+
+                        // Dim the header if this section has no chapters yet
+                        const hasChapters = section.chapters && section.chapters.length > 0;
+                        const headerStyle = hasChapters ? '' : ' style="opacity: 0.5;"';
+                        const processingLabel = hasChapters ? '' : ' <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-light);">(processing...)</span>';
+
+                        sectionHeader.innerHTML = `<h4${headerStyle}>${sectionTitle}${processingLabel}</h4>`;
+                        chaptersList.appendChild(sectionHeader);
+
+                        // Render chapters in this section (if any)
+                        if (hasChapters) {
+                            section.chapters.forEach(chapter => {
+                                const box = document.createElement('div');
+                                box.className = 'chapter-box indented';
+
+                                const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
+                                const titleEl = document.createElement('h4');
+                                titleEl.className = 'chapter-box-title';
+                                titleEl.textContent = `${chapter.chapter_number}. ${title}`;
+
+                                box.appendChild(titleEl);
+                                box.addEventListener('click', () => {
+                                    this.showChapterDetailPage(chapter.chapter_number);
+                                });
+                                chaptersList.appendChild(box);
+                            });
+                        }
                     });
-                    chaptersList.appendChild(box);
-                });
+
+                    // Add a note if the book is still being processed
+                    if (sectionsWithChapters < totalSections) {
+                        const note = document.createElement('p');
+                        note.style.cssText = 'color: var(--text-light); font-size: 0.9rem; margin-top: 1rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px;';
+                        note.innerHTML = `<em>⏳ Processing in progress... ${sectionsWithChapters}/${totalSections} sections complete. Refresh to see newly added chapters.</em>`;
+                        chaptersList.appendChild(note);
+                    }
+                } else {
+                    // Render flat structure (traditional single-level chapters)
+                    if (this.chapters.length === 0) {
+                        chaptersList.innerHTML = '<p style="color: var(--text-light); font-size: 0.95rem;">Chapters are being generated. Check back soon.</p>';
+                    } else {
+                        this.chapters.forEach(chapter => {
+                            const box = document.createElement('div');
+                            box.className = 'chapter-box';
+
+                            const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
+                            const titleEl = document.createElement('h4');
+                            titleEl.className = 'chapter-box-title';
+                            titleEl.textContent = `${chapter.chapter_number}. ${title}`;
+
+                            box.appendChild(titleEl);
+                            box.addEventListener('click', () => {
+                                this.showChapterDetailPage(chapter.chapter_number);
+                            });
+                            chaptersList.appendChild(box);
+                        });
+                    }
+                }
             } else {
                 chaptersList.innerHTML = '<p style="color: var(--text-light); font-size: 0.95rem;">Chapters are being generated. Check back soon.</p>';
                 this.chapters = [];
@@ -661,20 +745,28 @@ class SummraApp {
         document.getElementById('medium-detail-section').classList.add('hidden');
         document.getElementById('chapter-detail-section').classList.remove('hidden');
 
-        // Load chapter data if not already loaded
-        if (this.chapters.length === 0) {
+        // Fetch individual chapter data on demand (optimized - only fetches one chapter)
+        let chapter = this.chapters.find(c => c.chapter_number === chapterNum);
+
+        // If chapter doesn't have full details (summary/text), fetch them
+        if (!chapter || !chapter.summary) {
             try {
-                const response = await fetch(`${this.apiBase}/books/${book.id}/summary/comprehensive`);
+                const response = await fetch(`${this.apiBase}/books/${book.id}/chapters/${chapterNum}`);
                 const data = await response.json();
-                if (data.success && data.chapters) {
-                    this.chapters = data.chapters;
+                if (data.success && data.chapter) {
+                    // Update the chapter in the chapters array or add it
+                    const index = this.chapters.findIndex(c => c.chapter_number === chapterNum);
+                    if (index >= 0) {
+                        this.chapters[index] = data.chapter;
+                    } else {
+                        this.chapters.push(data.chapter);
+                    }
+                    chapter = data.chapter;
                 }
             } catch (error) {
-                console.error('Error loading chapters:', error);
+                console.error('Error loading chapter details:', error);
             }
         }
-
-        const chapter = this.chapters.find(c => c.chapter_number === chapterNum);
         if (!chapter) {
             document.getElementById('chapter-detail-content').innerHTML = '<p class="error">Chapter not found</p>';
             return;
