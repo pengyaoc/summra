@@ -2154,15 +2154,19 @@ index_to_chapter = {1: 1, 2: 2}
 
 ### Bulk Prompt Construction
 
-**Location:** `scripts/generate_summaries.py:1042-1121`
+**Location:** `scripts/generate_summaries.py:2459-2558`
 
 ```python
 def generate_bulk_chapter_summaries(self, chapters_batch: List[Tuple],
                                    book_title: str,
-                                   medium_summary: str = None) -> Dict[int, str]:
+                                   medium_summary: str = None,
+                                   previous_chapter_text: str = None) -> Dict[int, str]:
     """
     Generate summaries for multiple chapters in a single API call.
     Uses sequential indices (1, 2, 3...) for defensive parsing.
+
+    Args:
+        previous_chapter_text: Text from last chapter of previous batch for continuity (Added 2025-11-28)
     """
     # Create index mapping
     index_to_chapter = {}
@@ -2383,26 +2387,72 @@ Return: {15: "[content1]", 16: "[content2]"}
      ]
 
 3. For each batch:
-   a. Create index mapping:
+   a. Get previous chapter context (Added 2025-11-28):
+      - Batch 1: previous_chapter_text = None
+      - Batch 2+: previous_chapter_text = last chapter from previous batch (first 100K chars)
+
+   b. Create index mapping:
       Batch 1: {1: 15, 2: 16, 3: 21}
       Batch 2: {1: 22, 2: 23}
 
-   b. Build prompt with sequential indices (1, 2, 3...)
+   c. Build prompt with sequential indices (1, 2, 3...)
+      - Includes previous chapter context for narrative continuity (if available)
 
-   c. Make API call
+   d. Make API call
 
-   d. Parse response:
+   e. Parse response:
       "### CHAPTER 1: ..." → index=1 → chapter_num=15
       "### CHAPTER 2: ..." → index=2 → chapter_num=16
       "### CHAPTER 3: ..." → index=3 → chapter_num=21
 
-   e. Save to database:
+   f. Save to database:
       db.add_chapter(book_id, 15, "title", summary, text)
       db.add_chapter(book_id, 16, "title", summary, text)
       db.add_chapter(book_id, 21, "title", summary, text)
 
+   g. Track last chapter for next batch:
+      previous_batch_last_chapter = batch[-1]  # (23, "title", text)
+
 4. Next batch...
 ```
+
+**Previous Chapter Context Feature (Added 2025-11-28):**
+
+**Purpose:** Provide narrative continuity across batch boundaries by including the last chapter from the previous batch as context.
+
+**Implementation:** `scripts/generate_summaries.py:2737-2760`
+
+```python
+# Initialize tracking
+previous_batch_last_chapter = None  # Track last chapter from previous batch for context
+
+for batch_idx, batch in enumerate(batches, 1):
+    # Get previous chapter text for continuity (first 100K chars)
+    previous_chapter_text = previous_batch_last_chapter[2] if previous_batch_last_chapter else None
+
+    # Generate summaries with context
+    batch_summaries = self.generate_bulk_chapter_summaries(
+        batch,
+        title,
+        medium_summary=medium_summary,
+        previous_chapter_text=previous_chapter_text,  # Pass to API call
+        dry_run=dry_run,
+        partial_run=partial_run
+    )
+
+    # ... save summaries to database ...
+
+    # Track last chapter for next batch
+    previous_batch_last_chapter = batch[-1]
+```
+
+**Benefits:**
+- Helps AI understand character references that carry over between batches
+- Maintains plot thread continuity across batch boundaries
+- Improves summary quality for sequential narrative fiction
+- Example: Batch 2 processing Chapters 6-10 receives Chapter 5 context
+
+**Context Limit:** First 100,000 characters of previous chapter text (lines 2513-2520)
 
 ### Performance Metrics
 

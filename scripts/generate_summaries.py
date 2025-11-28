@@ -1180,7 +1180,7 @@ Cover all major plot points, themes, and character developments in chronological
         sequential_chapter_num = 1
 
         # Check for preface/introduction before the first section
-        # Look for TRANSLATOR'S PREFACE, AUTHOR'S PREFACE, PREFACE, INTRODUCTION
+        # Look for TRANSLATOR'S PREFACE, AUTHOR'S PREFACE, PREFACE, INTRODUCTION, PRELUDE
         # Use ['\u2019] to match both straight apostrophe (') and curly apostrophe (')
         preface_patterns = [
             r"^TRANSLATOR['\u2019]S PREFACE$",
@@ -1191,6 +1191,8 @@ Cover all major plot points, themes, and character developments in chronological
             r'^Preface$',
             r'^INTRODUCTION$',
             r'^Introduction$',
+            r'^PRELUDE\.?$',  # Match "PRELUDE" or "PRELUDE."
+            r'^Prelude\.?$',  # Match "Prelude" or "Prelude."
         ]
 
         # Find the first section start line
@@ -1376,6 +1378,7 @@ Cover all major plot points, themes, and character developments in chronological
 
         # Common chapter patterns - must start new line
         chapter_patterns = [
+            r'^\[\s*([0-9]+)\s*\]$',  # Bracket format: "[ 1 ]", "[ 10 ]" (Ulysses)
             r'CHAPTER\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # CHAPTER I: Title or CHAPTER 1
             r'Chapter\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',
             r'STAVE\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # STAVE I: Title (A Christmas Carol)
@@ -2179,8 +2182,18 @@ Cover all major plot points, themes, and character developments in chronological
                     # Search for exact title match (case-sensitive, on its own line)
                     # Use a pattern that matches the title at start of line, possibly with leading whitespace
                     # Also allow optional prefix words like "IN" before the title
-                    exact_pattern = r'^\s*' + re.escape(title) + r'\s*$'
-                    fuzzy_pattern = r'^\s*(?:IN\s+)?' + re.escape(title) + r'\s*$'
+
+                    # Special handling for bracket patterns like "[ 1 ]" or "[  1 ]"
+                    # Normalize spaces inside brackets to match variations
+                    bracket_match = re.match(r'^\[\s*(\d+)\s*\]$', title)
+                    if bracket_match:
+                        # Create pattern that matches bracket with any amount of whitespace
+                        chapter_num = bracket_match.group(1)
+                        exact_pattern = r'^\s*\[\s*' + chapter_num + r'\s*\]\s*$'
+                        fuzzy_pattern = exact_pattern  # No fuzzy variant for brackets
+                    else:
+                        exact_pattern = r'^\s*' + re.escape(title) + r'\s*$'
+                        fuzzy_pattern = r'^\s*(?:IN\s+)?' + re.escape(title) + r'\s*$'
 
                     # Find ALL occurrences, then keep the last one (most likely actual chapter, not TOC)
                     matches = []
@@ -2220,6 +2233,10 @@ Cover all major plot points, themes, and character developments in chronological
                         if len(chapter_content) > 100:  # Only add if substantial
                             chapters.append((chapter_num, title, chapter_content))
                             print(f"  Chapter {chapter_num}: {title} ({len(chapter_content)} chars)")
+
+                            # Mark all lines in this chapter as consumed (including the title line)
+                            for i in range(line_idx, end_line):
+                                consumed_line_indices.add(i)
                 else:
                     print(f"Only found {len(title_positions)}/{len(title_toc)} titles in content - not using TOC extraction")
 
@@ -2735,18 +2752,27 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(f"  Split into {len(batches)} batch(es) to respect token limits")
 
             # Generate bulk summaries for each batch and save immediately
+            previous_batch_last_chapter = None  # Track last chapter from previous batch for context
+
             for batch_idx, batch in enumerate(batches, 1):
                 batch_chars = sum(len(ch[2]) for ch in batch)
                 batch_chapter_nums = [ch[0] for ch in batch]
                 print(f"\n  Batch {batch_idx}/{len(batches)}: Chapters {batch_chapter_nums[0]}-{batch_chapter_nums[-1]} ({len(batch)} chapters, ~{batch_chars:,} chars)")
 
+                # Get previous chapter text for narrative continuity (from last chapter of previous batch)
+                previous_chapter_text = previous_batch_last_chapter[2] if previous_batch_last_chapter else None
+
                 batch_summaries = self.generate_bulk_chapter_summaries(
                     batch,
                     title,
                     medium_summary=medium_summary,
+                    previous_chapter_text=previous_chapter_text,
                     dry_run=dry_run,
                     partial_run=partial_run
                 )
+
+                # Track last chapter of this batch for next batch's context
+                previous_batch_last_chapter = batch[-1]
 
                 # Save batch results to database immediately
                 for chapter_num, chapter_title, chapter_text in batch:
@@ -3028,25 +3054,25 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                 for chapter_num, chapter_title, chapter_text in batch:
                     summary = bulk_summaries.get(chapter_num, f"ERROR: Summary not generated for chapter {chapter_num}")
 
-                chapter_summaries.append({
-                    'chapter_number': chapter_num,
-                    'chapter_title': chapter_title,
-                    'summary': summary,
-                    'word_count': len(summary.split())
-                })
+                    chapter_summaries.append({
+                        'chapter_number': chapter_num,
+                        'chapter_title': chapter_title,
+                        'summary': summary,
+                        'word_count': len(summary.split())
+                    })
 
-                # Add/update chapter in database (INSERT OR REPLACE)
-                if not dry_run:
-                    section_id = chapter_to_section_id.get(chapter_num)
-                    self.db.add_chapter(
-                        book_id,
-                        chapter_num,
-                        chapter_title,
-                        summary,
-                        chapter_text,  # Full chapter text
-                        section_id  # Link to section if two-level structure
-                    )
-                    print(f"  ✓ Saved chapter {chapter_num} to database")
+                    # Add/update chapter in database (INSERT OR REPLACE)
+                    if not dry_run:
+                        section_id = chapter_to_section_id.get(chapter_num)
+                        self.db.add_chapter(
+                            book_id,
+                            chapter_num,
+                            chapter_title,
+                            summary,
+                            chapter_text,  # Full chapter text
+                            section_id  # Link to section if two-level structure
+                        )
+                        print(f"  ✓ Saved chapter {chapter_num} to database")
 
             print(f"\n{'='*60}")
             print(f"✓ Regenerated {len(chapter_summaries)} chapter summaries!")
