@@ -6,6 +6,711 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-11-28
 
+### Carousel UX Improvements and Bug Fixes - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Fix All Categories page, add book randomization, restore hover effects with proper scrolling, prevent edge book clipping, enable horizontal scrolling, and fix button states.
+
+**Bugs Fixed:**
+
+1. **All Categories Page Not Rendering Carousels**
+   - **Problem:** Clicking "Categories" button showed empty page instead of all category carousels
+   - **Root Cause:** `renderCategoryCarousel()` hardcoded `categories-container` as target, but All Categories page uses `all-categories-container`
+   - **Solution:** Added `containerIdOverride` optional parameter to `renderCategoryCarousel()` method
+   - **File:** `frontend/static/js/app.js:438-439, 1372`
+   - **Result:** All Categories page now properly displays all category carousels
+
+2. **Book Order Randomization**
+   - **Requirement:** Randomize book order within each category carousel for variety
+   - **Solution:** Added shuffle logic using `[...books].sort(() => Math.random() - 0.5)`
+   - **File:** `frontend/static/js/app.js:474-477`
+   - **Result:** Each carousel shows books in random order on every page load
+
+3. **Scroll Blocking on Hover (Fixed Multiple Times)**
+   - **Problem:** Page couldn't scroll when hovering over book covers in carousel
+   - **Initial Fix:** Changed hover effect from `scale(1.05)` to `opacity: 0.8`
+   - **User Feedback:** "I like the interaction where upon hovering a book cover, it becomes slightly larger"
+   - **Final Fix:** Restored `scale(1.05)` with proper CSS configuration:
+     - Added `pointer-events: auto` to allow scroll events
+     - Added vertical and horizontal padding (`1rem 1rem`) to prevent clipping
+     - Added `z-index: 1` to bring hovered cards to front
+   - **File:** `frontend/static/css/style.css:1373-1391`
+
+4. **All Books Container Reappearing**
+   - **Problem:** Legacy `books-section` kept showing up on home page
+   - **User Feedback:** "All book container reappears. Can you make sure that's removed? It has happened over and over again. Double triple check"
+   - **Solution:** Completely deleted HTML section and removed all JavaScript references (7 locations)
+   - **Files Modified:**
+     - `frontend/templates/index.html` - Deleted `books-section` (lines 35-41)
+     - `frontend/static/js/app.js` - Removed all references in navigation methods
+
+5. **Edge Books Clipping When Scaled**
+   - **Problem:** Leftmost and rightmost book covers cut off when hovered/scaled
+   - **Solution:** Added horizontal padding `1rem 1rem` to `.carousel-scroll` to create safe zones
+   - **File:** `frontend/static/css/style.css:1364`
+   - **Result:** All books display fully when scaled, even at carousel edges
+
+6. **Horizontal Scrolling Not Working**
+   - **Problem:** Couldn't scroll carousel with cursor or right arrow button
+   - **Root Cause:** `overflow-x: hidden` prevented all scrolling
+   - **Solution:** Changed to `overflow-x: auto` and hid scrollbar with CSS
+   - **File:** `frontend/static/css/style.css:1361-1371`
+   - **Cross-Browser Scrollbar Hiding:**
+     ```css
+     scrollbar-width: none;  /* Firefox */
+     -ms-overflow-style: none;  /* IE/Edge */
+     .carousel-scroll::-webkit-scrollbar { display: none; }  /* Chrome/Safari */
+     ```
+
+7. **Right Button Disabled on Page Load**
+   - **Problem:** Right arrow button disabled when page first loads, even with content to scroll
+   - **Root Cause:** `updateButtonStates()` called before DOM fully rendered, causing `scrollWidth` to be incorrect
+   - **Solution:** Changed to `setTimeout(() => updateButtonStates(), 0)` to defer until after rendering
+   - **File:** `frontend/static/js/app.js:515`
+   - **Result:** Right arrow button properly enabled on page load
+
+**Files Modified:**
+- `frontend/static/js/app.js` (lines 438-439, 474-477, 515, 1372)
+- `frontend/static/css/style.css` (lines 1358-1391)
+- `frontend/templates/index.html` (removed lines 35-41)
+- `WORK_LOG.md` - This entry
+
+**Technical Details:**
+
+**Scroll + Hover Interaction Fix:**
+```css
+.carousel-scroll {
+    overflow-x: auto;        /* Enable scrolling */
+    overflow-y: visible;     /* Allow cards to scale beyond bounds */
+    padding: 1rem 1rem;      /* Safe zones for scaled cards */
+}
+
+.carousel-book-card {
+    pointer-events: auto;    /* Allow scroll events */
+}
+
+.carousel-book-card:hover {
+    transform: scale(1.05);  /* Restored scale effect */
+    z-index: 1;              /* Bring to front */
+}
+```
+
+**Button State Fix:**
+```javascript
+// Defer state check until after DOM rendering
+setTimeout(() => updateButtonStates(), 0);
+```
+
+**Impact:**
+- All Categories page now works correctly
+- Book discovery improved with randomized ordering
+- Smooth page scrolling while hovering over books
+- Hover scale effect preserved (1.05x)
+- No edge clipping when scaling books
+- Horizontal scrolling within carousels enabled
+- Right arrow button works correctly on page load
+- Clean UI without legacy elements
+- Professional carousel UX matching Amazon-inspired design
+
+---
+
+### Category Carousel Bug Fixes - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Fix 4 bugs in the newly implemented category carousel system.
+
+**Bugs Fixed:**
+
+1. **Book Cover Cropping Issue**
+   - **Problem:** Book covers were being cropped (cut off at top/bottom) due to `object-fit: cover`
+   - **Solution:** Changed to `object-fit: contain` and increased height to 300px
+   - **File:** `frontend/static/css/style.css:1384-1391`
+   - **Result:** Full book covers now display without cropping, sized for taller books like "A Tale of Two Cities"
+
+2. **Home Page Category Limit**
+   - **Problem:** Need to verify only top 10 categories + All Books carousel show on home
+   - **Status:** Already correctly implemented in `displayCategories()` method
+   - **File:** `frontend/static/js/app.js:389-436`
+   - **Logic:** Fetches book counts, filters empty categories, sorts by count descending, shows top 10 + All Books
+
+3. **Categories Page Not Showing Carousels**
+   - **Problem:** All Categories page (#/categories) should show all carousels with at least one book
+   - **Status:** Already correctly implemented in `displayAllCategories()` and `showAllCategories()` methods
+   - **Files:** `frontend/static/js/app.js:1295-1371`
+   - **Logic:** Filters categories with books, sorts by count, renders all carousels to `all-categories-container`
+
+4. **Duplicate All Books Grid on Home Page**
+   - **Problem:** Old "All Books" grid section was still showing on home page alongside new carousels
+   - **Solution:** Modified `showHomeSection()` to hide `books-section` and show only `categories-section`
+   - **File:** `frontend/static/js/app.js:1211-1238`
+   - **Result:** Home page now shows only category carousels, full grid accessible via header button or "View All" link
+
+**Files Modified:**
+- `frontend/static/css/style.css` (lines 1384-1391) - Fixed book cover display
+- `frontend/static/js/app.js` (lines 1211-1238) - Removed duplicate grid from home
+- `WORK_LOG.md` - This entry
+
+**Impact:**
+- Book covers display fully without cropping
+- Clean home page with only category carousels
+- No duplicate content
+- Categories page works correctly with all carousels
+
+---
+
+### Amazon-Inspired Category Carousel UX - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Redesign home page with category-based horizontal carousels (similar to Amazon's book browsing UI) to improve discoverability and provide better browsing experience.
+
+**User Request:**
+Provided screenshot of Amazon's carousel UI with 10 specific UX improvements requested including carousel navigation, white background, category sorting, view all links, and header navigation buttons.
+
+**Changes Made:**
+
+1. **CSS Styling** (`frontend/static/css/style.css`):
+   - Changed body background to white (cleaner look)
+   - Updated category carousel spacing:
+     - 2.5rem gap after blue header
+     - 1.5rem gap between carousel rows
+     - 0.75rem gap between books in carousel
+   - Added carousel navigation button styling:
+     - 40px circular white buttons with shadows
+     - Positioned absolutely (left: -20px, right: -20px)
+     - Disabled state styling (opacity: 0.3)
+   - Updated carousel book cards:
+     - Larger size: 200px wide × 280px cover height
+     - Transparent background (no card styling)
+     - Removed box shadows
+     - Hover: scale to 1.05x
+   - Changed carousel scroll overflow to hidden (arrows only, no scrollbar)
+   - Added "View All →" link styling (blue, hover underline)
+   - Added header navigation button styling (semi-transparent white)
+   - Added category detail and all categories section styles
+
+2. **HTML Structure** (`frontend/templates/index.html`):
+   - Added header navigation buttons in header:
+     ```html
+     <div class="header-nav-buttons">
+         <a href="#/categories" class="header-nav-btn">Categories</a>
+         <a href="#/all-books" class="header-nav-btn">All Books</a>
+     </div>
+     ```
+   - Added Category Detail Section:
+     - Back button
+     - Category title and subtitle (book count)
+     - Books grid container
+   - Added All Categories Section:
+     - Back button
+     - Section title
+     - Categories container for all carousels
+
+3. **JavaScript Implementation** (`frontend/static/js/app.js`):
+   - **Routing** (lines 12, 36-100):
+     - Added `currentView` tracking ('home', 'book', 'category', 'all-categories', 'all-books')
+     - Updated `handleRoute()` to support:
+       - `#/category/{id}` → Category detail page
+       - `#/categories` → All categories page
+       - `#/all-books` → All books grid page
+
+   - **Category Display** (lines 389-436):
+     - `displayCategories()`:
+       - Fetches book counts for all categories
+       - Filters out empty categories
+       - Sorts by book count (descending)
+       - Shows top 10 categories
+       - Adds "All Books" carousel at end
+
+   - **Carousel Rendering** (lines 438-517):
+     - `renderCategoryCarousel()`:
+       - Creates carousel with header (title + View All link)
+       - Adds left/right navigation arrows
+       - Renders book cards (cover, title, author)
+       - Implements scroll logic (220px × 3 per click)
+       - Updates arrow button states based on scroll position
+       - Disable/enable arrows at scroll boundaries
+
+   - **Navigation Methods** (lines 1242-1429):
+     - `showHomeSection()`: Show category carousels + all books grid
+     - `showCategoryDetail(categoryId)`: Display books in category as grid
+     - `showAllCategories()`: Display all category carousels
+     - `displayAllCategories()`: Fetch and render all categories with books
+     - `showAllBooksGrid()`: Display entire collection in grid
+     - `createBookCard()`: Helper to create book card DOM elements
+
+   - **Book Selection** (lines 575-616):
+     - Updated `selectBook()` to:
+       - Set `currentView = 'book'`
+       - Hide categories section when viewing book details
+       - Maintain clean book reading experience
+
+4. **URL Routing** (lines 45-99):
+   - Added support for category routes:
+     - `#/category/5` → Category 5 detail page
+     - `#/categories` → All categories page
+     - `#/all-books` → All books grid page
+   - Browser back/forward button support for all new routes
+   - Bookmarkable and shareable URLs
+
+**Technical Details:**
+
+**Carousel Navigation Logic:**
+```javascript
+const scrollAmount = 220; // Card width + gap
+
+leftBtn.addEventListener('click', () => {
+    scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
+});
+
+rightBtn.addEventListener('click', () => {
+    scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
+});
+
+// Update button states based on scroll position
+const updateButtonStates = () => {
+    leftBtn.disabled = scrollContainer.scrollLeft <= 0;
+    rightBtn.disabled = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 1;
+};
+
+scrollContainer.addEventListener('scroll', updateButtonStates);
+```
+
+**Category Sorting:**
+```javascript
+// Get book counts for each category
+const categoriesWithCounts = await Promise.all(
+    categories.map(async (category) => {
+        const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
+        const data = await response.json();
+        return {
+            ...category,
+            bookCount: data.success ? (data.books?.length || 0) : 0
+        };
+    })
+);
+
+// Filter and sort by book count
+const categoriesWithBooks = categoriesWithCounts
+    .filter(cat => cat.bookCount > 0)
+    .sort((a, b) => b.bookCount - a.bookCount);
+
+// Show top 10
+const topCategories = categoriesWithBooks.slice(0, 10);
+```
+
+**Files Modified:**
+- `frontend/static/css/style.css` (lines 1273-1473) - Carousel styling, navigation buttons, spacing
+- `frontend/templates/index.html` (lines 19-171) - Header nav, category detail, all categories sections
+- `frontend/static/js/app.js` (lines 12, 36-100, 389-517, 575-616, 1205-1429) - Routing, carousel rendering, navigation
+
+**Documentation Updated:**
+- `PRD.md` (version 1.4, 2025-11-28):
+  - Updated "Book Discovery and Browsing" feature section
+  - Added home page layout specifications
+  - Added header navigation specifications
+  - Updated URL structure to include category routes
+  - Added "Browsing by Category" workflow
+  - Updated "Discovering a New Book" workflow
+  - Marked Phase 2 as COMPLETED with carousel feature details
+- `WORK_LOG.md` - This entry
+
+**Impact:**
+
+1. **Improved Discoverability:**
+   - Users can browse books by category (Fiction, Romance, Philosophy, etc.)
+   - Top 10 most popular categories displayed on home
+   - Category sorting helps users find content-rich categories
+   - "All Books" carousel provides fallback for uncategorized browsing
+
+2. **Amazon-Inspired UX:**
+   - Horizontal scrolling carousels with arrow navigation
+   - Larger book cards (200px × 280px covers)
+   - Clean white background
+   - "View All →" links for category deep-dives
+   - Professional, familiar browsing experience
+
+3. **Enhanced Navigation:**
+   - Header buttons for quick access to Categories and All Books
+   - Category detail pages show all books in category (grid view)
+   - All Categories page shows all carousels (no 10-category limit)
+   - Browser back/forward buttons work correctly
+   - Bookmarkable URLs for categories
+
+4. **Clean Reading Experience:**
+   - Category carousels hidden on book detail pages
+   - Focus on content when reading
+   - Easy navigation back to browsing
+
+5. **Responsive Design:**
+   - Carousel arrows adapt to scroll position
+   - Touchscreen support (horizontal swipe)
+   - Mobile-friendly book cards
+
+**Next Steps:**
+- Test carousel navigation on different screen sizes
+- Verify category sorting accuracy
+- Ensure smooth animations and transitions
+- Consider adding keyboard navigation for carousels
+
+---
+
+### Conditional TTS Button Display Based on Audio Availability - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Only show "Listen" buttons in production mode when pre-generated audio files are actually available, preventing users from clicking buttons that won't work.
+
+**User Request:**
+"When app is triggered from app_prod.py, we should only show listen button (for any type of summary regardless of concise, medium or chapter) when there is an audio file presented."
+
+**Changes Made:**
+
+1. **Database Methods** (`backend/models.py:734-780`):
+   - Added `has_audio_for_summary(summary_id)` method
+     - Queries audio_files table for summary_id
+     - Verifies file exists on disk
+     - Returns boolean
+   - Added `has_audio_for_chapter(chapter_id)` method
+     - Queries audio_files table for chapter_id
+     - Verifies file exists on disk
+     - Returns boolean
+
+2. **API Response Updates** (`backend/app_base.py`):
+   - **Summary endpoint** (lines 201-221):
+     - Added `has_audio` flag to response
+     - Checks if audio exists for the summary
+     - For comprehensive summaries with chapters, adds `has_audio` to each chapter
+   - **Full summary endpoint** (lines 153-173):
+     - Added `has_audio` flag to response
+     - Adds `has_audio` to each chapter
+   - **Chapter detail endpoint** (lines 308-312):
+     - Added `has_audio` flag to chapter response
+
+3. **Frontend JavaScript Updates** (`frontend/static/js/app.js`):
+   - **Concise summary** (lines 568-575):
+     - Checks `data.has_audio` from API response
+     - Shows/hides TTS button based on audio availability
+   - **Medium summary** (lines 800-828):
+     - Caches `has_audio` flag along with content
+     - Shows/hides TTS button conditionally
+   - **Chapter summary** (lines 916-925):
+     - Checks `chapter.has_audio` from API response
+     - Shows/hides summary TTS button conditionally
+   - **Chapter fulltext** (lines 936-945):
+     - Checks `chapter.has_audio` from API response
+     - Shows/hides fulltext TTS button conditionally
+
+**Technical Details:**
+
+**Audio File Checking Logic:**
+```python
+def has_audio_for_summary(self, summary_id: int) -> bool:
+    # Query database for audio_path
+    cursor.execute('SELECT audio_path FROM audio_files WHERE summary_id = ?', (summary_id,))
+    row = cursor.fetchone()
+
+    if row:
+        # Verify file exists on disk
+        audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
+        return audio_path.exists()
+
+    return False
+```
+
+**Frontend Conditional Display:**
+```javascript
+// Show button if audio available
+if (data.has_audio) {
+    ttsBtn.classList.remove('hidden');
+    ttsBtn.onclick = () => this.generateTTS(content, type, ttsBtn);
+} else {
+    ttsBtn.classList.add('hidden');
+}
+```
+
+**Files Modified:**
+- `backend/models.py` (lines 734-780) - Added audio checking methods
+- `backend/app_base.py` (lines 153-173, 201-221, 308-312) - Added has_audio flags to API responses
+- `frontend/static/js/app.js` (lines 568-575, 800-828, 916-925, 936-945) - Conditional TTS button display
+
+**Impact:**
+1. **Production UX:**
+   - Users only see Listen buttons when audio is actually available
+   - No frustration from clicking non-functional buttons
+   - Clear indication of which content has audio
+
+2. **Development/Production Parity:**
+   - Works seamlessly in both app.py (dev with TTS generation) and app_prod.py (prod with pre-generated only)
+   - Same API contract, different TTS availability
+
+3. **Database Integrity:**
+   - Double-checks both database records AND file existence
+   - Prevents showing buttons for deleted/missing audio files
+   - Robust against database/filesystem inconsistencies
+
+4. **Performance:**
+   - Minimal overhead (simple database query + file existence check)
+   - Audio flags cached in frontend along with content
+   - No redundant API calls
+
+**Next Steps/Notes:**
+- Consider adding visual indicator (e.g., "Audio available" badge) beyond just showing/hiding button
+- May want to add tooltip explaining why button is hidden (for user understanding)
+- Could batch check audio existence for multiple summaries to optimize performance
+
+---
+
+### Home Navigation Link in Header - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Make the Summra logo icon and text clickable to allow users to return to the home page from any page.
+
+**User Request:**
+"Click on Summra icon or text on any page should get user back to home page."
+
+**Changes Made:**
+
+1. **HTML Structure Update** (`frontend/templates/index.html:15-18`):
+   - Wrapped logo icon and text in an anchor tag with class `header-link`
+   - Added `id="header-home-link"` for JavaScript event handling
+   - Set `href="#/"` for proper routing
+   - Structure:
+     ```html
+     <a href="#/" class="header-link" id="header-home-link">
+         <img src="..." class="logo-icon">
+         <h1 class="logo">Summra</h1>
+     </a>
+     ```
+
+2. **CSS Styling** (`frontend/static/css/style.css:60-72`):
+   - Added `.header-link` class for styling the clickable header
+   - Display: flex with 12px gap between icon and text
+   - Color: white with no text decoration
+   - Cursor: pointer for clear interactivity indication
+   - Transition: 0.2s ease for smooth hover effect
+   - Hover state: opacity 0.9 for subtle feedback
+
+3. **JavaScript Event Handler** (`frontend/static/js/app.js:349-356`):
+   - Added event listener in `setupEventListeners()` method
+   - Prevents default anchor behavior (prevents page reload)
+   - Calls `saveScrollPosition()` before navigation
+   - Calls `showBooksSection()` to navigate to home
+   - Maintains consistency with other navigation patterns
+
+**Technical Details:**
+
+**Event Handler Pattern:**
+```javascript
+const headerHomeLink = document.getElementById('header-home-link');
+if (headerHomeLink) {
+    headerHomeLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.saveScrollPosition();
+        this.showBooksSection();
+    });
+}
+```
+
+**Scroll Position Preservation:**
+- Before navigating, saves current scroll position
+- Ensures smooth UX when using browser back button
+- Consistent with all other navigation in the app
+
+**Files Modified:**
+- `frontend/templates/index.html` (lines 15-18)
+- `frontend/static/css/style.css` (lines 60-72)
+- `frontend/static/js/app.js` (lines 349-356)
+
+**Impact:**
+- Improved navigation UX - users can easily return to home
+- Consistent with standard web conventions (clickable logo)
+- Maintains app's scroll preservation behavior
+- Works from all pages (book detail, chapter detail, medium summary)
+- Accessible via keyboard (anchor tag is focusable)
+
+**Next Steps/Notes:**
+- Consider adding visual indication that logo is clickable (e.g., slightly different hover effect)
+- May want to add aria-label for better accessibility
+- Consider breadcrumb navigation for deeper pages in future
+
+---
+
+## 2025-11-28
+
+### Two-Level Book Structure Bug Fixes - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Fix critical bugs in two-level book structure (PART/BOOK/ACT → Chapters) implementation that caused chapters to disappear when regenerating individual chapters.
+
+**Problems Identified:**
+
+1. **Chapter 0 (Preface) Not Showing in UI:**
+   - Books with PART/BOOK structure had Chapter 0 (INTRODUCTION/PREFACE) that wasn't displayed
+   - `get_book_structure()` only returned chapters with matching section_id
+   - Chapters with NULL section_id were excluded
+
+2. **Section Deletion Bug in Regenerate Mode:**
+   - When using `--regenerate-chapters`, the script re-ran `_detect_book_structure()`
+   - Section creation used `INSERT OR REPLACE` with UNIQUE constraint on (book_id, section_number)
+   - This deleted old sections and created new ones with different IDs
+   - Result: All chapters pointing to old section IDs became orphaned (invisible in UI)
+   - **Example:** The Adventures of Ferdinand Count Fathom
+     - Regenerated chapters 54-55
+     - Sections 53-54 deleted, sections 57-58 created
+     - 65 out of 67 chapters orphaned (only chapters 54-55 visible)
+
+3. **Large Batch Sizes for Bulk Chapter Generation:**
+   - No limit on chapters per batch beyond 400K character limit
+   - Some batches had 28 chapters, increasing parsing complexity
+   - Higher risk of LLM forgetting END markers (like Chapter 55 bug)
+
+**Changes Made:**
+
+1. **Fixed Chapter 0 Display** (`backend/models.py:413-446, 515-579`):
+   - Added helper functions:
+     - `get_chapters_without_section()` - Returns chapters with NULL section_id
+     - `get_chapters_metadata_without_section()` - Returns metadata only
+   - Modified `get_book_structure()` and `get_book_structure_metadata()`:
+     - Check for chapters with NULL section_id first
+     - Create PREFACE section (number=0, type='PREFACE') for these chapters
+     - Prepend to sections list before regular PART/BOOK sections
+   - Example structure:
+     ```python
+     {
+         'has_sections': True,
+         'sections': [
+             {'id': None, 'type': 'PREFACE', 'number': 0, 'title': 'INTRODUCTION', 'chapters': [...]},
+             {'id': 57, 'type': 'PART', 'number': 1, 'title': '', 'chapters': [...]},
+             {'id': 58, 'type': 'PART', 'number': 2, 'title': '', 'chapters': [...]}
+         ]
+     }
+     ```
+
+2. **Fixed Section Deletion Bug** (`scripts/generate_summaries.py:3248-3295`):
+   - Added condition `and not regenerate_chapters` to skip section creation (line 3250)
+   - Added new branch `elif regenerate_chapters:` (lines 3267-3289):
+     - Retrieves existing sections using `db.get_book_sections(book_id)`
+     - Builds lookup: `{section_number: section_id}`
+     - Maps chapters to existing section IDs instead of creating new ones
+     - Preserves chapter-to-section relationships
+   - Also added fallback for dry_run/partial_run modes (lines 3290-3295)
+   - **Result:** Regenerating chapters no longer deletes/recreates sections
+
+3. **Added Maximum Chapters Per Batch** (`scripts/generate_summaries.py:2932, 2942-2943`):
+   - Added constant: `MAX_CHAPTERS_PER_BATCH = 10`
+   - Updated batching condition:
+     ```python
+     if current_batch and (current_batch_chars + chapter_chars > MAX_BATCH_CHARS or
+                          len(current_batch) >= MAX_CHAPTERS_PER_BATCH):
+     ```
+   - Batches now split on EITHER:
+     - Character limit exceeded (400K chars), OR
+     - Chapter count limit reached (10 chapters)
+   - **Benefits:**
+     - Clearer instructions to LLM (smaller batches)
+     - Reduced parsing errors
+     - More granular progress tracking
+
+4. **Fixed Orphaned Chapters for Ferdinand Count Fathom** (Database repair):
+   - Used SQL UPDATE to reassign chapters to valid sections:
+     ```sql
+     UPDATE chapters SET section_id = 57 WHERE book_id = 63 AND chapter_number BETWEEN 1 AND 31;
+     UPDATE chapters SET section_id = 58 WHERE book_id = 63 AND chapter_number BETWEEN 32 AND 67;
+     ```
+   - Result: All 67 chapters now properly assigned to Part 1 (chapters 1-31) or Part 2 (chapters 32-67)
+
+**Technical Details:**
+
+**Section ID Design (Auto-Increment Primary Keys):**
+- Section IDs are globally unique across ALL books (auto-incrementing)
+- `section_number` field stores logical section number (1, 2, 3...)
+- Example: Section ID 57 has section_number=1 (Part 1), Section ID 58 has section_number=2 (Part 2)
+- This is standard database design (surrogate keys)
+- Large ID numbers (53, 54, 57, 58) result from:
+  - Previous books creating sections 1-52
+  - Deleted sections not reused (53, 54 deleted during regeneration bug)
+  - New sections created with next available ID (57, 58)
+
+**Regenerate Mode Logic Flow:**
+```
+Normal Mode (first generation):
+  1. Detect book structure → [Part 1, Part 2]
+  2. Create sections in DB → [section_id=57, section_id=58]
+  3. Map chapters to sections → {1-31: 57, 32-67: 58}
+  4. Save chapters with section_id
+
+Regenerate Mode (BEFORE fix):
+  1. Detect book structure → [Part 1, Part 2]
+  2. INSERT OR REPLACE sections → Deletes 57,58, Creates 59,60
+  3. Map chapters to NEW sections → {1-31: 59, 32-67: 60}
+  4. Update ONLY regenerated chapters (54-55) → section_id=60
+  5. OTHER chapters still point to 57,58 (deleted) → ORPHANED!
+
+Regenerate Mode (AFTER fix):
+  1. Detect book structure → [Part 1, Part 2]
+  2. SKIP section creation (check regenerate_chapters flag)
+  3. Load existing sections from DB → [57, 58]
+  4. Map chapters to EXISTING sections → {1-31: 57, 32-67: 58}
+  5. Update regenerated chapters with correct section_id → No orphans!
+```
+
+**Files Modified:**
+- `backend/models.py` (lines 413-446, 515-579) - Added helper functions and updated structure methods
+- `scripts/generate_summaries.py` (lines 2932, 2942-2943, 3248-3295) - Fixed regenerate mode and added batch limit
+
+**Impact:**
+
+1. **Data Integrity:**
+   - Chapter 0 (Preface/Introduction) now visible in UI for two-level books
+   - Regenerating chapters no longer orphans other chapters
+   - Section IDs preserved across regenerations
+
+2. **User Experience:**
+   - All chapters visible for "The Adventures of Ferdinand Count Fathom"
+   - Preface sections properly displayed
+   - No more mysterious disappearing chapters
+
+3. **Code Quality:**
+   - Clear separation between initial generation and regeneration modes
+   - Proper state management for database relationships
+   - Reduced LLM parsing errors with smaller batches
+
+4. **Robustness:**
+   - Future regenerations won't cause data loss
+   - Database relationships maintained correctly
+   - Foreign key references remain valid
+
+**Files Created:**
+- SQL repair script (ad-hoc, not saved)
+
+**Verification:**
+```sql
+-- Verified all chapters assigned to valid sections
+SELECT COUNT(*) FROM chapters WHERE book_id = 63 AND section_id IN (57, 58);
+-- Result: 67 (all chapters)
+
+SELECT COUNT(*) FROM chapters WHERE book_id = 63 AND section_id NOT IN (57, 58) AND section_id IS NOT NULL;
+-- Result: 0 (no orphaned chapters)
+```
+
+**Next Steps/Notes:**
+- Monitor regenerate mode with other two-level books to ensure fix is robust
+- Consider adding database constraint checks for orphaned chapters
+- May want to add migration script to repair other books if affected
+
+---
+
 ### Previous Chapter Context Feature - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-11-28

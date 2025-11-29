@@ -12,17 +12,23 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
-                <h1 class="logo">Summra</h1>
+                <a href="#/" class="header-link" id="header-home-link">
+                    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
+                    <h1 class="logo">Summra</h1>
+                </a>
+                <div class="header-nav-buttons">
+                    <a href="#/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
+                    <a href="#/all-books" class="header-nav-btn" id="all-books-nav-btn">All Books</a>
+                </div>
             </div>
         </header>
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Books List Section -->
-            <section class="books-section" id="books-section">
-                <div class="books-grid" id="books-grid">
-                    <div class="loading">Loading books...</div>
+            <!-- Category Carousels Section -->
+            <section class="categories-section" id="categories-section">
+                <div class="categories-container" id="categories-container">
+                    <!-- Categories will be dynamically loaded here -->
                 </div>
             </section>
 
@@ -130,6 +136,30 @@
                         <div class="chapter-fulltext" id="chapter-fulltext"></div>
                     </div>
                 </div>
+            </section>
+
+            <!-- Category Detail Section -->
+            <section class="category-detail-section hidden" id="category-detail-section">
+                <div class="back-button-container">
+                    <button class="back-button" id="category-back-button">← Back to Home</button>
+                </div>
+
+                <div class="category-detail-header">
+                    <h2 id="category-detail-title"></h2>
+                    <p class="category-detail-subtitle" id="category-detail-subtitle"></p>
+                </div>
+
+                <div class="books-grid" id="category-books-grid"></div>
+            </section>
+
+            <!-- All Categories Section -->
+            <section class="all-categories-section hidden" id="all-categories-section">
+                <div class="back-button-container">
+                    <button class="back-button" id="all-categories-back-button">← Back to Home</button>
+                </div>
+
+                <h2 class="section-title">All Categories</h2>
+                <div class="categories-container" id="all-categories-container"></div>
             </section>
         </main>
 

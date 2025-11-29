@@ -150,11 +150,24 @@ def get_summary(book_id, summary_type):
                     cover_url = f"/static/{cover_url}"
                 book_data['cover_image_url'] = cover_url
 
+            # Check if audio exists for the summary
+            has_audio = False
+            if summary and summary.get('id'):
+                has_audio = db.has_audio_for_summary(summary['id'])
+
+            # Add has_audio flag to each chapter
+            for chapter in chapters:
+                if chapter.get('id'):
+                    chapter['has_audio'] = db.has_audio_for_chapter(chapter['id'])
+                else:
+                    chapter['has_audio'] = False
+
             response_data = {
                 'success': True,
                 'book': book_data,
                 'summary': summary,
                 'summary_type': 'full',
+                'has_audio': has_audio,
                 'chapters': chapters
             }
 
@@ -198,14 +211,26 @@ def get_summary(book_id, summary_type):
                 cover_url = f"/static/{cover_url}"
             book_data['cover_image_url'] = cover_url
 
+        # Check if audio exists for this summary
+        has_audio = False
+        if summary and summary.get('id'):
+            has_audio = db.has_audio_for_summary(summary['id'])
+
         response_data = {
             'success': True,
             'book': book_data,
             'summary': summary,
-            'summary_type': summary_type
+            'summary_type': summary_type,
+            'has_audio': has_audio
         }
 
         if chapters:
+            # Add has_audio flag to each chapter
+            for chapter in chapters:
+                if chapter.get('id'):
+                    chapter['has_audio'] = db.has_audio_for_chapter(chapter['id'])
+                else:
+                    chapter['has_audio'] = False
             response_data['chapters'] = chapters
 
         return jsonify(response_data)
@@ -280,6 +305,12 @@ def get_chapter_detail(book_id, chapter_number):
                 'error': 'Chapter not found'
             }), 404
 
+        # Check if audio exists for this chapter
+        if chapter.get('id'):
+            chapter['has_audio'] = db.has_audio_for_chapter(chapter['id'])
+        else:
+            chapter['has_audio'] = False
+
         return jsonify({
             'success': True,
             'chapter': chapter
@@ -300,6 +331,103 @@ def get_summary_configs():
         'success': True,
         'configs': config.SUMMARY_CONFIGS
     })
+
+
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    """Get all categories"""
+    try:
+        categories = db.get_all_categories()
+        return jsonify({
+            'success': True,
+            'categories': categories
+        })
+    except Exception as e:
+        logger.error(f"Error fetching categories: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/categories/<int:category_id>', methods=['GET'])
+def get_category(category_id):
+    """Get a specific category"""
+    try:
+        category = db.get_category(category_id)
+        if not category:
+            return jsonify({
+                'success': False,
+                'error': 'Category not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'category': category
+        })
+    except Exception as e:
+        logger.error(f"Error fetching category {category_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/categories/<int:category_id>/books', methods=['GET'])
+def get_books_by_category(category_id):
+    """Get all books for a specific category"""
+    try:
+        category = db.get_category(category_id)
+        if not category:
+            return jsonify({
+                'success': False,
+                'error': 'Category not found'
+            }), 404
+
+        books = db.get_books_by_category(category_id)
+
+        # Convert cover image paths to URLs for frontend
+        for book in books:
+            if book.get('cover_image_url') and not book['cover_image_url'].startswith('http'):
+                book['cover_image_url'] = f"/static/{book['cover_image_url']}"
+
+        return jsonify({
+            'success': True,
+            'category': category,
+            'books': books
+        })
+    except Exception as e:
+        logger.error(f"Error fetching books for category {category_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/books/<int:book_id>/categories', methods=['GET'])
+def get_book_categories(book_id):
+    """Get all categories for a specific book"""
+    try:
+        book = db.get_book(book_id)
+        if not book:
+            return jsonify({
+                'success': False,
+                'error': 'Book not found'
+            }), 404
+
+        categories = db.get_book_categories(book_id)
+
+        return jsonify({
+            'success': True,
+            'book_id': book_id,
+            'categories': categories
+        })
+    except Exception as e:
+        logger.error(f"Error fetching categories for book {book_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/covers/<path:filename>')

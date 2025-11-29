@@ -139,14 +139,44 @@ Users can listen to any summary using high-quality text-to-speech conversion, en
 ### 3. Book Discovery and Browsing
 
 **Feature Description:**
-Users can browse a curated collection of classic books with cover images and metadata.
+Users can browse a curated collection of classic books with cover images and metadata using category-based carousels and grid views.
 
 **User Stories:**
 - As a reader, I want to see book covers so I can visually browse the collection
 - As a user, I want to see author names and titles so I can find books I'm interested in
 - As a browser, I want an attractive interface so browsing feels enjoyable
+- As a curious reader, I want to explore books by category so I can discover books in genres I enjoy
+- As a user, I want to navigate between carousel and grid views so I can choose my preferred browsing style
 
 **Specifications:**
+
+**Home Page Layout (Redesigned 2025-11-28):**
+- **White Background:** Clean, minimal design inspired by Amazon
+- **Category Carousels:** Horizontal scrolling rows organized by category
+  - **Top 10 Categories:** Displayed first, sorted by book count (most popular first)
+  - **All Books Carousel:** Displayed last, shows entire collection
+  - **Each Carousel Includes:**
+    - Category title on left (e.g., "Victorian Literature")
+    - "View All →" link on right (navigates to category detail page)
+    - Left/right navigation arrows (circular, white background, shadow)
+    - Horizontal scrolling book cards (no scrollbar visible)
+  - **Book Cards:** Larger format (200px wide x 280px cover)
+    - Cover image with subtle shadow
+    - Title (2 lines max, truncated)
+    - Author name (1 line, truncated)
+    - No background card - transparent design
+    - Hover: Scale to 1.05x
+  - **Vertical Spacing:**
+    - 2.5rem gap after blue header
+    - 1.5rem gap between carousel rows
+    - 0.75rem gap between books in carousel
+
+**Header Navigation (Added 2025-11-28):**
+- **Logo and Home Link:** Left side (Summra icon + text)
+- **Navigation Buttons:** Right side
+  - "Categories" → All Categories page
+  - "All Books" → All Books grid page
+- **Button Style:** Semi-transparent white background, rounded corners
 
 **Book Grid:**
 - **Layout:** Responsive card-based grid
@@ -157,6 +187,9 @@ Users can browse a curated collection of classic books with cover images and met
   - Word count (optional)
 - **Interaction:** Click card to open book details
 - **Responsive:** Adapts to mobile, tablet, desktop
+- **Usage:**
+  - "All Books" page (grid view of entire collection)
+  - Category detail pages (grid view filtered by category)
 
 **Book Detail Page (Redesigned 2025-11-25):**
 - **Minimal Header:** Smaller cover image (120px) with title and author side-by-side
@@ -179,12 +212,20 @@ Users can browse a curated collection of classic books with cover images and met
 - Loading states for images
 
 **Acceptance Criteria:**
-- [ ] All books display with cover images
-- [ ] Cover images load progressively
-- [ ] Missing covers show placeholder
-- [ ] Grid is responsive on all screen sizes
-- [ ] Click on book opens detail view
-- [ ] Back button returns to library
+- [✅] All books display with cover images
+- [✅] Cover images load progressively
+- [✅] Missing covers show placeholder
+- [✅] Grid is responsive on all screen sizes
+- [✅] Click on book opens detail view
+- [✅] Back button returns to home
+- [✅] Category carousels display on home page (2025-11-28)
+- [✅] Carousels sorted by book count (most popular first) (2025-11-28)
+- [✅] Navigation arrows scroll carousel left/right (2025-11-28)
+- [✅] "View All" links navigate to category detail pages (2025-11-28)
+- [✅] Header navigation buttons work (Categories, All Books) (2025-11-28)
+- [✅] Category detail page shows grid of books (2025-11-28)
+- [✅] All Categories page shows all category carousels (2025-11-28)
+- [✅] Categories section hidden when viewing book details (2025-11-28)
 
 ### 4. URL Routing and Navigation
 
@@ -200,10 +241,13 @@ Each book and summary type has a unique URL that can be bookmarked and shared.
 
 **URL Structure:**
 ```
-/                                    → Home page (book library)
+/                                    → Home page (category carousels + all books grid)
 /#/book/alice-in-wonderland          → Book overview (concise + medium preview + chapters)
 /#/book/alice-in-wonderland/medium   → Full medium summary page
 /#/book/alice-in-wonderland/chapter/3 → Individual chapter page (chapter 3)
+/#/category/5                        → Category detail page (grid of books in category 5)
+/#/categories                        → All categories page (all category carousels)
+/#/all-books                         → All books grid page
 ```
 
 **Navigation:**
@@ -293,25 +337,49 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 
 ## User Workflows
 
-### Workflow 1: Discovering a New Book (Updated 2025-11-25)
+### Workflow 1: Browsing by Category (Added 2025-11-28)
 
 ```
 1. User lands on home page
-2. User browses book grid with cover images
+2. User sees category carousels (e.g., "Victorian Literature", "Philosophy", "Romance")
+3. User browses carousel by:
+   - Clicking left/right arrows to scroll through books in category
+   - Scrolling horizontally on touchscreen devices
+4. User sees book cover, title, and author in each carousel card
+5. User decides:
+   Option A: Click book cover → navigate to book detail page
+   Option B: Click "View All →" → navigate to category detail page (grid view)
+   Option C: Click "Categories" in header → see all categories page
+6. If viewing category detail page:
+   - See all books in category in grid layout
+   - Click any book to view details
+   - Click "Back to Home" to return
+7. If viewing All Categories page:
+   - See all category carousels (not just top 10)
+   - Sorted by popularity
+   - Click "Back to Home" to return
+```
+
+### Workflow 2: Discovering a New Book (Updated 2025-11-28)
+
+```
+1. User lands on home page
+2. User browses category carousels or clicks "All Books" in header
 3. User clicks on interesting book cover
 4. User arrives at book overview page showing:
    - Quick Summary (concise, 500 words, no spoilers)
    - Detailed Overview preview (first ~300px of medium summary with fade)
    - Chapter boxes (one per row, full width)
+   - NOTE: Category carousels hidden on book detail pages
 5. User reads concise summary
 6. User scrolls to see medium preview (first ~200 words visible with fade)
 7. User decides:
    - Want more detail → clicks "Read Full Summary →" (navigates to medium page)
    - Want specific chapter → clicks chapter box (navigates to chapter page)
-   - Not interested → back to library
+   - Not interested → back button returns to previous page (home, category, or all books)
 ```
 
-### Workflow 2: Studying a Book in Depth (Updated 2025-11-25)
+### Workflow 3: Studying a Book in Depth (Updated 2025-11-25)
 
 ```
 1. User searches for specific book in library
@@ -330,17 +398,17 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 12. Browser back/forward buttons work correctly
 ```
 
-### Workflow 3: Quick Reference
+### Workflow 4: Quick Reference
 
 ```
-1. User has bookmarked URL to specific book/summary
+1. User has bookmarked URL to specific book/summary/category
 2. User clicks bookmark
 3. App loads directly to bookmarked view
 4. User reads/listens to summary
 5. User closes tab when done
 ```
 
-### Workflow 4: Listening While Commuting
+### Workflow 5: Listening While Commuting
 
 ```
 1. User opens saved book on mobile device
@@ -394,7 +462,7 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - ✅ Project Gutenberg integration
 - ✅ Responsive web design
 
-### Phase 2: Enhanced UX (COMPLETED - 2025-11-27)
+### Phase 2: Enhanced UX (COMPLETED - 2025-11-28)
 - ✅ URL routing for books, summaries, and chapters
 - ✅ BeFreed-inspired minimal UI redesign
 - ✅ Removed unnecessary bounding boxes
@@ -411,6 +479,18 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
   - ✅ API returns structured data
   - ✅ Frontend displays section headers with indented chapters
   - ✅ All 5 test books passing (Treasure Island, War and Peace, Anna Karenina, Romeo and Juliet, Principles of Political Economy)
+- ✅ Category-based discovery (Amazon-inspired carousel UX) - 2025-11-28
+  - ✅ Home page with category carousels (horizontal scrolling rows)
+  - ✅ Categories sorted by book count (top 10 displayed)
+  - ✅ Left/right navigation arrows for each carousel
+  - ✅ "View All →" links to category detail pages
+  - ✅ Header navigation buttons (Categories, All Books)
+  - ✅ Category detail page (grid view of books in category)
+  - ✅ All Categories page (all carousels, no limit)
+  - ✅ All Books grid page
+  - ✅ White background, clean minimal design
+  - ✅ Category carousels hidden on book detail pages
+  - ✅ URL routing for categories (#/category/5, #/categories, #/all-books)
 - ⏳ Persistent audio player (stays across navigation) - PARTIAL (player exists but resets on navigation)
 
 ### Phase 3: Full-Length Option (PLANNED)
@@ -570,7 +650,7 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 
 ---
 
-**Document Version:** 1.3
-**Last Updated:** 2025-11-27
+**Document Version:** 1.4
+**Last Updated:** 2025-11-28
 **Author:** Summra Team
 **Status:** Living Document

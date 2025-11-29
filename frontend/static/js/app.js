@@ -9,6 +9,7 @@ class SummraApp {
         this.booksLoaded = false;
         this.chapters = [];
         this.currentChapter = null;
+        this.currentView = 'home'; // Track current view: 'home', 'book', 'category', 'all-categories', 'all-books'
         this.currentPlayback = {
             isPlaying: false,
             currentChunk: 0,
@@ -24,6 +25,7 @@ class SummraApp {
     }
 
     init() {
+        this.loadCategories();
         this.loadBooks();
         this.setupEventListeners();
         this.setupPersistentPlayer();
@@ -44,8 +46,8 @@ class SummraApp {
         const hash = window.location.hash;
 
         if (!hash || hash === '#' || hash === '#/') {
-            if (this.currentBook !== null) {
-                this.showBooksSection();
+            if (this.currentBook !== null || this.currentView !== 'home') {
+                this.showHomeSection();
             }
             return;
         }
@@ -54,9 +56,15 @@ class SummraApp {
         // #/book/{slug} - Book detail
         // #/book/{slug}/medium - Medium summary detail
         // #/book/{slug}/chapter/{num} - Chapter detail
+        // #/category/{id} - Category detail
+        // #/categories - All categories view
+        // #/all-books - All books grid view
         const bookMatch = hash.match(/#\/book\/([^\/]+)$/);
         const mediumMatch = hash.match(/#\/book\/([^\/]+)\/medium$/);
         const chapterMatch = hash.match(/#\/book\/([^\/]+)\/chapter\/(\d+)$/);
+        const categoryMatch = hash.match(/#\/category\/(\d+)$/);
+        const categoriesMatch = hash === '#/categories';
+        const allBooksMatch = hash === '#/all-books';
 
         if (!this.booksLoaded) {
             await this.waitForBooks();
@@ -81,6 +89,13 @@ class SummraApp {
             if (book) {
                 await this.selectBook(book, true);
             }
+        } else if (categoryMatch) {
+            const categoryId = parseInt(categoryMatch[1]);
+            await this.showCategoryDetail(categoryId, true);
+        } else if (categoriesMatch) {
+            await this.showAllCategories(true);
+        } else if (allBooksMatch) {
+            await this.showAllBooksGrid(true);
         }
     }
 
@@ -345,12 +360,169 @@ class SummraApp {
                 window.history.back();
             });
         }
+
+        const headerHomeLink = document.getElementById('header-home-link');
+        if (headerHomeLink) {
+            headerHomeLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.saveScrollPosition();
+                this.showBooksSection();
+            });
+        }
+    }
+
+    async loadCategories() {
+        try {
+            const response = await fetch(`${this.apiBase}/categories`);
+            const data = await response.json();
+
+            if (data.success && data.categories.length > 0) {
+                // Load books for each category and display
+                this.displayCategories(data.categories);
+            }
+        } catch (error) {
+            console.error('Error loading categories:', error);
+            // Categories are optional, so don't show error to user
+        }
+    }
+
+    async displayCategories(categories) {
+        const categoriesContainer = document.getElementById('categories-container');
+        categoriesContainer.innerHTML = '';
+
+        // Get book counts for each category
+        const categoriesWithCounts = await Promise.all(
+            categories.map(async (category) => {
+                try {
+                    const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
+                    const data = await response.json();
+                    return {
+                        ...category,
+                        bookCount: data.success ? (data.books?.length || 0) : 0
+                    };
+                } catch (error) {
+                    console.error(`Error loading books for category ${category.name}:`, error);
+                    return { ...category, bookCount: 0 };
+                }
+            })
+        );
+
+        // Filter out categories with no books and sort by book count
+        const categoriesWithBooks = categoriesWithCounts
+            .filter(cat => cat.bookCount > 0)
+            .sort((a, b) => b.bookCount - a.bookCount);
+
+        // Show top 10 categories
+        const topCategories = categoriesWithBooks.slice(0, 10);
+
+        for (const category of topCategories) {
+            try {
+                const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
+                const data = await response.json();
+
+                if (data.success && data.books && data.books.length > 0) {
+                    this.renderCategoryCarousel(category, data.books);
+                }
+            } catch (error) {
+                console.error(`Error rendering category ${category.name}:`, error);
+            }
+        }
+
+        // Add "All Books" carousel at the end
+        this.renderCategoryCarousel(
+            { id: 'all', name: 'All Books' },
+            this.allBooks
+        );
+    }
+
+    renderCategoryCarousel(category, books, containerIdOverride = null) {
+        const categoriesContainer = document.getElementById(containerIdOverride || 'categories-container');
+
+        const carouselSection = document.createElement('div');
+        carouselSection.className = 'category-carousel';
+
+        const header = document.createElement('div');
+        header.className = 'category-header';
+
+        // Add View All link (except for "All Books" carousel)
+        const viewAllLink = category.id !== 'all'
+            ? `<a href="#/category/${category.id}" class="view-all-link">View All →</a>`
+            : `<a href="#/all-books" class="view-all-link">View All →</a>`;
+
+        header.innerHTML = `
+            <h2 class="category-title">${this.escapeHtml(category.name)}</h2>
+            ${viewAllLink}
+        `;
+
+        const carousel = document.createElement('div');
+        carousel.className = 'carousel-container';
+
+        // Add navigation buttons
+        const leftBtn = document.createElement('button');
+        leftBtn.className = 'carousel-nav-btn left';
+        leftBtn.innerHTML = '‹';
+        leftBtn.disabled = true;  // Start disabled (at beginning)
+
+        const rightBtn = document.createElement('button');
+        rightBtn.className = 'carousel-nav-btn right';
+        rightBtn.innerHTML = '›';
+        rightBtn.disabled = false;  // Start enabled (can scroll right)
+
+        const scrollContainer = document.createElement('div');
+        scrollContainer.className = 'carousel-scroll';
+
+        // Randomize book order
+        const shuffledBooks = [...books].sort(() => Math.random() - 0.5);
+
+        shuffledBooks.forEach(book => {
+            const bookCard = document.createElement('div');
+            bookCard.className = 'carousel-book-card';
+
+            const coverImageHtml = book.cover_image_url
+                ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="carousel-book-cover">`
+                : '';
+
+            bookCard.innerHTML = `
+                ${coverImageHtml}
+                <h4 class="carousel-book-title">${this.escapeHtml(book.title)}</h4>
+                <p class="carousel-book-author">${this.escapeHtml(book.author)}</p>
+            `;
+
+            bookCard.addEventListener('click', () => this.selectBook(book));
+            scrollContainer.appendChild(bookCard);
+        });
+
+        // Carousel navigation logic
+        const scrollAmount = 220; // Width of one card + gap
+
+        leftBtn.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
+        });
+
+        rightBtn.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
+        });
+
+        // Update button states on scroll
+        const updateButtonStates = () => {
+            leftBtn.disabled = scrollContainer.scrollLeft <= 0;
+            rightBtn.disabled = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 1;
+        };
+
+        scrollContainer.addEventListener('scroll', updateButtonStates);
+
+        // Wait for DOM to render before checking initial state
+        setTimeout(() => updateButtonStates(), 0);
+
+        carousel.appendChild(leftBtn);
+        carousel.appendChild(scrollContainer);
+        carousel.appendChild(rightBtn);
+        carouselSection.appendChild(header);
+        carouselSection.appendChild(carousel);
+        categoriesContainer.appendChild(carouselSection);
     }
 
     async loadBooks() {
-        const booksGrid = document.getElementById('books-grid');
-        booksGrid.innerHTML = '<div class="loading">Loading books...</div>';
-
         try {
             const response = await fetch(`${this.apiBase}/books`);
             const data = await response.json();
@@ -358,53 +530,19 @@ class SummraApp {
             if (data.success && data.books.length > 0) {
                 this.allBooks = data.books;
                 this.booksLoaded = true;
-                this.displayBooks(data.books);
             } else {
                 this.booksLoaded = true;
-                booksGrid.innerHTML = `
-                    <div class="error">
-                        <p>No books found. Please add books using the summary generation script.</p>
-                    </div>
-                `;
+                console.warn('No books found in database');
             }
         } catch (error) {
             console.error('Error loading books:', error);
             this.booksLoaded = true;
-            booksGrid.innerHTML = `
-                <div class="error">
-                    <p>Error loading books. Please make sure the backend server is running.</p>
-                </div>
-            `;
         }
-    }
-
-    displayBooks(books) {
-        const booksGrid = document.getElementById('books-grid');
-        booksGrid.innerHTML = '';
-
-        books.forEach(book => {
-            const bookCard = document.createElement('div');
-            bookCard.className = 'book-card';
-
-            const coverImageHtml = book.cover_image_url
-                ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="book-cover">`
-                : '';
-
-            bookCard.innerHTML = `
-                ${coverImageHtml}
-                <h3>${this.escapeHtml(book.title)}</h3>
-                <p class="author">by ${this.escapeHtml(book.author)}</p>
-                <div class="meta">
-                    <p>${this.formatNumber(book.word_count)} words</p>
-                </div>
-            `;
-            bookCard.addEventListener('click', () => this.selectBook(book));
-            booksGrid.appendChild(bookCard);
-        });
     }
 
     async selectBook(book, restoreScroll = false) {
         this.currentBook = book;
+        this.currentView = 'book';
 
         // Save current scroll position
         this.saveScrollPosition();
@@ -427,6 +565,10 @@ class SummraApp {
             }
         }
 
+        // Hide categories section when viewing a book
+        const categoriesSection = document.getElementById('categories-section');
+        if (categoriesSection) categoriesSection.classList.add('hidden');
+
         // Show book detail section
         this.showBookDetail(restoreScroll);
 
@@ -445,12 +587,10 @@ class SummraApp {
         const pageKey = `book_${this.currentBook?.id || ''}`;
         this.setCurrentPage(pageKey);
 
-        const booksSection = document.getElementById('books-section');
         const mediumDetailSection = document.getElementById('medium-detail-section');
         const chapterDetailSection = document.getElementById('chapter-detail-section');
         const summarySection = document.getElementById('summary-section');
 
-        if (booksSection) booksSection.classList.add('hidden');
         if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
         if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
         if (summarySection) summarySection.classList.remove('hidden');
@@ -474,9 +614,14 @@ class SummraApp {
             if (data.success && data.summary) {
                 conciseSummaryText.innerHTML = this.renderMarkdown(data.summary.content);
 
-                // Setup TTS button
+                // Setup TTS button - only show if audio is available
                 const ttsBtn = document.getElementById('concise-tts-button');
-                ttsBtn.onclick = () => this.generateTTS(data.summary.content, 'concise', ttsBtn);
+                if (data.has_audio) {
+                    ttsBtn.classList.remove('hidden');
+                    ttsBtn.onclick = () => this.generateTTS(data.summary.content, 'concise', ttsBtn);
+                } else {
+                    ttsBtn.classList.add('hidden');
+                }
 
                 // Check if content height exceeds the preview container max-height
                 const previewContainer = document.getElementById('concise-preview-container');
@@ -691,7 +836,6 @@ class SummraApp {
         this.setCurrentPage(pageKey);
 
         // Hide other sections
-        document.getElementById('books-section').classList.add('hidden');
         document.getElementById('summary-section').classList.add('hidden');
         document.getElementById('chapter-detail-section').classList.add('hidden');
         document.getElementById('medium-detail-section').classList.remove('hidden');
@@ -701,24 +845,35 @@ class SummraApp {
         document.getElementById('medium-detail-subtitle').textContent = `by ${book.author}`;
 
         // Load or use cached medium summary
+        let hasAudio = false;
         if (!this.mediumSummaryContent) {
             try {
                 const response = await fetch(`${this.apiBase}/books/${book.id}/summary/medium`);
                 const data = await response.json();
                 if (data.success && data.summary) {
                     this.mediumSummaryContent = data.summary.content;
+                    hasAudio = data.has_audio || false;
+                    this.mediumSummaryHasAudio = hasAudio; // Cache the audio flag
                 }
             } catch (error) {
                 console.error('Error loading medium summary:', error);
             }
+        } else {
+            // Use cached audio flag
+            hasAudio = this.mediumSummaryHasAudio || false;
         }
 
         const mediumDetailText = document.getElementById('medium-detail-text');
         mediumDetailText.innerHTML = this.renderMarkdown(this.mediumSummaryContent || 'Summary not available');
 
-        // Setup TTS button
+        // Setup TTS button - only show if audio is available
         const ttsBtn = document.getElementById('medium-detail-tts-button');
-        ttsBtn.onclick = () => this.generateTTS(this.mediumSummaryContent, 'medium', ttsBtn);
+        if (hasAudio) {
+            ttsBtn.classList.remove('hidden');
+            ttsBtn.onclick = () => this.generateTTS(this.mediumSummaryContent, 'medium', ttsBtn);
+        } else {
+            ttsBtn.classList.add('hidden');
+        }
 
         // Restore scroll position or scroll to top
         if (restoreScroll) {
@@ -740,7 +895,6 @@ class SummraApp {
         this.setCurrentPage(pageKey);
 
         // Hide other sections
-        document.getElementById('books-section').classList.add('hidden');
         document.getElementById('summary-section').classList.add('hidden');
         document.getElementById('medium-detail-section').classList.add('hidden');
         document.getElementById('chapter-detail-section').classList.remove('hidden');
@@ -806,11 +960,16 @@ class SummraApp {
                 }
             };
 
-            // Setup summary TTS button
+            // Setup summary TTS button - only show if audio is available
             const summaryTtsBtn = document.getElementById('chapter-summary-tts-button');
-            summaryTtsBtn.onclick = () => {
-                this.generateChapterTTS(chapterNum, chapter.summary, summaryTtsBtn, 'summary');
-            };
+            if (chapter.has_audio) {
+                summaryTtsBtn.classList.remove('hidden');
+                summaryTtsBtn.onclick = () => {
+                    this.generateChapterTTS(chapterNum, chapter.summary, summaryTtsBtn, 'summary');
+                };
+            } else {
+                summaryTtsBtn.classList.add('hidden');
+            }
         }
 
         // Load full text
@@ -821,14 +980,15 @@ class SummraApp {
             fullTextEl.innerHTML = '<p class="error">Full text not available for this chapter</p>';
         }
 
-        // Setup fulltext TTS button
+        // Setup fulltext TTS button - only show if audio is available
         const fulltextTtsBtn = document.getElementById('chapter-fulltext-tts-button');
-        if (chapter.chapter_text) {
+        if (chapter.chapter_text && chapter.has_audio) {
+            fulltextTtsBtn.classList.remove('hidden');
             fulltextTtsBtn.onclick = () => {
                 this.generateChapterTTS(chapterNum, chapter.chapter_text, fulltextTtsBtn, 'fulltext');
             };
         } else {
-            fulltextTtsBtn.disabled = true;
+            fulltextTtsBtn.classList.add('hidden');
         }
 
         // Restore scroll position or scroll to top
@@ -1012,22 +1172,22 @@ class SummraApp {
         return cleaned;
     }
 
-    showBooksSection() {
-        // Save current scroll position before navigating
+    showHomeSection() {
         this.saveScrollPosition();
-
-        // Set current page to home
         this.setCurrentPage('home');
+        this.currentView = 'home';
 
-        const summarySection = document.getElementById('summary-section');
-        const mediumDetailSection = document.getElementById('medium-detail-section');
-        const chapterDetailSection = document.getElementById('chapter-detail-section');
-        const booksSection = document.getElementById('books-section');
+        // Hide all other sections
+        const sections = ['summary-section', 'medium-detail-section', 'chapter-detail-section',
+                         'category-detail-section', 'all-categories-section'];
+        sections.forEach(id => {
+            const section = document.getElementById(id);
+            if (section) section.classList.add('hidden');
+        });
 
-        if (summarySection) summarySection.classList.add('hidden');
-        if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
-        if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
-        if (booksSection) booksSection.classList.remove('hidden');
+        // Show only categories section on home
+        const categoriesSection = document.getElementById('categories-section');
+        if (categoriesSection) categoriesSection.classList.remove('hidden');
 
         this.currentBook = null;
         this.currentSummaryType = null;
@@ -1038,8 +1198,201 @@ class SummraApp {
             window.history.pushState(null, '', '/');
         }
 
-        // Restore scroll position when going back to home
         this.restoreScrollPosition('home');
+    }
+
+    // Keep backward compatibility
+    showBooksSection() {
+        this.showHomeSection();
+    }
+
+    async showCategoryDetail(categoryId, restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'category';
+        const pageKey = `category_${categoryId}`;
+        this.setCurrentPage(pageKey);
+
+        // Hide all sections except category detail
+        const sections = ['categories-section', 'summary-section',
+                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section'];
+        sections.forEach(id => {
+            const section = document.getElementById(id);
+            if (section) section.classList.add('hidden');
+        });
+
+        const categoryDetailSection = document.getElementById('category-detail-section');
+        categoryDetailSection.classList.remove('hidden');
+
+        // Fetch category and books
+        try {
+            const response = await fetch(`${this.apiBase}/categories/${categoryId}/books`);
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('category-detail-title').textContent = data.category.name;
+                document.getElementById('category-detail-subtitle').textContent =
+                    `${data.books.length} book${data.books.length !== 1 ? 's' : ''}`;
+
+                // Render books in grid
+                const grid = document.getElementById('category-books-grid');
+                grid.innerHTML = '';
+                data.books.forEach(book => {
+                    const bookCard = this.createBookCard(book);
+                    grid.appendChild(bookCard);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading category:', error);
+        }
+
+        // Setup back button
+        const backBtn = document.getElementById('category-back-button');
+        backBtn.onclick = () => {
+            this.saveScrollPosition();
+            window.history.back();
+        };
+
+        if (restoreScroll) {
+            this.restoreScrollPosition(pageKey);
+        } else {
+            window.scrollTo(0, 0);
+        }
+    }
+
+    async showAllCategories(restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'all-categories';
+        this.setCurrentPage('all-categories');
+
+        // Hide all sections except all categories
+        const sections = ['categories-section', 'summary-section',
+                         'medium-detail-section', 'chapter-detail-section', 'category-detail-section'];
+        sections.forEach(id => {
+            const section = document.getElementById(id);
+            if (section) section.classList.add('hidden');
+        });
+
+        const allCategoriesSection = document.getElementById('all-categories-section');
+        allCategoriesSection.classList.remove('hidden');
+
+        // Load all categories with books
+        try {
+            const response = await fetch(`${this.apiBase}/categories`);
+            const data = await response.json();
+
+            if (data.success) {
+                await this.displayAllCategories(data.categories);
+            }
+        } catch (error) {
+            console.error('Error loading categories:', error);
+        }
+
+        // Setup back button
+        const backBtn = document.getElementById('all-categories-back-button');
+        backBtn.onclick = () => {
+            this.saveScrollPosition();
+            window.history.back();
+        };
+
+        if (restoreScroll) {
+            this.restoreScrollPosition('all-categories');
+        } else {
+            window.scrollTo(0, 0);
+        }
+    }
+
+    async displayAllCategories(categories) {
+        const container = document.getElementById('all-categories-container');
+        container.innerHTML = '';
+
+        // Get book counts
+        const categoriesWithCounts = await Promise.all(
+            categories.map(async (category) => {
+                try {
+                    const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
+                    const data = await response.json();
+                    return {
+                        ...category,
+                        bookCount: data.success ? (data.books?.length || 0) : 0,
+                        books: data.success ? data.books : []
+                    };
+                } catch (error) {
+                    return { ...category, bookCount: 0, books: [] };
+                }
+            })
+        );
+
+        // Filter and sort
+        const categoriesWithBooks = categoriesWithCounts
+            .filter(cat => cat.bookCount > 0)
+            .sort((a, b) => b.bookCount - a.bookCount);
+
+        // Render each category carousel
+        categoriesWithBooks.forEach(category => {
+            this.renderCategoryCarousel(category, category.books, 'all-categories-container');
+        });
+    }
+
+    async showAllBooksGrid(restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'all-books';
+        this.setCurrentPage('all-books');
+
+        // Reuse category detail section for all books grid
+        const sections = ['categories-section', 'summary-section',
+                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section'];
+        sections.forEach(id => {
+            const section = document.getElementById(id);
+            if (section) section.classList.add('hidden');
+        });
+
+        const categoryDetailSection = document.getElementById('category-detail-section');
+        categoryDetailSection.classList.remove('hidden');
+
+        document.getElementById('category-detail-title').textContent = 'All Books';
+        document.getElementById('category-detail-subtitle').textContent =
+            `${this.allBooks.length} book${this.allBooks.length !== 1 ? 's' : ''}`;
+
+        // Render all books in grid
+        const grid = document.getElementById('category-books-grid');
+        grid.innerHTML = '';
+        this.allBooks.forEach(book => {
+            const bookCard = this.createBookCard(book);
+            grid.appendChild(bookCard);
+        });
+
+        // Setup back button
+        const backBtn = document.getElementById('category-back-button');
+        backBtn.onclick = () => {
+            this.saveScrollPosition();
+            window.history.back();
+        };
+
+        if (restoreScroll) {
+            this.restoreScrollPosition('all-books');
+        } else {
+            window.scrollTo(0, 0);
+        }
+    }
+
+    createBookCard(book) {
+        const bookCard = document.createElement('div');
+        bookCard.className = 'book-card';
+
+        const coverImageHtml = book.cover_image_url
+            ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="book-cover">`
+            : '';
+
+        bookCard.innerHTML = `
+            ${coverImageHtml}
+            <h3>${this.escapeHtml(book.title)}</h3>
+            <p class="author">by ${this.escapeHtml(book.author)}</p>
+            <div class="meta">
+                <p>${this.formatNumber(book.word_count)} words</p>
+            </div>
+        `;
+        bookCard.addEventListener('click', () => this.selectBook(book));
+        return bookCard;
     }
 
     escapeHtml(text) {

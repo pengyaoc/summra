@@ -2056,6 +2056,58 @@ BULK_SUMMARY_CONFIG = {
     'max_chapters_per_batch': 5,
     'max_batch_words': 40000
 }
+
+# Additional batch limits (Added 2025-11-28)
+MAX_BATCH_CHARS = 400000         # 400K characters max per batch
+MAX_CHAPTERS_PER_BATCH = 10      # 10 chapters max per batch
+```
+
+**Dual Batch Limit System (Added 2025-11-28):**
+
+**Problem:** Large batches with many chapters cause LLM parsing complexity and errors (e.g., forgetting END markers).
+
+**Example Issue:** Some batches had 28 chapters, increasing risk of LLM forgetting END markers for Chapter 55 (Ferdinand Count Fathom bug).
+
+**Solution:** Enforce BOTH character limit AND chapter count limit.
+
+**Location:** `scripts/generate_summaries.py:2931-2943`
+
+```python
+# Constants
+MAX_BATCH_CHARS = 400000  # 400K characters (~100K tokens)
+MAX_CHAPTERS_PER_BATCH = 10  # Limit chapters per batch to improve quality and reduce parsing errors
+
+# Batching condition
+if current_batch and (current_batch_chars + chapter_chars > MAX_BATCH_CHARS or
+                     len(current_batch) >= MAX_CHAPTERS_PER_BATCH):
+    # Split batch on EITHER condition
+    batches.append(current_batch)
+    current_batch = []
+    current_batch_chars = 0
+```
+
+**Benefits:**
+- Clearer instructions to LLM (smaller, more focused batches)
+- Reduced parsing errors (fewer chapters = simpler prompt)
+- More granular progress tracking
+- Better LLM attention to individual chapters
+
+**Impact on Batching:**
+
+**BEFORE (character limit only):**
+```
+Book with 28 short chapters (3K words each):
+Batch 1: Chapters 1-28 (84K words, 336K chars, 28 chapters) ← TOO MANY CHAPTERS
+Total batches: 1
+```
+
+**AFTER (dual limit):**
+```
+Book with 28 short chapters (3K words each):
+Batch 1: Chapters 1-10 (30K words, 120K chars, 10 chapters)
+Batch 2: Chapters 11-20 (30K words, 120K chars, 10 chapters)
+Batch 3: Chapters 21-28 (24K words, 96K chars, 8 chapters)
+Total batches: 3 ← More manageable
 ```
 
 **Implementation:**
@@ -3560,9 +3612,170 @@ VALUES (1, 5, 103, 'The Black Spot', ...)
        -- chapter_number=103 means Part 1, Chapter 3
 ```
 
+**IMPORTANT - Section ID Design (Auto-Increment Primary Keys):**
+
+Section IDs are globally unique auto-incrementing primary keys across ALL books, while `section_number` stores the logical section number (1, 2, 3, ...).
+
+**Example:**
+- Book 1 creates sections → section IDs: 1, 2, 3 (section_numbers: 1, 2, 3)
+- Book 2 creates sections → section IDs: 4, 5, 6 (section_numbers: 1, 2, 3)
+- Book 3 creates sections → section IDs: 7, 8 (section_numbers: 1, 2)
+
+**Why Large Section IDs:**
+- Standard database design (surrogate keys)
+- Section ID = database primary key (auto-increment)
+- Section Number = logical numbering for display (Part 1, Part 2)
+- Large IDs (53, 54, 57, 58) result from:
+  - Previous books creating sections 1-52
+  - Deleted sections not reused (53, 54 deleted during regeneration bug - see below)
+  - New sections created with next available ID (57, 58)
+
+**Regenerate Mode Critical Behavior (Bug Fixed 2025-11-28):**
+
+**BEFORE FIX - INCORRECT (Section Deletion Bug):**
+```python
+# WRONG: Section creation runs in regenerate mode
+if not dry_run and not partial_run:  # ❌ Missing regenerate_chapters check
+    # INSERT OR REPLACE with UNIQUE(book_id, section_number) causes deletion
+    section_id = db.add_book_section(book_id, section_type, section_number, section_title)
+    # Old sections deleted, new sections created with new IDs
+    # Example: Sections 53, 54 deleted → Sections 57, 58 created
+    # Result: Chapters pointing to 53, 54 become orphaned!
+```
+
+**AFTER FIX - CORRECT (Preserve Existing Sections):**
+```python
+# CORRECT: Skip section creation in regenerate mode
+if not dry_run and not partial_run and not regenerate_chapters:  # ✅ Added check
+    # Normal mode: Create new sections
+    section_id = db.add_book_section(...)
+elif regenerate_chapters:  # ✅ New branch
+    # Regenerate mode: Use existing sections from database
+    existing_sections = db.get_book_sections(book_id)
+    section_lookup = {s['section_number']: s['id'] for s in existing_sections}
+    # Map chapters to existing section IDs (no deletion, no new IDs)
+    section_id = section_lookup.get(section_number)
+```
+
+**Location:** `scripts/generate_summaries.py:3248-3295`
+
+**Impact of Bug:**
+- Regenerating Chapters 54-55 in "The Adventures of Ferdinand Count Fathom" (Book ID 63)
+- Old sections 53, 54 deleted by `INSERT OR REPLACE`
+- New sections 57, 58 created with new auto-increment IDs
+- Only regenerated chapters (54-55) got new section_id=58
+- All other chapters (1-53, 56-67) still pointed to deleted sections 53, 54
+- Result: 65 out of 67 chapters orphaned (invisible in UI)
+
+**Database Repair:**
+```sql
+-- Fixed Ferdinand Count Fathom orphaned chapters
+UPDATE chapters SET section_id = 57 WHERE book_id = 63 AND chapter_number BETWEEN 1 AND 31;
+UPDATE chapters SET section_id = 58 WHERE book_id = 63 AND chapter_number BETWEEN 32 AND 67;
+-- All 67 chapters now properly assigned to Part 1 (57) or Part 2 (58)
+```
+
+**Code Fix Ensures:**
+- Regenerating chapters no longer deletes/recreates sections
+- Existing section IDs preserved
+- No orphaned chapter references
+- Data integrity maintained across regenerations
+
+### Chapter 0 Display Fix (Bug Fixed 2025-11-28)
+
+**Problem:** Books with two-level structure had Chapter 0 (PREFACE/INTRODUCTION) that wasn't displayed in UI.
+
+**Root Cause:** `get_book_structure()` and `get_book_structure_metadata()` only returned chapters with matching `section_id`, excluding chapters with `section_id = NULL`.
+
+**Example:**
+- "The Adventures of Ferdinand Count Fathom" has Chapter 0 titled "INTRODUCTION"
+- Chapter 0 has `section_id = NULL` (not belonging to Part 1 or Part 2)
+- Original code query: `WHERE section_id = ?` → excludes NULL values
+- Result: Chapter 0 invisible in UI
+
+**Fix - Added Helper Functions:**
+
+**Location:** `backend/models.py:413-469`
+
+```python
+def get_chapters_without_section(self, book_id: int) -> List[Dict]:
+    """Get chapters that don't belong to any section (preface/introduction chapters)"""
+    conn = self.get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, book_id, chapter_number, chapter_title, summary, word_count,
+               created_at, chapter_text, section_id
+        FROM chapters
+        WHERE book_id = ? AND section_id IS NULL
+        ORDER BY chapter_number
+    ''', (book_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_chapters_metadata_without_section(self, book_id: int) -> List[Dict]:
+    """Get chapter metadata only for chapters without section (no summary or full text)"""
+    conn = self.get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+        FROM chapters
+        WHERE book_id = ? AND section_id IS NULL
+        ORDER BY chapter_number
+    ''', (book_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+```
+
+**Fix - Modified Structure Retrieval:**
+
+**Location:** `backend/models.py:515-579`
+
+```python
+def get_book_structure_metadata(self, book_id: int) -> Dict:
+    sections = self.get_book_sections(book_id)
+
+    if sections:
+        result = {
+            'has_sections': True,
+            'sections': []
+        }
+
+        # First, add any chapters without section_id (preface/introduction)
+        preface_chapters = self.get_chapters_metadata_without_section(book_id)
+        if preface_chapters:
+            result['sections'].append({
+                'id': None,
+                'type': 'PREFACE',
+                'number': 0,
+                'title': preface_chapters[0].get('chapter_title', 'Preface'),
+                'chapters': preface_chapters
+            })
+
+        # Then add regular sections
+        for section in sections:
+            chapters = self.get_chapters_metadata_by_section(section['id'])
+            result['sections'].append({
+                'id': section['id'],
+                'type': section['section_type'],
+                'number': section['section_number'],
+                'title': section['section_title'],
+                'chapters': chapters
+            })
+
+        return result
+```
+
+**Result:**
+- Chapter 0 now appears as first section with type "PREFACE"
+- Section structure preserves original ordering (Preface → Part 1 → Part 2)
+- UI displays complete book structure
+- Same fix applied to both `get_book_structure()` and `get_book_structure_metadata()`
+
 ### Frontend Rendering
 
-**API Response Structure:**
+**API Response Structure (Updated with PREFACE section):**
 ```json
 {
   "success": true,
@@ -3570,13 +3783,34 @@ VALUES (1, 5, 103, 'The Black Spot', ...)
   "has_sections": true,
   "sections": [
     {
-      "id": 1,
+      "id": null,
+      "type": "PREFACE",
+      "number": 0,
+      "title": "INTRODUCTION",
+      "chapters": [
+        {
+          "id": 123,
+          "chapter_number": 0,
+          "chapter_title": "INTRODUCTION",
+          "section_id": null,
+          ...
+        }
+      ]
+    },
+    {
+      "id": 57,
       "type": "PART",
       "number": 1,
-      "title": "The Old Buccaneer",
+      "title": "",
       "chapters": [...]
     },
-    ...
+    {
+      "id": 58,
+      "type": "PART",
+      "number": 2,
+      "title": "",
+      "chapters": [...]
+    }
   ]
 }
 ```

@@ -27,7 +27,8 @@
       "WebFetch(domain:code.claude.com)",
       "Bash(test:*)",
       "Bash(pip3 install:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(node -c:*)"
     ],
     "deny": [],
     "ask": []
