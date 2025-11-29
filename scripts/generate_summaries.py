@@ -1542,6 +1542,63 @@ Cover all major plot points, themes, and character developments in chronological
         # Store pre-TOC preface lines for later use
         initial_preface_text = pre_toc_preface_lines
 
+        # Extract preface material that appears AFTER the TOC but BEFORE the first chapter
+        # This handles cases like The Iliad where the introduction appears between TOC and BOOK I
+        post_toc_preface_lines = []
+        post_toc_preface_line_indices = set()
+        if toc_end_line > 0:
+            lines_after_toc = text.split('\n')
+            in_post_toc_preface = False
+            post_toc_preface_start = -1
+
+            # Same preface markers as pre-TOC extraction
+            preface_markers = [
+                r'^\s*INTRODUCTION\s*$',
+                r'^\s*Introduction\s*$',
+                r'^\s*PREFACE\s*$',
+                r'^\s*Preface\s*$',
+                r'^\s*DEDICATION\s*$',
+                r'^\s*Dedication\s*$',
+                r'^\s*TO HER\s*$',
+                r'^\s*TO\s+[A-Z]',
+            ]
+
+            # Patterns for first chapter markers (BOOK I, CHAPTER 1, etc.)
+            first_chapter_patterns = [
+                r'^\s*BOOK\s+(I|ONE|1)\s*\.?\s*$',
+                r'^\s*CHAPTER\s+(I|ONE|1)\s*\.?\s*$',
+                r'^\s*Chapter\s+(I|One|1)\s*\.?\s*$',
+                r'^\s*PART\s+(I|ONE|1)\s*\.?\s*$',
+            ]
+
+            # Scan from TOC end to find preface content before first chapter
+            for i in range(toc_end_line, len(lines_after_toc)):
+                line_stripped = lines_after_toc[i].strip()
+
+                # Skip empty lines
+                if not line_stripped:
+                    continue
+
+                # Check if this is a first chapter marker - if so, end preface extraction
+                if any(re.match(pattern, line_stripped) for pattern in first_chapter_patterns):
+                    if in_post_toc_preface and post_toc_preface_start >= 0:
+                        # Extract all lines from preface start to here
+                        post_toc_preface_lines = lines_after_toc[post_toc_preface_start:i]
+                        post_toc_preface_line_indices = set(range(post_toc_preface_start, i))
+                        print(f"Found preface material after TOC ({len(post_toc_preface_lines)} lines, {sum(len(l) for l in post_toc_preface_lines)} chars)")
+                    break
+
+                # Check if this line starts a post-TOC preface section
+                if any(re.match(pattern, line_stripped) for pattern in preface_markers):
+                    in_post_toc_preface = True
+                    post_toc_preface_start = i
+                    continue
+
+        # Combine pre-TOC and post-TOC preface materials
+        initial_preface_text = pre_toc_preface_lines + post_toc_preface_lines
+        # Also track combined line indices
+        combined_preface_line_indices = pre_toc_preface_line_indices.union(post_toc_preface_line_indices)
+
         # Pattern for BOOK/VOLUME/ACT markers (e.g., "BOOK I", "BOOK II", "BOOK ONE", "BOOK TWO", "VOLUME I", "ACT I")
         # IMPORTANT: Spelled-out words must come BEFORE Roman numerals in alternation to avoid partial matches
         # (e.g., "FIFTEEN" would match as "I" if Roman numerals are tried first)
@@ -2356,6 +2413,23 @@ Cover all major plot points, themes, and character developments in chronological
 
             print(f"Created {len(chapters)} chapters from {book_markers[0]['marker_type']} markers")
 
+            # Check if we have post-TOC preface material that should be added as Chapter 0
+            # This handles cases like The Iliad where the introduction appears between TOC and BOOK I
+            if initial_preface_text:
+                # Check if Chapter 0 doesn't already exist
+                has_chapter_0 = any(ch[0] == 0 for ch in chapters)
+                if not has_chapter_0:
+                    # Normalize preface text
+                    preface_content = '\n'.join(initial_preface_text)
+                    preface_content = self.normalize_chapter_text(preface_content)
+
+                    # Only create Chapter 0 if substantial (> 100 chars)
+                    if len(preface_content) > 100:
+                        chapters.insert(0, (0, "Introduction", preface_content))
+                        print(f"✓ Created Chapter 0 (Introduction) from post-TOC content: {len(preface_content)} chars")
+                        # Mark these lines as consumed
+                        consumed_line_indices.update(combined_preface_line_indices)
+
         # If no chapters detected (or very few), try title-only TOC extraction
         # This handles books like "The King in Yellow" with story titles but no numbers
         if len(chapters) <= 2:
@@ -2448,8 +2522,8 @@ Cover all major plot points, themes, and character developments in chronological
                 chapters[epilogue_idx] = (next_chapter_num, epilogue_chapter[1], epilogue_chapter[2])
                 print(f"Renumbered Epilogue from 999 to {next_chapter_num}")
 
-        # Add pre-TOC preface line indices to consumed set
-        consumed_line_indices.update(pre_toc_preface_line_indices)
+        # Add both pre-TOC and post-TOC preface line indices to consumed set
+        consumed_line_indices.update(combined_preface_line_indices)
 
         return chapters, consumed_line_indices
 

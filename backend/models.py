@@ -746,12 +746,46 @@ class Database:
         ''', (summary_id,))
 
         row = cursor.fetchone()
-        conn.close()
 
         if row:
             # Verify file exists on disk
             audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
-            return audio_path.exists()
+            if audio_path.exists():
+                conn.close()
+                return True
+
+        # If not in database, check for pre-generated audio files on disk
+        # Get book_id and summary_type from the summary
+        cursor.execute('''
+            SELECT book_id, summary_type FROM summaries
+            WHERE id = ?
+        ''', (summary_id,))
+
+        summary_row = cursor.fetchone()
+        conn.close()
+
+        if summary_row:
+            book_id = summary_row['book_id']
+            summary_type = summary_row['summary_type']
+
+            # Check for pre-generated files with naming pattern: book_{book_id}_{type}_{provider}.wav
+            # Priority order: gemini > vits > legacy complete
+            audio_id = f"book_{book_id}_{summary_type}"
+
+            # Check Gemini TTS
+            gemini_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
+            if gemini_path.exists():
+                return True
+
+            # Check VITS TTS
+            vits_path = config.TTS_OUTPUT_DIR / f"{audio_id}_vits.wav"
+            if vits_path.exists():
+                return True
+
+            # Check legacy complete
+            complete_path = config.TTS_OUTPUT_DIR / f"{audio_id}_complete.wav"
+            if complete_path.exists():
+                return True
 
         return False
 
@@ -770,11 +804,46 @@ class Database:
         ''', (chapter_id,))
 
         row = cursor.fetchone()
-        conn.close()
 
         if row:
             # Verify file exists on disk
             audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
-            return audio_path.exists()
+            if audio_path.exists():
+                conn.close()
+                return True
+
+        # If not in database, check for pre-generated audio files on disk
+        # Get book_id and chapter_number from the chapter
+        cursor.execute('''
+            SELECT book_id, chapter_number FROM chapters
+            WHERE id = ?
+        ''', (chapter_id,))
+
+        chapter_row = cursor.fetchone()
+        conn.close()
+
+        if chapter_row:
+            book_id = chapter_row['book_id']
+            chapter_number = chapter_row['chapter_number']
+
+            # Check for pre-generated files with naming pattern: book_{book_id}_chapter_{chapter_number}_{type}_{provider}.wav
+            # We check for both summary and fulltext variants
+            for content_type in ['summary', 'fulltext']:
+                audio_id = f"book_{book_id}_chapter_{chapter_number}_{content_type}"
+
+                # Check Gemini TTS
+                gemini_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
+                if gemini_path.exists():
+                    return True
+
+                # Check VITS TTS
+                vits_path = config.TTS_OUTPUT_DIR / f"{audio_id}_vits.wav"
+                if vits_path.exists():
+                    return True
+
+                # Check legacy complete
+                complete_path = config.TTS_OUTPUT_DIR / f"{audio_id}_complete.wav"
+                if complete_path.exists():
+                    return True
 
         return False
