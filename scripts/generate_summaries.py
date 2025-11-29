@@ -1544,55 +1544,82 @@ Cover all major plot points, themes, and character developments in chronological
 
         # Extract preface material that appears AFTER the TOC but BEFORE the first chapter
         # This handles cases like The Iliad where the introduction appears between TOC and BOOK I
+        # Strategy: Find ALL preface markers, check which ones have substantial content following,
+        # and use the LAST valid one (actual introduction, not TOC entry)
         post_toc_preface_lines = []
         post_toc_preface_line_indices = set()
-        if toc_end_line > 0:
-            lines_after_toc = text.split('\n')
-            in_post_toc_preface = False
-            post_toc_preface_start = -1
 
-            # Same preface markers as pre-TOC extraction
-            preface_markers = [
-                r'^\s*INTRODUCTION\s*$',
-                r'^\s*Introduction\s*$',
-                r'^\s*PREFACE\s*$',
-                r'^\s*Preface\s*$',
-                r'^\s*DEDICATION\s*$',
-                r'^\s*Dedication\s*$',
-                r'^\s*TO HER\s*$',
-                r'^\s*TO\s+[A-Z]',
-            ]
+        # Always scan the entire text for post-TOC preface, not just after toc_end_line
+        # This handles cases where toc_end_line detection fails
+        lines_after_toc = text.split('\n')
 
-            # Patterns for first chapter markers (BOOK I, CHAPTER 1, etc.)
-            first_chapter_patterns = [
-                r'^\s*BOOK\s+(I|ONE|1)\s*\.?\s*$',
-                r'^\s*CHAPTER\s+(I|ONE|1)\s*\.?\s*$',
-                r'^\s*Chapter\s+(I|One|1)\s*\.?\s*$',
-                r'^\s*PART\s+(I|ONE|1)\s*\.?\s*$',
-            ]
+        # Same preface markers as pre-TOC extraction
+        # Include optional period at the end to match "INTRODUCTION." or "PREFACE."
+        preface_markers = [
+            r'^\s*INTRODUCTION\.?\s*$',
+            r'^\s*Introduction\.?\s*$',
+            r'^\s*PREFACE\.?\s*$',
+            r'^\s*Preface\.?\s*$',
+            r'^\s*DEDICATION\.?\s*$',
+            r'^\s*Dedication\.?\s*$',
+            r'^\s*TO HER\.?\s*$',
+            r'^\s*TO\s+[A-Z]',
+        ]
 
-            # Scan from TOC end to find preface content before first chapter
-            for i in range(toc_end_line, len(lines_after_toc)):
+        # Patterns for first chapter markers (BOOK I, CHAPTER 1, etc.)
+        first_chapter_patterns = [
+            r'^\s*BOOK\s+(I|ONE|1)\s*\.?\s*$',
+            r'^\s*CHAPTER\s+(I|ONE|1)\s*\.?\s*$',
+            r'^\s*Chapter\s+(I|One|1)\s*\.?\s*$',
+            r'^\s*PART\s+(I|ONE|1)\s*\.?\s*$',
+        ]
+
+        # Find ALL preface markers and check which ones have substantial content
+        # We'll pick the LAST one that has substantial content (likely the actual introduction)
+        preface_candidates = []
+
+        for i in range(len(lines_after_toc)):
+            line_stripped = lines_after_toc[i].strip()
+
+            # Check if this line is a preface marker
+            if any(re.match(pattern, line_stripped) for pattern in preface_markers):
+                # Look ahead to see if there's substantial content (> 500 chars in next 50 lines)
+                # This distinguishes TOC entries (no content) from actual sections (has content)
+                content_following = []
+                for j in range(i + 1, min(i + 51, len(lines_after_toc))):
+                    next_line = lines_after_toc[j].strip()
+                    # Stop if we hit a chapter marker
+                    if any(re.match(pattern, next_line) for pattern in first_chapter_patterns):
+                        break
+                    content_following.append(lines_after_toc[j])
+
+                # Check if substantial content follows (> 500 chars)
+                content_size = sum(len(line) for line in content_following)
+                if content_size > 500:
+                    preface_candidates.append({
+                        'line_index': i,
+                        'marker': line_stripped,
+                        'content_size': content_size
+                    })
+
+        # If we found candidates, use the LAST one (most likely the actual introduction)
+        if preface_candidates:
+            best_candidate = preface_candidates[-1]  # Use last candidate
+            preface_start = best_candidate['line_index']
+
+            # Find where this preface ends (at the first chapter marker)
+            preface_end = len(lines_after_toc)
+            for i in range(preface_start + 1, len(lines_after_toc)):
                 line_stripped = lines_after_toc[i].strip()
-
-                # Skip empty lines
-                if not line_stripped:
-                    continue
-
-                # Check if this is a first chapter marker - if so, end preface extraction
                 if any(re.match(pattern, line_stripped) for pattern in first_chapter_patterns):
-                    if in_post_toc_preface and post_toc_preface_start >= 0:
-                        # Extract all lines from preface start to here
-                        post_toc_preface_lines = lines_after_toc[post_toc_preface_start:i]
-                        post_toc_preface_line_indices = set(range(post_toc_preface_start, i))
-                        print(f"Found preface material after TOC ({len(post_toc_preface_lines)} lines, {sum(len(l) for l in post_toc_preface_lines)} chars)")
+                    preface_end = i
                     break
 
-                # Check if this line starts a post-TOC preface section
-                if any(re.match(pattern, line_stripped) for pattern in preface_markers):
-                    in_post_toc_preface = True
-                    post_toc_preface_start = i
-                    continue
+            # Extract the preface content
+            post_toc_preface_lines = lines_after_toc[preface_start:preface_end]
+            post_toc_preface_line_indices = set(range(preface_start, preface_end))
+            print(f"Found preface material after TOC ({len(post_toc_preface_lines)} lines, {sum(len(l) for l in post_toc_preface_lines)} chars)")
+            print(f"  Preface marker: '{best_candidate['marker']}' at line {preface_start}")
 
         # Combine pre-TOC and post-TOC preface materials
         initial_preface_text = pre_toc_preface_lines + post_toc_preface_lines

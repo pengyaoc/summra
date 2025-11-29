@@ -6,6 +6,68 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-11-28
 
+### Navigation UX Improvements - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-28
+**Completed:** 2025-11-28
+
+**Objective:** Improve navigation UX by caching carousel book order, fixing back button behavior, and updating header navigation styling.
+
+**Changes Made:**
+
+1. **Cached Carousel Book Order** (`frontend/static/js/app.js`):
+   - **Problem:** Books randomized on every page load/refresh
+   - **Solution:** Added `carouselOrderCache` object to store shuffled book orders
+   - **Implementation:**
+     - Each carousel has unique ID: `${category.id}_${containerOverride || 'default'}`
+     - First render shuffles books and caches the order
+     - Subsequent renders use cached order from memory
+   - **Location:** Lines 27, 479-486
+   - **Result:** Book order persists across page refresh and navigation
+
+2. **Fixed Back Button Behavior** (`frontend/static/js/app.js`):
+   - **Problem:** "Back to Home" buttons used `window.history.back()` which could go to any previous page
+   - **Solution:** Changed to always call `this.showHomeSection()` for consistent navigation
+   - **Updated Buttons:**
+     - Category page back button (line 1275-1280)
+     - All Categories page back button (line 1317-1322)
+     - All Books page back button (line 1391-1396)
+   - **Result:** Users always return to home page from category/all books pages, regardless of history
+
+3. **Updated Header Navigation Styling** (`frontend/static/css/style.css`):
+   - **Problem:** Categories and All Books buttons looked like styled buttons with backgrounds/borders
+   - **Solution:** Changed to minimal menu item style
+   - **Changes:**
+     - Removed button background (`background: transparent`)
+     - Removed borders and padding
+     - Changed `margin-left: auto` to `margin-left: 20px` (left-aligned, closer to logo)
+     - Increased gap between items from 12px to 20px
+     - Hover: opacity + underline (no background change)
+   - **Location:** Lines 74-95
+   - **Result:** Clean menu-like appearance, better alignment with logo
+
+4. **Added Lazy Loading for Images** (`frontend/static/js/app.js`):
+   - Added `loading="lazy"` attribute to all book cover images
+   - **Locations:**
+     - Carousel book cards: Line 484
+     - Book grid cards: Line 1386
+   - **Result:** Improved page load performance, deferred off-screen image loading
+
+**Files Modified:**
+- `frontend/static/js/app.js` (lines 27, 479-486, 1275-1280, 1317-1322, 1391-1396)
+- `frontend/static/css/style.css` (lines 74-95)
+
+**Impact:**
+- Consistent book ordering across page refreshes
+- Predictable navigation (always home from category/books pages)
+- Cleaner header navigation appearance
+- Better performance with lazy-loaded images
+- Improved user experience with more intuitive navigation
+
+---
+
+## 2025-11-28
+
 ### Carousel UX Improvements and Bug Fixes - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-11-28
