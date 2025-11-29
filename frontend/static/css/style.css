@@ -20,7 +20,7 @@
 
 body {
     font-family: 'Amazon Ember', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--background-color);
+    background-color: white;
     color: var(--text-color);
     line-height: 1.6;
     min-height: 100vh;
@@ -57,6 +57,44 @@ body {
     gap: 12px;
 }
 
+.header-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: white;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.header-link:hover {
+    opacity: 0.9;
+}
+
+.header-nav-buttons {
+    display: flex;
+    gap: 12px;
+    margin-left: auto;
+}
+
+.header-nav-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.header-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
 .logo {
     font-family: 'New York', Baskerville, 'Baskerville Old Face', 'Hoefler Text', Garamond, 'Times New Roman', serif;
     font-size: 1.5rem;
@@ -90,6 +128,32 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 20px;
+}
+
+/* Category Detail Section */
+.category-detail-section {
+    padding-top: 20px;
+    animation: fadeIn 0.3s ease;
+}
+
+.category-detail-header {
+    margin-bottom: 24px;
+}
+
+.category-detail-header h2 {
+    font-size: 2rem;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+}
+
+.category-detail-subtitle {
+    font-size: 1rem;
+    color: var(--text-light);
+}
+
+/* All Categories Section */
+.all-categories-section {
+    padding-top: 20px;
 }
 
 .book-card {
@@ -1202,6 +1266,216 @@ body {
     }
 
     .player-time {
+        font-size: 0.75rem;
+    }
+}
+
+/* ===== Category Carousels ===== */
+.categories-section {
+    margin-bottom: 1rem;
+    margin-top: 2.5rem;  /* More space after blue header */
+}
+
+.categories-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;  /* Less gap between carousels */
+}
+
+.category-carousel {
+    margin-bottom: 0;
+}
+
+.category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding: 0;
+}
+
+.category-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.view-all-link {
+    color: var(--secondary-color);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.view-all-link:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+.carousel-container {
+    position: relative;
+    width: 100%;
+}
+
+.carousel-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s;
+}
+
+.carousel-nav-btn:hover {
+    background: #f7f7f7;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.carousel-nav-btn.left {
+    left: -20px;
+}
+
+.carousel-nav-btn.right {
+    right: -20px;
+}
+
+.carousel-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.carousel-scroll {
+    display: flex;
+    gap: 0.75rem;  /* Less gap between books */
+    overflow-x: auto;  /* Allow horizontal scrolling */
+    overflow-y: visible;  /* Allow vertical overflow for scaled cards */
+    scroll-behavior: smooth;
+    padding: 1rem 1rem;  /* Add padding to prevent clipping on all sides */
+    scrollbar-width: none;  /* Firefox - hide scrollbar */
+    -ms-overflow-style: none;  /* IE/Edge - hide scrollbar */
+}
+
+.carousel-scroll::-webkit-scrollbar {
+    display: none;  /* Chrome/Safari - hide scrollbar */
+}
+
+.carousel-book-card {
+    flex: 0 0 auto;
+    width: 200px;  /* Larger cards */
+    background: transparent;  /* No card background */
+    border-radius: 0;
+    box-shadow: none;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: auto;  /* Allow scroll events to pass through */
+}
+
+.carousel-book-card:hover {
+    transform: scale(1.05);
+    z-index: 1;  /* Bring hovered card to front */
+}
+
+.carousel-book-cover {
+    width: 100%;
+    height: 300px;  /* Taller to accommodate books like "A Tale of Two Cities" */
+    object-fit: contain;  /* Show full image without cropping */
+    border-radius: 4px;
+    background-color: #f7fafc;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.carousel-book-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.carousel-book-author {
+    font-size: 0.85rem;
+    color: #718096;
+    margin: 0;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.section-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 0.75rem 0;
+    padding: 0;
+}
+
+/* Responsive carousel styling */
+@media (max-width: 768px) {
+    .category-title {
+        font-size: 1.25rem;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+    }
+
+    .carousel-book-card {
+        width: 150px;
+    }
+
+    .carousel-book-cover {
+        height: 200px;
+    }
+
+    .categories-container {
+        gap: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .category-title {
+        font-size: 1.1rem;
+    }
+
+    .section-title {
+        font-size: 1.3rem;
+    }
+
+    .carousel-book-card {
+        width: 130px;
+        padding: 0.75rem;
+    }
+
+    .carousel-book-cover {
+        height: 180px;
+    }
+
+    .carousel-book-title {
+        font-size: 0.85rem;
+    }
+
+    .carousel-book-author {
         font-size: 0.75rem;
     }
 }

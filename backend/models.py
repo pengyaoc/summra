@@ -129,6 +129,29 @@ class Database:
             )
         ''')
 
+        # Categories table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Book categories junction table (many-to-many relationship)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS book_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                category_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+                UNIQUE(book_id, category_id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -410,6 +433,41 @@ class Database:
 
         return [dict(row) for row in rows]
 
+    def get_chapters_without_section(self, book_id: int) -> List[Dict]:
+        """Get chapters that don't belong to any section (preface/introduction chapters)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, book_id, chapter_number, chapter_title, summary, word_count,
+                   created_at, chapter_text, section_id
+            FROM chapters
+            WHERE book_id = ? AND section_id IS NULL
+            ORDER BY chapter_number
+        ''', (book_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_chapters_metadata_without_section(self, book_id: int) -> List[Dict]:
+        """Get chapter metadata only for chapters without section (no summary or full text)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+            FROM chapters
+            WHERE book_id = ? AND section_id IS NULL
+            ORDER BY chapter_number
+        ''', (book_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
     def get_book_structure(self, book_id: int) -> Dict:
         """
         Get complete book structure including sections and chapters.
@@ -440,6 +498,18 @@ class Database:
                 'sections': []
             }
 
+            # First, add any chapters without section_id (preface/introduction)
+            preface_chapters = self.get_chapters_without_section(book_id)
+            if preface_chapters:
+                result['sections'].append({
+                    'id': None,
+                    'type': 'PREFACE',
+                    'number': 0,
+                    'title': preface_chapters[0].get('chapter_title', 'Preface'),
+                    'chapters': preface_chapters
+                })
+
+            # Then add regular sections
             for section in sections:
                 chapters = self.get_chapters_by_section(section['id'])
                 result['sections'].append({
@@ -494,6 +564,18 @@ class Database:
                 'sections': []
             }
 
+            # First, add any chapters without section_id (preface/introduction)
+            preface_chapters = self.get_chapters_metadata_without_section(book_id)
+            if preface_chapters:
+                result['sections'].append({
+                    'id': None,
+                    'type': 'PREFACE',
+                    'number': 0,
+                    'title': preface_chapters[0].get('chapter_title', 'Preface'),
+                    'chapters': preface_chapters
+                })
+
+            # Then add regular sections
             for section in sections:
                 chapters = self.get_chapters_metadata_by_section(section['id'])
                 result['sections'].append({
@@ -518,3 +600,181 @@ class Database:
                     'chapters': chapters
                 }]
             }
+
+    # Category-related methods
+
+    def add_category(self, name: str, description: str = None) -> int:
+        """Add a new category"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO categories (name, description)
+            VALUES (?, ?)
+        ''', (name, description))
+
+        category_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return category_id
+
+    def get_category(self, category_id: int) -> Optional[Dict]:
+        """Get category by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM categories WHERE id = ?', (category_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def get_category_by_name(self, name: str) -> Optional[Dict]:
+        """Get category by name"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM categories WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def get_all_categories(self) -> List[Dict]:
+        """Get all categories"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM categories ORDER BY name')
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def add_book_category(self, book_id: int, category_id: int) -> int:
+        """Associate a book with a category"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO book_categories (book_id, category_id)
+            VALUES (?, ?)
+        ''', (book_id, category_id))
+
+        book_category_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return book_category_id
+
+    def remove_book_category(self, book_id: int, category_id: int):
+        """Remove category from a book"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            DELETE FROM book_categories
+            WHERE book_id = ? AND category_id = ?
+        ''', (book_id, category_id))
+
+        conn.commit()
+        conn.close()
+
+    def get_book_categories(self, book_id: int) -> List[Dict]:
+        """Get all categories for a book"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT c.* FROM categories c
+            INNER JOIN book_categories bc ON c.id = bc.category_id
+            WHERE bc.book_id = ?
+            ORDER BY c.name
+        ''', (book_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_books_by_category(self, category_id: int) -> List[Dict]:
+        """Get all books for a specific category"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT b.id, b.title, b.author, b.filename, b.word_count,
+                   b.gutenberg_id, b.cover_image_url, b.created_at
+            FROM books b
+            INNER JOIN book_categories bc ON b.id = bc.book_id
+            WHERE bc.category_id = ?
+            ORDER BY b.title
+        ''', (category_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def clear_book_categories(self, book_id: int):
+        """Remove all categories from a book"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM book_categories WHERE book_id = ?', (book_id,))
+
+        conn.commit()
+        conn.close()
+
+    def has_audio_for_summary(self, summary_id: int) -> bool:
+        """Check if audio file exists for a summary (in DB or on disk)"""
+        if not summary_id:
+            return False
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Check database first
+        cursor.execute('''
+            SELECT audio_path FROM audio_files
+            WHERE summary_id = ?
+        ''', (summary_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            # Verify file exists on disk
+            audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
+            return audio_path.exists()
+
+        return False
+
+    def has_audio_for_chapter(self, chapter_id: int) -> bool:
+        """Check if audio file exists for a chapter (in DB or on disk)"""
+        if not chapter_id:
+            return False
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Check database first
+        cursor.execute('''
+            SELECT audio_path FROM audio_files
+            WHERE chapter_id = ?
+        ''', (chapter_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            # Verify file exists on disk
+            audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
+            return audio_path.exists()
+
+        return False

@@ -51,6 +51,7 @@ from dotenv import load_dotenv
 
 import config
 import models
+import categorization
 
 
 class RateLimiter:
@@ -282,6 +283,9 @@ Cover all major plot points, themes, and character developments in chronological
         concise_summary = ""
         medium_summary = ""
 
+        # NOTE: We cannot log book_id here since it's not available in this scope
+        # The caller will need to log the full response if needed
+
         # Split by section markers
         concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)(?=### MEDIUM SUMMARY|$)', result, re.DOTALL | re.IGNORECASE)
         medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)(?=###|$)', result, re.DOTALL | re.IGNORECASE)
@@ -474,12 +478,25 @@ Cover all major plot points, themes, and character developments in chronological
         return result
 
     def word_to_int(self, s: str) -> int:
-        """Convert spelled-out number to integer (e.g., 'ONE' -> 1, 'TWO' -> 2)"""
+        """Convert spelled-out number to integer (e.g., 'ONE' -> 1, 'TWENTY-TWO' -> 22)"""
         word_map = {
             'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5,
             'SIX': 6, 'SEVEN': 7, 'EIGHT': 8, 'NINE': 9, 'TEN': 10,
             'ELEVEN': 11, 'TWELVE': 12, 'THIRTEEN': 13, 'FOURTEEN': 14, 'FIFTEEN': 15,
-            'SIXTEEN': 16, 'SEVENTEEN': 17, 'EIGHTEEN': 18, 'NINETEEN': 19, 'TWENTY': 20
+            'SIXTEEN': 16, 'SEVENTEEN': 17, 'EIGHTEEN': 18, 'NINETEEN': 19, 'TWENTY': 20,
+            'TWENTY-ONE': 21, 'TWENTY-TWO': 22, 'TWENTY-THREE': 23, 'TWENTY-FOUR': 24,
+            'TWENTY-FIVE': 25, 'TWENTY-SIX': 26, 'TWENTY-SEVEN': 27, 'TWENTY-EIGHT': 28,
+            'TWENTY-NINE': 29, 'THIRTY': 30, 'THIRTY-ONE': 31, 'THIRTY-TWO': 32,
+            'THIRTY-THREE': 33, 'THIRTY-FOUR': 34, 'THIRTY-FIVE': 35, 'THIRTY-SIX': 36,
+            'THIRTY-SEVEN': 37, 'THIRTY-EIGHT': 38, 'THIRTY-NINE': 39, 'FORTY': 40,
+            'FORTY-ONE': 41, 'FORTY-TWO': 42, 'FORTY-THREE': 43, 'FORTY-FOUR': 44,
+            'FORTY-FIVE': 45, 'FORTY-SIX': 46, 'FORTY-SEVEN': 47, 'FORTY-EIGHT': 48,
+            'FORTY-NINE': 49, 'FIFTY': 50, 'FIFTY-ONE': 51, 'FIFTY-TWO': 52,
+            'FIFTY-THREE': 53, 'FIFTY-FOUR': 54, 'FIFTY-FIVE': 55, 'FIFTY-SIX': 56,
+            'FIFTY-SEVEN': 57, 'FIFTY-EIGHT': 58, 'FIFTY-NINE': 59, 'SIXTY': 60,
+            'SIXTY-ONE': 61, 'SIXTY-TWO': 62, 'SIXTY-THREE': 63, 'SIXTY-FOUR': 64,
+            'SIXTY-FIVE': 65, 'SIXTY-SIX': 66, 'SIXTY-SEVEN': 67, 'SIXTY-EIGHT': 68,
+            'SIXTY-NINE': 69, 'SEVENTY': 70
         }
         return word_map.get(s.upper(), 0)
 
@@ -615,8 +632,9 @@ Cover all major plot points, themes, and character developments in chronological
 
             # Parse TOC entries
             if in_toc and line_stripped:
-                # Pattern 1: Roman numerals with title (e.g., "LVI. Old and New Tables")
-                match = re.match(r'^([IVXLCDM]+)\.\s+(.+?)\.?\s*$', line_stripped)
+                # Pattern 1: Roman numerals with title (e.g., "LVI. Old and New Tables" or "I        TREATS OF")
+                # Period after Roman numeral is optional to handle Oliver Twist style TOC
+                match = re.match(r'^([IVXLCDM]+)\.?\s+(.+?)\.?\s*$', line_stripped)
                 if match:
                     roman_num = match.group(1)
                     title = match.group(2).strip('. ')
@@ -638,10 +656,15 @@ Cover all major plot points, themes, and character developments in chronological
                     toc[roman_num] = title
                     continue
 
-                # Pattern 2: "Chapter" + number (e.g., "Chapter 1", "Chapter 12")
-                match = re.match(r'^Chapter\s+([IVXLCDM]+|[0-9]+)(?:\.\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
+                # Pattern 2: "Chapter" + number (e.g., "Chapter 1", "Chapter 12", "CHAPTER ONE", "CHAPTER TWENTY-TWO")
+                # Support spelled-out numbers (ONE through SEVENTY with hyphens)
+                # IMPORTANT: Longer patterns must come first to avoid partial matches (e.g., SIXTY-SEVEN before SIX)
+                # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
+                spelled_out_pattern = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
+                match = re.match(rf'^Chapter\s+([IVXLCDM]+|[0-9]+|{spelled_out_pattern})(?:\.\s+(.+?))?\.?\s*$', line_stripped, re.IGNORECASE)
                 if match:
                     chapter_marker = match.group(1)
+                    # Title is in group 2 (after the period and space)
                     title = match.group(2).strip('. ') if match.group(2) else ""
 
                     # Check for duplicate or decrease (signals TOC ended)
@@ -652,7 +675,11 @@ Cover all major plot points, themes, and character developments in chronological
                     if chapter_marker.isdigit():
                         current_number = int(chapter_marker)
                     else:
-                        current_number = self.roman_to_int(chapter_marker)
+                        # Try spelled-out number first
+                        current_number = self.word_to_int(chapter_marker)
+                        # If not a spelled-out number, try Roman numeral
+                        if current_number == 0:
+                            current_number = self.roman_to_int(chapter_marker)
 
                     if current_number > 0 and current_number < highest_number:
                         break  # Number decreased - TOC has ended
@@ -703,9 +730,8 @@ Cover all major plot points, themes, and character developments in chronological
                 # Letters should not be treated as numbered chapters, but as preface content
 
         # If we found TOC entries, scan forward to find where TOC section actually ends
-        # Instead of a fixed buffer, look for the first line with substantial content
-        # that isn't a chapter marker or blank line
-        # IMPORTANT: TOC entries are often indented, actual chapter headers are not
+        # Look for the first real chapter marker (not TOC entry) after the last TOC entry
+        # Real chapter markers have substantial paragraph content following them
         toc_end_line = 0
         if last_toc_entry_line > 0:
             # Scan forward from last TOC entry to find actual end of TOC section
@@ -721,22 +747,35 @@ Cover all major plot points, themes, and character developments in chronological
                 is_chapter_marker = (
                     re.match(r'^([IVXLCDM]+)\.\s+', scan_line) or
                     re.match(r'^Chapter\s+', scan_line, re.IGNORECASE) or
+                    re.match(r'^CHAPTER\s+', scan_line) or  # Oliver Twist style: " CHAPTER I."
                     re.match(r'^Stave\s+', scan_line, re.IGNORECASE)
                 )
 
-                # If it's a chapter marker, check if it's indented (TOC) or not (actual chapter)
+                # If it's a chapter marker, look ahead to see if it's followed by substantial content
+                # Real chapters have paragraph text following them, TOC entries don't
                 if is_chapter_marker:
-                    # Check if line starts with whitespace (indentation = TOC entry)
-                    if scan_line_original and scan_line_original[0] in (' ', '\t'):
-                        # This is an indented chapter marker, still part of TOC
-                        continue
-                    else:
-                        # This is a non-indented chapter marker = actual chapter header
+                    # Look ahead 5 lines for substantial content (> 50 chars, looks like paragraph text)
+                    has_content_following = False
+                    for lookahead_idx in range(scan_idx + 1, min(scan_idx + 6, len(lines))):
+                        lookahead_line = lines[lookahead_idx].strip()
+                        # Check if this looks like paragraph content (not another chapter marker, not blank)
+                        if (lookahead_line and
+                            len(lookahead_line) > 50 and
+                            not re.match(r'^(CHAPTER|Chapter|[IVXLCDM]+\.)\s+', lookahead_line)):
+                            has_content_following = True
+                            break
+
+                    if has_content_following:
+                        # This is a real chapter marker with content following
                         # TOC ends just before this line
                         toc_end_line = scan_idx - 1
                         break
+                    else:
+                        # This is likely a TOC entry (no content following)
+                        continue
 
                 # If we found a non-blank, non-chapter-marker line, this is where TOC ends
+                # (This handles books with content between TOC and first chapter)
                 toc_end_line = scan_idx
                 break
 
@@ -789,8 +828,11 @@ Cover all major plot points, themes, and character developments in chronological
         decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
 
         # Patterns for chapter/scene markers within sections - allow leading whitespace
-        # Matches: "Chapter I", "CHAPTER 1", "Scene I. Title", "Scene I Title", etc.
-        chapter_pattern = r'(?:CHAPTER|Chapter|SCENE|Scene)\s+([IVXLCDM]+|[0-9]+)\.?\s*(.+)?\.?\s*$'
+        # Matches: "Chapter I", "CHAPTER 1", "CHAPTER ONE", "CHAPTER TWENTY-TWO", "Scene I. Title", etc.
+        # IMPORTANT: Longer spelled-out patterns first to avoid partial matches
+        # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
+        spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
+        chapter_pattern = rf'(?:CHAPTER|Chapter|SCENE|Scene)\s+({spelled_out}|[IVXLCDM]+|[0-9]+)\.?\s*(.+)?\.?\s*$'
 
         # Also match bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
         bracket_chapter_pattern = r'^\s*\[\s*([0-9]+)\s*\]\s*$'
@@ -896,7 +938,11 @@ Cover all major plot points, themes, and character developments in chronological
                     if chapter_numeral.isdigit():
                         chapter_number = int(chapter_numeral)
                     else:
-                        chapter_number = self.roman_to_int(chapter_numeral)
+                        # Try spelled-out number first
+                        chapter_number = self.word_to_int(chapter_numeral)
+                        # If not a spelled-out number, try Roman numeral
+                        if chapter_number == 0:
+                            chapter_number = self.roman_to_int(chapter_numeral)
 
                     current_section['chapters'].append({
                         'number': chapter_number,
@@ -976,7 +1022,10 @@ Cover all major plot points, themes, and character developments in chronological
         decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
 
         # Patterns for chapter markers - must be on their own line or with short title
-        chapter_pattern = r'^\s*(?:CHAPTER|Chapter)\s+([IVXLCDM]+|[0-9]+)\.?\s*(.{0,60})$'
+        # IMPORTANT: Longer spelled-out patterns first to avoid partial matches
+        # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
+        spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
+        chapter_pattern = rf'^\s*(?:CHAPTER|Chapter)\s+({spelled_out}|[IVXLCDM]+|[0-9]+)\.?\s*(.{{0,60}})$'
         # Alternative pattern for standalone Roman numerals (Treasure Island style)
         standalone_roman_pattern = r'^\s*([IVXLCDM]+)\s*$'
         # Bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
@@ -1100,7 +1149,11 @@ Cover all major plot points, themes, and character developments in chronological
                     if chapter_numeral.isdigit():
                         chapter_number = int(chapter_numeral)
                     else:
-                        chapter_number = self.roman_to_int(chapter_numeral)
+                        # Try spelled-out number first
+                        chapter_number = self.word_to_int(chapter_numeral)
+                        # If not a spelled-out number, try Roman numeral
+                        if chapter_number == 0:
+                            chapter_number = self.roman_to_int(chapter_numeral)
 
                     if chapter_number == 0:
                         continue
@@ -1445,6 +1498,50 @@ Cover all major plot points, themes, and character developments in chronological
 
         chapters = []
 
+        # Extract preface material that appears BEFORE the TOC
+        # This handles cases like Winnie-the-Pooh where the dedication and introduction appear before the TOC
+        pre_toc_preface_lines = []
+        pre_toc_preface_line_indices = set()  # Track which line indices are part of the preface
+        if toc_end_line > 0:
+            lines_before_toc = text.split('\n')[:toc_end_line]
+            in_preface_section = False
+            preface_section_start = -1
+
+            # Patterns for preface/dedication/introduction markers
+            preface_markers = [
+                r'^\s*INTRODUCTION\s*$',
+                r'^\s*Introduction\s*$',
+                r'^\s*PREFACE\s*$',
+                r'^\s*Preface\s*$',
+                r'^\s*DEDICATION\s*$',
+                r'^\s*Dedication\s*$',
+                r'^\s*TO HER\s*$',  # Dedication format in Winnie-the-Pooh
+                r'^\s*TO\s+[A-Z]',  # Other dedication formats starting with "TO"
+            ]
+
+            for i, line in enumerate(lines_before_toc):
+                line_stripped = line.strip()
+
+                # Check if this line starts a preface section
+                if any(re.match(pattern, line_stripped) for pattern in preface_markers):
+                    in_preface_section = True
+                    preface_section_start = i
+                    continue
+
+                # Check if we've reached the start of the CONTENTS/TOC section
+                if re.match(r'^\s*CONTENTS?\s*$', line_stripped, re.IGNORECASE):
+                    in_preface_section = False
+                    if preface_section_start >= 0:
+                        # Extract all lines from preface start to here
+                        pre_toc_preface_lines = lines_before_toc[preface_section_start:i]
+                        # Track the line indices as consumed
+                        pre_toc_preface_line_indices = set(range(preface_section_start, i))
+                        print(f"Found preface material before TOC ({len(pre_toc_preface_lines)} lines, {sum(len(l) for l in pre_toc_preface_lines)} chars)")
+                    break
+
+        # Store pre-TOC preface lines for later use
+        initial_preface_text = pre_toc_preface_lines
+
         # Pattern for BOOK/VOLUME/ACT markers (e.g., "BOOK I", "BOOK II", "BOOK ONE", "BOOK TWO", "VOLUME I", "ACT I")
         # IMPORTANT: Spelled-out words must come BEFORE Roman numerals in alternation to avoid partial matches
         # (e.g., "FIFTEEN" would match as "I" if Roman numerals are tried first)
@@ -1457,6 +1554,10 @@ Cover all major plot points, themes, and character developments in chronological
         # Common chapter patterns - must start new line
         chapter_patterns = [
             r'^\[\s*([0-9]+)\s*\]$',  # Bracket format: "[ 1 ]", "[ 10 ]" (Ulysses)
+            # Spelled-out chapter numbers (must come before generic CHAPTER pattern)
+            # IMPORTANT: Longer patterns first to avoid partial matches (SIXTY-SEVEN before SIX)
+            r'CHAPTER\s+(SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)[:\.\s]*(.*)$',
+            r'Chapter\s+(Seventy|Sixty-Nine|Sixty-Eight|Sixty-Seven|Sixty-Six|Sixty-Five|Sixty-Four|Sixty-Three|Sixty-Two|Sixty-One|Sixty|Fifty-Nine|Fifty-Eight|Fifty-Seven|Fifty-Six|Fifty-Five|Fifty-Four|Fifty-Three|Fifty-Two|Fifty-One|Fifty|Forty-Nine|Forty-Eight|Forty-Seven|Forty-Six|Forty-Five|Forty-Four|Forty-Three|Forty-Two|Forty-One|Forty|Thirty-Nine|Thirty-Eight|Thirty-Seven|Thirty-Six|Thirty-Five|Thirty-Four|Thirty-Three|Thirty-Two|Thirty-One|Thirty|Twenty-Nine|Twenty-Eight|Twenty-Seven|Twenty-Six|Twenty-Five|Twenty-Four|Twenty-Three|Twenty-Two|Twenty-One|Twenty|Nineteen|Eighteen|Seventeen|Sixteen|Fifteen|Fourteen|Thirteen|Twelve|Eleven|Ten|Nine|Eight|Seven|Six|Five|Four|Three|Two|One)[:\.\s]*(.*)$',
             r'CHAPTER\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # CHAPTER I: Title or CHAPTER 1
             r'Chapter\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',
             r'STAVE\s+([IVXLCDM]+|[0-9]+)[:\.\s]*(.*)$',  # STAVE I: Title (A Christmas Carol)
@@ -1836,8 +1937,11 @@ Cover all major plot points, themes, and character developments in chronological
                     elif chapter_marker.isdigit():
                         base_chapter_num = int(chapter_marker)
                     else:
-                        # Try to convert Roman numeral
-                        base_chapter_num = self.roman_to_int(chapter_marker)
+                        # Try spelled-out number first (ONE, TWO, TWENTY-ONE, etc.)
+                        base_chapter_num = self.word_to_int(chapter_marker)
+                        # If not a spelled-out number, try Roman numeral
+                        if base_chapter_num == 0:
+                            base_chapter_num = self.roman_to_int(chapter_marker)
 
                     # Encode as book_num * 100 + chapter_num (e.g., Book 1 Chapter 5 = 105)
                     # For regular books without BOOK markers, use simple encoding (1, 2, 3...)
@@ -2002,9 +2106,12 @@ Cover all major plot points, themes, and character developments in chronological
                 # No need to consume them again here
 
                 # If this is the first numbered chapter, save all preface content as Chapter 0
-                if not found_first_chapter and preface_text:
+                if not found_first_chapter and (preface_text or initial_preface_text):
+                    # Combine pre-TOC preface material with post-TOC preface material
+                    combined_preface = initial_preface_text + preface_text
+
                     # Normalize preface text to check if it's substantial
-                    preface_content = '\n'.join(preface_text)
+                    preface_content = '\n'.join(combined_preface)
                     preface_content = self.normalize_chapter_text(preface_content)
 
                     # Create Chapter 0 if:
@@ -2340,6 +2447,9 @@ Cover all major plot points, themes, and character developments in chronological
                 epilogue_chapter = chapters[epilogue_idx]
                 chapters[epilogue_idx] = (next_chapter_num, epilogue_chapter[1], epilogue_chapter[2])
                 print(f"Renumbered Epilogue from 999 to {next_chapter_num}")
+
+        # Add pre-TOC preface line indices to consumed set
+        consumed_line_indices.update(pre_toc_preface_line_indices)
 
         return chapters, consumed_line_indices
 
@@ -2682,6 +2792,30 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                     contents=prompt
                 )
                 response_text = response.text
+
+                # Log the full API response for debugging
+                try:
+                    import json
+                    from pathlib import Path
+                    logs_dir = Path(__file__).parent.parent / "logs"
+                    logs_dir.mkdir(exist_ok=True)
+                    log_filename = f"gemini_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}_ch{chapter_numbers[0]}-{chapter_numbers[-1]}.json"
+                    log_path = logs_dir / log_filename
+
+                    log_data = {
+                        "timestamp": datetime.now().isoformat(),
+                        "chapter_numbers": chapter_numbers,
+                        "model": model_name,
+                        "response_text": response_text,
+                        "prompt_preview": prompt[:500] + "..." if len(prompt) > 500 else prompt
+                    }
+
+                    with open(log_path, 'w', encoding='utf-8') as f:
+                        json.dump(log_data, f, indent=2, ensure_ascii=False)
+                    print(f"  → Logged full response to: {log_path}")
+                except Exception as log_error:
+                    print(f"  → Warning: Could not log response: {log_error}")
+
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ API call successful for chapters {chapter_numbers}")
                 break  # Success - exit retry loop
             except Exception as e:
@@ -2846,6 +2980,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             # - Safety margin for rate limiting
             # Conservative batch size: 400K chars (~100K tokens input + ~25K output + context)
             MAX_BATCH_CHARS = 400000
+            MAX_CHAPTERS_PER_BATCH = 10  # Limit chapters per batch to improve quality and reduce parsing errors
 
             batches = []
             current_batch = []
@@ -2854,8 +2989,9 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             for chapter_num, chapter_title, chapter_text in chapters_needing_summary:
                 chapter_chars = len(chapter_text)
 
-                # If adding this chapter would exceed limit, start new batch
-                if current_batch and current_batch_chars + chapter_chars > MAX_BATCH_CHARS:
+                # If adding this chapter would exceed char limit or chapter limit, start new batch
+                if current_batch and (current_batch_chars + chapter_chars > MAX_BATCH_CHARS or
+                                     len(current_batch) >= MAX_CHAPTERS_PER_BATCH):
                     batches.append(current_batch)
                     current_batch = []
                     current_batch_chars = 0
@@ -3128,6 +3264,41 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(f"✓ Concise summary: {results['summaries']['concise']['word_count']} words")
             print(f"✓ Medium summary: {results['summaries']['medium']['word_count']} words")
 
+            # Categorize the book automatically after medium summary is generated
+            if not dry_run:
+                print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Categorizing Book ---")
+                try:
+                    # Get all categories from database
+                    categories = self.db.get_all_categories()
+                    if categories:
+                        # Categorize using medium summary
+                        book_info = {
+                            'id': book_id,
+                            'title': title,
+                            'author': author
+                        }
+                        category_names = categorization.categorize_single_book(
+                            self.client,
+                            self.db,
+                            book_info,
+                            categories,
+                            medium_summary=medium
+                        )
+
+                        if category_names:
+                            # Save categories to database
+                            categorization.save_book_categories(self.db, book_id, category_names)
+                            print(f"✓ Assigned {len(category_names)} categories:")
+                            for cat_name in category_names:
+                                print(f"  - {cat_name}")
+                        else:
+                            print("⚠️  No categories assigned")
+                    else:
+                        print("⚠️  No categories found in database, skipping categorization")
+                except Exception as e:
+                    print(f"⚠️  Error during categorization: {e}")
+                    print("   Continuing with summary generation...")
+
             if partial_run and not dry_run:
                 print(f"\n{'='*60}")
                 print("CONCISE SUMMARY OUTPUT:")
@@ -3163,7 +3334,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                 print(f"  ... and {len(toc_structure) - 3} more sections")
 
             # Save book sections to database and build chapter mapping
-            if not dry_run and not partial_run:
+            # Skip section creation in regenerate mode to avoid deleting existing sections
+            if not dry_run and not partial_run and not regenerate_chapters:
                 print("\nSaving book sections to database...")
                 sequential_chapter_num = 1  # Track sequential chapter numbers (1, 2, 3, ...)
                 for section in toc_structure:
@@ -3179,6 +3351,35 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                     # Use sequential numbering (1, 2, 3, ...) across all sections
                     for chapter in section['chapters']:
                         chapter_to_section_id[sequential_chapter_num] = section_id
+                        sequential_chapter_num += 1
+            elif regenerate_chapters:
+                # In regenerate mode, retrieve existing sections from database instead of recreating
+                print("\n[REGENERATE MODE] Using existing book sections from database...")
+                existing_sections = self.db.get_book_sections(book_id)
+                if existing_sections:
+                    # Build section_id mapping from existing database sections
+                    # Match by section_number (1, 2, 3, ...) to the detected structure
+                    section_lookup = {s['section_number']: s['id'] for s in existing_sections}
+
+                    sequential_chapter_num = 1
+                    for section in toc_structure:
+                        section_number = section['number']
+                        section_id = section_lookup.get(section_number)
+                        if section_id:
+                            print(f"  ✓ Using existing {section['type']} {section['numeral']}: section_id={section_id}")
+                            # Map chapters to existing section_id
+                            for chapter in section['chapters']:
+                                chapter_to_section_id[sequential_chapter_num] = section_id
+                                sequential_chapter_num += 1
+                        else:
+                            print(f"  ⚠️  WARNING: No existing section found for {section['type']} {section['numeral']}")
+                else:
+                    print("  ⚠️  WARNING: No existing sections found in database for regenerate mode")
+            else:
+                # dry_run or partial_run mode - just build the mapping without saving
+                sequential_chapter_num = 1
+                for section in toc_structure:
+                    for chapter in section['chapters']:
                         sequential_chapter_num += 1
         else:
             print("✓ Single-level structure (traditional chapters)")
