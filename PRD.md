@@ -161,27 +161,35 @@ Users can browse a curated collection of classic books with cover images and met
     - Left/right navigation arrows (circular, white background, shadow)
     - Horizontal scrolling book cards (no scrollbar visible)
   - **Book Cards:** Larger format (200px wide x 280px cover)
-    - Cover image with subtle shadow
+    - Cover image with subtle shadow (lazy-loaded for performance)
     - Title (2 lines max, truncated)
     - Author name (1 line, truncated)
     - No background card - transparent design
     - Hover: Scale to 1.05x
+  - **Book Order (Added 2025-11-28):**
+    - Books displayed in randomized order within each carousel
+    - Order is cached in-memory after first load
+    - Refreshing page preserves the same randomized order
+    - Improves discovery while maintaining consistency
   - **Vertical Spacing:**
     - 2.5rem gap after blue header
     - 1.5rem gap between carousel rows
     - 0.75rem gap between books in carousel
 
-**Header Navigation (Added 2025-11-28):**
+**Header Navigation (Added 2025-11-28, Updated 2025-11-28):**
 - **Logo and Home Link:** Left side (Summra icon + text)
-- **Navigation Buttons:** Right side
+- **Navigation Menu Items:** Right side (left-aligned, 20px from logo)
   - "Categories" → All Categories page
   - "All Books" → All Books grid page
-- **Button Style:** Semi-transparent white background, rounded corners
+- **Menu Style:** Transparent background, minimal text-only design
+  - No borders or button backgrounds
+  - Hover: opacity change + underline
+  - Appears as integrated menu items, not separate buttons
 
 **Book Grid:**
 - **Layout:** Responsive card-based grid
 - **Cards Include:**
-  - Cover image (Project Gutenberg or custom)
+  - Cover image (Project Gutenberg or custom, lazy-loaded)
   - Book title
   - Author name
   - Word count (optional)
@@ -190,6 +198,10 @@ Users can browse a curated collection of classic books with cover images and met
 - **Usage:**
   - "All Books" page (grid view of entire collection)
   - Category detail pages (grid view filtered by category)
+- **Data Caching (Added 2025-11-28):**
+  - Category data cached in-memory after first fetch
+  - Eliminates flash/reload when returning to category pages
+  - Improves navigation performance and user experience
 
 **Book Detail Page (Redesigned 2025-11-25):**
 - **Minimal Header:** Smaller cover image (120px) with title and author side-by-side
@@ -250,11 +262,14 @@ Each book and summary type has a unique URL that can be bookmarked and shared.
 /#/all-books                         → All books grid page
 ```
 
-**Navigation:**
+**Navigation (Updated 2025-11-28):**
 - Hash-based routing (no server-side routing needed)
 - Browser back/forward buttons work correctly
 - Page refresh preserves current view
 - URL updates when user navigates
+- **Consistent Back Behavior:** "Back to Home" buttons always navigate to home page (not browser history)
+  - Applied to: Category detail pages, All Categories page, All Books page
+  - Ensures predictable navigation for users
 
 **Acceptance Criteria:**
 - [ ] Each book has a unique URL slug
@@ -353,11 +368,15 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 6. If viewing category detail page:
    - See all books in category in grid layout
    - Click any book to view details
-   - Click "Back to Home" to return
+   - Click "Back to Home" to return (always returns to home, not previous page)
 7. If viewing All Categories page:
    - See all category carousels (not just top 10)
    - Sorted by popularity
-   - Click "Back to Home" to return
+   - Click "Back to Home" to return (always returns to home, not previous page)
+8. Navigation behavior (Added 2025-11-28):
+   - Carousel book order is randomized but cached - order stays consistent on refresh
+   - Category data is cached - no flash/reload when returning to pages
+   - Book cover images lazy-load for better performance
 ```
 
 ### Workflow 2: Discovering a New Book (Updated 2025-11-28)
@@ -428,7 +447,14 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - **Summary Switch:** < 500ms to switch between summary types
 - **TTS Generation:** < 30 seconds for first generation
 - **Cached TTS:** < 1 second to load
-- **Image Loading:** Progressive with lazy loading
+- **Image Loading:** Progressive with lazy loading (Added 2025-11-28)
+  - All carousel and grid book cover images use `loading="lazy"` attribute
+  - Reduces initial page load by deferring off-screen images
+  - Improves performance on slower connections
+- **Data Caching:** In-memory caching for category data and carousel order (Added 2025-11-28)
+  - Eliminates redundant API calls when navigating back to pages
+  - Preserves carousel book order across page refreshes
+  - Instant page loads for previously visited categories
 
 ### Accessibility
 - **ARIA Labels:** All interactive elements properly labeled

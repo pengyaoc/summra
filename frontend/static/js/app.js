@@ -21,6 +21,10 @@ class SummraApp {
         // Store scroll positions for each page
         this.scrollPositions = {};
         this.currentPage = 'home'; // Track current page for scroll saving
+        // Cache category data to prevent re-fetching
+        this.categoryCache = {}; // { categoryId: { category: {...}, books: [...] } }
+        // Cache shuffled book orders for carousels
+        this.carouselOrderCache = {}; // { carouselId: [shuffled books array] }
         this.init();
     }
 
@@ -471,15 +475,22 @@ class SummraApp {
         const scrollContainer = document.createElement('div');
         scrollContainer.className = 'carousel-scroll';
 
-        // Randomize book order
-        const shuffledBooks = [...books].sort(() => Math.random() - 0.5);
+        // Use cached shuffled order or create new one
+        const carouselId = `${category.id}_${containerIdOverride || 'default'}`;
+        let shuffledBooks = this.carouselOrderCache[carouselId];
+
+        if (!shuffledBooks) {
+            // Randomize book order and cache it
+            shuffledBooks = [...books].sort(() => Math.random() - 0.5);
+            this.carouselOrderCache[carouselId] = shuffledBooks;
+        }
 
         shuffledBooks.forEach(book => {
             const bookCard = document.createElement('div');
             bookCard.className = 'carousel-book-card';
 
             const coverImageHtml = book.cover_image_url
-                ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="carousel-book-cover">`
+                ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="carousel-book-cover" loading="lazy">`
                 : '';
 
             bookCard.innerHTML = `
@@ -1224,33 +1235,48 @@ class SummraApp {
         const categoryDetailSection = document.getElementById('category-detail-section');
         categoryDetailSection.classList.remove('hidden');
 
-        // Fetch category and books
-        try {
-            const response = await fetch(`${this.apiBase}/categories/${categoryId}/books`);
-            const data = await response.json();
+        // Check cache first
+        let categoryData = this.categoryCache[categoryId];
 
-            if (data.success) {
-                document.getElementById('category-detail-title').textContent = data.category.name;
-                document.getElementById('category-detail-subtitle').textContent =
-                    `${data.books.length} book${data.books.length !== 1 ? 's' : ''}`;
+        if (!categoryData) {
+            // Fetch category and books if not cached
+            try {
+                const response = await fetch(`${this.apiBase}/categories/${categoryId}/books`);
+                const data = await response.json();
 
-                // Render books in grid
-                const grid = document.getElementById('category-books-grid');
-                grid.innerHTML = '';
-                data.books.forEach(book => {
-                    const bookCard = this.createBookCard(book);
-                    grid.appendChild(bookCard);
-                });
+                if (data.success) {
+                    // Cache the data
+                    categoryData = {
+                        category: data.category,
+                        books: data.books
+                    };
+                    this.categoryCache[categoryId] = categoryData;
+                }
+            } catch (error) {
+                console.error('Error loading category:', error);
             }
-        } catch (error) {
-            console.error('Error loading category:', error);
         }
 
-        // Setup back button
+        // Render cached or freshly fetched data
+        if (categoryData) {
+            document.getElementById('category-detail-title').textContent = categoryData.category.name;
+            document.getElementById('category-detail-subtitle').textContent =
+                `${categoryData.books.length} book${categoryData.books.length !== 1 ? 's' : ''}`;
+
+            // Render books in grid
+            const grid = document.getElementById('category-books-grid');
+            grid.innerHTML = '';
+            categoryData.books.forEach(book => {
+                const bookCard = this.createBookCard(book);
+                grid.appendChild(bookCard);
+            });
+        }
+
+        // Setup back button - always go to home
         const backBtn = document.getElementById('category-back-button');
         backBtn.onclick = () => {
             this.saveScrollPosition();
-            window.history.back();
+            this.showHomeSection();
         };
 
         if (restoreScroll) {
@@ -1288,11 +1314,11 @@ class SummraApp {
             console.error('Error loading categories:', error);
         }
 
-        // Setup back button
+        // Setup back button - always go to home
         const backBtn = document.getElementById('all-categories-back-button');
         backBtn.onclick = () => {
             this.saveScrollPosition();
-            window.history.back();
+            this.showHomeSection();
         };
 
         if (restoreScroll) {
@@ -1362,11 +1388,11 @@ class SummraApp {
             grid.appendChild(bookCard);
         });
 
-        // Setup back button
+        // Setup back button - always go to home
         const backBtn = document.getElementById('category-back-button');
         backBtn.onclick = () => {
             this.saveScrollPosition();
-            window.history.back();
+            this.showHomeSection();
         };
 
         if (restoreScroll) {
@@ -1381,7 +1407,7 @@ class SummraApp {
         bookCard.className = 'book-card';
 
         const coverImageHtml = book.cover_image_url
-            ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="book-cover">`
+            ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="book-cover" loading="lazy">`
             : '';
 
         bookCard.innerHTML = `
