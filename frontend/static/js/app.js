@@ -681,6 +681,7 @@ class SummraApp {
 
             if (data.success && data.summary) {
                 this.mediumSummaryContent = data.summary.content;
+                this.mediumSummaryHasAudio = data.has_audio || false; // Cache the audio flag
                 // Show full content in preview (will be faded by CSS)
                 mediumPreviewText.innerHTML = this.renderMarkdown(this.mediumSummaryContent);
 
