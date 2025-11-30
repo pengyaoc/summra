@@ -510,13 +510,18 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
   - ✅ Categories sorted by book count (top 10 displayed)
   - ✅ Left/right navigation arrows for each carousel
   - ✅ "View All →" links to category detail pages
-  - ✅ Header navigation buttons (Categories, All Books)
+  - ✅ Header navigation menu items (Categories, All Books) - minimal text-only design
   - ✅ Category detail page (grid view of books in category)
   - ✅ All Categories page (all carousels, no limit)
   - ✅ All Books grid page
   - ✅ White background, clean minimal design
   - ✅ Category carousels hidden on book detail pages
   - ✅ URL routing for categories (#/category/5, #/categories, #/all-books)
+- ✅ Navigation UX Improvements - 2025-11-28
+  - ✅ Carousel book order randomization with caching (consistent across refreshes)
+  - ✅ Category data caching (eliminates flash/reload)
+  - ✅ Lazy loading for all book cover images (performance optimization)
+  - ✅ Consistent "Back to Home" behavior (always returns to home, not browser history)
 - ⏳ Persistent audio player (stays across navigation) - PARTIAL (player exists but resets on navigation)
 
 ### Phase 3: Full-Length Option (PLANNED)

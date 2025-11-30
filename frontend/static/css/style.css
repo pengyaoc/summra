@@ -508,6 +508,9 @@ body {
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Indented chapters (for two-level structure) */
