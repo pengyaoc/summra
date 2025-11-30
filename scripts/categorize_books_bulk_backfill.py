@@ -10,6 +10,9 @@ Usage:
     # Categorize all books without categories
     python categorize_books_bulk_backfill.py
 
+    # Re-categorize ALL books (even those with existing categories)
+    python categorize_books_bulk_backfill.py --force
+
     # Categorize a specific book
     python categorize_books_bulk_backfill.py --book-id 5
 
@@ -39,6 +42,7 @@ def main():
     parser = argparse.ArgumentParser(description='Bulk backfill categories for existing books')
     parser.add_argument('--book-id', type=int, help='Categorize a specific book by ID')
     parser.add_argument('--batch-size', type=int, default=10, help='Number of books per API call (default: 10)')
+    parser.add_argument('--force', action='store_true', help='Re-categorize all books, even if they already have categories')
     args = parser.parse_args()
 
     # Load environment variables
@@ -83,25 +87,41 @@ def main():
         print(f"\nCategorizing single book: {book['title']} by {book['author']}")
 
     else:
-        # Bulk mode: get all books without categories
+        # Bulk mode: get all books
         all_books = db.get_all_books()
 
-        # Filter to books that don't have categories AND have a medium summary
+        # Filter based on --force flag
         books_to_categorize = []
         for book in all_books:
-            existing_categories = db.get_book_categories(book['id'])
             medium_summary = db.get_summary(book['id'], 'medium')
 
-            if not existing_categories and medium_summary:
+            # Skip books without medium summaries
+            if not medium_summary:
+                continue
+
+            if args.force:
+                # Force mode: include all books with medium summaries
                 books_to_categorize.append(book)
+            else:
+                # Normal mode: only books without categories
+                existing_categories = db.get_book_categories(book['id'])
+                if not existing_categories:
+                    books_to_categorize.append(book)
 
         if not books_to_categorize:
-            print("\nNo books found that need categorization")
-            print("(All books either have categories or don't have medium summaries)")
+            if args.force:
+                print("\nNo books found with medium summaries to categorize")
+            else:
+                print("\nNo books found that need categorization")
+                print("(All books either have categories or don't have medium summaries)")
+                print("Use --force to re-categorize all books")
             sys.exit(0)
 
         books = books_to_categorize
-        print(f"\nFound {len(books)} books to categorize (have medium summaries, no categories)")
+        if args.force:
+            print(f"\nFound {len(books)} books to re-categorize (force mode)")
+        else:
+            print(f"\nFound {len(books)} books to categorize (have medium summaries, no categories)")
 
     # Categorize books using bulk processing
     print(f"\nStarting bulk categorization (batch size: {args.batch_size})...")

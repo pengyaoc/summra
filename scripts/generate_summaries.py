@@ -548,9 +548,56 @@ Cover all major plot points, themes, and character developments in chronological
                 content = content[:-1]
 
             print(f"Extracted Project Gutenberg content: {len(content)} characters (original: {len(text)})")
+
             return content
 
         return text
+
+    def normalize_chapter_title(self, title: str) -> str:
+        """
+        Normalize chapter title to use consistent title case.
+        Converts to title case while preserving certain words in lowercase.
+        Handles quoted text specially - words inside quotes are always capitalized.
+        """
+        import re
+
+        if not title or not title.strip():
+            return title
+
+        # Words that should remain lowercase in titles (unless first word or in quotes)
+        lowercase_words = {
+            'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from',
+            'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
+            'up', 'with', 'yet'
+        }
+
+        # Track whether we're inside quotes
+        in_quotes = False
+        result = []
+
+        # Split on whitespace while preserving spaces
+        words = title.split()
+
+        for i, word in enumerate(words):
+            # Check if word contains quotes
+            if '"' in word or '"' in word or '"' in word:
+                in_quotes = not in_quotes
+                # Words with quotes should be capitalized
+                result.append(word.capitalize())
+            # First word always capitalized
+            elif i == 0:
+                result.append(word.capitalize())
+            # Words inside quotes are always capitalized
+            elif in_quotes:
+                result.append(word.capitalize())
+            # Check if word should be lowercase
+            elif word.lower() in lowercase_words:
+                result.append(word.lower())
+            # Otherwise capitalize
+            else:
+                result.append(word.capitalize())
+
+        return ' '.join(result)
 
     def normalize_chapter_text(self, text: str) -> str:
         """
@@ -588,6 +635,20 @@ Cover all major plot points, themes, and character developments in chronological
         result = re.sub(r' {2,}', ' ', result)
 
         return result
+
+    def clean_page_numbers_from_title(self, title: str) -> str:
+        """
+        Remove page numbers from chapter titles.
+        Page numbers typically appear at the end, possibly with leading dots/spaces.
+        Examples:
+            "THE PRISON-DOOR                                51" -> "THE PRISON-DOOR"
+            "The Market Place . . . . . . . . . . . . . 54" -> "The Market Place"
+            "Chapter Title                              123" -> "Chapter Title"
+        """
+        # Remove trailing page numbers (digits possibly preceded by dots, spaces, etc.)
+        # Look for patterns like "  123", "....123", ". . . .123", "     51"
+        cleaned = re.sub(r'[\s\.]+\d+\s*$', '', title)
+        return cleaned.strip()
 
     def extract_toc(self, text: str) -> Tuple[Dict[str, str], int]:
         """
@@ -632,12 +693,14 @@ Cover all major plot points, themes, and character developments in chronological
 
             # Parse TOC entries
             if in_toc and line_stripped:
-                # Pattern 1: Roman numerals with title (e.g., "LVI. Old and New Tables" or "I        TREATS OF")
-                # Period after Roman numeral is optional to handle Oliver Twist style TOC
-                match = re.match(r'^([IVXLCDM]+)\.?\s+(.+?)\.?\s*$', line_stripped)
+                # Pattern 1: Roman numerals with title (e.g., "LVI. Old and New Tables")
+                # MUST have a period after the numeral to avoid matching "I have..." sentences
+                match = re.match(r'^([IVXLCDM]+)\.\s+(.+?)\.?\s*$', line_stripped)
                 if match:
                     roman_num = match.group(1)
                     title = match.group(2).strip('. ')
+                    # Clean page numbers from title
+                    title = self.clean_page_numbers_from_title(title)
 
                     # Check for duplicate or decrease (signals TOC ended)
                     if roman_num in seen_markers:
@@ -666,6 +729,8 @@ Cover all major plot points, themes, and character developments in chronological
                     chapter_marker = match.group(1)
                     # Title is in group 2 (after the period and space)
                     title = match.group(2).strip('. ') if match.group(2) else ""
+                    # Clean page numbers from title
+                    title = self.clean_page_numbers_from_title(title)
 
                     # Check for duplicate or decrease (signals TOC ended)
                     if chapter_marker in seen_markers:
@@ -985,8 +1050,8 @@ Cover all major plot points, themes, and character developments in chronological
             # Note: Removed exit_markers as they're unreliable
             # Rely on duplicate detection and chapter count thresholds instead
 
-        # Save last section
-        if current_section and len(current_section['chapters']) > 0:
+        # Save last section (allow sections with 0 chapters - they might be filled in later by body scan)
+        if current_section:
             toc_structure.append(current_section)
 
         # Return None if no two-level structure detected
@@ -995,6 +1060,13 @@ Cover all major plot points, themes, and character developments in chronological
 
         # Only return if we have at least 2 sections (to qualify as two-level)
         if len(toc_structure) < 2:
+            return None
+
+        # Check if at least some sections have chapters (to avoid false positives)
+        # Allow some sections to have 0 chapters (like in Gulliver's Travels TOC)
+        sections_with_chapters = sum(1 for s in toc_structure if len(s['chapters']) > 0)
+        if sections_with_chapters == 0:
+            # No chapters found in any section - this is not a valid two-level structure
             return None
 
         return toc_structure
@@ -1014,9 +1086,13 @@ Cover all major plot points, themes, and character developments in chronological
         lines = text.split('\n')
 
         # Patterns for section markers
-        # Allow optional title after numeral (e.g., "PART ONE--The Old Buccaneer" for Treasure Island)
-        # Capture group 3 is the title (after optional period, double-dash, or space+double-dash)
-        section_pattern = r'^\s*(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\.?\s*$|(?:--|\s+--)\s*(.+?)\s*$)'
+        # Allow optional title after numeral with various separators:
+        # - "PART ONE" (no separator)
+        # - "PART ONE." (period, no title)
+        # - "PART I. A VOYAGE TO LILLIPUT." (period + space + title)
+        # - "PART ONE--The Old Buccaneer" (double-dash + title)
+        # Capture group 3 is the title (after period or double-dash)
+        section_pattern = r'^\s*(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\.?\s*$|\.?\s+(.+?)\s*$|(?:--|\s+--)\s*(.+?)\s*$)'
 
         # Also match decorative section markers like "— I —", "— II —", "— III —" (Ulysses)
         decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
@@ -1026,8 +1102,9 @@ Cover all major plot points, themes, and character developments in chronological
         # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
         spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
         chapter_pattern = rf'^\s*(?:CHAPTER|Chapter)\s+({spelled_out}|[IVXLCDM]+|[0-9]+)\.?\s*(.{{0,60}})$'
-        # Alternative pattern for standalone Roman numerals (Treasure Island style)
-        standalone_roman_pattern = r'^\s*([IVXLCDM]+)\s*$'
+        # Alternative patterns for standalone Roman numerals (Treasure Island, War of the Worlds styles)
+        standalone_roman_pattern = r'^\s*([IVXLCDM]+)\s*$'  # Without period: "I", "II", "III"
+        standalone_roman_with_period_pattern = r'^\s*([IVXLCDM]+)\.\s*$'  # With period: "I.", "II.", "III."
         # Bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
         bracket_chapter_pattern = r'^\s*\[\s*([0-9]+)\s*\]\s*$'
 
@@ -1073,14 +1150,14 @@ Cover all major plot points, themes, and character developments in chronological
                 existing_index = next((idx for idx, s in enumerate(toc_structure) if s['number'] == section_number), None)
                 if existing_index is not None:
                     # Remove the old entry (TOC)
-                    toc_structure.pop(existing_index)
+                    old_section = toc_structure.pop(existing_index)
 
                 # Also check if current_section matches this number
                 if current_section and current_section['number'] == section_number:
                     # Replace current_section with this new occurrence
                     pass  # Will be replaced below
-                elif current_section and len(current_section['chapters']) > 0:
-                    # Save previous section if it has chapters and is different
+                elif current_section:
+                    # Save previous section (even if it has 0 chapters - chapters might be detected later)
                     toc_structure.append(current_section)
 
                 # Extract section title
@@ -1088,9 +1165,14 @@ Cover all major plot points, themes, and character developments in chronological
                     # Decorative markers don't have titles
                     section_title = ""
                 else:
-                    # First try to get it from the match (group 3) if it exists on the same line
-                    # (e.g., "PART ONE--The Old Buccaneer")
-                    section_title = section_match.group(3).strip() if section_match.group(3) else ""
+                    # Try to get it from the match if it exists on the same line
+                    # Group 3: "PART I. A VOYAGE TO LILLIPUT." (period + space + title)
+                    # Group 4: "PART ONE--The Old Buccaneer" (double-dash + title)
+                    section_title = ""
+                    if section_match.group(3):
+                        section_title = section_match.group(3).strip()
+                    elif section_match.group(4):
+                        section_title = section_match.group(4).strip()
 
                     # If not on same line, check next line for section title
                     if not section_title and i + 1 < len(lines):
@@ -1117,14 +1199,19 @@ Cover all major plot points, themes, and character developments in chronological
                 chapter_match = re.match(chapter_pattern, line_stripped)
                 bracket_match = re.match(bracket_chapter_pattern, line_stripped) if not chapter_match else None
                 standalone_match = re.match(standalone_roman_pattern, line_stripped) if not chapter_match and not bracket_match else None
+                standalone_with_period_match = re.match(standalone_roman_with_period_pattern, line_stripped) if not chapter_match and not bracket_match and not standalone_match else None
 
-                if chapter_match or bracket_match or standalone_match:
+                if chapter_match or bracket_match or standalone_match or standalone_with_period_match:
                     if chapter_match:
                         chapter_numeral = chapter_match.group(1)
                         chapter_title = chapter_match.group(2).strip() if chapter_match.group(2) else ""
                     elif bracket_match:
                         # Bracket-style chapter (Ulysses)
                         chapter_numeral = bracket_match.group(1)
+                        chapter_title = ""
+                    elif standalone_with_period_match:
+                        # Standalone Roman numeral with period (War of the Worlds)
+                        chapter_numeral = standalone_with_period_match.group(1)
                         chapter_title = ""
                     else:  # standalone_match
                         chapter_numeral = standalone_match.group(1)
@@ -1169,23 +1256,30 @@ Cover all major plot points, themes, and character developments in chronological
                         'title': chapter_title
                     })
 
-        # Save last section
-        if current_section and len(current_section['chapters']) > 0:
+        # Save last section (allow sections with 0 chapters - chapters might not be detected yet)
+        if current_section:
             toc_structure.append(current_section)
 
         # Validation: Only return if we have a valid two-level structure
         if len(toc_structure) < 2:
             return None
 
-        # Validation: Each section should have at least 2 chapters on average
-        total_chapters = sum(len(s['chapters']) for s in toc_structure)
-        avg_chapters_per_section = total_chapters / len(toc_structure)
-        if avg_chapters_per_section < 2:
-            return None
+        # Validation: Each section should have at least 2 chapters on average (for sections that have chapters)
+        sections_with_chapters = [s for s in toc_structure if len(s['chapters']) > 0]
+        total_chapters = sum(len(s['chapters']) for s in sections_with_chapters)
 
-        # Validation: Total chapters should be substantial (at least 10)
-        if total_chapters < 10:
-            return None
+        if len(sections_with_chapters) == 0:
+            # No chapters found in any section yet - this might still be valid if chapters are detected later
+            # Don't return None here, let the structure be used
+            pass
+        else:
+            avg_chapters_per_section = total_chapters / len(sections_with_chapters)
+            if avg_chapters_per_section < 2:
+                return None
+
+            # Validation: Total chapters should be substantial (at least 10)
+            if total_chapters < 10:
+                return None
 
         print(f"  📖 Document body scan detected {len(toc_structure)} sections with {total_chapters} total chapters")
         for section in toc_structure[:3]:  # Show first 3 sections
@@ -1280,66 +1374,53 @@ Cover all major plot points, themes, and character developments in chronological
         chapters = []
         consumed_line_indices = set()
 
-        # For two-level structures, don't use toc_end_line from extract_toc() - it's often wrong
-        # Instead, start searching from the beginning and skip TOC entries by looking for duplicates
-        # Track where we last searched to avoid finding the same section twice
-        search_start_line = 0
+        # For two-level structures, start searching after TOC (if detected) to avoid finding TOC entries
+        # When toc_end_line is available, use it as the starting point to skip the TOC section
+        # Otherwise start from the beginning and rely on duplicate detection
+        search_start_line = toc_end_line if toc_end_line > 0 else 0
 
         # Sequential chapter counter across all sections (1, 2, 3, ...)
         sequential_chapter_num = 1
 
         # Check for preface/introduction before the first section
-        # Look for TRANSLATOR'S PREFACE, AUTHOR'S PREFACE, PREFACE, INTRODUCTION, PRELUDE
-        # Use ['\u2019] to match both straight apostrophe (') and curly apostrophe (')
-        preface_patterns = [
-            r"^TRANSLATOR['\u2019]S PREFACE$",
-            r"^Translator['\u2019]s Preface$",
-            r"^AUTHOR['\u2019]S PREFACE$",
-            r"^Author['\u2019]s Preface$",
-            r'^PREFACE$',
-            r'^Preface$',
-            r'^INTRODUCTION$',
-            r'^Introduction$',
-            r'^PRELUDE\.?$',  # Match "PRELUDE" or "PRELUDE."
-            r'^Prelude\.?$',  # Match "Prelude" or "Prelude."
-        ]
-
+        # Capture all content from beginning up to first chapter/section
         # Find the first section start line
         first_section = toc_structure[0] if toc_structure else None
         first_section_line = first_section.get('line_index', len(lines)) if first_section else len(lines)
 
-        print(f"  Searching for preface in lines 0-{first_section_line} (first section at line {first_section_line})")
+        # Start after TOC to skip title page and table of contents
+        # Uses existing TOC detection to find where actual content begins
+        # Safety check: if toc_end_line is after first_section_line, TOC detection failed - start from 0
+        if toc_end_line > 0 and toc_end_line < first_section_line:
+            preface_start = toc_end_line
+        else:
+            preface_start = 0
+        preface_end = first_section_line
 
-        # Search for preface before the first section
-        preface_start = None
-        preface_title = None
-        for i in range(min(500, first_section_line)):  # Search first 500 lines or until first section
-            line = lines[i].strip()
-            for pattern in preface_patterns:
-                if re.match(pattern, line):
-                    preface_start = i
-                    preface_title = line
-                    print(f"  Found preface: '{preface_title}' at line {i}")
-                    break
-            if preface_start is not None:
-                break
+        print(f"  Searching for preface in lines {preface_start}-{preface_end} (TOC ends at {toc_end_line}, first section at line {first_section_line})")
 
-        if preface_start is None:
-            print(f"  No preface found in first {min(500, first_section_line)} lines")
-
-        # If preface found, create Chapter 0
-        if preface_start is not None:
-            preface_end = first_section_line
+        # Extract content from TOC end to first section
+        if preface_end > preface_start:
             preface_text = '\n'.join(lines[preface_start:preface_end])
+
+            # Normalize text formatting (same as regular chapters)
+            preface_text = self.normalize_chapter_text(preface_text)
+
             preface_words = len(preface_text.split())
 
             # Only include if substantial (>100 words)
             if preface_words > 100:
+                # Use "Preface" as default title
+                preface_title = "Preface"
                 chapters.append((0, preface_title, preface_text))
                 for idx in range(preface_start, preface_end):
                     consumed_line_indices.add(idx)
                 print(f"  ✓ Created Chapter 0 ({preface_title}): {len(preface_text)} chars, ~{preface_words} words")
                 sequential_chapter_num = 1  # Chapters start at 1 after preface
+            else:
+                print(f"  Preface content too short ({preface_words} words), skipping")
+        else:
+            print(f"  No preface content found (first section starts at beginning)")
 
         # Build list of expected chapter markers from the structure
         # For each PART/BOOK/ACT, use the line_index from the structure (if available)
@@ -1402,12 +1483,14 @@ Cover all major plot points, themes, and character developments in chronological
                 chapter_title = chapter_info['title']
 
                 # Pattern to find this chapter
-                # Try three patterns:
+                # Try four patterns:
                 # 1. "CHAPTER <numeral>" (e.g., White Fang: "CHAPTER I")
-                # 2. Standalone "<numeral>" (e.g., Treasure Island: "I")
-                # 3. Bracket format "[ <numeral> ]" (e.g., Ulysses: "[ 1 ]")
+                # 2. Standalone "<numeral>" without period (e.g., Treasure Island: "I")
+                # 3. Standalone "<numeral>." with period (e.g., War of the Worlds: "I.")
+                # 4. Bracket format "[ <numeral> ]" (e.g., Ulysses: "[ 1 ]")
                 chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{chapter_numeral}\.?\s*'
                 chapter_pattern_standalone = rf'^\s*{chapter_numeral}\s*$'
+                chapter_pattern_standalone_with_period = rf'^\s*{chapter_numeral}\.\s*$'
                 chapter_pattern_bracket = rf'^\s*\[\s*{chapter_numeral}\s*\]\s*$'
 
                 # Find where this chapter starts (between section start and section end)
@@ -1415,6 +1498,7 @@ Cover all major plot points, themes, and character developments in chronological
                 for i in range(section_start_line + 1, section_end_line):
                     if (re.match(chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or
                         re.match(chapter_pattern_standalone, lines[i]) or
+                        re.match(chapter_pattern_standalone_with_period, lines[i]) or
                         re.match(chapter_pattern_bracket, lines[i])):
                         chapter_start_line = i
                         break
@@ -1435,11 +1519,13 @@ Cover all major plot points, themes, and character developments in chronological
                     next_chapter_numeral = next_chapter_info['numeral']
                     next_chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{next_chapter_numeral}\.?\s*'
                     next_chapter_pattern_standalone = rf'^\s*{next_chapter_numeral}\s*$'
+                    next_chapter_pattern_standalone_with_period = rf'^\s*{next_chapter_numeral}\.\s*$'
                     next_chapter_pattern_bracket = rf'^\s*\[\s*{next_chapter_numeral}\s*\]\s*$'
 
                     for i in range(chapter_start_line + 1, section_end_line):
                         if (re.match(next_chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or
                             re.match(next_chapter_pattern_standalone, lines[i]) or
+                            re.match(next_chapter_pattern_standalone_with_period, lines[i]) or
                             re.match(next_chapter_pattern_bracket, lines[i])):
                             chapter_end_line = i
                             break
@@ -1454,8 +1540,9 @@ Cover all major plot points, themes, and character developments in chronological
                 # Only add if substantial content (> 100 chars)
                 if len(chapter_text) > 100:
                     # Use sequential numbering (1, 2, 3, ...) across all sections
-                    # Keep the original chapter title without adding section prefix
-                    chapters.append((sequential_chapter_num, chapter_title, chapter_text))
+                    # Normalize chapter title for consistent capitalization
+                    normalized_title = self.normalize_chapter_title(chapter_title)
+                    chapters.append((sequential_chapter_num, normalized_title, chapter_text))
                     # Mark all lines as consumed
                     for i in range(chapter_start_line, chapter_end_line):
                         consumed_line_indices.add(i)
@@ -1498,133 +1585,127 @@ Cover all major plot points, themes, and character developments in chronological
 
         chapters = []
 
-        # Extract preface material that appears BEFORE the TOC
-        # This handles cases like Winnie-the-Pooh where the dedication and introduction appear before the TOC
-        pre_toc_preface_lines = []
-        pre_toc_preface_line_indices = set()  # Track which line indices are part of the preface
-        if toc_end_line > 0:
-            lines_before_toc = text.split('\n')[:toc_end_line]
-            in_preface_section = False
-            preface_section_start = -1
+        # NEW APPROACH: Capture everything before Chapter 1, then filter out TOC and frontmatter
+        # This is simpler and more robust than trying to detect specific preface patterns
+        #
+        # Strategy:
+        # 1. Find the first numbered chapter (CHAPTER I, CHAPTER 1, etc.)
+        # 2. Everything before that goes into the preface pool
+        # 3. Filter out: TOC lines, illustration captions, title pages, copyright notices
+        # 4. Keep: All prefaces, dedications, introductions, and substantive content
 
-            # Patterns for preface/dedication/introduction markers
-            preface_markers = [
-                r'^\s*INTRODUCTION\s*$',
-                r'^\s*Introduction\s*$',
-                r'^\s*PREFACE\s*$',
-                r'^\s*Preface\s*$',
-                r'^\s*DEDICATION\s*$',
-                r'^\s*Dedication\s*$',
-                r'^\s*TO HER\s*$',  # Dedication format in Winnie-the-Pooh
-                r'^\s*TO\s+[A-Z]',  # Other dedication formats starting with "TO"
-            ]
+        all_lines = text.split('\n')
 
-            for i, line in enumerate(lines_before_toc):
+        # Patterns for first numbered chapter (not preface/introduction)
+        first_chapter_patterns = [
+            r'^\s*BOOK\s+(I|ONE|1)\b',
+            r'^\s*CHAPTER\s+(I|ONE|1)\b',
+            r'^\s*Chapter\s+(I|One|1)\b',
+            r'^\s*PART\s+(I|ONE|1)\b',
+            r'^\s*STAVE\s+(I|ONE|1)\b',
+            r'^\s*SCENE\s+(I|ONE|1)\b',
+            r'^\s*\[\s*1\s*\]',  # Bracket format: "[1]"
+            r'^\s*I\.\s+',  # Roman numeral with period: "I. Title"
+        ]
+
+        # Find the line where Chapter 1 starts
+        first_chapter_line = None
+        for i, line in enumerate(all_lines):
+            line_stripped = line.strip()
+            if any(re.match(pattern, line_stripped) for pattern in first_chapter_patterns):
+                first_chapter_line = i
+                print(f"Found first chapter at line {i}: '{line_stripped}'")
+                break
+
+        # If we didn't find Chapter 1, there's no preface to extract
+        if first_chapter_line is None:
+            print("No first chapter found - no preface extraction")
+            initial_preface_text = []
+            combined_preface_line_indices = set()
+        else:
+            # Extract all lines before Chapter 1
+            preface_pool = all_lines[:first_chapter_line]
+
+            # Filter out non-content lines
+            filtered_preface_lines = []
+            filtered_line_indices = set()
+
+            in_toc = False
+            in_illustration = False
+
+            for i, line in enumerate(preface_pool):
                 line_stripped = line.strip()
 
-                # Check if this line starts a preface section
-                if any(re.match(pattern, line_stripped) for pattern in preface_markers):
-                    in_preface_section = True
-                    preface_section_start = i
+                # Skip empty lines at the start, but keep them once we have content
+                if not line_stripped:
+                    if filtered_preface_lines:  # Only keep if we already have content
+                        filtered_preface_lines.append(line)
+                        filtered_line_indices.add(i)
                     continue
 
-                # Check if we've reached the start of the CONTENTS/TOC section
-                if re.match(r'^\s*CONTENTS?\s*$', line_stripped, re.IGNORECASE):
-                    in_preface_section = False
-                    if preface_section_start >= 0:
-                        # Extract all lines from preface start to here
-                        pre_toc_preface_lines = lines_before_toc[preface_section_start:i]
-                        # Track the line indices as consumed
-                        pre_toc_preface_line_indices = set(range(preface_section_start, i))
-                        print(f"Found preface material before TOC ({len(pre_toc_preface_lines)} lines, {sum(len(l) for l in pre_toc_preface_lines)} chars)")
-                    break
+                # Detect start of TOC
+                if re.match(r'^\s*(CONTENTS?|TABLE OF CONTENTS|LIST OF CHAPTERS)\s*$', line_stripped, re.IGNORECASE):
+                    in_toc = True
+                    continue
 
-        # Store pre-TOC preface lines for later use
-        initial_preface_text = pre_toc_preface_lines
+                # Detect end of TOC (first substantive line after TOC that's not a chapter listing)
+                if in_toc:
+                    # Check if this looks like a TOC entry (chapter name with page number)
+                    # or a TOC-related line (like "PAGE", "CHAPTER", section headers, etc.)
+                    is_toc_entry = (
+                        re.search(r'\d+\s*$', line_stripped) or  # Ends with page number
+                        re.match(r'^(PAGE|CHAPTER|BOOK|PART|VOLUME|ACT|SCENE|STAVE)\s*$', line_stripped, re.IGNORECASE) or
+                        re.match(r'^[IVXLCDM]+\.?\s+', line_stripped) or  # Roman numeral listing
+                        re.match(r'^\d+\.?\s+', line_stripped) or  # Arabic numeral listing
+                        len(line_stripped) < 3  # Very short lines in TOC
+                    )
 
-        # Extract preface material that appears AFTER the TOC but BEFORE the first chapter
-        # This handles cases like The Iliad where the introduction appears between TOC and BOOK I
-        # Strategy: Find ALL preface markers, check which ones have substantial content following,
-        # and use the LAST valid one (actual introduction, not TOC entry)
-        post_toc_preface_lines = []
-        post_toc_preface_line_indices = set()
+                    if not is_toc_entry:
+                        in_toc = False
+                        # Don't skip this line - it's the start of real content
+                    else:
+                        continue  # Skip TOC entries
 
-        # Always scan the entire text for post-TOC preface, not just after toc_end_line
-        # This handles cases where toc_end_line detection fails
-        lines_after_toc = text.split('\n')
+                # Handle illustration captions
+                if line_stripped.startswith('[Illustration'):
+                    in_illustration = True
+                    if ']' in line_stripped:
+                        in_illustration = False
+                    continue
 
-        # Same preface markers as pre-TOC extraction
-        # Include optional period at the end to match "INTRODUCTION." or "PREFACE."
-        preface_markers = [
-            r'^\s*INTRODUCTION\.?\s*$',
-            r'^\s*Introduction\.?\s*$',
-            r'^\s*PREFACE\.?\s*$',
-            r'^\s*Preface\.?\s*$',
-            r'^\s*DEDICATION\.?\s*$',
-            r'^\s*Dedication\.?\s*$',
-            r'^\s*TO HER\.?\s*$',
-            r'^\s*TO\s+[A-Z]',
-        ]
+                if in_illustration:
+                    if ']' in line_stripped:
+                        in_illustration = False
+                    continue
 
-        # Patterns for first chapter markers (BOOK I, CHAPTER 1, etc.)
-        first_chapter_patterns = [
-            r'^\s*BOOK\s+(I|ONE|1)\s*\.?\s*$',
-            r'^\s*CHAPTER\s+(I|ONE|1)\s*\.?\s*$',
-            r'^\s*Chapter\s+(I|One|1)\s*\.?\s*$',
-            r'^\s*PART\s+(I|ONE|1)\s*\.?\s*$',
-        ]
+                # Skip title page elements (all caps, centered, short lines)
+                # But keep preface/dedication/introduction headers
+                is_preface_header = re.match(r'^\s*(PREFACE|DEDICATION|INTRODUCTION|TO\s+)', line_stripped, re.IGNORECASE)
+                if not is_preface_header:
+                    # Skip common frontmatter patterns
+                    if (
+                        re.match(r'^(THE\s+)?\w+(\s+\w+){0,3}$', line_stripped) and line_stripped.isupper() and len(line_stripped) < 50 or
+                        re.match(r'^BY\s*$', line_stripped, re.IGNORECASE) or
+                        re.match(r'^Illustrated\.?$', line_stripped) or
+                        re.match(r'^(BOSTON|LONDON|NEW YORK|CHICAGO|PHILADELPHIA):', line_stripped) or
+                        re.match(r'^COPYRIGHT', line_stripped, re.IGNORECASE) or
+                        re.match(r'^All rights reserved', line_stripped, re.IGNORECASE) or
+                        re.match(r'^\d{4}\.?$', line_stripped) or  # Just a year
+                        re.match(r'^[A-Z\s,\.&]+$', line_stripped) and len(line_stripped) < 60 and i < 100  # Publisher info (only in first 100 lines)
+                    ):
+                        continue
 
-        # Find ALL preface markers and check which ones have substantial content
-        # We'll pick the LAST one that has substantial content (likely the actual introduction)
-        preface_candidates = []
+                # Keep this line
+                filtered_preface_lines.append(line)
+                filtered_line_indices.add(i)
 
-        for i in range(len(lines_after_toc)):
-            line_stripped = lines_after_toc[i].strip()
+            initial_preface_text = filtered_preface_lines
+            combined_preface_line_indices = filtered_line_indices
 
-            # Check if this line is a preface marker
-            if any(re.match(pattern, line_stripped) for pattern in preface_markers):
-                # Look ahead to see if there's substantial content (> 500 chars in next 50 lines)
-                # This distinguishes TOC entries (no content) from actual sections (has content)
-                content_following = []
-                for j in range(i + 1, min(i + 51, len(lines_after_toc))):
-                    next_line = lines_after_toc[j].strip()
-                    # Stop if we hit a chapter marker
-                    if any(re.match(pattern, next_line) for pattern in first_chapter_patterns):
-                        break
-                    content_following.append(lines_after_toc[j])
-
-                # Check if substantial content follows (> 500 chars)
-                content_size = sum(len(line) for line in content_following)
-                if content_size > 500:
-                    preface_candidates.append({
-                        'line_index': i,
-                        'marker': line_stripped,
-                        'content_size': content_size
-                    })
-
-        # If we found candidates, use the LAST one (most likely the actual introduction)
-        if preface_candidates:
-            best_candidate = preface_candidates[-1]  # Use last candidate
-            preface_start = best_candidate['line_index']
-
-            # Find where this preface ends (at the first chapter marker)
-            preface_end = len(lines_after_toc)
-            for i in range(preface_start + 1, len(lines_after_toc)):
-                line_stripped = lines_after_toc[i].strip()
-                if any(re.match(pattern, line_stripped) for pattern in first_chapter_patterns):
-                    preface_end = i
-                    break
-
-            # Extract the preface content
-            post_toc_preface_lines = lines_after_toc[preface_start:preface_end]
-            post_toc_preface_line_indices = set(range(preface_start, preface_end))
-            print(f"Found preface material after TOC ({len(post_toc_preface_lines)} lines, {sum(len(l) for l in post_toc_preface_lines)} chars)")
-            print(f"  Preface marker: '{best_candidate['marker']}' at line {preface_start}")
-
-        # Combine pre-TOC and post-TOC preface materials
-        initial_preface_text = pre_toc_preface_lines + post_toc_preface_lines
-        # Also track combined line indices
-        combined_preface_line_indices = pre_toc_preface_line_indices.union(post_toc_preface_line_indices)
+            if filtered_preface_lines:
+                print(f"Extracted preface material: {len(filtered_preface_lines)} lines, {sum(len(l) for l in filtered_preface_lines)} chars")
+            else:
+                print("No preface material found before first chapter")
 
         # Pattern for BOOK/VOLUME/ACT markers (e.g., "BOOK I", "BOOK II", "BOOK ONE", "BOOK TWO", "VOLUME I", "ACT I")
         # IMPORTANT: Spelled-out words must come BEFORE Roman numerals in alternation to avoid partial matches
@@ -1709,6 +1790,12 @@ Cover all major plot points, themes, and character developments in chronological
             # Track illustration blocks (update state before processing)
             if line_stripped.startswith('[Illustration'):
                 in_illustration = True
+                # Check if illustration closes on the same line (has a closing ']')
+                # Handles both "[Illustration: text]" and "[Illustration: ] text" formats
+                if ']' in line_stripped:
+                    in_illustration = False
+                    # Skip this line entirely
+                    continue
 
             # Check if this closes an illustration block
             closes_illustration = in_illustration and line_stripped.endswith(']')
@@ -1927,21 +2014,30 @@ Cover all major plot points, themes, and character developments in chronological
 
                     # Check if next line is a continuation of the title (for multi-line titles)
                     # Do this BEFORE removing part markers so we can check if continuation is part of the marker
+                    # Skip up to 2 blank lines to find the continuation/title
+                    next_line = None
+                    next_line_idx_offset = None
                     if i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
+                        # Find the next non-blank line (skip up to 2 blank lines)
+                        for lookahead in range(1, min(4, len(lines) - i)):
+                            candidate_line = lines[i + lookahead].strip()
+                            if candidate_line:  # Found non-blank line
+                                next_line = candidate_line
+                                next_line_idx_offset = lookahead
+                                break
 
                         # Check if next line is just a part marker continuation (e.g., " I.", "II.", etc.)
                         # These should be concatenated to the title for regex removal, but consumed to prevent re-detection
-                        is_part_marker_continuation = re.match(r'^[IVXLCDM]+\.$', next_line)
+                        is_part_marker_continuation = re.match(r'^[IVXLCDM]+\.$', next_line) if next_line else False
 
                         # If this is a part marker continuation, mark it for consumption
                         if is_part_marker_continuation:
-                            part_marker_line_idx = i + 1
+                            part_marker_line_idx = i + next_line_idx_offset
                             # Also concatenate it to the title so the part marker removal regex can find it
                             chapter_title = chapter_title + ' ' + next_line
-                            continuation_line_idx = i + 1
+                            continuation_line_idx = i + next_line_idx_offset
                             # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
-                            consumed_lines.add(i + 1)
+                            consumed_lines.add(i + next_line_idx_offset)
                         else:
                             # Check if next line looks like a title continuation:
                             # - Not another chapter marker
@@ -1964,15 +2060,15 @@ Cover all major plot points, themes, and character developments in chronological
                                 # Title is empty - use next line as title
                                 if is_continuation and len(next_line) > 3:
                                     chapter_title = next_line
-                                    continuation_line_idx = i + 1
+                                    continuation_line_idx = i + next_line_idx_offset
                                     # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
-                                    consumed_lines.add(i + 1)
+                                    consumed_lines.add(i + next_line_idx_offset)
                             elif is_continuation:
                                 # Title exists but next line is likely a continuation - append it
                                 chapter_title = chapter_title + ' ' + next_line
-                                continuation_line_idx = i + 1
+                                continuation_line_idx = i + next_line_idx_offset
                                 # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
-                                consumed_lines.add(i + 1)
+                                consumed_lines.add(i + next_line_idx_offset)
 
                     # Remove part markers from titles (e.g., "—Part I", ".—Part II", ". Part IV", etc.)
                     # Do this AFTER concatenation so we handle multi-line part markers
@@ -2735,7 +2831,8 @@ Cover all major plot points, themes, and character developments in chronological
         # Split by chapter markers
         # Expected format: ### CHAPTER N: TITLE\n[content]\n### END CHAPTER N
         # N should be sequential indices (1, 2, 3...) as specified in the prompt
-        pattern = r'###\s*CHAPTER\s+(\d+):\s*[^\n]*\n(.*?)(?=###\s*(?:CHAPTER\s+|END\s+CHAPTER\s+)|$)'
+        # Also handle LLM errors where it outputs "### END CHAPTER N: TITLE" instead of "### CHAPTER N: TITLE"
+        pattern = r'###\s*(?:END\s+)?CHAPTER\s+(\d+):\s*[^\n]*\n(.*?)(?=###\s*(?:(?:END\s+)?CHAPTER\s+|END\s+CHAPTER\s+)|$)'
 
         matches = re.finditer(pattern, response_text, re.DOTALL | re.IGNORECASE)
 

@@ -54,7 +54,7 @@ def categorize_book(db: Database, client: genai.Client, book: dict, categories: 
     category_list = "\n".join([f"- {cat['name']}: {cat['description']}" for cat in categories])
 
     # Prepare prompt
-    prompt = f"""You are a literary expert. Based on the book summary below, assign 2-5 appropriate categories from the provided list.
+    prompt = f"""You are a literary expert. Based on the book summary below, assign the most appropriate categories from the provided list.
 
 Book Title: {book['title']}
 Author: {book['author']}
@@ -66,10 +66,12 @@ Available Categories:
 {category_list}
 
 Requirements:
-1. Assign 2-5 categories that best fit this book
-2. Only use categories from the provided list (exact name match)
-3. Be specific and accurate based on the summary content
-4. Prioritize the most relevant categories
+1. Assign between 2-5 categories that genuinely fit this book
+2. Only assign categories that are clearly relevant based on the summary
+3. Only use categories from the provided list (exact name match)
+4. Quality over quantity - it's better to have 2-3 highly relevant categories than to pad with less relevant ones
+5. Consider both the primary genre AND thematic content (e.g., a Victorian novel might be both "Victorian Literature" and "Romance")
+6. Do NOT assign a category unless it's clearly applicable to the book
 
 Respond with a JSON object in this exact format:
 {{

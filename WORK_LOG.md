@@ -4,6 +4,143 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ---
 
+## 2025-11-29
+
+### Gulliver's Travels Preface Bug Fix and DRY Refactoring - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-29
+**Completed:** 2025-11-29
+
+**Objective:** Fix TOC detection bug causing Gulliver's Travels preface to start at line 47 instead of line 0, and eliminate duplicate text normalization code between prefaces and chapters.
+
+**Problem 1: TOC Detection False Positives**
+
+The TOC extraction pattern `^([IVXLCDM]+)\.?\s+` had an optional period (`\.?`) which caused it to match prose sentences starting with "I":
+
+```
+"I have carefully perused them three times."
+```
+
+This was incorrectly detected as:
+- TOC entry: Roman numeral "I"
+- Title: "have carefully perused them three times"
+
+**Impact:**
+- TOC detection failed to identify correct TOC end boundary
+- Preface text extraction started too late (line 47 instead of 0)
+- Missing preface content: "The Publisher to the Reader" and part of Gulliver's letter
+
+**Problem 2: Duplicate Code (DRY Violation)**
+
+Two separate text normalization methods existed:
+- `_clean_preface_text()` (84 lines) - for preface normalization
+- `normalize_chapter_text()` (36 lines) - for chapter normalization
+
+Both performed identical operations but were maintained separately, violating DRY principle.
+
+**Changes Made:**
+
+1. **Fixed TOC Detection Pattern** (`scripts/generate_summaries.py:684`):
+   - Changed pattern from: `^([IVXLCDM]+)\.?\s+` (optional period)
+   - Changed pattern to: `^([IVXLCDM]+)\.\s+` (mandatory period)
+   - **Rationale:** Actual TOC entries always have periods ("I. Title"), prose sentences don't
+   - **Impact:** Prevents false positives in preface/prose text
+
+2. **Eliminated Duplicate Code** (`scripts/generate_summaries.py:639-722`):
+   - **Deleted:** `_clean_preface_text()` method (84 lines)
+   - **Changed:** Preface normalization to use `normalize_chapter_text()` (line ~1469)
+   - **Result:** Single code path for all text normalization (DRY principle)
+   - **Benefits:**
+     - Reduced code duplication
+     - Easier maintenance (changes in one place)
+     - Consistent behavior between prefaces and chapters
+
+3. **Added Safety Check** (`scripts/generate_summaries.py:1374-1380`):
+   ```python
+   if not preface_text:
+       print("⚠️  Warning: No preface text extracted")
+       print(f"   TOC entries found: {len(toc)}")
+       print(f"   First chapter starts at line: {lines.index(first_line) if first_line else 'N/A'}")
+   ```
+   - Detects when TOC detection fails
+   - Provides debugging information
+   - Prevents silent failures
+
+4. **Regenerated Gulliver's Travels Preface**:
+   - Command: `python scripts/generate_summaries.py data/books/pg829.txt --regenerate-chapters "0"`
+   - Result: Correctly extracted 2037-word preface starting from line 0
+   - Summary: 498 words capturing all preface content
+
+**Testing:**
+
+1. **Regeneration Verification:**
+   - Generated logs: `logs/gemini_response_20251129_175001_ch0-0.json`
+   - Summary file: `data/summaries/pg829_summaries.json`
+   - Removed content log: `data/removed_content/pg829_removed.txt`
+   - Coverage: 99.7% (40 chapters, 104,968 words parsed)
+
+2. **Preface Content Verification:**
+   - ✅ "The Publisher to the Reader" by Richard Sympson
+   - ✅ "A Letter from Captain Gulliver to his Cousin Sympson" (1727)
+   - ✅ Gulliver's complaints about unauthorized edits
+   - ✅ Gulliver's misanthropic declarations about "Yahoos"
+   - ✅ Complete narrative framing device
+
+**Code Locations:**
+
+- `scripts/generate_summaries.py:684` - TOC pattern fix
+- `scripts/generate_summaries.py:639-722` - Deleted `_clean_preface_text()` (84 lines)
+- `scripts/generate_summaries.py:~1469` - Changed to use `normalize_chapter_text()` for preface
+- `scripts/generate_summaries.py:1374-1380` - Added safety check for TOC detection
+
+**Documentation Updates:**
+
+- ✅ ERD.md: Added TOC Detection Bug Fix section (lines 597-611)
+- ✅ PRD.md: No changes needed (technical implementation, not user-facing)
+- ✅ WORK_LOG.md: This entry
+
+**Files Modified:**
+- `scripts/generate_summaries.py` (3 changes: pattern fix, code deletion, safety check)
+- `data/summaries/pg829_summaries.json` (regenerated Chapter 0)
+- `ERD.md` (added bug fix documentation)
+- `WORK_LOG.md` (this entry)
+
+**Impact:**
+- Correct preface detection for all Project Gutenberg books
+- Eliminated 84 lines of duplicate code
+- Single normalization code path (DRY)
+- Better debugging for TOC detection failures
+- Fixed Gulliver's Travels preface summary
+
+**Key Learnings:**
+
+1. **Regular Expression Precision:**
+   - Optional patterns (`?`) can cause false positives
+   - Always test regex against actual text variations
+   - Real TOC entries have consistent formatting (period after Roman numeral)
+
+2. **DRY Principle:**
+   - Duplicate code paths are maintenance burden
+   - Refactor to single implementation when logic is identical
+   - Text normalization should be consistent across all content types
+
+3. **Defensive Programming:**
+   - Add safety checks for edge cases
+   - Log warnings when detection fails
+   - Provide debugging information for troubleshooting
+
+4. **Project Gutenberg Prefaces:**
+   - Prefaces often contain meta-fictional content
+   - TOC may include preface as first entry
+   - Correct extraction requires precise TOC boundary detection
+
+**Next Steps:**
+- Monitor other books for similar TOC detection issues
+- Consider adding unit tests for TOC extraction edge cases
+- Review other regex patterns for potential false positives
+
+---
+
 ## 2025-11-28
 
 ### Navigation UX Improvements - COMPLETED

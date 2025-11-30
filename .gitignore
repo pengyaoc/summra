@@ -30,10 +30,10 @@ build/
 Thumbs.db
 
 # Database (don't commit large databases to git)
-# *.db
-# *.db-journal
-# *.sqlite
-# *.sqlite3
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
 
 # Audio files (too large for git)
 # frontend/static/audio/*.wav
