@@ -16,16 +16,11 @@ import sys
 import os
 from pathlib import Path
 
-# Add project root to path so we can import from scripts
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-# Add backend directory to path
-backend_dir = project_root / 'backend'
-sys.path.insert(0, str(backend_dir))
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 import pytest
-from scripts.generate_summaries import SummaryGenerator
+from generate_summaries import SummaryGenerator
 
 
 class TestPrefaceDetection:

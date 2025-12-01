@@ -1,0 +1,40 @@
+The Project Gutenberg eBook of Test Fairy Tales
+
+CONTENTS
+
+  The First Story
+  The Second Story
+  The Missing Story
+
+  The Fourth Story
+
+
+
+
+THE FIRST STORY
+
+This is the beginning of the first story. It has real paragraph content
+that goes on for multiple lines and tells an actual story about things.
+
+More paragraph content here to make it substantial and realistic.
+
+
+
+
+THE SECOND STORY
+
+Here begins the second story with its own paragraph content that is
+quite long and substantial, just like a real fairy tale would be.
+
+Another paragraph to make it more realistic and detectable.
+
+
+
+
+THE FOURTH STORY
+
+And finally the fourth story, which comes after a missing story that
+only appeared in the table of contents but not in the actual book.
+
+This is common in Project Gutenberg books where TOC lists all stories
+but some editions don't include all of them.

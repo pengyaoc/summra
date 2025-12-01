@@ -307,7 +307,7 @@ Summary 2
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
         # Create chapters with enough words (> 200) to pass filtering
-        long_text = " ".join(["word"] * 250)
+        long_text = " ".join(["word"] * 600)
 
         chapters = [(1, "Chapter 1", long_text), (2, "Chapter 2", long_text)]
 

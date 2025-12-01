@@ -4,6 +4,513 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ---
 
+## 2025-11-30
+
+### Reading Experience Enhancements - Kindle-Inspired Features - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-30
+**Completed:** 2025-11-30
+
+**Objective:** Implement comprehensive reading experience improvements for chapter and medium summary pages with customization options inspired by Kindle's reading interface.
+
+**Features Implemented:**
+
+1. **Reading Progress Indicator (Kindle-Style)**
+   - **Location:** Bottom of screen
+   - **Design:** Thin progress bar (2px height, not thick like typical web progress bars)
+   - **Display:** Shows percentage complete with visual fill bar
+   - **Updates:** Real-time as user scrolls through content
+   - **Styling:** Matches color scheme (light/dark/sepia themes)
+
+2. **Next Chapter Navigation**
+   - **Location:** End of chapter content
+   - **Functionality:** Button to navigate to next sequential chapter
+   - **Smart Display:** Only shown when a next chapter exists
+   - **Styling:** Subject to color scheme changes (not font size/family)
+   - **Responsive:** Adapts to selected theme colors
+
+3. **Reading Settings Panel**
+   - **Access:** Gear icon (⚙️) button on reading pages
+   - **Panel Type:** Slides in from right edge
+   - **Persistence:** Settings saved to localStorage
+   - **Availability:** On both chapter detail and medium summary pages
+
+   **3a. Font Family Selection:**
+   - **Options:** 3 readable fonts
+     - Georgia (serif, default)
+     - System (system font stack)
+     - Open Sans (sans-serif)
+   - **UI:** Radio-style buttons with live preview
+   - **Application:** Applies to all reading content (summaries and chapters)
+
+   **3b. Font Size Adjustment:**
+   - **Range:** 12px to 24px
+   - **Controls:**
+     - Slider for fine control
+     - A- button to decrease
+     - A+ button to increase
+   - **Display:** Shows current size value
+   - **Application:** Applies to summary and chapter text
+   - **Exclusion:** Next chapter button area not affected
+
+   **3c. Color Scheme (Theme):**
+   - **Light:** White background (#FFFFFF), black text (#2c3e50)
+   - **Dark:** Dark gray background (#1a1a1a), light text (#e0e0e0)
+   - **Sepia:** Beige/cream background (#f4ecd8), warm brown text (#5c4f3d)
+   - **UI:** Visual theme previews with labels
+   - **Application:**
+     - Applies to summary and chapter text
+     - Applies to next chapter button area background
+     - Does NOT affect button font size/family
+
+4. **Sticky Reading Header**
+   - **Trigger:** Appears when user scrolls past book title
+   - **Content:**
+     - Chapter number (e.g., "Chapter 8")
+     - Book title
+     - Gear icon for settings access
+   - **Position:** Edge-to-edge, fixed to top
+   - **Visibility:** Hides when scrolled back to top
+   - **Dual Implementation:** Separate sticky headers for chapter and medium pages
+
+5. **Improved Navigation UX**
+   - **Back Button Behavior:** "Back to Book" now always returns to book detail page (not browser history)
+   - **Top Margin:** Added spacing to back button + gear icon row (not stuck to top)
+   - **Route Persistence:** Page refresh on chapter URL maintains chapter view (no redirect to home)
+
+**Technical Implementation:**
+
+**HTML Structure:**
+- `frontend/templates/index.html` (lines 90-234)
+  - Reading progress bar elements for both chapter and medium pages
+  - Reading settings panel with font/size/theme controls
+  - Sticky header elements with chapter/book title display
+  - Next chapter button container
+
+**CSS Styling:**
+- `frontend/static/css/style.css` (lines 1652-2200)
+  - `.reading-progress-bar`: Kindle-style thin progress bar (2px height)
+  - `.reading-settings-panel`: Right-sliding settings panel (320px width)
+  - `.sticky-reading-header`: Edge-to-edge sticky header with smooth transitions
+  - `.next-chapter-btn`: Theme-aware button styling
+  - Font family data attributes (`[data-font]`)
+  - Theme data attributes (`[data-theme]` for light/dark/sepia)
+  - Responsive breakpoints for mobile optimization
+
+**JavaScript Functionality:**
+- `frontend/static/js/app.js` (lines 1483-1738)
+  - `setupReadingSettings()`: Initialize all reading controls
+  - `applyFont(font)`: Apply font family to reading sections
+  - `applyFontSize(size)`: Dynamically adjust text size
+  - `applyTheme(theme)`: Switch color schemes
+  - `saveReadingPreference(key, value)`: Persist to localStorage
+  - `loadReadingPreferences()`: Restore saved preferences on page load
+  - `updateReadingProgress()`: Calculate and display scroll progress (chapter)
+  - `updateReadingProgressMedium()`: Calculate and display scroll progress (medium)
+  - `setupStickyHeader()`: Handle sticky header visibility logic
+  - `showNextChapterButton()`: Display next chapter navigation
+
+**Reading Preferences Persistence:**
+- **Storage:** Browser localStorage
+- **Keys:**
+  - `reading_font` (default: 'georgia')
+  - `reading_fontSize` (default: '16')
+  - `reading_theme` (default: 'light')
+- **Scope:** Applies across all books and sessions
+- **Restoration:** Automatic on page load
+
+**Progress Calculation:**
+```javascript
+const windowHeight = window.innerHeight;
+const documentHeight = document.documentElement.scrollHeight;
+const scrollTop = window.scrollY;
+const scrollableHeight = documentHeight - windowHeight;
+
+let progress = Math.min(100, Math.round((scrollTop / scrollableHeight) * 100));
+```
+
+**Theme Application:**
+```javascript
+const chapterSection = document.getElementById('chapter-detail-section');
+const mediumSection = document.getElementById('medium-detail-section');
+
+// Set theme attribute
+chapterSection.setAttribute('data-theme', 'dark'); // or 'light', 'sepia'
+
+// CSS automatically applies theme-specific colors via:
+// .chapter-detail-section[data-theme="dark"] { ... }
+```
+
+**Files Modified:**
+- `frontend/templates/index.html` (lines 90-234) - Reading UI components
+- `frontend/static/css/style.css` (lines 1652-2200, 73-95) - Reading styles and header nav
+- `frontend/static/js/app.js` (lines 1483-1738, 24-25, 38-39) - Reading functionality
+
+**Impact:**
+
+1. **User Experience:**
+   - Professional, distraction-free reading environment
+   - Customization matches user preferences (Kindle-like)
+   - Clear reading progress indication
+   - Easy navigation between chapters
+   - Settings persist across sessions
+
+2. **Accessibility:**
+   - Font size adjustment for visually impaired users
+   - High contrast dark theme option
+   - Sepia theme for reduced eye strain
+   - Clear progress indicators
+
+3. **Mobile Responsiveness:**
+   - Settings panel goes full-width on mobile
+   - Progress bar height increases on mobile (32px vs 2px)
+   - Touch-friendly controls
+
+4. **Code Quality:**
+   - Shared reading settings panel between chapter/medium pages
+   - Clean separation of font/size/theme application logic
+   - LocalStorage persistence for seamless UX
+
+**Next Steps/Notes:**
+- All reading experience features fully implemented
+- Settings persist correctly across page refreshes
+- Sticky header appears/disappears smoothly
+- Next chapter navigation working for sequential reading
+- Theme switching applies to all reading content
+
+---
+
+### BOOK and Chapter Title Detection Fix and Documentation - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-30
+**Completed:** 2025-11-30
+
+**Objective:** Fix detection of BOOK section titles and chapter titles for books with titles on separate lines, specifically "The History of Tom Jones, a Foundling" (Project Gutenberg #6593).
+
+**Problems:**
+1. **BOOK section titles showing as "(untitled)":**
+   - Tom Jones has multi-line BOOK titles spanning 2+ lines
+   - Code only checked immediate next line, which was often empty
+   - Example: "BOOK I." → empty line → "CONTAINING AS MUCH OF THE BIRTH..." → "...THE BEGINNING OF THIS HISTORY."
+
+2. **Chapter titles showing as empty strings:**
+   - Tom Jones has chapter titles 2 lines after the marker
+   - Code only checked immediate next line, which was always empty
+   - Example: "Chapter i." → empty line → "The introduction to the work, or bill of fare to the feast."
+
+**Changes Made:**
+
+1. **BOOK Title Detection** (`scripts/generate_summaries.py:1185-1212`):
+   - Extended lookahead from 1 line to 5 lines
+   - Skip empty lines when searching for titles
+   - Collect multi-line titles (all-caps or title case lines < 100 chars)
+   - Join multiple title lines with spaces
+   - Stop when hitting chapter marker or prose content
+
+2. **Chapter Title Detection** (`scripts/generate_summaries.py:1248-1274`):
+   - Extended lookahead from 1 line to 3 lines
+   - Skip empty lines when searching for titles
+   - Increased max title length from 100 to 150 characters
+   - Stop when hitting another marker or prose content
+
+**Results:**
+- **BOOK Titles:** Now properly detected and displayed
+  - Before: "(untitled)"
+  - After: "CONTAINING AS MUCH OF THE BIRTH OF THE FOUNDLING AS IS NECESSARY OR PROPER TO ACQUAINT THE READER WITH IN THE BEGINNING OF THIS HISTORY."
+
+- **Chapter Titles:** Now properly detected and normalized
+  - Before: Empty strings
+  - After: "The Introduction to the Work, or Bill of Fare to the Feast."
+
+**Examples from Tom Jones:**
+```
+BOOK I: CONTAINING AS MUCH OF THE BIRTH OF THE FOUNDLING...
+  Chapter 1: The Introduction to the Work, or Bill of Fare to the Feast.
+  Chapter 2: A Short Description of Squire Allworthy, and a Fuller Account of Miss
+  Chapter 3: An Odd Accident Which Befel Mr Allworthy at His Return Home...
+```
+
+**Impact:**
+- Fixes title detection for books with titles on separate lines
+- Handles multi-line titles automatically
+- Backward compatible with existing single-line title detection
+- Improves metadata quality for chapter summaries
+
+**Documentation Updated:**
+- `ERD.md` - Added new section "Multi-Line Title Detection with Empty Line Skipping (Tom Jones Fix - 2025-11-30)" documenting:
+  - BOOK section title detection algorithm (lines 504-571)
+  - Chapter title detection algorithm (lines 572-633)
+  - Code examples with before/after comparisons
+  - Algorithm details and stop conditions
+  - Test coverage information
+- `ERD.md` - Updated "Supported Chapter Patterns" section to document lowercase Roman numeral support (lines 286-308)
+
+---
+
+### Lowercase Roman Numeral Support - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-30
+**Completed:** 2025-11-30
+
+**Objective:** Fix chapter detection for books using lowercase Roman numerals, specifically "The History of Tom Jones, a Foundling" by Henry Fielding (Project Gutenberg #6593).
+
+**Problem:**
+- Tom Jones uses lowercase Roman numerals for chapters (e.g., "Chapter i.", "Chapter ii.", "Chapter iii.")
+- Chapter detection regex only matched uppercase Roman numerals: `[IVXLCDM]+`
+- Result: Only 1 chapter detected (preface) out of 209 total chapters (99.5% content loss)
+
+**Root Cause Analysis:**
+- Pattern in `extract_two_level_structure_from_body()` at line 1104: `[IVXLCDM]+` only matches uppercase
+- Similar patterns at lines 1106-1107 for standalone Roman numerals also uppercase-only
+- While `roman_to_int()` function already handled case conversion (line 466: `s.upper()`), the regex pattern prevented lowercase matches from even being detected
+
+**Changes Made:**
+1. **Updated chapter pattern** (`scripts/generate_summaries.py:1104`):
+   - Changed: `[IVXLCDM]+` → `[IVXLCDMivxlcdm]+`
+   - Now matches both "Chapter I" and "Chapter i"
+
+2. **Updated standalone patterns** (`scripts/generate_summaries.py:1106-1107`):
+   - Changed: `[IVXLCDM]+` → `[IVXLCDMivxlcdm]+` in both patterns
+   - Handles standalone numerals like "i.", "ii.", "iii." (without "Chapter" prefix)
+
+**Results:**
+- **Before fix:** 1 chapter detected (0.3% coverage, 4,522 words)
+- **After fix:** 208 chapters detected (99.1% coverage, 349,236 words)
+- **Improvement:** 207 additional chapters captured, 344,714 words recovered
+- Successfully processes Tom Jones with proper chapter boundaries across all 18 BOOK sections
+
+**Testing:**
+```bash
+# Dry run shows proper detection
+python scripts/generate_summaries.py data/books/pg6593.txt --dry-run
+# Output: Total Chapters Detected: 208, Coverage: 99.1%
+```
+
+**Impact:**
+- Fixes chapter detection for any book using lowercase Roman numerals
+- No breaking changes to existing uppercase Roman numeral detection
+- Pattern is now case-inclusive for maximum compatibility
+
+**Unit Tests Added:**
+- Created comprehensive test suite: `tests/test_book_chapter_name_detection.py`
+- **16 tests total**, all passing:
+  - 4 tests for book title/author detection (`extract_metadata`)
+  - 3 tests for lowercase Roman numeral support
+  - 4 tests for chapter name detection
+  - 2 tests for two-level BOOK/Chapter structure
+  - 3 tests for Roman numeral edge cases (high numbers, complex conversions)
+- Test coverage includes:
+  - Project Gutenberg metadata extraction (title, author, translator handling)
+  - Lowercase vs uppercase Roman numerals (`i` vs `I`)
+  - Regex pattern matching for `Chapter i.`, `Chapter ii.`, etc.
+  - Chapter title normalization
+  - Two-level structure with realistic test data (12+ chapters meeting validation)
+  - Complex Roman numeral conversions (XCIX, CDXLIV, MCMXCIV)
+
+---
+
+### Title-Only TOC Detection Bug Fix - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-30
+**Completed:** 2025-11-30
+
+**Objective:** Fix chapter detection issues for books with title-only table of contents (no chapter numbers), specifically Hans Christian Andersen's Fairy Tales (Project Gutenberg #27200).
+
+**Problems Addressed:**
+
+1. **Case-sensitive title matching:**
+   - TOC had "A Story" (title case) but actual content had "A STORY" (uppercase)
+   - Regex pattern matching was case-sensitive, causing failure to match actual story titles
+   - Result: Script only found TOC entries, not actual story locations
+
+2. **TOC entries treated as chapter locations:**
+   - Some titles appeared only in TOC (e.g., "The Dumb Cook") without corresponding stories
+   - Script incorrectly used TOC line numbers as chapter start positions
+   - Result: Massive chapters (256KB+) or missing actual stories
+
+3. **No paragraph content detection:**
+   - Script didn't verify if titles were followed by actual story content
+   - Couldn't distinguish between TOC entries and real chapter headings
+   - Result: Incorrectly included TOC-only entries as chapters
+
+**Changes Made:**
+
+1. **Case-insensitive pattern matching** (`scripts/generate_summaries.py:2639`):
+   - Added `re.IGNORECASE` flag to both exact and fuzzy pattern matching
+   - Allows matching "A Story" (TOC) with "A STORY" (content)
+
+2. **Paragraph content detection heuristic** (`scripts/generate_summaries.py:2642-2674`):
+   - Look ahead 5 lines after each title match for paragraph content (>40 chars, mixed case or punctuation)
+   - Allow up to 2 uppercase subtitle lines (e.g., "AN OLD STORY TOLD ANEW")
+   - Only accept matches followed by actual story content, not just more titles
+   - Limit lookahead to 5 lines to avoid detecting content from subsequent stories
+
+3. **Removed fallback to unverified matches** (`scripts/generate_summaries.py:2676-2684`):
+   - Previously fell back to using any match even without paragraph detection
+   - Now skips titles that only appear in TOC (no nearby paragraph content)
+   - Prints "Skipping... likely TOC-only" message for visibility
+
+**Results:**
+- Before: 125 "chapters" detected (many with 0 chars or entire book content)
+- After: 120 chapters detected with proper boundaries
+- Successfully skips 5 TOC-only entries (The Dumb Cook, Ole-Luk-Oie the Dream God, etc.)
+- All chapters now have proper content (e.g., "The Child in the Grave": 9,442 chars, "Jack the Dullard": 12,381 chars)
+
+**Test Case:**
+- Created `tests/test_title_only_toc.txt` with:
+  - 4 titles in TOC (The First Story, The Second Story, The Missing Story, The Fourth Story)
+  - Only 3 actual stories in content (missing "The Missing Story")
+  - Correctly detects 3 chapters and skips the TOC-only entry
+
+**Technical Details:**
+- Applied DRY principle: Reuses case-insensitive matching for all title patterns
+- Maintains backward compatibility: Falls back to numbered chapter detection if needed
+- Handles edge cases: Stories with subtitles, various punctuation, mixed case content
+
+**Documentation Updated:**
+- ERD.md: Added "Solution 5: Title-Only TOC Detection" section in Chapter Parser Implementation
+- Documented paragraph content detection heuristic with code examples
+- Added test case information and impact analysis
+
+---
+
+### Responsive Layout Improvements - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-30
+**Completed:** 2025-11-30
+
+**Objective:** Improve responsive design for mobile and tablet devices by reducing spacing when images shrink, ensuring proper column counts in book grids, and fixing view switching bugs.
+
+**Problems Addressed:**
+
+1. **Disproportionate vertical spacing on mobile:**
+   - Carousel book covers reduce in size on mobile (300px → 200px → 180px)
+   - Vertical spacing remained fixed (2.5rem top, 1.5rem between carousels)
+   - Created visual imbalance with large gaps relative to smaller images
+
+2. **Books grid jumping from 3 to 1 column:**
+   - Grid used `repeat(auto-fill, minmax(220px, 1fr))` which skipped 2-column layout
+   - On screens between certain widths, only 1 column displayed despite enough space for 2
+   - Root cause: Conflicting media query at 768px forced `grid-template-columns: 1fr`
+
+3. **Category view stacking under book detail:**
+   - When navigating from category → book, category grid remained visible
+   - `showBookDetail()` hid medium/chapter sections but not category sections
+   - Caused confusing visual overlap
+
+**Changes Made:**
+
+1. **Responsive Carousel Spacing** (`frontend/static/css/style.css`):
+   - **At 768px and below (tablet):**
+     - Carousel gap: `1.5rem` → `0.75rem`
+     - Top margin: `2.5rem` → `1.25rem`
+     - Header-to-carousel gap: `0.75rem` → `0.5rem`
+   - **At 480px and below (mobile):**
+     - Carousel gap: `0.75rem` → `0.5rem` (very tight)
+     - Top margin: `1.25rem` → `0.75rem` (minimal)
+     - Header-to-carousel gap: `0.5rem` → `0.35rem` (minimal)
+   - Spacing now scales proportionally with image size
+
+2. **Responsive Books Grid** (`frontend/static/css/style.css`):
+   - **Mobile-first approach with explicit column counts:**
+     - Base (0-479px): 2 columns, 12px gap, 12px container padding
+     - Small (480-649px): 2 columns, 10px gap
+     - Medium (650-899px): 3 columns, 16px gap, 20px container padding
+     - Large (900-1199px): 4 columns, 20px gap
+     - Extra Large (1200px+): Auto-fill with 220px minimum (flexible)
+   - **Removed conflicting rule at line 1342:**
+     - Deleted `@media (max-width: 768px) { .books-grid { grid-template-columns: 1fr; } }`
+     - This was overriding the min-width rules and forcing 1 column
+   - **Responsive image and text sizing:**
+     - Book covers: 230px → 180px → 100% width
+     - Card padding: 16px → 12px → 8px
+     - Title font: 1.1rem → 1rem → 0.9rem
+     - Author font: 0.9rem → 0.85rem → 0.75rem
+     - Meta font: 0.85rem → 0.8rem → 0.7rem
+   - **Category section spacing:**
+     - Header margin: 24px → 16px → 12px
+     - Section padding-top: 20px → 16px → 12px
+
+3. **Fixed View Switching Bug** (`frontend/static/js/app.js:597-611`):
+   - Added `categoryDetailSection` and `allCategoriesSection` to hide list
+   - When showing book detail, now hides all other sections:
+     - `mediumDetailSection`
+     - `chapterDetailSection`
+     - `categoryDetailSection` (NEW)
+     - `allCategoriesSection` (NEW)
+   - Prevents category grid from appearing under book detail page
+
+**Technical Details:**
+
+**Cascading Media Query Problem:**
+```css
+/* BEFORE - Conflicting rules */
+.books-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+@media (min-width: 650px) {
+    .books-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .books-grid { grid-template-columns: 1fr; }  /* ← Overrode min-width rule! */
+}
+
+/* AFTER - Clean mobile-first approach */
+.books-grid {
+    grid-template-columns: repeat(2, 1fr);  /* Base: 2 columns */
+}
+@media (min-width: 650px) {
+    .books-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 900px) {
+    .books-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 1200px) {
+    .books-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+```
+
+**Responsive Spacing Calculations:**
+- Mobile phone (360px width):
+  - Container padding: 24px total (12px each side)
+  - Grid gap: 10px
+  - Available: 326px
+  - Per column: ~163px (perfect for 2 columns)
+
+**Files Modified:**
+- `frontend/static/css/style.css` (lines 126-165, 172-219, 1436-1503)
+- `frontend/static/js/app.js` (lines 597-611)
+- `frontend/templates/index.html` (cache-busting version updated and removed)
+
+**Impact:**
+1. **Mobile UX:**
+   - Carousel spacing proportional to image size
+   - No excessive white space on small screens
+   - Tighter, more efficient layout
+
+2. **Books Grid:**
+   - Smooth column transition: 2 → 3 → 4 → flexible
+   - Always shows at least 2 books side by side on mobile
+   - No more jumping from 3 to 1 column
+
+3. **Navigation:**
+   - Clean page transitions without content overlap
+   - Category view properly hidden when viewing books
+   - Professional, polished user experience
+
+**Testing:**
+- Verified carousel spacing at 768px, 480px, and 360px widths
+- Confirmed books grid shows 2/3/4 columns at different breakpoints
+- Tested category → book navigation (no overlap)
+- Validated responsive images and text sizing
+
+**Next Steps/Notes:**
+- Monitor user feedback on mobile spacing
+- Consider adding transition animations for column changes
+- May want to optimize for larger tablets (1024px+)
+
+---
+
 ## 2025-11-29
 
 ### Gulliver's Travels Preface Bug Fix and DRY Refactoring - COMPLETED

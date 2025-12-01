@@ -192,7 +192,7 @@ Summary 2
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
         # Create chapters with enough words (> 200) to pass filtering
-        long_text = " ".join(["word"] * 250)
+        long_text = " ".join(["word"] * 600)
 
         # 5 chapters available, request only 2 and 3
         all_chapters = [
@@ -224,7 +224,7 @@ Summary 2
         generator = SummaryGenerator("test_api_key")
         generator.db = Mock()
 
-        long_text = " ".join(["word"] * 250)
+        long_text = " ".join(["word"] * 600)
 
         all_chapters = [
             (1, "Chapter 1", long_text),
@@ -276,7 +276,7 @@ Summary 4
 """
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
-        long_text = " ".join(["word"] * 250)
+        long_text = " ".join(["word"] * 600)
 
         all_chapters = [
             (1, "Chapter 1", long_text),
@@ -316,7 +316,7 @@ Summary 5
 """
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
-        long_text = " ".join(["word"] * 250)
+        long_text = " ".join(["word"] * 600)
 
         all_chapters = [
             (1, "Chapter 1", long_text),
@@ -359,7 +359,7 @@ Summary 1
 """
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
-        long_text = " ".join(["word"] * 250)  # Long enough to generate summary
+        long_text = " ".join(["word"] * 600)  # Long enough to generate summary
 
         all_chapters = [
             (1, "Chapter 1", long_text),      # Long chapter (will be summarized)
@@ -410,7 +410,7 @@ Summary 1
 """
         mock_genai.Client.return_value.models.generate_content.return_value = mock_response
 
-        long_text = " ".join(["word"] * 250)
+        long_text = " ".join(["word"] * 600)
 
         all_chapters = [(1, "Chapter 1", long_text)]
 

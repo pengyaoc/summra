@@ -1101,10 +1101,10 @@ Cover all major plot points, themes, and character developments in chronological
         # IMPORTANT: Longer spelled-out patterns first to avoid partial matches
         # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
         spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
-        chapter_pattern = rf'^\s*(?:CHAPTER|Chapter)\s+({spelled_out}|[IVXLCDM]+|[0-9]+)\.?\s*(.{{0,60}})$'
+        chapter_pattern = rf'^\s*(?:CHAPTER|Chapter)\s+({spelled_out}|[IVXLCDMivxlcdm]+|[0-9]+)\.?\s*(.{{0,60}})$'
         # Alternative patterns for standalone Roman numerals (Treasure Island, War of the Worlds styles)
-        standalone_roman_pattern = r'^\s*([IVXLCDM]+)\s*$'  # Without period: "I", "II", "III"
-        standalone_roman_with_period_pattern = r'^\s*([IVXLCDM]+)\.\s*$'  # With period: "I.", "II.", "III."
+        standalone_roman_pattern = r'^\s*([IVXLCDMivxlcdm]+)\s*$'  # Without period: "I", "II", "III"
+        standalone_roman_with_period_pattern = r'^\s*([IVXLCDMivxlcdm]+)\.\s*$'  # With period: "I.", "II.", "III."
         # Bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
         bracket_chapter_pattern = r'^\s*\[\s*([0-9]+)\s*\]\s*$'
 
@@ -1133,6 +1133,14 @@ Cover all major plot points, themes, and character developments in chronological
                     # Standard PART/BOOK/ACT marker
                     section_type = section_match.group(1).upper()
                     section_numeral = section_match.group(2)
+
+                    # Check for false positive: if title exists and starts with lowercase, likely prose
+                    # Example: "part I am in doubt." (from Anna Karenina dialog)
+                    title_group_3 = section_match.group(3)
+                    title_group_4 = section_match.group(4)
+                    if (title_group_3 and title_group_3[0].islower()) or (title_group_4 and title_group_4[0].islower()):
+                        # This is likely prose, not a section marker - skip it
+                        continue
 
                 # Convert numeral to number
                 if section_numeral.isdigit():
@@ -1174,14 +1182,34 @@ Cover all major plot points, themes, and character developments in chronological
                     elif section_match.group(4):
                         section_title = section_match.group(4).strip()
 
-                    # If not on same line, check next line for section title
+                    # If not on same line, check next few lines for section title
+                    # Skip empty lines and collect multi-line titles (e.g., Tom Jones)
                     if not section_title and i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        # If next line is not empty and doesn't look like a chapter, use as title
-                        if next_line and not re.match(chapter_pattern, next_line) and len(next_line) < 100:
-                            # Check if it looks like a title (not starting with lowercase, not too long)
-                            if next_line and (next_line[0].isupper() or next_line[0].isdigit()):
-                                section_title = next_line
+                        title_lines = []
+                        # Look ahead up to 5 lines, skipping empty ones
+                        for offset in range(1, 6):
+                            if i + offset >= len(lines):
+                                break
+                            candidate_line = lines[i + offset].strip()
+
+                            # Skip empty lines
+                            if not candidate_line:
+                                continue
+
+                            # Stop if we hit a chapter marker
+                            if re.match(chapter_pattern, candidate_line):
+                                break
+
+                            # Check if it looks like a title line (all caps or title case, not too long)
+                            if (candidate_line[0].isupper() or candidate_line[0].isdigit()) and len(candidate_line) < 100:
+                                title_lines.append(candidate_line)
+                            else:
+                                # Hit prose content, stop collecting title
+                                break
+
+                        # Join multi-line title with spaces
+                        if title_lines:
+                            section_title = ' '.join(title_lines)
 
                 current_section = {
                     'type': section_type,
@@ -1217,20 +1245,33 @@ Cover all major plot points, themes, and character developments in chronological
                         chapter_numeral = standalone_match.group(1)
                         chapter_title = ""
 
-                    # If title is empty, check next line (common format in White Fang & Treasure Island)
-                    # Format: "CHAPTER I" or just "I" on one line, "THE TRAIL OF THE MEAT" on next line
-                    if not chapter_title and i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        # If next line is not empty and doesn't look like another marker, use it as title
-                        # Also verify it looks like a title (starts with capital or quote, isn't too long)
-                        # Include both straight quotes (", ') and curly quotes (\u201c, \u201d, \u2018, \u2019)
-                        if (next_line and
-                            not re.match(chapter_pattern, next_line) and
-                            not re.match(standalone_roman_pattern, next_line) and
-                            not re.match(section_pattern, next_line, re.IGNORECASE) and
-                            len(next_line) > 3 and len(next_line) < 100 and
-                            (next_line[0].isupper() or next_line[0] in '"\'\u201c\u201d\u2018\u2019')):
-                            chapter_title = next_line
+                    # If title is empty, check next few lines (skip empty lines)
+                    # Format: "CHAPTER I" or "Chapter i." on one line, empty line(s), then title
+                    # Tom Jones: "Chapter i." → empty line → "The introduction to the work..."
+                    if not chapter_title:
+                        # Look ahead up to 3 lines, skipping empty ones
+                        for offset in range(1, 4):
+                            if i + offset >= len(lines):
+                                break
+                            next_line = lines[i + offset].strip()
+
+                            # Skip empty lines
+                            if not next_line:
+                                continue
+
+                            # If next line doesn't look like another marker, use it as title
+                            # Also verify it looks like a title (starts with capital or quote, isn't too long)
+                            # Include both straight quotes (", ') and curly quotes (\u201c, \u201d, \u2018, \u2019)
+                            if (not re.match(chapter_pattern, next_line) and
+                                not re.match(standalone_roman_pattern, next_line) and
+                                not re.match(section_pattern, next_line, re.IGNORECASE) and
+                                len(next_line) > 3 and len(next_line) < 150 and
+                                (next_line[0].isupper() or next_line[0] in '"\'\u201c\u201d\u2018\u2019')):
+                                chapter_title = next_line
+                                break
+                            else:
+                                # Hit a marker or prose, stop searching
+                                break
 
                     # Convert numeral to number
                     if chapter_numeral.isdigit():
@@ -1410,8 +1451,22 @@ Cover all major plot points, themes, and character developments in chronological
 
             # Only include if substantial (>100 words)
             if preface_words > 100:
-                # Use "Preface" as default title
-                preface_title = "Preface"
+                # Try to extract the actual preface marker from the text as title
+                # Look for patterns like "PRELUDE", "TRANSLATOR'S PREFACE", "INTRODUCTION", etc.
+                preface_marker_patterns = [
+                    r'^\s*(TRANSLATOR[\'\']S PREFACE|PRELUDE|PREFACE|INTRODUCTION|PROLOGUE)\.?\s*$',
+                ]
+                preface_title = "Preface"  # Default fallback
+                for line in lines[preface_start:preface_end]:
+                    for pattern in preface_marker_patterns:
+                        match = re.match(pattern, line.strip(), re.IGNORECASE)
+                        if match:
+                            # Found a preface marker - use it as the title
+                            preface_title = match.group(1).title()  # Capitalize first letter of each word
+                            print(f"  Found preface marker: {preface_title}")
+                            break
+                    if preface_title != "Preface":
+                        break
                 chapters.append((0, preface_title, preface_text))
                 for idx in range(preface_start, preface_end):
                     consumed_line_indices.add(idx)
@@ -1718,6 +1773,7 @@ Cover all major plot points, themes, and character developments in chronological
 
         # Common chapter patterns - must start new line
         chapter_patterns = [
+            r'^([0-9]+)$',  # Standalone number format: "1", "2", etc. with title on next line (A Little Princess)
             r'^\[\s*([0-9]+)\s*\]$',  # Bracket format: "[ 1 ]", "[ 10 ]" (Ulysses)
             # Spelled-out chapter numbers (must come before generic CHAPTER pattern)
             # IMPORTANT: Longer patterns first to avoid partial matches (SIXTY-SEVEN before SIX)
@@ -2012,6 +2068,42 @@ Cover all major plot points, themes, and character developments in chronological
                     continuation_line_idx = None
                     part_marker_line_idx = None
 
+                    # Check if this is the standalone number pattern (e.g., "1", "2", etc.)
+                    # For this pattern, the title is ALWAYS on the next line
+                    # BUT: Only apply if we're in an appropriate context (not in TOC, preceded by blank lines)
+                    is_standalone_number = False
+                    if pattern == r'^([0-9]+)$':
+                        # Check context:
+                        # 1. Must be past TOC section (if TOC exists)
+                        # 2. Must be preceded by at least 2 blank lines (chapter break context)
+                        # 3. Number should be reasonable (1-200 range)
+
+                        # Check if past TOC
+                        past_toc = (toc_end_line == 0) or (i >= toc_end_line)
+
+                        # Check if preceded by at least 2 consecutive blank lines immediately before
+                        # This ensures we're at a chapter break, not mid-paragraph
+                        preceded_by_blanks = False
+                        if i >= 2:  # Need at least 2 lines before to check
+                            # Check that the 2 lines immediately before are both blank
+                            line_before_1 = lines[i - 1].strip() if i - 1 >= 0 else None
+                            line_before_2 = lines[i - 2].strip() if i - 2 >= 0 else None
+                            preceded_by_blanks = (line_before_1 == "" and line_before_2 == "")
+
+                        # Check if number is in reasonable range
+                        try:
+                            num_value = int(chapter_marker)
+                            reasonable_number = 1 <= num_value <= 200
+                        except ValueError:
+                            reasonable_number = False
+
+                        # Only treat as standalone number if all conditions met
+                        is_standalone_number = past_toc and preceded_by_blanks and reasonable_number
+
+                        # If context validation failed, skip this match entirely
+                        if not is_standalone_number:
+                            continue
+
                     # Check if next line is a continuation of the title (for multi-line titles)
                     # Do this BEFORE removing part markers so we can check if continuation is part of the marker
                     # Skip up to 2 blank lines to find the continuation/title
@@ -2048,6 +2140,7 @@ Cover all major plot points, themes, and character developments in chronological
                                 next_line and
                                 not re.match(r'(CHAPTER|Chapter|SCENE|Scene|PREFACE|Preface|INTRODUCTION|Introduction|BOOK|VOLUME|ACT|PART)\s+', next_line) and
                                 not re.match(r'^[IVXLCDM]+\.\s+', next_line) and  # Not Roman numeral-only chapter format
+                                not re.match(r'^[0-9]+$', next_line) and  # Not another standalone number
                                 not next_line.startswith('[Illustration') and
                                 not next_line.startswith('By ') and
                                 len(next_line) < 100 and
@@ -2055,16 +2148,37 @@ Cover all major plot points, themes, and character developments in chronological
                                 (next_line[0].islower() or next_line[0] in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' or next_line.startswith('Æ'))
                             )
 
-                            # If title is empty OR looks like continuation, use next line
-                            if not chapter_title:
-                                # Title is empty - use next line as title
-                                if is_continuation and len(next_line) > 3:
+                            # For standalone number pattern, ALWAYS use next line as title (if it's not another chapter marker)
+                            # For other patterns, only use next line if title is empty or it looks like continuation
+                            if is_standalone_number:
+                                # Standalone number pattern - next line is ALWAYS the title
+                                if next_line and not re.match(r'^[0-9]+$', next_line) and len(next_line) > 0:
                                     chapter_title = next_line
                                     continuation_line_idx = i + next_line_idx_offset
                                     # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
                                     consumed_lines.add(i + next_line_idx_offset)
-                            elif is_continuation:
-                                # Title exists but next line is likely a continuation - append it
+                            elif not chapter_title:
+                                # Title is empty - use next line as title ONLY if it looks like a title
+                                # Don't use it if it looks like content (long sentence, ends with dash/em-dash)
+                                looks_like_title = (
+                                    is_continuation and
+                                    len(next_line) > 3 and
+                                    len(next_line) <= 50 and  # Titles are usually short
+                                    not next_line.endswith('—') and  # Em-dash indicates continuation
+                                    not next_line.endswith('-')      # Regular dash indicates continuation
+                                )
+                                if looks_like_title:
+                                    chapter_title = next_line
+                                    continuation_line_idx = i + next_line_idx_offset
+                                    # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                                    consumed_lines.add(i + next_line_idx_offset)
+                            elif is_continuation and (next_line[0].islower() or (len(next_line.split()) <= 3 and not next_line.endswith('.'))):
+                                # Title exists and next line is a valid continuation - append it
+                                # Only append if:
+                                # 1. Starts with lowercase (e.g., "of the") - likely part of title, OR
+                                # 2. Starts with uppercase AND is short (≤3 words) AND doesn't end with period
+                                #    (e.g., "Antonines" is 1 word, but "This is a sentence." is 4 words ending with period)
+                                # This avoids appending chapter content that starts with uppercase
                                 chapter_title = chapter_title + ' ' + next_line
                                 continuation_line_idx = i + next_line_idx_offset
                                 # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
@@ -2244,7 +2358,8 @@ Cover all major plot points, themes, and character developments in chronological
                 is_preface_intro = chapter_num == 0  # Chapter 0 is PREFACE/INTRODUCTION
                 if accumulated_content_size < 1000 and not is_preface_intro and not recently_saw_book_marker and not has_substantial_content_ahead:
                     # If this line has an inline title AND no substantial content follows, it's a TOC entry
-                    if has_inline_title:
+                    # BUT only if we're still within the TOC section (haven't passed toc_end_line)
+                    if has_inline_title and toc and (toc_end_line == 0 or i < toc_end_line):
                         is_likely_toc = True
                         print(f"Skipping TOC entry (inline title, no substantial content ahead): {line_stripped}")
                     # Only use lookahead TOC detection if we actually found a TOC (toc is not empty)
@@ -2296,9 +2411,13 @@ Cover all major plot points, themes, and character developments in chronological
 
                     # Create Chapter 0 if:
                     # 1. First chapter is NOT Chapter 1 (e.g., Introduction, Prologue), OR
-                    # 2. First chapter IS Chapter 1 BUT there's substantial preface content (> 150 chars)
-                    #    This handles books like Frankenstein with Letters before Chapter 1
-                    should_create_preface = (chapter_num != 1) or (len(preface_content) > 150)
+                    # 2. First chapter IS Chapter 1 BUT there's substantial preface content:
+                    #    - Either > 300 chars (like Frankenstein with Letters), OR
+                    #    - Contains 3+ sentences (indicates narrative content, not just metadata)
+                    #      Count sentences by looking for ". " or ".\n" or ".End"
+                    sentence_count = preface_content.count('. ') + preface_content.count('.\n') + preface_content.count('.—') + (1 if preface_content.endswith('.') else 0)
+                    has_narrative_content = sentence_count >= 3
+                    should_create_preface = (chapter_num != 1) or (len(preface_content) > 300) or has_narrative_content
 
                     if should_create_preface:
                         # Only save if substantial content (minimum threshold: 100 chars)
@@ -2325,11 +2444,9 @@ Cover all major plot points, themes, and character developments in chronological
                         content = content[:-1]
                     # Normalize newlines: remove single newlines, keep paragraph breaks
                     content = self.normalize_chapter_text(content)
-                    # Use lower threshold for Chapter 0 (Preface/Introduction) - 20 chars
-                    # For regular chapters, use 100 chars minimum
-                    min_length = 20 if current_chapter[0] == 0 else 100
-                    if len(content) > min_length:
-                        chapters.append((current_chapter[0], current_chapter[1], content))
+                    # Always add chapter, even if very short (some books have intentionally short chapters)
+                    # Summary generation will skip chapters that are too short
+                    chapters.append((current_chapter[0], current_chapter[1], content))
 
                 # Start new chapter
                 current_chapter = (chapter_num, chapter_title)
@@ -2372,11 +2489,9 @@ Cover all major plot points, themes, and character developments in chronological
                 content = content[:-1]
             # Normalize newlines: remove single newlines, keep paragraph breaks
             content = self.normalize_chapter_text(content)
-            # Use lower threshold for Chapter 0 (Preface/Introduction) - 20 chars
-            # For regular chapters, use 100 chars minimum
-            min_length = 20 if current_chapter[0] == 0 else 100
-            if len(content) > min_length:
-                chapters.append((current_chapter[0], current_chapter[1], content))
+            # Always add chapter, even if very short (some books have intentionally short chapters)
+            # Summary generation will skip chapters that are too short
+            chapters.append((current_chapter[0], current_chapter[1], content))
 
         # Filter out duplicate chapter numbers and merge multi-part chapters
         # For chapters split into parts (e.g., "Chapter X Part I", "Chapter X Part II"),
@@ -2458,9 +2573,12 @@ Cover all major plot points, themes, and character developments in chronological
 
             # Final sanity check: if ALL remaining chapters are tiny (< 500 chars average),
             # likely the entire detection failed and we should treat as single text
+            # UNLESS we successfully detected and skipped a TOC (indicated by toc_end_line > 0)
+            # and have multiple chapters (3+) - in that case, trust the detection even if chapters are short
             if chapters:
                 avg_length = sum(len(ch[2]) for ch in chapters) / len(chapters)
-                if avg_length < 500:
+                has_toc_and_multiple_chapters = (toc_end_line > 0 and len(chapters) >= 3)
+                if avg_length < 500 and not has_toc_and_multiple_chapters:
                     print("Warning: Detected potential table of contents. Treating book as single text.")
                     chapters = [(1, "Full Text", text)]
 
@@ -2581,18 +2699,55 @@ Cover all major plot points, themes, and character developments in chronological
                         exact_pattern = r'^\s*' + re.escape(title) + r'\s*$'
                         fuzzy_pattern = r'^\s*(?:IN\s+)?' + re.escape(title) + r'\s*$'
 
-                    # Find ALL occurrences, then keep the last one (most likely actual chapter, not TOC)
+                    # Find ALL occurrences, then filter for actual chapters (not TOC entries)
                     matches = []
                     for i, line in enumerate(lines):
-                        # Try exact match first, then fuzzy match
-                        if re.match(exact_pattern, line) or re.match(fuzzy_pattern, line):
+                        # Try exact match first, then fuzzy match (case-insensitive)
+                        if re.match(exact_pattern, line, re.IGNORECASE) or re.match(fuzzy_pattern, line, re.IGNORECASE):
                             matches.append(i)
 
-                    # Use the last occurrence (skips TOC, gets actual chapter)
-                    if matches:
-                        last_match = matches[-1]
+                    # Filter matches to find actual chapter starts (not TOC entries)
+                    # A real chapter is followed by substantial paragraph content within 5 lines
+                    # If we need to look further, we're probably in a TOC
+                    chapter_matches = []
+                    for match_idx in matches:
+                        # Look ahead only 5 lines - real chapters have immediate content
+                        has_paragraph = False
+                        uppercase_subtitle_count = 0
+                        for lookahead in range(match_idx + 1, min(match_idx + 6, len(lines))):
+                            lookahead_line = lines[lookahead].strip()
+                            # Skip blank lines
+                            if not lookahead_line:
+                                continue
+
+                            # Check if this is paragraph content (> 40 chars with mixed case or punctuation)
+                            if len(lookahead_line) > 40:
+                                has_mixed_case = not lookahead_line.isupper()
+                                ends_with_punctuation = lookahead_line[-1] in '.,"!?;:'
+                                if has_mixed_case or ends_with_punctuation:
+                                    has_paragraph = True
+                                    break
+
+                            # If we hit uppercase short lines (potential titles/subtitles)
+                            # Allow 1-2 subtitles like "AN OLD STORY TOLD ANEW"
+                            if lookahead_line.isupper() and len(lookahead_line) < 50:
+                                uppercase_subtitle_count += 1
+                                if uppercase_subtitle_count > 2:
+                                    # Too many uppercase lines without paragraph = TOC
+                                    break
+
+                        if has_paragraph:
+                            chapter_matches.append(match_idx)
+
+                    # Only use matches that have paragraph content nearby
+                    # Don't use TOC-only entries (no fallback)
+                    if chapter_matches:
+                        last_match = chapter_matches[-1]
                         title_positions.append((last_match, title))
                         print(f"  Found '{title}' at line {last_match}")
+                    elif matches:
+                        # Title exists but has no paragraph content nearby = TOC-only entry
+                        print(f"  Skipping '{title}' - found at line {matches[-1]} but no paragraph content (likely TOC-only)")
 
                 # If we found most of the titles, create chapters from them
                 if len(title_positions) >= len(title_toc) * 0.6:  # Found at least 60% of titles
@@ -2616,12 +2771,17 @@ Cover all major plot points, themes, and character developments in chronological
                         # Normalize the content
                         chapter_content = self.normalize_chapter_text(chapter_content)
 
-                        if len(chapter_content) > 100:  # Only add if substantial
-                            chapters.append((chapter_num, title, chapter_content))
+                        # Always add chapter, even if very short (some books have intentionally short chapters)
+                        # Summary generation will skip chapters that are too short
+                        chapters.append((chapter_num, title, chapter_content))
+                        word_count = len(chapter_content.split())
+                        if len(chapter_content) <= 100:
+                            print(f"  Chapter {chapter_num}: {title} ({len(chapter_content)} chars, ~{word_count} words - very short)")
+                        else:
                             print(f"  Chapter {chapter_num}: {title} ({len(chapter_content)} chars)")
 
-                            # Mark all lines in this chapter as consumed (including the title line)
-                            for i in range(line_idx, end_line):
+                        # Mark all lines in this chapter as consumed (including the title line)
+                        for i in range(line_idx, end_line):
                                 consumed_line_indices.add(i)
                 else:
                     print(f"Only found {len(title_positions)}/{len(title_toc)} titles in content - not using TOC extraction")
@@ -3155,7 +3315,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             chapters_to_process = chapters
 
         # Filter chapters by word count - separate long and short chapters
-        MIN_WORDS_FOR_SUMMARY = 200
+        MIN_WORDS_FOR_SUMMARY = 500
         chapters_needing_summary = []
         short_chapters = []
 

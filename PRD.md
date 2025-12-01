@@ -350,6 +350,152 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - [✅] Listen button in summary header alongside toggle (2025-11-25)
 - [✅] Toggle button simplified to chevron-only design (2025-11-25)
 
+### 6. Reading Experience Customization (Added 2025-11-30)
+
+**Feature Description:**
+Kindle-inspired reading experience with customizable fonts, sizes, and color schemes, plus progress tracking and sequential navigation for distraction-free long-form reading.
+
+**User Stories:**
+- As a reader, I want to customize font family and size so I can read comfortably
+- As a user with visual impairments, I want adjustable text size and high-contrast themes
+- As a reader, I want to see my reading progress so I know how much content remains
+- As a student, I want to quickly move to the next chapter without returning to the book overview
+- As a user, I want my reading preferences to persist across sessions
+
+**Specifications:**
+
+**6a. Reading Settings Panel:**
+- **Access:** Gear icon (⚙️) button on chapter and medium summary pages
+- **Panel Design:**
+  - Slides in from right edge of screen
+  - 320px wide on desktop, full-width on mobile
+  - White background with shadow overlay
+  - Close button (✕) in header
+- **Settings Persistence:** All preferences saved to browser localStorage
+- **Availability:** Both chapter detail and medium summary pages
+
+**6b. Font Family Selection:**
+- **Options:**
+  1. **Georgia** (default) - Classic serif font, traditional book feel
+  2. **System** - Native system font stack, familiar to user's OS
+  3. **Open Sans** - Modern sans-serif, clean and readable
+- **UI:** Radio-style buttons with font preview ("Aa")
+- **Labels:** Font names displayed below preview buttons
+- **Application:** Applies to chapter summaries, chapter full text, and medium summaries
+- **Persistence:** Saved as `reading_font` in localStorage
+
+**6c. Font Size Adjustment:**
+- **Range:** 12px (minimum) to 24px (maximum)
+- **Default:** 16px
+- **Controls:**
+  - **Slider:** Continuous adjustment across full range
+  - **A- Button:** Decrease by 1px (minimum 12px)
+  - **A+ Button:** Increase by 1px (maximum 24px)
+  - **Size Display:** Shows current size (e.g., "16px")
+- **Application:** Applies to reading text only (summaries and chapters)
+- **Exclusion:** Does NOT affect next chapter button, headers, or UI elements
+- **Persistence:** Saved as `reading_fontSize` in localStorage
+
+**6d. Color Scheme (Theme):**
+- **Light Theme** (default):
+  - Background: White (#FFFFFF)
+  - Text: Dark gray (#2c3e50)
+  - Use case: Bright environments, daytime reading
+- **Dark Theme:**
+  - Background: Dark gray (#1a1a1a)
+  - Text: Light gray (#e0e0e0)
+  - Use case: Low-light environments, night reading, reduced eye strain
+- **Sepia Theme:**
+  - Background: Beige/cream (#f4ecd8)
+  - Text: Warm brown (#5c4f3d)
+  - Use case: Kindle-like warm tones, reduced blue light, comfortable long reading sessions
+- **UI:** Visual theme preview squares with labels
+- **Application:**
+  - Applies to all reading content (summaries, chapters)
+  - Applies to next chapter button area background
+  - Does NOT affect navigation elements outside reading area
+- **Persistence:** Saved as `reading_theme` in localStorage
+
+**6e. Reading Progress Indicator:**
+- **Design:** Kindle-style thin progress bar (2px height, not thick web-style)
+- **Position:** Fixed to bottom of screen
+- **Components:**
+  - Visual fill bar showing progress percentage
+  - Text percentage display (e.g., "42%")
+- **Calculation:** Based on scroll position relative to total scrollable height
+- **Formula:** `progress = (scrollTop / scrollableHeight) * 100`
+- **Updates:** Real-time as user scrolls
+- **Theme Adaptation:** Colors match selected theme
+- **Mobile:** Taller bar (32px) for better visibility and touch interaction
+
+**6f. Sticky Reading Header:**
+- **Trigger:** Appears when user scrolls past book/chapter title
+- **Content:**
+  - Chapter number (e.g., "Chapter 8")
+  - Book title
+  - Gear icon for quick settings access
+- **Position:** Fixed to top, edge-to-edge width
+- **Behavior:**
+  - Smooth slide-down animation when triggered
+  - Smooth slide-up when scrolled back to top
+  - Always accessible for settings
+- **Dual Implementation:** Separate headers for chapter and medium summary pages
+
+**6g. Next Chapter Navigation:**
+- **Location:** End of chapter full text section
+- **Display Logic:** Only shown when a next chapter exists
+- **Button Text:** "Next Chapter →"
+- **Functionality:** Navigates directly to next sequential chapter
+- **Styling:**
+  - Transparent background with border
+  - Theme-aware colors (adapts to light/dark/sepia)
+  - Hover: Border color changes to accent color, subtle background tint
+- **Margin:** 48px top, 80px bottom (space above and below button)
+- **Font Behavior:** Does NOT change size or family with reading settings
+
+**6h. Navigation Improvements:**
+- **Back Button:** "← Back to Book" always returns to book detail page (not browser history)
+- **Top Spacing:** Proper margin above back button + gear icon row (not stuck to top edge)
+- **Route Persistence:** Page refresh on chapter URL maintains chapter view (no redirect to home)
+- **Scroll Behavior:** Page scrolls to top on chapter navigation
+
+**UI Requirements:**
+- Settings panel accessible at all times during reading
+- Clear visual feedback for selected options (active state)
+- Smooth transitions when changing settings
+- Keyboard navigation support for accessibility
+- Touch-friendly controls on mobile devices
+- Preferences restore on page load
+- No jarring visual changes when switching themes
+
+**Acceptance Criteria:**
+- [✅] Gear icon opens settings panel from both fixed and sticky headers
+- [✅] Settings panel slides in from right with smooth animation
+- [✅] Font family changes apply immediately to reading content
+- [✅] Font size changes apply immediately with live preview
+- [✅] Theme changes apply immediately with smooth color transitions
+- [✅] All settings persist in localStorage across sessions
+- [✅] Settings restore automatically on page load
+- [✅] Progress bar updates in real-time as user scrolls
+- [✅] Progress percentage displayed accurately
+- [✅] Sticky header appears when scrolling past title
+- [✅] Sticky header hides when scrolled back to top
+- [✅] Next chapter button only shown when next chapter exists
+- [✅] Next chapter button navigates to correct sequential chapter
+- [✅] Next chapter button respects theme colors
+- [✅] Back button always returns to book detail page
+- [✅] Page refresh on chapter URL maintains chapter view
+- [✅] Settings panel works identically on chapter and medium pages
+- [✅] Mobile: Settings panel goes full-width
+- [✅] Mobile: Progress bar taller for better visibility
+
+**Design Inspiration:**
+- Amazon Kindle reading interface for customization options
+- E-reader design principles for distraction-free reading
+- Thin progress indicators like Kindle (not thick web-style bars)
+- Minimal, unobtrusive UI elements during reading
+- Professional typography and spacing
+
 ## User Workflows
 
 ### Workflow 1: Browsing by Category (Added 2025-11-28)
