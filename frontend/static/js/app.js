@@ -35,23 +35,26 @@ class SummraApp {
         this.setupPersistentPlayer();
         this.setupRouting();
         this.configureMarked();
+        this.setupReadingSettings();
+        this.loadReadingPreferences();
     }
 
     setupRouting() {
         window.addEventListener('popstate', () => {
             this.handleRoute();
         });
-        window.addEventListener('load', () => {
-            this.handleRoute();
-        });
+        // Handle the initial route immediately (don't wait for load event)
+        this.handleRoute();
     }
 
     async handleRoute() {
         const hash = window.location.hash;
 
         if (!hash || hash === '#' || hash === '#/') {
-            if (this.currentBook !== null || this.currentView !== 'home') {
-                this.showHomeSection();
+            this.showHomeSection();
+            // Clear URL when intentionally navigating to home
+            if (hash) {
+                window.history.pushState(null, '', '/');
             }
             return;
         }
@@ -345,23 +348,27 @@ class SummraApp {
         if (backButton) {
             backButton.addEventListener('click', () => {
                 this.saveScrollPosition();
-                window.history.back();
+                window.location.hash = '#/';
             });
         }
 
         const mediumBackButton = document.getElementById('medium-back-button');
         if (mediumBackButton) {
             mediumBackButton.addEventListener('click', () => {
-                this.saveScrollPosition();
-                window.history.back();
+                if (this.currentBook) {
+                    const slug = this.slugify(this.currentBook.title);
+                    window.location.hash = `#/book/${slug}`;
+                }
             });
         }
 
         const chapterBackButton = document.getElementById('chapter-back-button');
         if (chapterBackButton) {
             chapterBackButton.addEventListener('click', () => {
-                this.saveScrollPosition();
-                window.history.back();
+                if (this.currentBook) {
+                    const slug = this.slugify(this.currentBook.title);
+                    window.location.hash = `#/book/${slug}`;
+                }
             });
         }
 
@@ -601,9 +608,13 @@ class SummraApp {
         const mediumDetailSection = document.getElementById('medium-detail-section');
         const chapterDetailSection = document.getElementById('chapter-detail-section');
         const summarySection = document.getElementById('summary-section');
+        const categoryDetailSection = document.getElementById('category-detail-section');
+        const allCategoriesSection = document.getElementById('all-categories-section');
 
         if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
         if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
+        if (categoryDetailSection) categoryDetailSection.classList.add('hidden');
+        if (allCategoriesSection) allCategoriesSection.classList.add('hidden');
         if (summarySection) summarySection.classList.remove('hidden');
 
         // Restore scroll position or scroll to top
@@ -887,12 +898,42 @@ class SummraApp {
             ttsBtn.classList.add('hidden');
         }
 
+        // Setup sticky header for medium summary
+        const stickyMediumBookTitle = document.getElementById('sticky-medium-book-title');
+        if (stickyMediumBookTitle) {
+            stickyMediumBookTitle.textContent = book.title;
+        }
+
+        // Setup reading settings button for medium summary
+        const settingsToggleMedium = document.getElementById('reading-settings-toggle-medium');
+        const stickySettingsBtnMedium = document.getElementById('sticky-settings-btn-medium');
+
+        if (settingsToggleMedium) {
+            settingsToggleMedium.addEventListener('click', () => {
+                const panel = document.getElementById('reading-settings-panel');
+                if (panel) panel.classList.remove('hidden');
+            });
+        }
+
+        if (stickySettingsBtnMedium) {
+            stickySettingsBtnMedium.addEventListener('click', () => {
+                const panel = document.getElementById('reading-settings-panel');
+                if (panel) panel.classList.remove('hidden');
+            });
+        }
+
+        // Setup sticky header scroll detection for medium summary
+        this.setupStickyHeaderMedium();
+
         // Restore scroll position or scroll to top
         if (restoreScroll) {
             this.restoreScrollPosition(pageKey);
         } else {
             window.scrollTo(0, 0);
         }
+
+        // Initialize reading progress for medium summary
+        setTimeout(() => this.updateReadingProgressMedium(), 100);
     }
 
     async showChapterDetail(book, chapterNum, restoreScroll = false) {
@@ -1003,12 +1044,21 @@ class SummraApp {
             fulltextTtsBtn.classList.add('hidden');
         }
 
+        // Setup next chapter button
+        this.setupNextChapterButton(chapterNum);
+
+        // Update sticky header title with chapter and book name
+        this.updateStickyHeaderTitle(book.title, chapterNum, chapterTitle);
+
         // Restore scroll position or scroll to top
         if (restoreScroll) {
             this.restoreScrollPosition(pageKey);
         } else {
             window.scrollTo(0, 0);
         }
+
+        // Initialize reading progress
+        setTimeout(() => this.updateReadingProgress(), 100);
     }
 
     async generateTTS(text, type, buttonElement) {
@@ -1205,10 +1255,6 @@ class SummraApp {
         this.currentSummaryType = null;
         this.currentChapter = null;
         this.mediumSummaryContent = null;
-
-        if (window.location.hash !== '' && window.location.hash !== '#/') {
-            window.history.pushState(null, '', '/');
-        }
 
         this.restoreScrollPosition('home');
     }
@@ -1430,6 +1476,328 @@ class SummraApp {
 
     formatNumber(num) {
         return num.toLocaleString();
+    }
+
+    // ===== Reading Experience Features =====
+
+    setupReadingSettings() {
+        // Settings panel toggle
+        const toggleBtn = document.getElementById('reading-settings-toggle');
+        const stickyToggleBtn = document.getElementById('sticky-settings-btn');
+        const panel = document.getElementById('reading-settings-panel');
+        const closeBtn = document.getElementById('reading-settings-close');
+
+        const openPanel = () => {
+            if (panel) panel.classList.remove('hidden');
+        };
+
+        const closePanel = () => {
+            if (panel) panel.classList.add('hidden');
+        };
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', openPanel);
+        }
+
+        if (stickyToggleBtn) {
+            stickyToggleBtn.addEventListener('click', openPanel);
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closePanel);
+        }
+
+        // Handle sticky header visibility
+        this.setupStickyHeader();
+
+        // Font selection
+        const fontChoices = document.querySelectorAll('.font-choice');
+        fontChoices.forEach(btn => {
+            btn.addEventListener('click', () => {
+                fontChoices.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const font = btn.dataset.font;
+                this.applyFont(font);
+                this.saveReadingPreference('font', font);
+            });
+        });
+
+        // Font size controls
+        const slider = document.getElementById('font-size-slider');
+        const decreaseBtn = document.getElementById('decrease-size');
+        const increaseBtn = document.getElementById('increase-size');
+        const sizeValue = document.getElementById('size-value');
+
+        if (slider) {
+            slider.addEventListener('input', (e) => {
+                const size = e.target.value;
+                this.applyFontSize(size);
+                sizeValue.textContent = `${size}px`;
+                this.saveReadingPreference('fontSize', size);
+            });
+        }
+
+        if (decreaseBtn) {
+            decreaseBtn.addEventListener('click', () => {
+                const currentSize = parseInt(slider.value);
+                const newSize = Math.max(12, currentSize - 1);
+                slider.value = newSize;
+                this.applyFontSize(newSize);
+                sizeValue.textContent = `${newSize}px`;
+                this.saveReadingPreference('fontSize', newSize);
+            });
+        }
+
+        if (increaseBtn) {
+            increaseBtn.addEventListener('click', () => {
+                const currentSize = parseInt(slider.value);
+                const newSize = Math.min(24, currentSize + 1);
+                slider.value = newSize;
+                this.applyFontSize(newSize);
+                sizeValue.textContent = `${newSize}px`;
+                this.saveReadingPreference('fontSize', newSize);
+            });
+        }
+
+        // Theme selection
+        const themeChoices = document.querySelectorAll('.theme-choice');
+        themeChoices.forEach(btn => {
+            btn.addEventListener('click', () => {
+                themeChoices.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const theme = btn.dataset.theme;
+                this.applyTheme(theme);
+                this.saveReadingPreference('theme', theme);
+            });
+        });
+
+        // Reading progress tracking
+        window.addEventListener('scroll', () => {
+            this.updateReadingProgress();
+            this.updateReadingProgressMedium();
+        });
+    }
+
+    applyFont(font) {
+        const chapterSection = document.getElementById('chapter-detail-section');
+        const mediumSection = document.getElementById('medium-detail-section');
+        if (chapterSection) {
+            chapterSection.setAttribute('data-font', font);
+        }
+        if (mediumSection) {
+            mediumSection.setAttribute('data-font', font);
+        }
+    }
+
+    applyFontSize(size) {
+        const chapterSection = document.getElementById('chapter-detail-section');
+        const mediumSection = document.getElementById('medium-detail-section');
+
+        if (chapterSection) {
+            const fulltext = chapterSection.querySelector('.chapter-fulltext');
+            const summaryText = chapterSection.querySelector('.chapter-summary-text');
+            const summaryContentText = chapterSection.querySelector('#chapter-summary-content .summary-text');
+
+            if (fulltext) fulltext.style.fontSize = `${size}px`;
+            if (summaryText) summaryText.style.fontSize = `${size}px`;
+            if (summaryContentText) summaryContentText.style.fontSize = `${size}px`;
+        }
+
+        if (mediumSection) {
+            const mediumText = mediumSection.querySelector('.summary-text');
+            if (mediumText) mediumText.style.fontSize = `${size}px`;
+        }
+    }
+
+    applyTheme(theme) {
+        const chapterSection = document.getElementById('chapter-detail-section');
+        const mediumSection = document.getElementById('medium-detail-section');
+        if (chapterSection) {
+            chapterSection.setAttribute('data-theme', theme);
+        }
+        if (mediumSection) {
+            mediumSection.setAttribute('data-theme', theme);
+        }
+    }
+
+    saveReadingPreference(key, value) {
+        try {
+            localStorage.setItem(`reading_${key}`, value);
+        } catch (error) {
+            console.error('Error saving reading preference:', error);
+        }
+    }
+
+    loadReadingPreferences() {
+        try {
+            const font = localStorage.getItem('reading_font') || 'georgia';
+            const fontSize = localStorage.getItem('reading_fontSize') || '16';
+            const theme = localStorage.getItem('reading_theme') || 'light';
+
+            // Update UI to reflect saved preferences
+            const fontBtn = document.querySelector(`.font-choice[data-font="${font}"]`);
+            if (fontBtn) {
+                document.querySelectorAll('.font-choice').forEach(b => b.classList.remove('active'));
+                fontBtn.classList.add('active');
+            }
+
+            const slider = document.getElementById('font-size-slider');
+            const sizeValue = document.getElementById('size-value');
+            if (slider) {
+                slider.value = fontSize;
+                sizeValue.textContent = `${fontSize}px`;
+            }
+
+            const themeBtn = document.querySelector(`.theme-choice[data-theme="${theme}"]`);
+            if (themeBtn) {
+                document.querySelectorAll('.theme-choice').forEach(b => b.classList.remove('active'));
+                themeBtn.classList.add('active');
+            }
+
+            // Apply preferences
+            this.applyFont(font);
+            this.applyFontSize(fontSize);
+            this.applyTheme(theme);
+        } catch (error) {
+            console.error('Error loading reading preferences:', error);
+        }
+    }
+
+    updateReadingProgress() {
+        const chapterSection = document.getElementById('chapter-detail-section');
+        if (!chapterSection || chapterSection.classList.contains('hidden')) {
+            return;
+        }
+
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const scrollTop = window.scrollY;
+        const scrollableHeight = documentHeight - windowHeight;
+
+        let progress = 0;
+        if (scrollableHeight > 0) {
+            progress = Math.min(100, Math.round((scrollTop / scrollableHeight) * 100));
+        }
+
+        const progressFill = document.getElementById('reading-progress-fill');
+        const progressText = document.getElementById('reading-progress-text');
+
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${progress}%`;
+        }
+    }
+
+    setupNextChapterButton(currentChapterNum) {
+        const nextChapterBtn = document.getElementById('next-chapter-btn');
+        if (!nextChapterBtn) return;
+
+        // Find the next chapter
+        const nextChapter = this.chapters.find(ch => ch.chapter_number === currentChapterNum + 1);
+
+        if (nextChapter) {
+            nextChapterBtn.classList.remove('hidden');
+            nextChapterBtn.onclick = () => {
+                this.showChapterDetailPage(nextChapter.chapter_number);
+            };
+        } else {
+            nextChapterBtn.classList.add('hidden');
+        }
+    }
+
+    setupStickyHeader() {
+        let lastScrollTop = 0;
+        const stickyHeader = document.getElementById('sticky-reading-header');
+        const chapterHeader = document.querySelector('.chapter-detail-header');
+
+        window.addEventListener('scroll', () => {
+            const chapterSection = document.getElementById('chapter-detail-section');
+            if (!chapterSection || chapterSection.classList.contains('hidden')) {
+                return;
+            }
+
+            if (!chapterHeader || !stickyHeader) return;
+
+            const scrollTop = window.scrollY;
+            const headerBottom = chapterHeader.offsetTop + chapterHeader.offsetHeight;
+
+            // Show sticky header when scrolled past the main chapter header
+            if (scrollTop > headerBottom) {
+                stickyHeader.classList.remove('hidden');
+            } else {
+                stickyHeader.classList.add('hidden');
+            }
+
+            lastScrollTop = scrollTop;
+        });
+    }
+
+    updateStickyHeaderTitle(bookTitle, chapterNum = null, chapterTitle = '') {
+        const stickyBookTitle = document.getElementById('sticky-book-title');
+        const stickyChapterTitle = document.getElementById('sticky-chapter-title');
+
+        if (stickyBookTitle) {
+            stickyBookTitle.textContent = bookTitle;
+        }
+        if (stickyChapterTitle) {
+            // Format as "X: Title" or just "X" if no title (without the word "Chapter")
+            const displayText = chapterNum
+                ? (chapterTitle ? `${chapterNum}: ${chapterTitle}` : `${chapterNum}`)
+                : chapterTitle;
+            stickyChapterTitle.textContent = displayText;
+        }
+    }
+
+    setupStickyHeaderMedium() {
+        const stickyHeader = document.getElementById('sticky-reading-header-medium');
+        const mediumHeader = document.querySelector('.medium-detail-header');
+
+        window.addEventListener('scroll', () => {
+            const mediumSection = document.getElementById('medium-detail-section');
+            if (!mediumSection || mediumSection.classList.contains('hidden')) {
+                return;
+            }
+
+            if (!mediumHeader || !stickyHeader) return;
+
+            const scrollTop = window.scrollY;
+            const headerBottom = mediumHeader.offsetTop + mediumHeader.offsetHeight;
+
+            if (scrollTop > headerBottom) {
+                stickyHeader.classList.remove('hidden');
+            } else {
+                stickyHeader.classList.add('hidden');
+            }
+        });
+    }
+
+    updateReadingProgressMedium() {
+        const mediumSection = document.getElementById('medium-detail-section');
+        if (!mediumSection || mediumSection.classList.contains('hidden')) {
+            return;
+        }
+
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const scrollTop = window.scrollY;
+        const scrollableHeight = documentHeight - windowHeight;
+
+        let progress = 0;
+        if (scrollableHeight > 0) {
+            progress = Math.min(100, Math.round((scrollTop / scrollableHeight) * 100));
+        }
+
+        const progressFill = document.getElementById('reading-progress-fill-medium');
+        const progressText = document.getElementById('reading-progress-text-medium');
+
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+        if (progressText) {
+            progressText.textContent = `${progress}%`;
+        }
     }
 }
 

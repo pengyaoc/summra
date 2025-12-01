@@ -28,7 +28,8 @@
       "Bash(test:*)",
       "Bash(pip3 install:*)",
       "Bash(lsof:*)",
-      "Bash(node -c:*)"
+      "Bash(node -c:*)",
+      "Bash(echo:*)"
     ],
     "deny": [],
     "ask": []

@@ -14,11 +14,10 @@ import sys
 import os
 from pathlib import Path
 
-# Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from scripts.generate_summaries import SummaryGenerator
+from generate_summaries import SummaryGenerator
 import pytest
 
 

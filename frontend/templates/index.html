@@ -26,7 +26,7 @@
         <!-- Main Content -->
         <main class="main-content">
             <!-- Category Carousels Section -->
-            <section class="categories-section" id="categories-section">
+            <section class="categories-section hidden" id="categories-section">
                 <div class="categories-container" id="categories-container">
                     <!-- Categories will be dynamically loaded here -->
                 </div>
@@ -81,10 +81,23 @@
                 </div>
             </section>
 
+            <!-- Sticky Reading Header for Medium (outside section to be edge-to-edge) -->
+            <div class="sticky-reading-header hidden" id="sticky-reading-header-medium">
+                <div class="sticky-header-content">
+                    <h3>
+                        <span>Full Summary</span>
+                        <span class="sticky-header-title-separator">—</span>
+                        <span id="sticky-medium-book-title"></span>
+                    </h3>
+                    <button class="sticky-settings-btn" id="sticky-settings-btn-medium" title="Reading Settings">⚙️</button>
+                </div>
+            </div>
+
             <!-- Medium Summary Detail Section -->
             <section class="medium-detail-section hidden" id="medium-detail-section">
                 <div class="back-button-container">
                     <button class="back-button" id="medium-back-button">← Back to Book</button>
+                    <button class="reading-settings-toggle" id="reading-settings-toggle-medium" title="Reading Settings">⚙️</button>
                 </div>
 
                 <div class="medium-detail-header">
@@ -99,12 +112,31 @@
                     </div>
                     <div class="summary-text" id="medium-detail-text"></div>
                 </div>
+
+                <!-- Reading Progress Indicator -->
+                <div class="reading-progress-bar">
+                    <div class="reading-progress-fill" id="reading-progress-fill-medium"></div>
+                    <div class="reading-progress-text" id="reading-progress-text-medium">0%</div>
+                </div>
             </section>
+
+            <!-- Sticky Reading Header (outside section to be edge-to-edge) -->
+            <div class="sticky-reading-header hidden" id="sticky-reading-header">
+                <div class="sticky-header-content">
+                    <h3>
+                        <span id="sticky-chapter-title"></span>
+                        <span class="sticky-header-title-separator">—</span>
+                        <span id="sticky-book-title"></span>
+                    </h3>
+                    <button class="sticky-settings-btn" id="sticky-settings-btn" title="Reading Settings">⚙️</button>
+                </div>
+            </div>
 
             <!-- Chapter Detail Section -->
             <section class="chapter-detail-section hidden" id="chapter-detail-section">
                 <div class="back-button-container">
                     <button class="back-button" id="chapter-back-button">← Back to Book</button>
+                    <button class="reading-settings-toggle" id="reading-settings-toggle" title="Reading Settings">⚙️</button>
                 </div>
 
                 <div class="chapter-detail-header">
@@ -135,8 +167,71 @@
                         </div>
                         <div class="chapter-fulltext" id="chapter-fulltext"></div>
                     </div>
+
+                    <!-- Next Chapter Button -->
+                    <div class="next-chapter-container" id="next-chapter-container">
+                        <button class="next-chapter-btn hidden" id="next-chapter-btn">Next Chapter →</button>
+                    </div>
+                </div>
+
+                <!-- Reading Progress Indicator -->
+                <div class="reading-progress-bar">
+                    <div class="reading-progress-fill" id="reading-progress-fill"></div>
+                    <div class="reading-progress-text" id="reading-progress-text">0%</div>
                 </div>
             </section>
+
+            <!-- Reading Settings Panel (shared between chapter and medium pages) -->
+            <div class="reading-settings-panel hidden" id="reading-settings-panel">
+                <div class="reading-settings-header">
+                    <h3>Reading Settings</h3>
+                    <button class="reading-settings-close" id="reading-settings-close">✕</button>
+                </div>
+
+                <div class="reading-settings-section">
+                    <h4>Font Family</h4>
+                    <div class="font-choices">
+                        <button class="font-choice active" data-font="georgia">Aa</button>
+                        <button class="font-choice" data-font="system">Aa</button>
+                        <button class="font-choice" data-font="opensans">Aa</button>
+                    </div>
+                    <div class="font-labels">
+                        <span>Georgia</span>
+                        <span>System</span>
+                        <span>Open Sans</span>
+                    </div>
+                </div>
+
+                <div class="reading-settings-section">
+                    <h4>Text Size</h4>
+                    <div class="size-control">
+                        <button class="size-btn" id="decrease-size">A-</button>
+                        <div class="size-slider-container">
+                            <input type="range" min="12" max="24" value="16" step="1" id="font-size-slider" class="size-slider">
+                        </div>
+                        <button class="size-btn" id="increase-size">A+</button>
+                    </div>
+                    <div class="size-value" id="size-value">16px</div>
+                </div>
+
+                <div class="reading-settings-section">
+                    <h4>Theme</h4>
+                    <div class="theme-choices">
+                        <button class="theme-choice active" data-theme="light">
+                            <div class="theme-preview theme-preview-light"></div>
+                            <span>Light</span>
+                        </button>
+                        <button class="theme-choice" data-theme="dark">
+                            <div class="theme-preview theme-preview-dark"></div>
+                            <span>Dark</span>
+                        </button>
+                        <button class="theme-choice" data-theme="sepia">
+                            <div class="theme-preview theme-preview-sepia"></div>
+                            <span>Sepia</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Category Detail Section -->
             <section class="category-detail-section hidden" id="category-detail-section">
