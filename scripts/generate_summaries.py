@@ -896,7 +896,7 @@ Cover all major plot points, themes, and character developments in chronological
         # Matches: "Chapter I", "CHAPTER 1", "CHAPTER ONE", "CHAPTER TWENTY-TWO", "Scene I. Title", etc.
         # IMPORTANT: Longer spelled-out patterns first to avoid partial matches
         # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
-        spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
+        spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE|the\s+last)'
         chapter_pattern = rf'(?:CHAPTER|Chapter|SCENE|Scene)\s+({spelled_out}|[IVXLCDM]+|[0-9]+)\.?\s*(.+)?\.?\s*$'
 
         # Also match bracket-style chapter markers like "[ 1 ]", "[ 10 ]" (Ulysses)
@@ -1002,6 +1002,11 @@ Cover all major plot points, themes, and character developments in chronological
                     # Convert numeral to number
                     if chapter_numeral.isdigit():
                         chapter_number = int(chapter_numeral)
+                    elif chapter_numeral.lower() == "the last":
+                        # Special case for "the last" - assign a placeholder number
+                        # The actual chapter number will be determined by its position
+                        # We use a large placeholder number that will be replaced during processing
+                        chapter_number = 9999  # Placeholder for "the last"
                     else:
                         # Try spelled-out number first
                         chapter_number = self.word_to_int(chapter_numeral)
@@ -1100,7 +1105,7 @@ Cover all major plot points, themes, and character developments in chronological
         # Patterns for chapter markers - must be on their own line or with short title
         # IMPORTANT: Longer spelled-out patterns first to avoid partial matches
         # IMPORTANT: Use non-capturing group (?:...) to avoid creating extra capture groups
-        spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE)'
+        spelled_out = r'(?:SEVENTY|SIXTY-NINE|SIXTY-EIGHT|SIXTY-SEVEN|SIXTY-SIX|SIXTY-FIVE|SIXTY-FOUR|SIXTY-THREE|SIXTY-TWO|SIXTY-ONE|SIXTY|FIFTY-NINE|FIFTY-EIGHT|FIFTY-SEVEN|FIFTY-SIX|FIFTY-FIVE|FIFTY-FOUR|FIFTY-THREE|FIFTY-TWO|FIFTY-ONE|FIFTY|FORTY-NINE|FORTY-EIGHT|FORTY-SEVEN|FORTY-SIX|FORTY-FIVE|FORTY-FOUR|FORTY-THREE|FORTY-TWO|FORTY-ONE|FORTY|THIRTY-NINE|THIRTY-EIGHT|THIRTY-SEVEN|THIRTY-SIX|THIRTY-FIVE|THIRTY-FOUR|THIRTY-THREE|THIRTY-TWO|THIRTY-ONE|THIRTY|TWENTY-NINE|TWENTY-EIGHT|TWENTY-SEVEN|TWENTY-SIX|TWENTY-FIVE|TWENTY-FOUR|TWENTY-THREE|TWENTY-TWO|TWENTY-ONE|TWENTY|NINETEEN|EIGHTEEN|SEVENTEEN|SIXTEEN|FIFTEEN|FOURTEEN|THIRTEEN|TWELVE|ELEVEN|TEN|NINE|EIGHT|SEVEN|SIX|FIVE|FOUR|THREE|TWO|ONE|the\s+last)'
         chapter_pattern = rf'^\s*(?:CHAPTER|Chapter)\s+({spelled_out}|[IVXLCDMivxlcdm]+|[0-9]+)\.?\s*(.{{0,60}})$'
         # Alternative patterns for standalone Roman numerals (Treasure Island, War of the Worlds styles)
         standalone_roman_pattern = r'^\s*([IVXLCDMivxlcdm]+)\s*$'  # Without period: "I", "II", "III"
@@ -1276,6 +1281,10 @@ Cover all major plot points, themes, and character developments in chronological
                     # Convert numeral to number
                     if chapter_numeral.isdigit():
                         chapter_number = int(chapter_numeral)
+                    elif chapter_numeral.lower() == "the last":
+                        # Special case for "the last" - assign a placeholder number
+                        # The actual chapter number will be determined by its position
+                        chapter_number = 9999  # Placeholder for "the last"
                     else:
                         # Try spelled-out number first
                         chapter_number = self.word_to_int(chapter_numeral)
@@ -1538,23 +1547,39 @@ Cover all major plot points, themes, and character developments in chronological
                 chapter_title = chapter_info['title']
 
                 # Pattern to find this chapter
-                # Try four patterns:
+                # Try multiple patterns:
                 # 1. "CHAPTER <numeral>" (e.g., White Fang: "CHAPTER I")
                 # 2. Standalone "<numeral>" without period (e.g., Treasure Island: "I")
                 # 3. Standalone "<numeral>." with period (e.g., War of the Worlds: "I.")
                 # 4. Bracket format "[ <numeral> ]" (e.g., Ulysses: "[ 1 ]")
-                chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{chapter_numeral}\.?\s*'
-                chapter_pattern_standalone = rf'^\s*{chapter_numeral}\s*$'
-                chapter_pattern_standalone_with_period = rf'^\s*{chapter_numeral}\.\s*$'
-                chapter_pattern_bracket = rf'^\s*\[\s*{chapter_numeral}\s*\]\s*$'
+                # 5. Special case: "Chapter the last" (e.g., Tom Jones)
+
+                # Handle special case for "the last" as a chapter numeral
+                if chapter_numeral.lower() == "the last":
+                    # Match both "Chapter the last" and "CHAPTER THE LAST"
+                    chapter_pattern_with_prefix = r'^\s*(?:CHAPTER|Chapter)\s+the\s+last\.?\s*'
+                    chapter_pattern_standalone = None
+                    chapter_pattern_standalone_with_period = None
+                    chapter_pattern_bracket = None
+                else:
+                    chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{chapter_numeral}\.?\s*'
+                    chapter_pattern_standalone = rf'^\s*{chapter_numeral}\s*$'
+                    chapter_pattern_standalone_with_period = rf'^\s*{chapter_numeral}\.\s*$'
+                    chapter_pattern_bracket = rf'^\s*\[\s*{chapter_numeral}\s*\]\s*$'
 
                 # Find where this chapter starts (between section start and section end)
                 chapter_start_line = None
                 for i in range(section_start_line + 1, section_end_line):
-                    if (re.match(chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or
-                        re.match(chapter_pattern_standalone, lines[i]) or
-                        re.match(chapter_pattern_standalone_with_period, lines[i]) or
-                        re.match(chapter_pattern_bracket, lines[i])):
+                    if re.match(chapter_pattern_with_prefix, lines[i], re.IGNORECASE):
+                        chapter_start_line = i
+                        break
+                    if chapter_pattern_standalone and re.match(chapter_pattern_standalone, lines[i]):
+                        chapter_start_line = i
+                        break
+                    if chapter_pattern_standalone_with_period and re.match(chapter_pattern_standalone_with_period, lines[i]):
+                        chapter_start_line = i
+                        break
+                    if chapter_pattern_bracket and re.match(chapter_pattern_bracket, lines[i]):
                         chapter_start_line = i
                         break
 
@@ -1572,16 +1597,30 @@ Cover all major plot points, themes, and character developments in chronological
                     # There's a next chapter in this section
                     next_chapter_info = section['chapters'][current_chapter_idx + 1]
                     next_chapter_numeral = next_chapter_info['numeral']
-                    next_chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{next_chapter_numeral}\.?\s*'
-                    next_chapter_pattern_standalone = rf'^\s*{next_chapter_numeral}\s*$'
-                    next_chapter_pattern_standalone_with_period = rf'^\s*{next_chapter_numeral}\.\s*$'
-                    next_chapter_pattern_bracket = rf'^\s*\[\s*{next_chapter_numeral}\s*\]\s*$'
+
+                    # Handle special case for "the last" as a chapter numeral
+                    if next_chapter_numeral.lower() == "the last":
+                        next_chapter_pattern_with_prefix = r'^\s*(?:CHAPTER|Chapter)\s+the\s+last\.?\s*'
+                        next_chapter_pattern_standalone = None
+                        next_chapter_pattern_standalone_with_period = None
+                        next_chapter_pattern_bracket = None
+                    else:
+                        next_chapter_pattern_with_prefix = rf'^\s*(?:CHAPTER|Chapter)\s+{next_chapter_numeral}\.?\s*'
+                        next_chapter_pattern_standalone = rf'^\s*{next_chapter_numeral}\s*$'
+                        next_chapter_pattern_standalone_with_period = rf'^\s*{next_chapter_numeral}\.\s*$'
+                        next_chapter_pattern_bracket = rf'^\s*\[\s*{next_chapter_numeral}\s*\]\s*$'
 
                     for i in range(chapter_start_line + 1, section_end_line):
-                        if (re.match(next_chapter_pattern_with_prefix, lines[i], re.IGNORECASE) or
-                            re.match(next_chapter_pattern_standalone, lines[i]) or
-                            re.match(next_chapter_pattern_standalone_with_period, lines[i]) or
-                            re.match(next_chapter_pattern_bracket, lines[i])):
+                        if re.match(next_chapter_pattern_with_prefix, lines[i], re.IGNORECASE):
+                            chapter_end_line = i
+                            break
+                        if next_chapter_pattern_standalone and re.match(next_chapter_pattern_standalone, lines[i]):
+                            chapter_end_line = i
+                            break
+                        if next_chapter_pattern_standalone_with_period and re.match(next_chapter_pattern_standalone_with_period, lines[i]):
+                            chapter_end_line = i
+                            break
+                        if next_chapter_pattern_bracket and re.match(next_chapter_pattern_bracket, lines[i]):
                             chapter_end_line = i
                             break
 
@@ -1789,6 +1828,7 @@ Cover all major plot points, themes, and character developments in chronological
             r'^([IVXLCDM]+)\.$',  # Roman numeral only format: "I." with title on next line (must be checked first)
             r'^([IVXLCDM]+)\.\s+(.+)$',  # Roman numeral only format: "I. TITLE" (must have title after period)
             r'^(CHAPTER\s+THE\s+LAST)\.?$',  # "CHAPTER THE LAST" or "CHAPTER THE LAST." (special ending chapter)
+            r'^(Chapter\s+the\s+last)\.?$',  # "Chapter the last" or "Chapter the last." (special ending chapter, lowercase variant)
             r'^(EPILOGUE)$',  # Standalone "EPILOGUE"
             r'^(Epilogue)$',  # Standalone "Epilogue"
             # Introductory material patterns (only if not numbered in TOC)
@@ -2804,6 +2844,24 @@ Cover all major plot points, themes, and character developments in chronological
                 epilogue_chapter = chapters[epilogue_idx]
                 chapters[epilogue_idx] = (next_chapter_num, epilogue_chapter[1], epilogue_chapter[2])
                 print(f"Renumbered Epilogue from 999 to {next_chapter_num}")
+
+        # Renumber chapters sequentially (1, 2, 3, ...) while preserving Chapter 0 (preface)
+        # This fixes the encoded numbering (101, 102, 228, 229) used for books with VOLUME markers
+        if chapters and has_book_markers:
+            # Separate Chapter 0 (preface) from regular chapters
+            preface = [ch for ch in chapters if ch[0] == 0]
+            regular_chapters = [ch for ch in chapters if ch[0] != 0]
+
+            # Renumber regular chapters sequentially
+            renumbered_chapters = []
+            for idx, (old_num, title, text) in enumerate(regular_chapters, start=1):
+                renumbered_chapters.append((idx, title, text))
+
+            # Combine: preface first, then renumbered regular chapters
+            chapters = preface + renumbered_chapters
+
+            if renumbered_chapters:
+                print(f"Renumbered {len(renumbered_chapters)} chapters sequentially (1-{len(renumbered_chapters)})")
 
         # Add both pre-TOC and post-TOC preface line indices to consumed set
         consumed_line_indices.update(combined_preface_line_indices)

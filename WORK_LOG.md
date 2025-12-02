@@ -4,6 +4,366 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ---
 
+## 2025-12-01
+
+### Chapter Illustration Lightbox Overlay - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-01
+**Completed:** 2025-12-01
+
+**Objective:** Add lightbox/overlay functionality for chapter illustrations to allow users to view illustrations in full-screen mode when clicked.
+
+**Changes Made:**
+
+1. **HTML Structure** (`frontend/templates/index.html`):
+   - Added lightbox overlay container with close button and image element
+   - Positioned before closing `</body>` tag for proper z-index layering
+   - Structure: `.lightbox-overlay` > `.lightbox-close` + `.lightbox-image`
+
+2. **CSS Styling** (`frontend/static/css/style.css`):
+   - Full-screen dark overlay (95% black background, z-index 10000)
+   - Centered image with max 90vh/90vw sizing for responsive viewing
+   - Close button styling (top right, circular, white with hover effects)
+   - Pointer cursor on illustration thumbnails with opacity hover effect
+   - Smooth fade in/out transitions (0.3s)
+   - Mobile-responsive adjustments (95vh/95vw, smaller close button)
+
+3. **JavaScript Logic** (`frontend/static/js/app.js`):
+   - Added `setupLightbox()` method to initialize overlay event handlers
+   - Click event on chapter illustrations opens lightbox
+   - Multiple close methods:
+     - Click close button (✕)
+     - Click overlay background
+     - Press Escape key
+   - Prevents body scroll when lightbox is open
+   - Restores scroll when closed
+   - Stores `openLightbox()` reference on app instance for use in chapter loading
+
+4. **Integration**:
+   - Modified `showChapterDetail()` to add click handler to illustration images
+   - Passes illustration URL and alt text to lightbox
+   - Works seamlessly with existing chapter illustration display logic
+
+**User Experience Improvements:**
+- ✅ Click to expand - Pointer cursor indicates illustrations are clickable
+- ✅ Full-screen view - Images open in dark overlay for better viewing
+- ✅ Multiple close options - Close button, background click, or Escape key
+- ✅ Smooth transitions - Fade in/out animations
+- ✅ Scroll lock - Page doesn't scroll behind overlay
+- ✅ Responsive design - Works on mobile and desktop
+
+**Files Modified:**
+- `frontend/templates/index.html` - Added lightbox HTML structure
+- `frontend/static/css/style.css` - Added lightbox styling (~90 lines)
+- `frontend/static/js/app.js` - Added lightbox setup and event handlers (~55 lines)
+
+---
+
+### Wizard of Oz Chapter Illustrations Import - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-01
+**Completed:** 2025-12-01
+
+**Objective:** Import and process 24 chapter illustrations for "The Wonderful Wizard of Oz" (Book ID 6) with automatic resizing and proper organization.
+
+**Changes Made:**
+
+1. **Import Script Updates** (`scripts/import_chapter_illustrations.py`):
+   - Updated to use new directory structure: `illustrations/{book_id}/{chapter_num}.{ext}`
+   - Changed from: `covers/{book_id}_{chapter_num}.{ext}` (old)
+   - Changed to: `illustrations/{book_id}/{chapter_num}.{ext}` (new)
+   - Database URLs now use format: `illustrations/6/1.png` instead of `covers/6_1.png`
+
+2. **Image Processing**:
+   - Source: 24 images (6_1.png through 6_24.png) from `/Users/pengyao/Downloads`
+   - All images were 5.8-7.4MB (well above 1.5MB threshold)
+   - Automatically resized to ~1MB each using PIL binary search algorithm
+   - Average final size: 0.91-1.08MB (perfectly optimized)
+   - Total size reduction: ~165MB → ~24MB (85% reduction)
+
+3. **File Organization**:
+   - Destination: `frontend/static/illustrations/6/1.png` through `24.png`
+   - Proper naming: Just chapter number (no book_id prefix in filename)
+   - Book-specific subdirectory structure maintained
+
+4. **Database Updates**:
+   - All 24 chapters updated with illustration URLs
+   - Format: `illustrations/6/{chapter_num}.png`
+   - URLs ready for frontend rendering and lightbox display
+
+**Results:**
+- ✅ 24 illustrations imported successfully
+- ✅ 24 images resized (100% success rate, 0 errors)
+- ✅ Database updated with correct URLs
+- ✅ Files organized in proper directory structure
+- ✅ Chapter illustrations now display with clickable lightbox functionality
+
+**Files Modified:**
+- `scripts/import_chapter_illustrations.py` - Updated directory structure logic
+- Database: 24 chapter records updated with illustration URLs
+
+---
+
+### Chapter Illustrations Reorganization - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-01
+**Completed:** 2025-12-01
+
+**Objective:** Reorganize existing chapter illustrations from flat structure to book-specific subdirectories.
+
+**Changes Made:**
+
+1. **New Directory Structure**:
+   - FROM: `frontend/static/illustrations/1_1.png`, `1_2.png`, etc. (flat)
+   - TO: `frontend/static/illustrations/1/1.png`, `1/2.png`, etc. (hierarchical)
+   - Benefits: Better organization, scalability, clearer separation by book
+
+2. **Migration Script** (`scripts/reorganize_illustrations.py`):
+   - Automatically detects files matching pattern `{book_id}_{chapter_num}.{ext}`
+   - Creates book-specific subdirectories
+   - Renames files to just chapter number within subdirectory
+   - Updates database with new URLs
+   - Features dry-run mode for safe preview
+
+3. **Results**:
+   - Alice in Wonderland: 14 illustrations moved to `illustrations/1/` directory
+   - Files renamed from `1_1.png`-`1_12.png` to `1.png`-`12.png`
+   - Database updated with new URLs: `illustrations/1/1.png`, etc.
+   - Chapters 1 and 10 had both JPG and PNG versions (consolidated to PNG)
+
+**Files Created:**
+- `scripts/reorganize_illustrations.py` - Migration script with dry-run support
+
+---
+
+## 2025-12-01
+
+### Book Cover Standardization - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-01
+**Completed:** 2025-12-01
+
+**Objective:** Standardize book cover naming and organization to differentiate between book covers and chapter illustrations, track cover sources, and optimize large files.
+
+**Changes Made:**
+
+1. **Database Schema Updates** (`backend/models.py`):
+   - Added `cover_source` column to `books` table (TEXT, default: 'unknown')
+   - Tracks cover source: 'custom', 'gutenberg', or 'unknown'
+   - Updated `update_book_cover()` method to accept optional `cover_source` parameter
+
+2. **Directory Structure**:
+   - Created `frontend/static/illustrations/` for chapter art (separate from book covers)
+   - Created `data/cover_originals/` for large original covers >1.5MB (gitignored)
+   - Updated `.gitignore` to exclude `data/cover_originals/`
+
+3. **File Naming Convention**:
+   - **Book covers**: Renamed to `{book_id}.{ext}` format (e.g., `1.png`, `2.jpg`)
+   - **Chapter illustrations**: Moved to `illustrations/{book_id}_{chapter_num}.{ext}`
+   - Old naming (e.g., `alice_wonderland_custom.png`, `pg1234.jpg`) migrated automatically
+
+4. **Image Optimization**:
+   - Large covers (>1.5MB) automatically resized to ~1MB for web use
+   - Original high-res versions preserved in `data/cover_originals/`
+   - 20 large covers optimized, saving ~40MB in static assets
+
+5. **Migration Script** (`scripts/migrate_book_covers.py`):
+   - Automated migration of all existing covers and illustrations
+   - Features:
+     - Dry-run mode for previewing changes
+     - Automatic cover source detection (custom vs gutenberg)
+     - Batch resizing of large files using PIL
+     - Database updates for all affected records
+   - Results:
+     - 61 book covers renamed and organized
+     - 14 chapter illustrations moved to separate directory
+     - 20 large covers resized and originals archived
+
+6. **Configuration** (`backend/config.py`):
+   - Added `ILLUSTRATIONS_DIR` constant for chapter art location
+
+**Migration Summary:**
+- Total books processed: 61
+- Chapter illustrations moved: 14 (for Alice in Wonderland, book_id=1)
+- Covers resized: 20 (all custom PNG covers >1.5MB)
+- Large originals archived: 20 (~60MB total, now gitignored)
+- Database records updated: 75 (61 books + 14 chapter records)
+
+**Benefits:**
+- Clear separation between book covers and chapter illustrations
+- Simplified file management with predictable naming
+- Reduced static asset size by ~40MB
+- Cover source tracking for better organization
+- Original high-quality images preserved for future use
+
+---
+
+## 2025-12-01
+
+### Chapter Illustrations Feature - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-01
+**Completed:** 2025-12-01
+
+**Objective:** Add support for displaying illustrations for each chapter, allowing chapter-specific artwork to enhance the reading experience.
+
+**Changes Made:**
+
+1. **Database Schema Updates** (`backend/models.py`):
+   - Added `illustration_url` column to `chapters` table (TEXT, nullable)
+   - Updated `add_chapter()` method to accept optional `illustration_url` parameter
+   - Updated all chapter metadata queries to include `illustration_url` in SELECT statements
+   - Backward compatible: NULL values allowed for chapters without illustrations
+
+2. **Frontend HTML Structure** (`frontend/templates/index.html`):
+   - Added chapter illustration container between header and summary block:
+   ```html
+   <div class="chapter-illustration-container hidden" id="chapter-illustration-container">
+       <img id="chapter-illustration" class="chapter-illustration" alt="Chapter illustration" />
+   </div>
+   ```
+
+3. **JavaScript Display Logic** (`frontend/static/js/app.js`):
+   - Updated `showChapterDetail()` function to:
+     - Check if chapter has `illustration_url`
+     - Convert local paths to proper URLs (`covers/image.jpg` → `/static/covers/image.jpg`)
+     - Show illustration if available, hide container otherwise
+     - Set appropriate alt text for accessibility
+
+4. **CSS Styling** (`frontend/static/css/style.css`):
+   - Added responsive styling for chapter illustrations:
+     - Centered display with `max-width: 100%`
+     - Max-height: 600px on desktop, 400px on mobile
+     - Rounded corners (8px) with subtle shadow
+     - Smooth hover effect (scale to 1.02x)
+     - Hidden by default when no illustration available
+
+**Technical Details:**
+
+**Path Conversion Logic:**
+```javascript
+// Convert local path to full URL
+if (chapter.illustration_url) {
+    let illustrationUrl = chapter.illustration_url;
+    if (!illustrationUrl.startsWith('http') && !illustrationUrl.startsWith('/')) {
+        illustrationUrl = `/static/${illustrationUrl}`;
+    }
+    illustrationImg.src = illustrationUrl;
+    illustrationContainer.classList.remove('hidden');
+}
+```
+
+**Database Schema:**
+```sql
+ALTER TABLE chapters ADD COLUMN illustration_url TEXT;
+```
+
+**Example Usage:**
+```python
+db.add_chapter(
+    book_id=1,
+    chapter_number=1,
+    chapter_title="Down the Rabbit-Hole",
+    summary="...",
+    chapter_text="...",
+    illustration_url="covers/alice_ch1.jpg"  # or full URL
+)
+```
+
+**Files Modified:**
+- `backend/models.py` - Added illustration_url column and parameter
+- `frontend/templates/index.html` - Added illustration container
+- `frontend/static/js/app.js` - Added illustration display logic
+- `frontend/static/css/style.css` - Added illustration styling
+
+**Impact:**
+- Enhances reading experience with chapter-specific artwork
+- Fully backward compatible (chapters without illustrations display normally)
+- No visual changes for existing chapters (container hidden when no illustration)
+- Supports both local paths (in covers/ directory) and external URLs
+- Responsive design works on desktop and mobile
+- Accessible with proper alt text
+
+**Next Steps/Notes:**
+- Illustrations can be added to chapters via database update or during book processing
+- Consider adding illustration upload interface in future
+- Could extend to support multiple illustrations per chapter
+- Storage location: `frontend/static/covers/` for local files
+
+---
+
+### Chapter Numbering Fix: Sequential Numbering for Multi-Volume Books - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-01
+**Completed:** 2025-12-01
+
+**Problem:** Books with VOLUME/BOOK markers (like "The Count of Monte Cristo" with 5 volumes) were using an encoded numbering scheme: `book_num * 100 + chapter_num`, resulting in non-sequential chapter numbers (101, 102, 103... 228, 229, 230... 348, 349...). This was confusing for users who expected chapters to be numbered sequentially (1, 2, 3, 4...) across all volumes.
+
+**Solution:** Added renumbering logic to convert encoded chapter numbers to sequential numbering (1-117 for Count of Monte Cristo) while preserving Chapter 0 (preface).
+
+**Files Modified:**
+- `scripts/generate_summaries.py`
+
+**Changes:**
+
+1. **Sequential Renumbering (`detect_chapters` method):**
+   - Lines 2848-2864: Added new renumbering logic before the return statement
+   - Separates Chapter 0 (preface) from regular chapters
+   - Renumbers all non-zero chapters sequentially (1, 2, 3...)
+   - Only applies when `has_book_markers=True` to avoid affecting regular books
+   - Preserves chapter titles and content exactly as detected
+
+**Testing:**
+- Verified pg1184.txt (The Count of Monte Cristo, 5 volumes, 117 chapters)
+  - Before: Chapters numbered 101-127, 228-247, 348-373, 474-495, 596-617
+  - After: Chapters numbered sequentially 1-117
+- Verified Frankenstein (no volumes) still works correctly with original numbering (0, 1, 2, 3...)
+- Dry run output shows: "Renumbered 117 chapters sequentially (1-117)"
+
+**Impact:** This fix ensures all books have consistent, sequential chapter numbering in the UI regardless of their internal structure (VOLUME/BOOK markers), providing a better user experience.
+
+---
+
+## 2025-11-30
+
+### Chapter Detection Enhancement: Support for "Chapter the last" Pattern - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-11-30
+**Completed:** 2025-11-30
+
+**Problem:** Tom Jones (pg6593.txt) uses "Chapter the last" as the final chapter marker, which was not being detected by the chapter extraction logic. This caused the last chapter to be merged with the previous chapter "Approaching Still Nearer to the End."
+
+**Solution:** Added support for "the last" as a valid chapter numeral across all chapter detection mechanisms:
+
+**Files Modified:**
+- `scripts/generate_summaries.py`
+
+**Changes:**
+
+1. **TOC Extraction (`extract_two_level_toc`):**
+   - Line 899: Added "the\s+last" to the `spelled_out` pattern
+   - Lines 1005-1009: Added special case handling to assign placeholder number 9999 for "the last"
+
+2. **Body Structure Extraction (`extract_two_level_structure_from_body`):**
+   - Line 1108: Added "the\s+last" to the `spelled_out` pattern
+   - Lines 1284-1287: Added special case handling to assign placeholder number 9999 for "the last"
+
+3. **Two-Level Structure Detection (`_detect_chapters_from_toc_structure`):**
+   - Lines 1549-1575: Added special case handling for "the last" in chapter pattern matching
+   - Lines 1593-1616: Added special case handling for "the last" in next chapter boundary detection
+
+4. **General Chapter Detection (`detect_chapters`):**
+   - Line 1792: Added pattern `r'^(Chapter\s+the\s+last)\.?$'` for lowercase variant
+
+**Testing:**
+- Verified pg6593.txt (Tom Jones) now detects all 208 chapters (was 207 before)
+- BOOK 18 now correctly shows 13 chapters including "Chapter the last"
+- The placeholder number (9999) ensures "the last" is correctly positioned as the final chapter
+
+**Impact:** This fix ensures books using non-standard chapter numbering like "Chapter the last" are properly detected and processed, maintaining the DRY principle by having a single implementation for "the last" detection across all code paths.
+
+---
+
 ## 2025-11-30
 
 ### Reading Experience Enhancements - Kindle-Inspired Features - COMPLETED

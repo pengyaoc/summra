@@ -36,6 +36,7 @@ class SummraApp {
         this.setupRouting();
         this.configureMarked();
         this.setupReadingSettings();
+        this.setupLightbox();
         this.loadReadingPreferences();
     }
 
@@ -984,6 +985,32 @@ class SummraApp {
         document.getElementById('chapter-detail-title').textContent = `${chapterNum}. ${chapterTitle}`;
         document.getElementById('chapter-detail-subtitle').textContent = book.title;
 
+        // Display illustration if available
+        const illustrationContainer = document.getElementById('chapter-illustration-container');
+        const illustrationImg = document.getElementById('chapter-illustration');
+
+        if (chapter.illustration_url && chapter.illustration_url.trim() !== '') {
+            // Illustration available - show it
+            let illustrationUrl = chapter.illustration_url;
+            // Convert local path to URL if needed (similar to cover images)
+            if (!illustrationUrl.startsWith('http')) {
+                illustrationUrl = `/static/${illustrationUrl}`;
+            }
+            illustrationImg.src = illustrationUrl;
+            illustrationImg.alt = `Illustration for ${chapterTitle}`;
+            illustrationContainer.classList.remove('hidden');
+
+            // Add click handler to open in lightbox
+            illustrationImg.onclick = () => {
+                if (this.openLightbox) {
+                    this.openLightbox(illustrationUrl, `Illustration for ${chapterTitle}`);
+                }
+            };
+        } else {
+            // No illustration - hide the container
+            illustrationContainer.classList.add('hidden');
+        }
+
         // Load summary (collapsed by default) - or hide if empty
         const summaryBox = document.getElementById('chapter-summary-box');
         const summaryText = document.getElementById('chapter-summary-text');
@@ -1798,6 +1825,59 @@ class SummraApp {
         if (progressText) {
             progressText.textContent = `${progress}%`;
         }
+    }
+
+    setupLightbox() {
+        /**
+         * Setup image lightbox overlay for chapter illustrations.
+         * When user clicks an illustration, it opens in a full-screen overlay.
+         */
+        const lightboxOverlay = document.getElementById('lightbox-overlay');
+        const lightboxImage = document.getElementById('lightbox-image');
+        const lightboxClose = document.getElementById('lightbox-close');
+
+        if (!lightboxOverlay || !lightboxImage || !lightboxClose) {
+            return; // Lightbox elements not found
+        }
+
+        // Function to open lightbox
+        const openLightbox = (imageSrc, imageAlt) => {
+            lightboxImage.src = imageSrc;
+            lightboxImage.alt = imageAlt || '';
+            lightboxOverlay.classList.remove('hidden');
+            // Prevent body scroll when lightbox is open
+            document.body.style.overflow = 'hidden';
+        };
+
+        // Function to close lightbox
+        const closeLightbox = () => {
+            lightboxOverlay.classList.add('hidden');
+            // Restore body scroll
+            document.body.style.overflow = '';
+        };
+
+        // Close button click
+        lightboxClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeLightbox();
+        });
+
+        // Click on overlay background (not the image)
+        lightboxOverlay.addEventListener('click', (e) => {
+            if (e.target === lightboxOverlay) {
+                closeLightbox();
+            }
+        });
+
+        // Escape key to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !lightboxOverlay.classList.contains('hidden')) {
+                closeLightbox();
+            }
+        });
+
+        // Store reference to openLightbox function for use when loading chapters
+        this.openLightbox = openLightbox;
     }
 }
 

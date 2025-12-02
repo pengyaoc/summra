@@ -742,6 +742,33 @@ body {
     /* Content is already contained within chapter-detail-section which has edge-to-edge white background */
 }
 
+/* Chapter Illustration */
+.chapter-illustration-container {
+    margin: 32px 0;
+    text-align: center;
+}
+
+.chapter-illustration {
+    max-width: 100%;
+    max-height: 600px;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive illustration sizing */
+@media (max-width: 768px) {
+    .chapter-illustration {
+        max-height: none;
+        width: 100%;
+    }
+
+    .chapter-illustration-container {
+        margin: 32px -20px;
+        width: calc(100% + 40px);
+    }
+}
+
 .chapter-summary-box {
     background: #fff9e6;
     border-left: 4px solid #ffc107;
@@ -2196,5 +2223,92 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
     .next-chapter-container {
         margin-bottom: 60px;
+    }
+}
+
+/* ===================================
+   Image Lightbox Overlay
+   =================================== */
+
+/* Lightbox overlay - full screen dark background */
+.lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.lightbox-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Close button - top right corner */
+.lightbox-close {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-size: 2rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 10001;
+}
+
+.lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.1);
+}
+
+/* Lightbox image - centered and scaled */
+.lightbox-image {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    cursor: default;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Make illustration clickable (pointer cursor) */
+.chapter-illustration {
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.chapter-illustration:hover {
+    opacity: 0.9;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .lightbox-close {
+        top: 16px;
+        right: 16px;
+        width: 44px;
+        height: 44px;
+        font-size: 1.5rem;
+    }
+
+    .lightbox-image {
+        max-width: 95vw;
+        max-height: 95vh;
     }
 }

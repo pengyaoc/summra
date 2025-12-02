@@ -29,7 +29,8 @@
       "Bash(pip3 install:*)",
       "Bash(lsof:*)",
       "Bash(node -c:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(./venv/bin/python:*)"
     ],
     "deny": [],
     "ask": []
