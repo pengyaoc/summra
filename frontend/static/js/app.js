@@ -28,9 +28,11 @@ class SummraApp {
         this.init();
     }
 
-    init() {
-        this.loadCategories();
-        this.loadBooks();
+    async init() {
+        // Load books first, then categories (categories need books data for filtering)
+        await this.loadBooks();
+        await this.loadCategories();
+
         this.setupEventListeners();
         this.setupPersistentPlayer();
         this.setupRouting();
@@ -41,38 +43,58 @@ class SummraApp {
     }
 
     setupRouting() {
+        // Handle popstate for browser back/forward buttons
         window.addEventListener('popstate', () => {
             this.handleRoute();
         });
-        // Handle the initial route immediately (don't wait for load event)
+
+        // Intercept all link clicks for client-side routing
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a[href^="/"]');
+            if (!link) return;
+
+            const href = link.getAttribute('href');
+
+            // Skip external links and download links
+            if (link.hasAttribute('target') || link.hasAttribute('download')) {
+                return;
+            }
+
+            // Handle clean URLs
+            if (href.startsWith('/') && !href.startsWith('/api/') && !href.startsWith('/static/')) {
+                e.preventDefault();
+                window.history.pushState(null, '', href);
+                this.handleRoute();
+            }
+        });
+
+        // Handle the initial route immediately
         this.handleRoute();
     }
 
     async handleRoute() {
-        const hash = window.location.hash;
+        // Use pathname for routing (clean URLs)
+        const path = window.location.pathname;
 
-        if (!hash || hash === '#' || hash === '#/') {
+        // Home page
+        if (!path || path === '/') {
             this.showHomeSection();
-            // Clear URL when intentionally navigating to home
-            if (hash) {
-                window.history.pushState(null, '', '/');
-            }
             return;
         }
 
         // Parse routes:
-        // #/book/{slug} - Book detail
-        // #/book/{slug}/medium - Medium summary detail
-        // #/book/{slug}/chapter/{num} - Chapter detail
-        // #/category/{id} - Category detail
-        // #/categories - All categories view
-        // #/all-books - All books grid view
-        const bookMatch = hash.match(/#\/book\/([^\/]+)$/);
-        const mediumMatch = hash.match(/#\/book\/([^\/]+)\/medium$/);
-        const chapterMatch = hash.match(/#\/book\/([^\/]+)\/chapter\/(\d+)$/);
-        const categoryMatch = hash.match(/#\/category\/(\d+)$/);
-        const categoriesMatch = hash === '#/categories';
-        const allBooksMatch = hash === '#/all-books';
+        // /books/{slug} - Book detail
+        // /books/{slug}/summary - Medium summary detail
+        // /books/{slug}/chapters/{num} - Chapter detail
+        // /categories/{id} - Category detail
+        // /categories - All categories view
+        // /books - All books grid view
+        const bookMatch = path.match(/^\/books\/([^\/]+)$/);
+        const mediumMatch = path.match(/^\/books\/([^\/]+)\/summary$/);
+        const chapterMatch = path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/);
+        const categoryMatch = path.match(/^\/categories\/(\d+)$/);
+        const categoriesMatch = path === '/categories';
+        const allBooksMatch = path === '/books';
 
         if (!this.booksLoaded) {
             await this.waitForBooks();
@@ -150,16 +172,16 @@ class SummraApp {
 
     updateURL(book, page = null) {
         const slug = this.slugify(book.title);
-        let newHash = `#/book/${slug}`;
+        let newPath = `/books/${slug}`;
 
-        if (page === 'medium') {
-            newHash = `#/book/${slug}/medium`;
+        if (page === 'summary') {
+            newPath = `/books/${slug}/summary`;
         } else if (typeof page === 'number') {
-            newHash = `#/book/${slug}/chapter/${page}`;
+            newPath = `/books/${slug}/chapters/${page}`;
         }
 
-        if (window.location.hash !== newHash) {
-            window.history.pushState(null, '', newHash);
+        if (window.location.pathname !== newPath) {
+            window.history.pushState(null, '', newPath);
         }
     }
 
@@ -349,7 +371,8 @@ class SummraApp {
         if (backButton) {
             backButton.addEventListener('click', () => {
                 this.saveScrollPosition();
-                window.location.hash = '#/';
+                window.history.pushState(null, '', '/');
+                this.handleRoute();
             });
         }
 
@@ -358,7 +381,8 @@ class SummraApp {
             mediumBackButton.addEventListener('click', () => {
                 if (this.currentBook) {
                     const slug = this.slugify(this.currentBook.title);
-                    window.location.hash = `#/book/${slug}`;
+                    window.history.pushState(null, '', `/books/${slug}`);
+                    this.handleRoute();
                 }
             });
         }
@@ -368,7 +392,8 @@ class SummraApp {
             chapterBackButton.addEventListener('click', () => {
                 if (this.currentBook) {
                     const slug = this.slugify(this.currentBook.title);
-                    window.location.hash = `#/book/${slug}`;
+                    window.history.pushState(null, '', `/books/${slug}`);
+                    this.handleRoute();
                 }
             });
         }
@@ -402,42 +427,40 @@ class SummraApp {
         const categoriesContainer = document.getElementById('categories-container');
         categoriesContainer.innerHTML = '';
 
-        // Get book counts for each category
-        const categoriesWithCounts = await Promise.all(
-            categories.map(async (category) => {
-                try {
-                    const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
-                    const data = await response.json();
-                    return {
-                        ...category,
-                        bookCount: data.success ? (data.books?.length || 0) : 0
-                    };
-                } catch (error) {
-                    console.error(`Error loading books for category ${category.name}:`, error);
-                    return { ...category, bookCount: 0 };
-                }
-            })
-        );
+        // Use already-loaded books data to filter by category client-side
+        // This avoids making 50+ API calls for each category
+        const categoriesWithBooks = categories.map(category => {
+            // Filter all books to find those in this category
+            const booksInCategory = this.allBooks.filter(book =>
+                book.categories && book.categories.some(cat => cat.id === category.id)
+            );
+
+            // Cache the result for later use
+            if (booksInCategory.length > 0) {
+                this.categoryCache[category.id] = {
+                    category,
+                    books: booksInCategory
+                };
+            }
+
+            return {
+                category,
+                books: booksInCategory,
+                bookCount: booksInCategory.length
+            };
+        });
 
         // Filter out categories with no books and sort by book count
-        const categoriesWithBooks = categoriesWithCounts
-            .filter(cat => cat.bookCount > 0)
+        const validCategories = categoriesWithBooks
+            .filter(item => item.bookCount > 0)
             .sort((a, b) => b.bookCount - a.bookCount);
 
         // Show top 10 categories
-        const topCategories = categoriesWithBooks.slice(0, 10);
+        const topCategories = validCategories.slice(0, 10);
 
-        for (const category of topCategories) {
-            try {
-                const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
-                const data = await response.json();
-
-                if (data.success && data.books && data.books.length > 0) {
-                    this.renderCategoryCarousel(category, data.books);
-                }
-            } catch (error) {
-                console.error(`Error rendering category ${category.name}:`, error);
-            }
+        // Render carousels using cached data
+        for (const item of topCategories) {
+            this.renderCategoryCarousel(item.category, item.books);
         }
 
         // Add "All Books" carousel at the end
@@ -458,8 +481,8 @@ class SummraApp {
 
         // Add View All link (except for "All Books" carousel)
         const viewAllLink = category.id !== 'all'
-            ? `<a href="#/category/${category.id}" class="view-all-link">View All →</a>`
-            : `<a href="#/all-books" class="view-all-link">View All →</a>`;
+            ? `<a href="/categories/${category.id}" class="view-all-link">View All →</a>`
+            : `<a href="/books" class="view-all-link">View All →</a>`;
 
         header.innerHTML = `
             <h2 class="category-title">${this.escapeHtml(category.name)}</h2>
@@ -498,7 +521,7 @@ class SummraApp {
             bookCard.className = 'carousel-book-card';
 
             const coverImageHtml = book.cover_image_url
-                ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="carousel-book-cover" loading="lazy">`
+                ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'carousel-book-cover')
                 : '';
 
             bookCard.innerHTML = `
@@ -573,15 +596,51 @@ class SummraApp {
         if (bookTitle) bookTitle.textContent = book.title;
         if (bookAuthor) bookAuthor.textContent = `by ${book.author}`;
 
-        const bookCoverEl = document.getElementById('book-info-cover');
-        if (bookCoverEl) {
-            if (book.cover_image_url) {
-                bookCoverEl.src = book.cover_image_url;
-                bookCoverEl.alt = `${book.title} cover`;
-                bookCoverEl.classList.remove('hidden');
+        // Handle book cover - check for both <img> and <picture> elements
+        let bookCoverContainer = document.getElementById('book-info-cover');
+
+        // If we replaced it with <picture> before, the img won't have the ID anymore
+        // So look for the picture element inside the parent
+        if (!bookCoverContainer) {
+            const parent = document.querySelector('.book-detail-header');
+            bookCoverContainer = parent?.querySelector('picture') || parent?.querySelector('img');
+        }
+
+        if (bookCoverContainer && book.cover_image_url) {
+            // Get base URL without extension for WebP/JPG support
+            const urlWithoutExt = book.cover_image_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+
+            // If it's still the original <img> element, replace with <picture>
+            if (bookCoverContainer.tagName === 'IMG') {
+                const pictureHtml = `
+                    <picture id="book-info-cover">
+                        <source srcset="${this.escapeHtml(urlWithoutExt + '.webp')}" type="image/webp">
+                        <img src="${this.escapeHtml(urlWithoutExt + '.jpg')}"
+                             alt="${this.escapeHtml(book.title)} cover"
+                             class="book-detail-cover">
+                    </picture>
+                `;
+                bookCoverContainer.outerHTML = pictureHtml;
             } else {
-                bookCoverEl.classList.add('hidden');
+                // Already a <picture> element, just update the sources
+                const source = bookCoverContainer.querySelector('source');
+                const img = bookCoverContainer.querySelector('img');
+
+                if (source) {
+                    source.srcset = urlWithoutExt + '.webp';
+                }
+                if (img) {
+                    img.src = urlWithoutExt + '.jpg';
+                    img.alt = `${book.title} cover`;
+                }
             }
+
+            bookCoverContainer = document.getElementById('book-info-cover');
+            if (bookCoverContainer) {
+                bookCoverContainer.classList.remove('hidden');
+            }
+        } else if (bookCoverContainer) {
+            bookCoverContainer.classList.add('hidden');
         }
 
         // Hide categories section when viewing a book
@@ -711,7 +770,7 @@ class SummraApp {
                 // Setup expand button to navigate to new page
                 const expandBtn = document.getElementById('medium-expand-button');
                 expandBtn.onclick = () => {
-                    this.updateURL(this.currentBook, 'medium');
+                    this.updateURL(this.currentBook, 'summary');
                     this.showMediumDetail(this.currentBook);
                 };
             } else {
@@ -988,22 +1047,34 @@ class SummraApp {
         // Display illustration if available
         const illustrationContainer = document.getElementById('chapter-illustration-container');
         const illustrationImg = document.getElementById('chapter-illustration');
+        const illustrationWebp = document.getElementById('chapter-illustration-webp');
+        const illustrationJpg = document.getElementById('chapter-illustration-jpg');
 
         if (chapter.illustration_url && chapter.illustration_url.trim() !== '') {
             // Illustration available - show it
             let illustrationUrl = chapter.illustration_url;
             // Convert local path to URL if needed (similar to cover images)
-            if (!illustrationUrl.startsWith('http')) {
+            if (!illustrationUrl.startsWith('http') && !illustrationUrl.startsWith('/static/')) {
                 illustrationUrl = `/static/${illustrationUrl}`;
             }
-            illustrationImg.src = illustrationUrl;
+
+            // Generate optimized image URLs (WebP and JPG)
+            // Remove extension from URL and add .webp and .jpg
+            const baseUrl = illustrationUrl.replace(/\.(png|jpg|jpeg)$/i, '');
+            const webpUrl = `${baseUrl}.webp`;
+            const jpgUrl = `${baseUrl}.jpg`;
+
+            // Set picture sources for WebP and JPG
+            illustrationWebp.srcset = webpUrl;
+            illustrationJpg.srcset = jpgUrl;
+            illustrationImg.src = jpgUrl; // Fallback for older browsers
             illustrationImg.alt = `Illustration for ${chapterTitle}`;
             illustrationContainer.classList.remove('hidden');
 
-            // Add click handler to open in lightbox
+            // Add click handler to open in lightbox - pass base URL for lightbox to handle formats
             illustrationImg.onclick = () => {
                 if (this.openLightbox) {
-                    this.openLightbox(illustrationUrl, `Illustration for ${chapterTitle}`);
+                    this.openLightbox(baseUrl, `Illustration for ${chapterTitle}`);
                 }
             };
         } else {
@@ -1312,21 +1383,39 @@ class SummraApp {
         let categoryData = this.categoryCache[categoryId];
 
         if (!categoryData) {
-            // Fetch category and books if not cached
-            try {
-                const response = await fetch(`${this.apiBase}/categories/${categoryId}/books`);
-                const data = await response.json();
+            // Try to build from already-loaded books (client-side filtering)
+            // This avoids an API call in most cases
+            const booksInCategory = this.allBooks.filter(book =>
+                book.categories && book.categories.some(cat => cat.id === categoryId)
+            );
 
-                if (data.success) {
-                    // Cache the data
-                    categoryData = {
-                        category: data.category,
-                        books: data.books
-                    };
-                    this.categoryCache[categoryId] = categoryData;
+            if (booksInCategory.length > 0) {
+                // Find category info from the books' category data
+                const categoryInfo = booksInCategory[0].categories.find(cat => cat.id === categoryId);
+
+                categoryData = {
+                    category: categoryInfo,
+                    books: booksInCategory
+                };
+
+                // Cache for future use
+                this.categoryCache[categoryId] = categoryData;
+            } else {
+                // Last resort: fetch from API
+                try {
+                    const response = await fetch(`${this.apiBase}/categories/${categoryId}/books`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        categoryData = {
+                            category: data.category,
+                            books: data.books
+                        };
+                        this.categoryCache[categoryId] = categoryData;
+                    }
+                } catch (error) {
+                    console.error('Error loading category:', error);
                 }
-            } catch (error) {
-                console.error('Error loading category:', error);
             }
         }
 
@@ -1405,30 +1494,45 @@ class SummraApp {
         const container = document.getElementById('all-categories-container');
         container.innerHTML = '';
 
-        // Get book counts
-        const categoriesWithCounts = await Promise.all(
-            categories.map(async (category) => {
-                try {
-                    const response = await fetch(`${this.apiBase}/categories/${category.id}/books`);
-                    const data = await response.json();
-                    return {
-                        ...category,
-                        bookCount: data.success ? (data.books?.length || 0) : 0,
-                        books: data.success ? data.books : []
-                    };
-                } catch (error) {
-                    return { ...category, bookCount: 0, books: [] };
-                }
-            })
-        );
+        // Use already-loaded books data to filter by category client-side
+        // This avoids making API calls - we reuse the cache from displayCategories
+        const categoriesWithBooks = categories.map(category => {
+            // Check cache first (should be populated by displayCategories)
+            if (this.categoryCache[category.id]) {
+                return {
+                    ...category,
+                    bookCount: this.categoryCache[category.id].books.length,
+                    books: this.categoryCache[category.id].books
+                };
+            }
+
+            // If not cached, filter client-side from all books
+            const booksInCategory = this.allBooks.filter(book =>
+                book.categories && book.categories.some(cat => cat.id === category.id)
+            );
+
+            // Cache for future use
+            if (booksInCategory.length > 0) {
+                this.categoryCache[category.id] = {
+                    category,
+                    books: booksInCategory
+                };
+            }
+
+            return {
+                ...category,
+                bookCount: booksInCategory.length,
+                books: booksInCategory
+            };
+        });
 
         // Filter and sort
-        const categoriesWithBooks = categoriesWithCounts
+        const validCategories = categoriesWithBooks
             .filter(cat => cat.bookCount > 0)
             .sort((a, b) => b.bookCount - a.bookCount);
 
         // Render each category carousel
-        categoriesWithBooks.forEach(category => {
+        validCategories.forEach(category => {
             this.renderCategoryCarousel(category, category.books, 'all-categories-container');
         });
     }
@@ -1480,7 +1584,7 @@ class SummraApp {
         bookCard.className = 'book-card';
 
         const coverImageHtml = book.cover_image_url
-            ? `<img src="${this.escapeHtml(book.cover_image_url)}" alt="${this.escapeHtml(book.title)} cover" class="book-cover" loading="lazy">`
+            ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'book-cover')
             : '';
 
         bookCard.innerHTML = `
@@ -1503,6 +1607,74 @@ class SummraApp {
 
     formatNumber(num) {
         return num.toLocaleString();
+    }
+
+    // ===== Skeleton Loading Helpers =====
+
+    createImageWithSkeleton(src, alt, className) {
+        // Create wrapper div
+        const wrapper = document.createElement('div');
+        wrapper.className = 'book-cover-wrapper';
+
+        // Create skeleton placeholder
+        const skeleton = document.createElement('div');
+        skeleton.className = 'book-cover-skeleton';
+        wrapper.appendChild(skeleton);
+
+        // Create image
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = alt;
+        img.className = className;
+        img.loading = 'lazy';
+
+        // Handle image load
+        img.addEventListener('load', () => {
+            img.classList.add('loaded');
+            // Remove skeleton after fade-in completes
+            setTimeout(() => {
+                if (skeleton.parentNode === wrapper) {
+                    wrapper.removeChild(skeleton);
+                }
+            }, 300);
+        });
+
+        // Handle image error
+        img.addEventListener('error', () => {
+            // Remove skeleton on error too
+            if (skeleton.parentNode === wrapper) {
+                wrapper.removeChild(skeleton);
+            }
+        });
+
+        wrapper.appendChild(img);
+        return wrapper;
+    }
+
+    getImageHtml(imageUrl, alt, className) {
+        if (!imageUrl) return '';
+
+        // Escape attributes for safety
+        const escapedAlt = this.escapeHtml(alt);
+
+        // Get base URL without extension
+        const urlWithoutExt = imageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+
+        // Create picture element with WebP source and JPG fallback
+        return `
+            <div class="book-cover-wrapper">
+                <div class="book-cover-skeleton"></div>
+                <picture>
+                    <source srcset="${this.escapeHtml(urlWithoutExt + '.webp')}" type="image/webp">
+                    <img src="${this.escapeHtml(urlWithoutExt + '.jpg')}"
+                         alt="${escapedAlt}"
+                         class="${className}"
+                         loading="lazy"
+                         onload="this.classList.add('loaded'); setTimeout(() => { const skeleton = this.parentElement.previousElementSibling; if (skeleton && skeleton.classList.contains('book-cover-skeleton')) skeleton.remove(); }, 300);"
+                         onerror="const skeleton = this.parentElement.previousElementSibling; if (skeleton && skeleton.classList.contains('book-cover-skeleton')) skeleton.remove();">
+                </picture>
+            </div>
+        `;
     }
 
     // ===== Reading Experience Features =====
@@ -1834,6 +2006,8 @@ class SummraApp {
          */
         const lightboxOverlay = document.getElementById('lightbox-overlay');
         const lightboxImage = document.getElementById('lightbox-image');
+        const lightboxWebp = document.getElementById('lightbox-webp');
+        const lightboxJpg = document.getElementById('lightbox-jpg');
         const lightboxClose = document.getElementById('lightbox-close');
 
         if (!lightboxOverlay || !lightboxImage || !lightboxClose) {
@@ -1842,7 +2016,14 @@ class SummraApp {
 
         // Function to open lightbox
         const openLightbox = (imageSrc, imageAlt) => {
-            lightboxImage.src = imageSrc;
+            // imageSrc is the base URL without extension
+            const webpUrl = `${imageSrc}.webp`;
+            const jpgUrl = `${imageSrc}.jpg`;
+
+            // Set picture sources for WebP and JPG
+            lightboxWebp.srcset = webpUrl;
+            lightboxJpg.srcset = jpgUrl;
+            lightboxImage.src = jpgUrl; // Fallback
             lightboxImage.alt = imageAlt || '';
             lightboxOverlay.classList.remove('hidden');
             // Prevent body scroll when lightbox is open

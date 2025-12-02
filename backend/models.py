@@ -101,6 +101,14 @@ class Database:
             # Column already exists
             pass
 
+        # Add slug column for SEO-friendly URLs (migration for existing databases)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN slug TEXT UNIQUE")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Book sections table (for two-level structure: Part/Book/Act → Chapters)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS book_sections (
@@ -237,16 +245,49 @@ class Database:
             return dict(row)
         return None
 
+    def get_book_by_slug(self, slug: str) -> Optional[Dict]:
+        """Get book by slug (SEO-friendly URL identifier)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM books WHERE slug = ?', (slug,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def update_book_slug(self, book_id: int, slug: str):
+        """Update book's slug for SEO-friendly URLs"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE books
+            SET slug = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (slug, book_id))
+
+        conn.commit()
+        conn.close()
+
     def get_all_books(self) -> List[Dict]:
-        """Get all books"""
+        """Get all books with their categories"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at FROM books ORDER BY title')
         rows = cursor.fetchall()
-        conn.close()
 
-        return [dict(row) for row in rows]
+        books = [dict(row) for row in rows]
+
+        # Add categories to each book
+        for book in books:
+            book['categories'] = self.get_book_categories(book['id'])
+
+        conn.close()
+        return books
 
     def add_summary(self, book_id: int, summary_type: str, content: str) -> int:
         """Add or update a summary"""

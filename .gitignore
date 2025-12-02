@@ -40,19 +40,9 @@ Thumbs.db
 # frontend/static/audio/*.mp3
 # frontend/static/tts/*.wav
 
-# Book text files (too large, download from Gutenberg)
-data/books/*.txt
-data/removed_content/*.txt
-!data/books/.gitkeep
-
-# Cover images from Gutenberg (can re-download)
-# frontend/static/covers/pg*.jpg
-
-# Original large cover files (optimized versions are in frontend/static/covers)
-data/cover_originals/
-
-# Summaries
-data/summaries/*.json
+# Data directory - ignore all files but keep structure
+data/**/*
+!data/**/.gitkeep
 
 # Logs
 *.log

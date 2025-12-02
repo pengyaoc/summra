@@ -30,7 +30,11 @@
       "Bash(lsof:*)",
       "Bash(node -c:*)",
       "Bash(echo:*)",
-      "Bash(./venv/bin/python:*)"
+      "Bash(./venv/bin/python:*)",
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:googleapis.github.io)"
     ],
     "deny": [],
     "ask": []
