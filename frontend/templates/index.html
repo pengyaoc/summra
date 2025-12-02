@@ -3,22 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Summra - Classic Book Summaries</title>
+
+    <!-- Primary Meta Tags -->
+    <title>{{ meta_title|default('Summra - AI-Powered Classic Book Summaries') }}</title>
+    <meta name="description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries. Get concise overviews, comprehensive analyses, and chapter-by-chapter breakdowns of public domain books.') }}">
+    <meta name="keywords" content="classic books, book summaries, literature summaries, AI summaries, public domain books, chapter summaries, {{ meta_keywords|default('') }}">
+    <meta name="author" content="Summra">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{{ canonical_url|default('https://summra.com/') }}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{{ og_type|default('website') }}">
+    <meta property="og:url" content="{{ canonical_url|default('https://summra.com/') }}">
+    <meta property="og:title" content="{{ meta_title|default('Summra - AI-Powered Classic Book Summaries') }}">
+    <meta property="og:description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries. Get concise overviews, comprehensive analyses, and chapter-by-chapter breakdowns of public domain books.') }}">
+    <meta property="og:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
+    <meta property="og:site_name" content="Summra">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ canonical_url|default('https://summra.com/') }}">
+    <meta name="twitter:title" content="{{ meta_title|default('Summra - AI-Powered Classic Book Summaries') }}">
+    <meta name="twitter:description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries.') }}">
+    <meta name="twitter:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
+
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    {% if structured_data %}
+    <!-- Schema.org Structured Data -->
+    <script type="application/ld+json">
+    {{ structured_data|tojson }}
+    </script>
+    {% endif %}
 </head>
 <body>
+    {% if initial_data %}
+    <!-- Initial data for SEO and faster client-side rendering -->
+    <script>
+        window.__INITIAL_DATA__ = {{ initial_data|tojson }};
+    </script>
+    {% endif %}
+
     <div class="container">
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <a href="#/" class="header-link" id="header-home-link">
+                <a href="/" class="header-link" id="header-home-link">
                     <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
                     <h1 class="logo">Summra</h1>
                 </a>
                 <div class="header-nav-buttons">
-                    <a href="#/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
-                    <a href="#/all-books" class="header-nav-btn" id="all-books-nav-btn">All Books</a>
+                    <a href="/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
+                    <a href="/books" class="header-nav-btn" id="all-books-nav-btn">All Books</a>
                 </div>
             </div>
         </header>
@@ -147,7 +184,11 @@
                 <div class="chapter-detail-content" id="chapter-detail-content">
                     <!-- Chapter Illustration -->
                     <div class="chapter-illustration-container hidden" id="chapter-illustration-container">
-                        <img id="chapter-illustration" class="chapter-illustration" alt="Chapter illustration" />
+                        <picture id="chapter-illustration-picture">
+                            <source id="chapter-illustration-webp" type="image/webp" />
+                            <source id="chapter-illustration-jpg" type="image/jpeg" />
+                            <img id="chapter-illustration" class="chapter-illustration" alt="Chapter illustration" />
+                        </picture>
                     </div>
 
                     <!-- Summary (Collapsed by default) -->
@@ -299,7 +340,11 @@
     <!-- Image Lightbox Overlay -->
     <div class="lightbox-overlay hidden" id="lightbox-overlay">
         <button class="lightbox-close" id="lightbox-close" aria-label="Close lightbox">✕</button>
-        <img class="lightbox-image" id="lightbox-image" alt="" />
+        <picture id="lightbox-picture">
+            <source id="lightbox-webp" type="image/webp" />
+            <source id="lightbox-jpg" type="image/jpeg" />
+            <img class="lightbox-image" id="lightbox-image" alt="" />
+        </picture>
     </div>
 
     <!-- Markdown parser -->

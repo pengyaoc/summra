@@ -37,10 +37,387 @@ CORS(app)
 db = models.Database()
 
 
+# HTTP Caching Headers
+@app.after_request
+def add_cache_headers(response):
+    """Add appropriate cache control headers to responses"""
+    # Static assets (images, CSS, JS) - cache for 1 year
+    if request.path.startswith('/static/'):
+        # Immutable static assets
+        response.cache_control.max_age = 31536000  # 1 year
+        response.cache_control.public = True
+        response.cache_control.immutable = True
+    # API responses - cache for 1 hour
+    elif request.path.startswith('/api/'):
+        response.cache_control.max_age = 3600  # 1 hour
+        response.cache_control.public = True
+        # Add ETag for conditional requests (only for successful responses)
+        if response.status_code == 200:
+            response.add_etag()
+            # Check if client sent If-None-Match header
+            response.make_conditional(request)
+    # HTML pages - no cache (always fresh)
+    elif request.path == '/' or request.path.endswith('.html'):
+        response.cache_control.no_cache = True
+        response.cache_control.no_store = True
+        response.cache_control.must_revalidate = True
+
+    return response
+
+
 @app.route('/')
 def index():
     """Serve the main page"""
     return render_template('index.html')
+
+
+@app.route('/robots.txt')
+def robots():
+    """Serve robots.txt for SEO"""
+    return send_from_directory(app.static_folder, 'robots.txt')
+
+
+@app.route('/sitemap.xml')
+def sitemap():
+    """Generate dynamic XML sitemap for SEO"""
+    from datetime import datetime
+
+    pages = []
+
+    # Home page
+    pages.append({
+        'loc': 'https://summra.com/',
+        'lastmod': datetime.now().strftime('%Y-%m-%d'),
+        'changefreq': 'daily',
+        'priority': '1.0'
+    })
+
+    # All books pages
+    books = db.get_all_books()
+    for book in books:
+        slug = book.get('slug')
+        if not slug:
+            continue
+
+        # Book detail page
+        pages.append({
+            'loc': f'https://summra.com/books/{slug}',
+            'lastmod': book.get('updated_at', datetime.now().strftime('%Y-%m-%d')),
+            'changefreq': 'weekly',
+            'priority': '0.8'
+        })
+
+    # Category pages
+    categories = db.get_all_categories()
+    for category in categories:
+        pages.append({
+            'loc': f'https://summra.com/categories/{category["id"]}',
+            'changefreq': 'weekly',
+            'priority': '0.7'
+        })
+
+    # All books and categories listing pages
+    pages.append({
+        'loc': 'https://summra.com/books',
+        'changefreq': 'daily',
+        'priority': '0.9'
+    })
+
+    pages.append({
+        'loc': 'https://summra.com/categories',
+        'changefreq': 'weekly',
+        'priority': '0.8'
+    })
+
+    sitemap_xml = render_template('sitemap.xml', pages=pages)
+    response = app.make_response(sitemap_xml)
+    response.headers['Content-Type'] = 'application/xml'
+    return response
+
+
+@app.route('/books/<slug>')
+def book_detail(slug):
+    """Server-side rendering for book detail pages (SEO)"""
+    book = db.get_book_by_slug(slug)
+
+    if not book:
+        # Return 404 but still render the SPA shell
+        # The client-side router will handle showing the 404 message
+        return render_template('index.html'), 404
+
+    # Get concise summary for meta description
+    concise_summary = db.get_summary(book['id'], 'concise')
+    summary_text = concise_summary['content'][:200] if concise_summary else ''
+
+    # Prepare meta tags
+    meta_title = f"{book['title']} by {book['author']} - Summary | Summra"
+    meta_description = f"Read AI-generated summaries of {book['title']} by {book['author']}. {summary_text}..."
+    canonical_url = f"https://summra.com/books/{slug}"
+
+    # Get cover image URL
+    cover_url = book.get('cover_image_url', '')
+    if cover_url and not cover_url.startswith('http'):
+        cover_url = f"https://summra.com/static/{cover_url}"
+    og_image = cover_url if cover_url else 'https://summra.com/static/images/og-image.png'
+
+    # Schema.org structured data for Book
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "Book",
+        "name": book['title'],
+        "author": {
+            "@type": "Person",
+            "name": book['author']
+        },
+        "description": summary_text,
+        "inLanguage": "en"
+    }
+
+    if cover_url:
+        structured_data["image"] = og_image
+
+    # Pass initial data to speed up client-side rendering
+    initial_data = {
+        'type': 'book',
+        'book': {
+            'id': book['id'],
+            'title': book['title'],
+            'author': book['author'],
+            'slug': slug
+        }
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords=f"{book['title']}, {book['author']}, book summary, literature",
+        canonical_url=canonical_url,
+        og_type='book',
+        og_image=og_image,
+        structured_data=structured_data,
+        initial_data=initial_data
+    )
+
+
+@app.route('/books/<slug>/summary')
+def book_summary_detail(slug):
+    """Server-side rendering for book full summary pages (SEO)"""
+    book = db.get_book_by_slug(slug)
+
+    if not book:
+        return render_template('index.html'), 404
+
+    # Get medium summary for meta description
+    medium_summary = db.get_summary(book['id'], 'medium')
+    summary_text = medium_summary['content'][:200] if medium_summary else ''
+
+    # Prepare meta tags
+    meta_title = f"{book['title']} - Full Summary | Summra"
+    meta_description = f"Read the complete AI-generated summary of {book['title']} by {book['author']}. {summary_text}..."
+    canonical_url = f"https://summra.com/books/{slug}/summary"
+
+    # Get cover image URL
+    cover_url = book.get('cover_image_url', '')
+    if cover_url and not cover_url.startswith('http'):
+        cover_url = f"https://summra.com/static/{cover_url}"
+    og_image = cover_url if cover_url else 'https://summra.com/static/images/og-image.png'
+
+    # Schema.org structured data for Book
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "Book",
+        "name": book['title'],
+        "author": {
+            "@type": "Person",
+            "name": book['author']
+        },
+        "description": summary_text,
+        "inLanguage": "en"
+    }
+
+    if cover_url:
+        structured_data["image"] = og_image
+
+    # Pass initial data
+    initial_data = {
+        'type': 'book-summary',
+        'book': {
+            'id': book['id'],
+            'title': book['title'],
+            'author': book['author'],
+            'slug': slug
+        }
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords=f"{book['title']}, {book['author']}, book summary, full summary, literature",
+        canonical_url=canonical_url,
+        og_type='book',
+        og_image=og_image,
+        structured_data=structured_data,
+        initial_data=initial_data
+    )
+
+
+@app.route('/books/<slug>/chapters/<int:chapter_number>')
+def book_chapter_detail(slug, chapter_number):
+    """Server-side rendering for chapter pages (SEO)"""
+    book = db.get_book_by_slug(slug)
+
+    if not book:
+        return render_template('index.html'), 404
+
+    # Get chapter data
+    chapter = db.get_chapter(book['id'], chapter_number)
+
+    if not chapter:
+        return render_template('index.html'), 404
+
+    # Get chapter summary for meta description
+    chapter_summary = chapter.get('summary', '')[:200] if chapter.get('summary') else ''
+    chapter_title = chapter.get('chapter_title', f'Chapter {chapter_number}')
+
+    # Prepare meta tags
+    meta_title = f"{book['title']} - Chapter {chapter_number}: {chapter_title} | Summra"
+    meta_description = f"Read Chapter {chapter_number} of {book['title']} by {book['author']}. {chapter_summary}..."
+    canonical_url = f"https://summra.com/books/{slug}/chapters/{chapter_number}"
+
+    # Get cover image URL
+    cover_url = book.get('cover_image_url', '')
+    if cover_url and not cover_url.startswith('http'):
+        cover_url = f"https://summra.com/static/{cover_url}"
+    og_image = cover_url if cover_url else 'https://summra.com/static/images/og-image.png'
+
+    # Schema.org structured data for Book Chapter
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "Chapter",
+        "name": f"Chapter {chapter_number}: {chapter_title}",
+        "isPartOf": {
+            "@type": "Book",
+            "name": book['title'],
+            "author": {
+                "@type": "Person",
+                "name": book['author']
+            }
+        },
+        "description": chapter_summary,
+        "position": chapter_number
+    }
+
+    # Pass initial data
+    initial_data = {
+        'type': 'chapter',
+        'book': {
+            'id': book['id'],
+            'title': book['title'],
+            'author': book['author'],
+            'slug': slug
+        },
+        'chapter_number': chapter_number
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords=f"{book['title']}, {book['author']}, chapter {chapter_number}, {chapter_title}, book chapter, literature",
+        canonical_url=canonical_url,
+        og_type='article',
+        og_image=og_image,
+        structured_data=structured_data,
+        initial_data=initial_data
+    )
+
+
+@app.route('/categories/<int:category_id>')
+def category_detail(category_id):
+    """Server-side rendering for category pages (SEO)"""
+    category = db.get_category(category_id)
+
+    if not category:
+        return render_template('index.html'), 404
+
+    books = db.get_books_by_category(category_id)
+    book_count = len(books)
+
+    # Prepare meta tags
+    meta_title = f"{category['name']} - Classic Books | Summra"
+    meta_description = f"Explore {book_count} classic {category['name']} books with AI-generated summaries. Browse timeless literature with concise and comprehensive analyses."
+    canonical_url = f"https://summra.com/categories/{category_id}"
+
+    # Pass initial data
+    initial_data = {
+        'type': 'category',
+        'category': category
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords=f"{category['name']}, classic books, literature, book summaries",
+        canonical_url=canonical_url,
+        og_type='website',
+        initial_data=initial_data
+    )
+
+
+@app.route('/categories')
+def categories_list():
+    """Server-side rendering for all categories page (SEO)"""
+    categories = db.get_all_categories()
+
+    # Prepare meta tags
+    meta_title = "Browse Categories - Classic Book Summaries | Summra"
+    meta_description = f"Browse {len(categories)} categories of classic literature. Discover timeless books organized by genre, theme, and literary movement with AI-generated summaries."
+    canonical_url = "https://summra.com/categories"
+
+    # Pass initial data
+    initial_data = {
+        'type': 'all-categories'
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords="book categories, classic literature, literary genres, book summaries",
+        canonical_url=canonical_url,
+        og_type='website',
+        initial_data=initial_data
+    )
+
+
+@app.route('/books')
+def all_books():
+    """Server-side rendering for all books page (SEO)"""
+    books = db.get_all_books()
+    book_count = len(books)
+
+    # Prepare meta tags
+    meta_title = f"All {book_count} Classic Books - AI Summaries | Summra"
+    meta_description = f"Browse our complete collection of {book_count} classic books with AI-generated summaries. From Shakespeare to Tolstoy, explore timeless literature with concise and comprehensive analyses."
+    canonical_url = "https://summra.com/books"
+
+    # Pass initial data
+    initial_data = {
+        'type': 'all-books'
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords="classic books, literature, AI summaries, book collection, timeless literature",
+        canonical_url=canonical_url,
+        og_type='website',
+        initial_data=initial_data
+    )
 
 
 @app.route('/api/books', methods=['GET'])

@@ -557,47 +557,93 @@ Cover all major plot points, themes, and character developments in chronological
         """
         Normalize chapter title to use consistent title case.
         Converts to title case while preserving certain words in lowercase.
-        Handles quoted text specially - words inside quotes are always capitalized.
+        Handles special cases:
+        - Words inside quotes are always capitalized (including first word)
+        - Words after em-dashes (—) are capitalized
+        - Words after colons (:) are capitalized
+        - Words after periods (.) are capitalized
         """
         import re
 
         if not title or not title.strip():
             return title
 
-        # Words that should remain lowercase in titles (unless first word or in quotes)
+        # Words that should remain lowercase in titles (unless first word, after punctuation, or in quotes)
         lowercase_words = {
             'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from',
             'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
             'up', 'with', 'yet'
         }
 
-        # Track whether we're inside quotes
+        # First, handle em-dashes by adding spaces around them
+        # This ensures "Huck.—miss" becomes "Huck.— miss" so we can capitalize properly
+        title = title.replace('—', ' — ')
+        # Also handle colons followed directly by letters
+        title = re.sub(r':(\S)', r': \1', title)
+        # Collapse multiple spaces into one
+        title = re.sub(r'\s+', ' ', title).strip()
+
+        # Track whether we're inside quotes and if we need to capitalize next word
         in_quotes = False
+        capitalize_next = True  # Always capitalize first word
         result = []
 
         # Split on whitespace while preserving spaces
         words = title.split()
 
         for i, word in enumerate(words):
-            # Check if word contains quotes
-            if '"' in word or '"' in word or '"' in word:
+            # Check if word contains quotes (opening or closing)
+            # Handle both straight quotes and curly quotes (U+201C LEFT, U+201D RIGHT)
+            has_quote = '"' in word or '\u201c' in word or '\u201d' in word
+            starts_with_quote = word.startswith('"') or word.startswith('\u201c') or word.startswith('\u201d')
+
+            if has_quote:
                 in_quotes = not in_quotes
-                # Words with quotes should be capitalized
+
+            # Handle standalone em-dash
+            if word == '—':
+                result.append(word)
+                capitalize_next = True
+                continue
+
+            if starts_with_quote:
+                # Word starts with quote - capitalize first letter after quote
+                # e.g., "it -> "It
+                if len(word) > 1:
+                    # Get the quote character and rest of word
+                    quote_char = word[0]
+                    rest = word[1:]
+                    # Capitalize using the same logic as normal words
+                    if capitalize_next:
+                        result.append(quote_char + rest.capitalize())
+                    else:
+                        # First letter after quote should be capitalized
+                        result.append(quote_char + rest[0].upper() + rest[1:].lower() if len(rest) > 1 else quote_char + rest.upper())
+                else:
+                    result.append(word)
+                capitalize_next = False
+                in_quotes = True  # We're now inside quotes
+            elif capitalize_next or in_quotes:
+                # Capitalize this word
                 result.append(word.capitalize())
-            # First word always capitalized
-            elif i == 0:
-                result.append(word.capitalize())
-            # Words inside quotes are always capitalized
-            elif in_quotes:
-                result.append(word.capitalize())
-            # Check if word should be lowercase
+                capitalize_next = False
             elif word.lower() in lowercase_words:
+                # Keep as lowercase
                 result.append(word.lower())
-            # Otherwise capitalize
             else:
+                # Default: capitalize
                 result.append(word.capitalize())
 
-        return ' '.join(result)
+            # Check if we should capitalize the NEXT word
+            # This happens after colon (:) or period (.)
+            if result[-1].endswith(':') or result[-1].endswith('.'):
+                capitalize_next = True
+
+        # Clean up: remove spaces before em-dashes and after em-dashes when followed by punctuation
+        result_str = ' '.join(result)
+        result_str = result_str.replace(' — ', '—')
+
+        return result_str
 
     def normalize_chapter_text(self, text: str) -> str:
         """

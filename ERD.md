@@ -5,11 +5,13 @@ This document provides in-depth technical documentation for the Summra project, 
 ## Table of Contents
 
 1. [Database Schema & ERD](#database-schema--erd)
-2. [Chapter Parser Implementation](#chapter-parser-implementation)
-3. [TTS Engine Implementation](#tts-engine-implementation)
-4. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
-5. [Bulk Summary Processing](#bulk-summary-processing)
-6. [Project Gutenberg Integration](#project-gutenberg-integration)
+2. [SEO Architecture](#seo-architecture)
+3. [Chapter Parser Implementation](#chapter-parser-implementation)
+4. [TTS Engine Implementation](#tts-engine-implementation)
+5. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
+6. [Bulk Summary Processing](#bulk-summary-processing)
+7. [Project Gutenberg Integration](#project-gutenberg-integration)
+8. [Gemini Image Generation System](#gemini-image-generation-system)
 
 ---
 
@@ -89,14 +91,24 @@ CREATE TABLE books (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     author TEXT,
+    author_id INTEGER,  -- FK to authors table (added 2025-12-02 for SEO)
     filename TEXT UNIQUE NOT NULL,
     full_text TEXT,
     word_count INTEGER,
     gutenberg_id INTEGER,
+    slug TEXT UNIQUE,  -- SEO-friendly URL slug (added 2025-12-02)
     cover_image_url TEXT,
     cover_source TEXT DEFAULT 'unknown',  -- 'custom', 'gutenberg', or 'unknown'
+    -- SEO Content Fields (added 2025-12-02)
+    about_text TEXT,  -- Editorial "About the Book" section (150-200 words)
+    publication_year INTEGER,  -- Publication year for metadata
+    literary_period VARCHAR(100),  -- e.g., "Victorian", "Modernist", "Romantic"
+    notable_themes TEXT,  -- JSON array of key themes
+    historical_context TEXT,  -- Historical background (2-3 sentences)
+    why_important TEXT,  -- Literary significance (2-3 sentences)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES authors(id)
 )
 ```
 
@@ -110,8 +122,20 @@ CREATE TABLE books (
 **Indexes:**
 - Primary key on `id` (auto-indexed)
 - Unique index on `filename` (auto-created from UNIQUE constraint)
+- Unique index on `slug` (added 2025-12-02 for SEO-friendly URLs)
+- Index on `author_id` (added 2025-12-02 for author page queries)
 
-**Purpose:** Stores complete book metadata and full text content.
+**Purpose:** Stores complete book metadata, full text content, and SEO-optimized editorial content.
+
+**SEO Fields (added 2025-12-02):**
+- `slug`: URL-friendly identifier (e.g., "pride-and-prejudice")
+- `about_text`: Human-written editorial content for E-E-A-T signals
+- `publication_year`: Enables historical context filtering and display
+- `literary_period`: Supports period-based topic clusters
+- `notable_themes`: JSON array for theme-based discovery
+- `historical_context`: Adds depth beyond AI summaries
+- `why_important`: Demonstrates literary expertise
+- `author_id`: Links to authors table for author hub pages
 
 #### summaries Table
 
@@ -1192,6 +1216,133 @@ def normalize_chapter_text(self, text: str) -> str:
 
     return result
 ```
+
+### Chapter Title Normalization
+
+**Problem:** Chapter titles have inconsistent capitalization from source texts
+- ALL CAPS titles: `"VARIATION UNDER DOMESTICATION"`
+- Words after em-dashes not capitalized: `"Huck.—miss Watson.—tom Sawyer"`
+- First words in quotes not capitalized: `""it Is The Child!""`
+- Mixed hyphenation: `"Tea-Party"` vs `"Tea-party"`
+
+**Solution:** Normalize all chapter titles to consistent title case with proper punctuation handling
+
+**Location:** `scripts/generate_summaries.py:556-640`
+
+**Implementation:**
+
+```python
+def normalize_chapter_title(self, title: str) -> str:
+    """
+    Normalize chapter title to use consistent title case.
+
+    Handles special cases:
+    - Words inside quotes are always capitalized (including first word)
+    - Words after em-dashes (—) are capitalized
+    - Words after colons (:) are capitalized
+    - Words after periods (.) are capitalized
+    """
+    import re
+
+    if not title or not title.strip():
+        return title
+
+    # Words that should remain lowercase (unless first word or after punctuation)
+    lowercase_words = {
+        'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from',
+        'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
+        'up', 'with', 'yet'
+    }
+
+    # Step 1: Add spaces around em-dashes for proper word splitting
+    # "Huck.—miss" → "Huck. — miss"
+    title = title.replace('—', ' — ')
+    title = re.sub(r':(\S)', r': \1', title)  # Handle colons
+    title = re.sub(r'\s+', ' ', title).strip()  # Collapse spaces
+
+    # Step 2: Process each word
+    in_quotes = False
+    capitalize_next = True  # First word always capitalized
+    result = []
+
+    for word in title.split():
+        # Detect quote characters (straight and curly: U+201C, U+201D)
+        has_quote = '"' in word or '\u201c' in word or '\u201d' in word
+        starts_with_quote = word.startswith('"') or word.startswith('\u201c') or word.startswith('\u201d')
+
+        if has_quote:
+            in_quotes = not in_quotes
+
+        # Handle standalone em-dash
+        if word == '—':
+            result.append(word)
+            capitalize_next = True
+            continue
+
+        # Process quoted words
+        if starts_with_quote:
+            quote_char = word[0]
+            rest = word[1:]
+            if capitalize_next:
+                result.append(quote_char + rest.capitalize())
+            else:
+                # Capitalize first letter after quote
+                result.append(quote_char + rest[0].upper() + rest[1:].lower() if len(rest) > 1 else quote_char + rest.upper())
+            capitalize_next = False
+            in_quotes = True
+        # Capitalize if needed
+        elif capitalize_next or in_quotes:
+            result.append(word.capitalize())
+            capitalize_next = False
+        # Apply lowercase rule
+        elif word.lower() in lowercase_words:
+            result.append(word.lower())
+        # Default: capitalize
+        else:
+            result.append(word.capitalize())
+
+        # Set flag for next word after punctuation
+        if result[-1].endswith(':') or result[-1].endswith('.'):
+            capitalize_next = True
+
+    # Step 3: Clean up - remove added spaces around em-dashes
+    result_str = ' '.join(result)
+    result_str = result_str.replace(' — ', '—')
+
+    return result_str
+```
+
+**Key Features:**
+
+1. **Em-dash Handling:**
+   - Temporarily adds spaces around em-dashes for word splitting
+   - Capitalizes words after em-dashes
+   - Removes added spaces after processing
+   - Example: `"Huck.—miss Watson"` → `"Huck.—Miss Watson"`
+
+2. **Quote Handling:**
+   - Supports both straight quotes (U+0022) and curly quotes (U+201C, U+201D)
+   - Capitalizes first word inside quotes
+   - Respects capitalization after punctuation even in quotes
+   - Example: `""it Is The Child!""` → `""It Is The Child!""`
+
+3. **Punctuation Capitalization:**
+   - Words after colons, periods, and em-dashes are capitalized
+   - Example: `"Medieval. a"` → `"Medieval. A"`
+
+4. **Article/Preposition Handling:**
+   - Small words (a, an, the, of, in, etc.) are lowercase
+   - Unless they're the first word or after punctuation
+   - Example: `"Of the Division of Labour"` (first word capitalized)
+
+5. **Usage:**
+   - Called when saving chapters: `scripts/generate_summaries.py:1638`
+   - Backfill script available: `scripts/backfill_chapter_title_case.py`
+   - Dry-run mode: `python3 scripts/backfill_chapter_title_case.py --dry-run`
+
+**Results:**
+- Fixed 1,013 out of 2,965 chapter titles
+- Consistent title case across all 80 books in database
 
 ### Coverage Validation
 
@@ -3320,6 +3471,7 @@ sudo systemctl status summra
 
 **Step 1: Copy database from local to VM** (run on local machine)
 ```bash
+gcloud auth login
 gcloud compute scp \
     /Users/pengyao/Documents/dev/summra/data/database.db \
     instance-20251125-033837:/tmp/database.db \
@@ -5875,5 +6027,1187 @@ if not toc_structure:
 - Frontend conditional rendering has negligible performance impact
 - No impact on books without hierarchical structure
 - Automatic fallback ensures all supported books work without manual intervention
+
+---
+
+## Gemini Image Generation System
+
+**Location:** `scripts/generate_gemini_illustrations.py` (1500+ lines)
+
+The Gemini Image Generation System provides automated creation of book covers and chapter illustrations using Google's Gemini image generation models. This enhances the visual presentation of classic literature with AI-generated artwork.
+
+### Overview
+
+The system generates two types of images with support for both synchronous and asynchronous batch processing:
+1. **Book Covers**: Professional cover art with title and author text (sync only)
+2. **Chapter Illustrations**: Visual storytelling for individual chapters with character and style consistency (sync or batch)
+
+**Supported Models:**
+- `gemini-3-pro-image-preview`: High quality, 2K resolution (2048×3072 @ 2:3 aspect ratio)
+- `gemini-2.5-flash-image`: Faster generation, lower cost, auto resolution
+
+**Processing Modes:**
+- **Synchronous Mode**: Real-time generation with immediate results, live progress feedback
+- **Batch Mode**: Asynchronous bulk processing with 50% cost savings, ideal for 50+ chapters
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GeminiImageGenerator                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  SYNCHRONOUS API METHODS:                                        │
+│  ────────────────────────────────────────────────────────────   │
+│  generate_cover_image()                                          │
+│  ├── Fetches medium summary for context                         │
+│  ├── Constructs professional cover prompt                        │
+│  ├── Calls Gemini Image API (real-time)                         │
+│  └── Returns base64 image data                                  │
+│                                                                  │
+│  generate_chapter_illustration()                                 │
+│  ├── Fetches book summary + chapter summary                     │
+│  ├── Loads previous/reference chapter illustration              │
+│  ├── Constructs visual storytelling prompt                      │
+│  ├── Passes reference image for character consistency           │
+│  ├── Calls Gemini Image API (real-time)                         │
+│  └── Returns base64 image data                                  │
+│                                                                  │
+│  BATCH API METHODS:                                              │
+│  ────────────────────────────────────────────────────────────   │
+│  create_batch_job(batch_requests)                                │
+│  ├── Creates JSONL file with all chapter requests               │
+│  ├── Uploads file to Gemini API                                 │
+│  ├── Submits batch job                                          │
+│  └── Returns job_name for tracking                              │
+│                                                                  │
+│  poll_batch_job(job_name)                                        │
+│  ├── Polls Gemini API for job status                            │
+│  ├── Shows progress updates every 30s                           │
+│  └── Returns completed batch_job object                         │
+│                                                                  │
+│  retrieve_batch_results(batch_job)                               │
+│  ├── Downloads results JSONL file (contains ALL images)         │
+│  ├── Parses each line (one per chapter)                         │
+│  ├── Decodes base64 image data for each chapter                 │
+│  └── Returns dict: {"chapter-11": (image_bytes, None), ...}     │
+│                                                                  │
+│  _wait_for_rate_limit()                                          │
+│  └── Enforces 30s spacing (sync mode only)                      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+            │
+            ├── HELPER FUNCTIONS
+            │   ─────────────────────────────────────────────────
+            │   build_chapter_illustration_prompt()
+            │   ├── Shared by both sync and batch modes
+            │   ├── Takes: book info, chapter, previous chapter
+            │   └── Returns: Complete formatted prompt string
+            │
+            │   filter_eligible_chapters()
+            │   ├── Shared chapter filtering logic
+            │   ├── Removes: <200 words, preface chapters
+            │   └── Applies chapter range filtering
+            │
+            ├── WORKFLOW FUNCTIONS
+            │   ─────────────────────────────────────────────────
+            │   generate_chapter_illustrations_for_book()  [SYNC]
+            │   ├── Sequential chapter generation
+            │   ├── Uses previous chapter as reference
+            │   └── Live progress updates
+            │
+            │   generate_chapter_illustrations_batch()  [BATCH]
+            │   ├── Generates Chapter 1 synchronously
+            │   ├── Submits chapters 2-N as batch job
+            │   ├── Polls for completion (hours later)
+            │   ├── Downloads all results in one JSONL file
+            │   └── Saves all chapter images to disk
+            │
+            │   resume_batch_job(state_file)  [RESUME]
+            │   ├── Loads saved job metadata from disk
+            │   ├── Polls Gemini API for current status
+            │   ├── Downloads results when complete
+            │   └── Saves all images and updates database
+            │
+            ├── STATE PERSISTENCE
+            │   ─────────────────────────────────────────────────
+            │   save_batch_job_state()
+            │   └── Saves job to data/batch_jobs/*.json
+            │
+            │   load_batch_job_state()
+            │   └── Loads job metadata from disk
+            │
+            │   update_batch_job_state()
+            │   └── Updates job status (running/completed/failed)
+            │
+            │   list_pending_batch_jobs()
+            │   └── Lists all active/pending jobs
+            │
+            ├── IMAGE PROCESSING
+            │   ─────────────────────────────────────────────────
+            │   save_image()
+            │   ├── Decodes base64 image
+            │   ├── Optimizes with PIL
+            │   └── Saves to disk
+            │
+            └── DATABASE UPDATES
+                ├── books.cover_image_url
+                ├── books.cover_source = 'gemini-generated'
+                └── chapters.illustration_url
+```
+
+### Key Classes and Functions
+
+#### GeminiImageGenerator Class (lines 81-303)
+
+**Initialization:**
+```python
+def __init__(self, api_key: str, model: str = DEFAULT_IMAGE_MODEL):
+    self.client = genai.Client(api_key=api_key)
+    self.model = model  # Default: "gemini-3-pro-image-preview"
+    self.last_request_time = 0
+```
+
+**Methods:**
+
+1. **`generate_cover_image(book_title, author, medium_summary)`** (lines 103-179)
+   - **Purpose:** Generate professional book cover
+   - **Inputs:**
+     - `book_title`: String, book title
+     - `author`: String, author name
+     - `medium_summary`: String, context for visual themes
+   - **Prompt Structure:**
+     ```
+     Generate a professional book cover for:
+     Title: {book_title}
+     Author: {author}
+
+     Context: {medium_summary}
+
+     Requirements:
+     - Title at top, author at bottom
+     - Visual storytelling (not literal title interpretation)
+     - Edge-to-edge artwork, no borders/frames
+     - 2:3 aspect ratio (portrait)
+     - Professional, publishable quality
+     ```
+   - **Returns:** Base64-encoded image data
+   - **Rate Limiting:** Waits 30s between requests
+
+2. **`generate_chapter_illustration(chapter_num, chapter_title, chapter_summary, book_summary, previous_chapter_summary, reference_image)`** (lines 181-303)
+   - **Purpose:** Generate chapter-specific illustration
+   - **Inputs:**
+     - `chapter_num`: Integer, chapter number
+     - `chapter_title`: String, chapter title
+     - `chapter_summary`: String, chapter content
+     - `book_summary`: String, overall book context
+     - `previous_chapter_summary`: String, narrative continuity
+     - `reference_image`: Bytes, previous chapter image for consistency
+   - **Prompt Structure:**
+     ```
+     Create visual storytelling illustration for:
+     Chapter {chapter_num}: {chapter_title}
+
+     Book Context: {book_summary}
+
+     Previous Chapter: {previous_chapter_summary}
+
+     This Chapter: {chapter_summary}
+
+     Requirements:
+     - Multi-panel layout option for key moments
+     - Match characters/style from reference image
+     - Visual narrative, no text/dialog/narration
+     - Consistent art style with previous chapters
+     ```
+   - **Character Consistency:** Uses `reference_image` parameter to maintain consistent character appearance
+   - **Returns:** Base64-encoded image data
+
+3. **`_wait_for_rate_limit()`** (lines 95-101)
+   - Enforces 30-second spacing between API calls
+   - Prevents quota exhaustion
+   - Conservative limit (2 requests/minute)
+
+#### Main Processing Functions
+
+1. **`generate_book_cover(db, generator, book_id, force_regenerate)`** (lines 375-410)
+   - Checks if cover already exists
+   - Skips if `cover_source = 'gemini-generated'` and not forced
+   - Fetches medium summary for context
+   - Generates cover image
+   - Saves to `frontend/static/covers/{book_id}.png`
+   - Updates database: `cover_image_url`, `cover_source`
+   - Saves prompt to `{book_id}.txt`
+
+2. **`generate_chapter_illustrations_for_book(db, generator, book_id, chapter_range, force_regenerate)`** (lines 438-586)
+   - Fetches all chapters for book
+   - Filters out:
+     - Short chapters (<200 words)
+     - Preface chapters
+   - Optional chapter range filtering
+   - For each chapter:
+     - Loads previous chapter illustration as reference
+     - Generates illustration with character consistency
+     - Saves to `frontend/static/illustrations/{book_id}/{chapter_num}.png`
+     - Updates database: `chapters.illustration_url`
+     - Saves prompt to `{chapter_num}.txt`
+
+3. **`find_books_without_covers(db)`** (lines 588-602)
+   - Identifies books missing covers or with non-Gemini covers
+   - Used for batch processing
+
+4. **`find_books_without_chapter_illustrations(db)`** (lines 604-636)
+   - Identifies books with comprehensive summaries but no illustrations
+   - Filters out short chapters
+   - Returns list of book IDs needing illustrations
+
+### Image Processing
+
+**`save_image(image_data, output_path)`** (lines 331-355)
+```python
+# Decode base64 image
+img_bytes = base64.b64decode(image_data)
+
+# Open with PIL
+img = Image.open(io.BytesIO(img_bytes))
+
+# Optimize and save
+if output_path.suffix.lower() == '.jpg' or output_path.suffix.lower() == '.jpeg':
+    img.save(output_path, 'JPEG', quality=85, optimize=True)
+else:
+    img.save(output_path, 'PNG', optimize=True)
+```
+
+**Features:**
+- Base64 decoding
+- PIL-based optimization
+- Quality 85 for JPEG
+- Optimize flag for PNG
+- Automatic format detection
+
+**`save_prompt(prompt, output_path)`** (lines 357-373)
+- Saves generation prompt to `.txt` file
+- Useful for debugging and reference
+- Stored alongside images
+
+### Batch API Mode (Added 2025-12-02)
+
+**Purpose:** Asynchronous bulk processing for large books with 50% cost savings
+
+**Architecture:**
+
+1. **Submit Phase:**
+   - Generate Chapter 1 synchronously (for reference)
+   - Build JSONL file with chapters 2-N requests
+   - Each request includes Chapter 1 as reference image
+   - Upload JSONL to Gemini API
+   - Submit batch job, receive `job_name`
+   - Save job state to `data/batch_jobs/book_{id}_{timestamp}.json`
+
+2. **Processing Phase** (on Google's servers):
+   - Gemini processes all chapters in parallel
+   - Uses Chapter 1 reference for character consistency
+   - Can take 1-4 hours for typical books
+   - Maximum SLA: 24 hours
+
+3. **Retrieval Phase:**
+   - Poll job status every 30s (configurable)
+   - When complete, download single JSONL results file
+   - Parse JSONL: each line contains one chapter's base64 image
+   - Decode all images, save to disk
+   - Update database with illustration URLs
+
+**JSONL Request Format:**
+```json
+{
+  "key": "chapter-11",
+  "request": {
+    "contents": [{
+      "parts": [
+        {"inline_data": {"mime_type": "image/png", "data": "base64_chapter1_ref..."}},
+        {"text": "Chapter 11 illustration prompt..."}
+      ],
+      "role": "user"
+    }],
+    "generation_config": {
+      "temperature": 1.0,
+      "response_modalities": ["IMAGE"],
+      "image_config": {
+        "aspect_ratio": "2:3",
+        "image_size": "2K"
+      }
+    }
+  }
+}
+```
+
+**JSONL Response Format:**
+```json
+{
+  "key": "chapter-11",
+  "response": {
+    "candidates": [{
+      "content": {
+        "parts": [{
+          "inlineData": {
+            "mimeType": "image/png",
+            "data": "base64_encoded_png_image..."
+          }
+        }]
+      }
+    }]
+  }
+}
+```
+
+**Resume Capability:**
+- Script can be interrupted safely
+- Job state saved to `data/batch_jobs/*.json`
+- Resume with: `--resume data/batch_jobs/book_47_1234567890.json`
+- Polls job status, downloads results when ready
+- Idempotent: safe to resume multiple times
+
+**CLI Commands:**
+```bash
+# Submit batch job
+python scripts/generate_gemini_illustrations.py --book-id 47 --batch-mode --chapters-only
+
+# List pending jobs
+python scripts/generate_gemini_illustrations.py --list-jobs
+
+# Resume interrupted job
+python scripts/generate_gemini_illustrations.py --resume data/batch_jobs/book_47_1234567890.json
+```
+
+**Cost Comparison:**
+- Sync mode: Full price × N chapters
+- Batch mode: 50% price × N chapters
+- Example: 100 chapters = 50% total cost savings
+
+**Performance:**
+- 10-50 chapters: 30 min - 2 hours
+- 50-100 chapters: 1-4 hours
+- 100-200 chapters: 2-8 hours
+- Maximum: 24 hours (SLA guarantee)
+
+### File Organization
+
+```
+frontend/static/
+├── covers/
+│   ├── {book_id}.png         # Book cover image
+│   └── {book_id}.txt         # Cover generation prompt
+
+data/batch_jobs/                # Batch job state persistence
+└── book_{id}_{timestamp}.json  # Job metadata for resume
+└── illustrations/
+    └── {book_id}/
+        ├── {chapter_num}.png # Chapter illustration
+        └── {chapter_num}.txt # Chapter prompt
+
+data/illustration_original/   # Original high-res (gitignored)
+```
+
+### Database Integration
+
+**Updates to `books` table:**
+```sql
+UPDATE books
+SET cover_image_url = '/static/covers/{book_id}.png',
+    cover_source = 'gemini-generated'
+WHERE id = {book_id};
+```
+
+**Updates to `chapters` table:**
+```sql
+UPDATE chapters
+SET illustration_url = '/static/illustrations/{book_id}/{chapter_num}.png'
+WHERE book_id = {book_id} AND chapter_number = {chapter_num};
+```
+
+### Command-Line Interface
+
+**Script:** `scripts/generate_gemini_illustrations.py`
+
+**Usage Examples:**
+
+```bash
+# Generate cover only for specific book
+python scripts/generate_gemini_illustrations.py --book-id 47 --cover-only
+
+# Generate all chapter illustrations
+python scripts/generate_gemini_illustrations.py --book-id 47 --chapters-only
+
+# Generate specific chapter range
+python scripts/generate_gemini_illustrations.py --book-id 47 --chapter-range 1-10
+
+# Generate both cover and all chapters
+python scripts/generate_gemini_illustrations.py --book-id 47
+
+# Use faster flash model (lower cost)
+python scripts/generate_gemini_illustrations.py --book-id 47 --model gemini-2.5-flash-image
+
+# Batch process all books missing illustrations
+python scripts/generate_gemini_illustrations.py --batch-all
+
+# Dry run (preview without generating)
+python scripts/generate_gemini_illustrations.py --book-id 47 --dry-run
+
+# Force regenerate existing illustrations
+python scripts/generate_gemini_illustrations.py --book-id 47 --force
+```
+
+**Arguments:**
+- `--book-id`: Target book ID
+- `--cover-only`: Generate cover only
+- `--chapters-only`: Generate chapter illustrations only
+- `--chapter-range START-END`: Generate specific chapters
+- `--batch-all`: Process all books
+- `--model`: Choose model (`gemini-3-pro-image-preview` or `gemini-2.5-flash-image`)
+- `--dry-run`: Preview without generating
+- `--force`: Force regeneration of existing illustrations
+
+### Character Consistency Implementation
+
+**Challenge:** Maintaining consistent character appearance across multiple chapter illustrations
+
+**Solution:** Reference image approach
+
+```python
+# Load previous chapter illustration
+prev_img_path = illustrations_dir / f"{chapter_num - 1}.png"
+reference_image = None
+
+if prev_img_path.exists():
+    with open(prev_img_path, 'rb') as f:
+        reference_image = f.read()
+
+# Pass to API
+content_parts = []
+if reference_image:
+    content_parts.append({
+        "inline_data": {
+            "mime_type": "image/png",
+            "data": base64.b64encode(reference_image).decode('utf-8')
+        }
+    })
+content_parts.append(prompt)
+
+# Generate with reference
+response = client.models.generate_content(
+    model=model,
+    contents=content_parts,
+    config=generation_config
+)
+```
+
+**Benefits:**
+1. Characters maintain consistent appearance
+2. Art style continuity across chapters
+3. Improved narrative flow
+4. Better visual coherence
+
+### Rate Limiting Strategy
+
+**Configuration:**
+```python
+MAX_REQUESTS_PER_MINUTE = 2  # Conservative for image API
+SECONDS_BETWEEN_REQUESTS = 30
+```
+
+**Implementation:**
+```python
+def _wait_for_rate_limit(self):
+    current_time = time.time()
+    time_since_last_request = current_time - self.last_request_time
+
+    if time_since_last_request < SECONDS_BETWEEN_REQUESTS:
+        wait_time = SECONDS_BETWEEN_REQUESTS - time_since_last_request
+        print(f"Rate limiting: waiting {wait_time:.1f}s...")
+        time.sleep(wait_time)
+
+    self.last_request_time = time.time()
+```
+
+**Rationale:**
+- Image generation is more resource-intensive than text
+- Conservative limits prevent quota exhaustion
+- Suitable for overnight batch processing
+- 30s spacing = 2 requests/minute = 120 requests/hour
+
+**Batch Processing Time Estimates:**
+- 1 cover + 50 chapters = 51 requests × 30s = ~25 minutes
+- 10 books (average) = ~4 hours
+- Overnight batch: Can process 15-20 books
+
+### Prompt Engineering
+
+**Cover Generation Prompt Design:**
+```python
+prompt = f"""
+Generate a professional, eye-catching book cover image for a classic book.
+
+Title: {book_title}
+Author: {author}
+
+Context (for thematic understanding):
+{medium_summary}
+
+Requirements:
+1. Include the title "{book_title}" prominently at the top
+2. Include the author name "{author}" at the bottom
+3. Focus on accurate visual storytelling that captures the book's essence
+4. DO NOT interpret the title literally - tell the story visually
+5. Create edge-to-edge artwork with no borders or frames
+6. Use a color palette and mood that matches the book's content
+7. Make it professional and publishable quality
+8. Aspect ratio 2:3 (portrait/vertical orientation for book covers)
+"""
+```
+
+**Key Elements:**
+- Clear title/author placement
+- Context from medium summary
+- Visual storytelling emphasis
+- No literal interpretation
+- Professional quality requirements
+- Specific aspect ratio
+
+**Chapter Illustration Prompt Design:**
+```python
+prompt = f"""
+Create a visual storytelling illustration for this chapter from a classic book.
+
+Chapter {chapter_num}: {chapter_title}
+
+Overall Book Context:
+{book_summary}
+
+Previous Chapter Context:
+{previous_chapter_summary}
+
+This Chapter's Content:
+{chapter_summary}
+
+Requirements:
+1. Create accurate visual storytelling that captures key plot points
+2. Consider using a multi-panel layout if there are multiple important moments
+3. If there are characters, keep them visually consistent with the reference image
+4. Maintain the same artistic style as previous chapters
+5. Focus on visual narrative - no text, dialog, or narration
+6. Use rich, detailed artwork appropriate for classic literature
+"""
+```
+
+**Key Elements:**
+- Multi-context (book, previous chapter, current chapter)
+- Character consistency instructions
+- Style continuity guidance
+- Multi-panel layout option
+- Pure visual storytelling (no text)
+- Rich detail for quality
+
+### Performance Characteristics
+
+**Generation Time:**
+- Cover: ~15-30 seconds per image
+- Chapter illustration: ~15-30 seconds per image
+- Rate limiting adds 30s between requests
+- Actual throughput: ~1 image per minute
+
+**Image Quality:**
+- Pro model: 2K resolution (2048×3072)
+- Flash model: Auto resolution (typically 1024×1536)
+- File sizes: 200-800 KB (PNG, optimized)
+- Format: PNG for illustrations, JPEG option available
+
+**API Costs:** (approximate, varies by model)
+- Pro model: Higher cost per image
+- Flash model: ~75% cheaper than Pro
+- Batch processing overnight recommended for cost efficiency
+
+### Error Handling
+
+**Common Issues:**
+
+1. **API Quota Exceeded:**
+   - Script pauses with informative message
+   - Resume from last successful chapter
+   - Automatic retry not implemented (manual restart)
+
+2. **Image Decode Failure:**
+   - Logs error with chapter number
+   - Skips to next chapter
+   - Continues processing
+
+3. **Database Connection:**
+   - Fails fast with clear error message
+   - No partial state (transaction-based)
+
+4. **Missing Summaries:**
+   - Skips books/chapters without summaries
+   - Logs warning
+   - Continues with other content
+
+### Testing and Validation
+
+**Test Case: Peter Pan (Book ID 47)**
+```bash
+python scripts/generate_gemini_illustrations.py --book-id 47 --chapter-range 1-10
+```
+
+**Results:**
+- Generated 1 cover + 10 chapter illustrations
+- Total time: ~10 minutes
+- All images saved successfully
+- Database updated correctly
+- Character consistency maintained across chapters
+- Art style coherent throughout
+
+**Validation Checklist:**
+- [ ] Cover image includes title and author
+- [ ] Cover aspect ratio is 2:3
+- [ ] Chapter illustrations are visually coherent
+- [ ] Characters maintain consistent appearance
+- [ ] Art style is consistent across chapters
+- [ ] File sizes are reasonable (200-800 KB)
+- [ ] Database URLs are correct
+- [ ] Prompts saved alongside images
+
+### Integration with Frontend
+
+**Book Detail Page:**
+- Displays book cover from `books.cover_image_url`
+- Shows chapter illustrations in chapter list
+- Lightbox overlay for full-size viewing
+
+**Chapter Lightbox:**
+- Shows chapter illustration at top
+- Displays chapter title and summary
+- Navigation to next/previous chapters
+- Close button returns to chapter list
+
+### Future Enhancements
+
+**Potential Improvements:**
+
+1. **Quality Validation:**
+   - Automatic quality scoring
+   - Flagging low-quality generations for review
+   - Automatic regeneration below threshold
+
+2. **Style Customization:**
+   - Multiple art styles (oil painting, watercolor, etc.)
+   - User-selectable styles
+   - Style transfer from reference images
+
+3. **Batch Optimization:**
+   - Parallel processing with multiple API keys
+   - Smarter rate limiting based on quota
+   - Resume from interruption
+
+4. **Cost Optimization:**
+   - Automatic model selection (Pro for covers, Flash for chapters)
+   - Caching of common elements
+   - Lower resolution for previews
+
+5. **Content Safety:**
+   - Automatic filtering of inappropriate content
+   - Age-appropriate variations
+   - Historical accuracy validation
+
+### Deployment Considerations
+
+**Production Deployment:**
+
+1. **Static Files:**
+   ```bash
+   # Copy generated images to production server
+   rsync -av frontend/static/covers/ user@server:/var/www/summra/frontend/static/covers/
+   rsync -av frontend/static/illustrations/ user@server:/var/www/summra/frontend/static/illustrations/
+   ```
+
+2. **Database:**
+   - Database updates included in main database deployment
+   - URLs reference `/static/` path (no change needed)
+
+3. **Monitoring:**
+   - Track API usage and costs
+   - Monitor image quality
+   - Alert on generation failures
+
+**Backup Strategy:**
+- Original high-resolution images stored in `data/illustration_originals/`
+- Gitignored to save space
+- Manual backup recommended for originals
+- Optimized versions in `frontend/static/` (tracked in git)
+
+---
+
+## Image Optimization System
+
+**Location:** `scripts/reduce_illustration_resolution.py`
+
+The Image Optimization System provides automated WebP/JPG conversion and size reduction for book covers and chapter illustrations, dramatically reducing page load times while maintaining visual quality.
+
+### Overview
+
+The system implements a two-stage workflow:
+1. **Generation Stage**: High-resolution originals (2K, ~7MB each) saved to `data/` directory
+2. **Optimization Stage**: Creates dual-format web-optimized versions (WebP + JPG) in `frontend/static/`
+
+**Performance Metrics:**
+- Average file size reduction: **94.5%** per image (7MB → 0.4MB)
+- WebP format: ~30% smaller than JPG at equivalent quality
+- Total storage savings: **89%** (331MB → 36.1MB for 48 illustrations)
+
+### Directory Structure
+
+```
+project_root/
+├── data/
+│   ├── cover_originals/          # Original book cover PNGs (gitignored)
+│   │   ├── 1.png                 # ~7MB per cover
+│   │   ├── 47.png
+│   │   └── ...
+│   └── illustration_originals/   # Original chapter illustrations (gitignored)
+│       ├── 1/                    # Book ID
+│       │   ├── 1.png             # Chapter number
+│       │   ├── 2.png             # ~7MB per illustration
+│       │   └── ...
+│       ├── 47/
+│       └── ...
+│
+└── frontend/static/
+    ├── covers/                   # Optimized book covers (tracked in git)
+    │   ├── 1.webp                # ~0.15MB (WebP, primary format)
+    │   ├── 1.jpg                 # ~0.25MB (JPG, fallback)
+    │   ├── 47.webp
+    │   └── 47.jpg
+    └── illustrations/            # Optimized chapter illustrations (tracked in git)
+        ├── 1/
+        │   ├── 1.webp            # ~0.3MB (WebP)
+        │   ├── 1.jpg             # ~0.4MB (JPG)
+        │   └── ...
+        └── 47/
+            └── ...
+```
+
+### Workflow
+
+#### Stage 1: Generation (generate_gemini_illustrations.py)
+
+```python
+# Saves to data/cover_originals/ or data/illustration_originals/
+cover_path = project_root / "data" / "cover_originals" / f"{book_id}.png"
+save_image(cover_data, cover_path)  # ~7MB PNG, 2048×3072
+
+illustration_path = project_root / "data" / "illustration_originals" / str(book_id) / f"{chapter_num}.png"
+save_image(image_data, illustration_path)  # ~7MB PNG, 2048×3072
+```
+
+**Key Changes from Original Design:**
+- Previously saved directly to `frontend/static/` (deployment-ready location)
+- Now saves to `data/` (source storage, not deployed)
+- Database updates deferred until after optimization
+- Script outputs reminder to run optimization
+
+**Auto-Optimization Integration (Lines 782-836):**
+
+The generation script automatically calls the optimization script after creating illustrations:
+
+```python
+def auto_optimize_illustrations(book_id: int, chapter_numbers: list = None, dry_run: bool = False) -> bool:
+    """Automatically run optimization script after generating illustrations"""
+
+    # Build command with optional chapter numbers and update-db flag
+    cmd = [sys.executable, str(optimize_script), "--book-id", str(book_id)]
+    if chapter_numbers:
+        chapters_arg = ",".join(str(num) for num in sorted(chapter_numbers))
+        cmd.extend(["--chapters", chapters_arg])
+    cmd.append("--update-db")  # Always update database when called from generation script
+
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    return result.returncode == 0
+```
+
+**Integration Flow:**
+1. Generation script creates high-res originals in `data/illustration_originals/`
+2. `auto_optimize_illustrations()` called at end of generation
+3. Subprocess runs optimization script with `--update-db` flag
+4. Optimization creates WebP/JPG in `frontend/static/illustrations/`
+5. Database updated with illustration URLs automatically
+6. User sees optimized images in frontend immediately
+
+#### Stage 2: Optimization (reduce_illustration_resolution.py)
+
+```bash
+# Manual usage - process book illustrations
+python scripts/reduce_illustration_resolution.py --book-id 47
+
+# Manual usage with database update
+python scripts/reduce_illustration_resolution.py --book-id 47 --update-db
+
+# Process specific chapters
+python scripts/reduce_illustration_resolution.py --book-id 47 --chapters 1,2,3 --update-db
+
+# Process book covers
+python scripts/reduce_illustration_resolution.py --covers --book-id 47
+python scripts/reduce_illustration_resolution.py --covers --all
+
+# Automatic usage (called from generation script)
+# auto_optimize_illustrations() always passes --update-db flag
+```
+
+**Optimization Process:**
+
+1. **Load from source:** Reads PNG from `data/illustration_originals/{book_id}/{chapter_num}.png`
+
+2. **Resize (if needed):**
+   - Target width: 1024px for illustrations, 400px for covers
+   - Maintains aspect ratio (typically 2:3)
+   - Uses Lanczos resampling (high-quality downscaling)
+   - Example: 2048×3072 → 1024×1526
+
+3. **Convert formats:**
+   ```python
+   # WebP (primary format, best compression)
+   img.save(webp_path, 'WEBP', quality=85, method=6)
+
+   # JPG (fallback for older browsers)
+   img.save(jpg_path, 'JPEG', quality=85, optimize=True)
+   ```
+
+4. **Output to frontend:**
+   - Saves to `frontend/static/illustrations/{book_id}/{chapter_num}.{webp,jpg}`
+   - Both formats created for browser compatibility
+   - Original PNG remains in `data/` directory
+
+5. **Update database (if --update-db flag enabled):**
+   ```python
+   # Fetch existing chapter data
+   chapter = db.get_chapter(book_id, chapter_num)
+
+   # Create URL pattern (frontend uses this to find .webp/.jpg)
+   illustration_url = f"/static/illustrations/{book_id}/{chapter_num}.png"
+
+   # Update chapter with illustration_url (preserves all other fields)
+   db.add_chapter(
+       book_id=book_id,
+       chapter_number=chapter_num,
+       chapter_title=chapter.get('chapter_title', ''),
+       summary=chapter.get('summary', ''),
+       chapter_text=chapter.get('chapter_text'),
+       section_id=chapter.get('section_id'),
+       illustration_url=illustration_url
+   )
+   ```
+   - URL uses `.png` extension as base (JavaScript strips and adds .webp/.jpg)
+   - Preserves all existing chapter data (title, summary, text, section)
+   - Only runs if `--update-db` flag passed (automatic in generation workflow)
+   - Gracefully handles missing chapters or database errors
+
+### Frontend Integration
+
+#### HTML Structure (index.html)
+
+Uses `<picture>` element for automatic format selection:
+
+```html
+<!-- Chapter Illustration -->
+<div class="chapter-illustration-container" id="chapter-illustration-container">
+    <picture id="chapter-illustration-picture">
+        <source id="chapter-illustration-webp" type="image/webp" />
+        <source id="chapter-illustration-jpg" type="image/jpeg" />
+        <img id="chapter-illustration" class="chapter-illustration" alt="..." />
+    </picture>
+</div>
+
+<!-- Lightbox (full-screen view) -->
+<div class="lightbox-overlay" id="lightbox-overlay">
+    <picture id="lightbox-picture">
+        <source id="lightbox-webp" type="image/webp" />
+        <source id="lightbox-jpg" type="image/jpeg" />
+        <img class="lightbox-image" id="lightbox-image" alt="" />
+    </picture>
+</div>
+```
+
+#### JavaScript Logic (app.js)
+
+**displayChapterDetail() - Lines 1024-1095:**
+
+```javascript
+// Get illustration URL from database (may be .png)
+let illustrationUrl = chapter.illustration_url; // "/static/illustrations/47/1.png"
+
+// Generate base URL by stripping extension
+const baseUrl = illustrationUrl.replace(/\.(png|jpg|jpeg)$/i, '');
+// Result: "/static/illustrations/47/1"
+
+// Generate optimized URLs
+const webpUrl = `${baseUrl}.webp`; // "/static/illustrations/47/1.webp"
+const jpgUrl = `${baseUrl}.jpg`;   // "/static/illustrations/47/1.jpg"
+
+// Set picture element sources
+illustrationWebp.srcset = webpUrl;
+illustrationJpg.srcset = jpgUrl;
+illustrationImg.src = jpgUrl; // Fallback for very old browsers
+```
+
+**openLightbox() - Lines 2029-2043:**
+
+```javascript
+// Receives base URL (without extension)
+const openLightbox = (imageSrc, imageAlt) => {
+    const webpUrl = `${imageSrc}.webp`;
+    const jpgUrl = `${imageSrc}.jpg`;
+
+    lightboxWebp.srcset = webpUrl;
+    lightboxJpg.srcset = jpgUrl;
+    lightboxImage.src = jpgUrl;
+    // Browser automatically selects best format
+};
+```
+
+### Browser Behavior
+
+The `<picture>` element provides native browser support for format selection:
+
+1. **Modern Browsers** (Chrome 23+, Firefox 65+, Edge 18+, Safari 14+):
+   - Automatically select WebP source
+   - Load smaller, faster WebP files (~0.3MB)
+
+2. **Older Browsers** (IE11, Safari 13-):
+   - Fall back to JPG source
+   - Load slightly larger JPG files (~0.4MB)
+
+3. **Very Old Browsers** (IE9-10):
+   - Ignore `<picture>` element
+   - Load `<img>` src directly (JPG fallback)
+
+**No JavaScript required** for format selection - handled by browser HTML parser.
+
+### Code Organization
+
+**`optimize_image()` function - Lines 42-108:**
+
+```python
+def optimize_image(input_path: Path, output_base_path: Path,
+                   max_width: int = 1024, create_webp: bool = True) -> bool:
+    """
+    Args:
+        input_path: Source PNG (e.g., data/illustration_originals/47/1.png)
+        output_base_path: Output without extension (e.g., frontend/static/illustrations/47/1)
+        max_width: Maximum width in pixels (default 1024 for illustrations)
+        create_webp: Whether to create WebP version (default True)
+
+    Process:
+        1. Load image with PIL
+        2. Convert RGBA → RGB if needed (WebP compatibility)
+        3. Resize if width > max_width (maintains aspect ratio)
+        4. Save WebP at quality 85, method 6 (best compression)
+        5. Save JPG at quality 85, optimize=True
+
+    Returns:
+        True if both formats created successfully
+    """
+```
+
+**`process_book_illustrations()` - Lines 112-219:**
+
+```python
+def process_book_illustrations(book_id: int, max_width: int = 1024,
+                               dry_run: bool = False, chapter_numbers: list = None,
+                               update_db: bool = False) -> bool:
+    """
+    Process all illustrations for a book.
+
+    Args:
+        book_id: Book ID to process
+        max_width: Maximum width (default 1024px)
+        dry_run: Preview without writing files
+        chapter_numbers: Optional list of chapter numbers to process (e.g., [1, 2, 3])
+        update_db: If True, update database with illustration URLs after optimization
+
+    Process:
+        1. Read all PNGs from data/illustration_originals/{book_id}/
+        2. Filter by chapter_numbers if specified
+        3. For each PNG:
+           - Call optimize_image()
+           - Create .webp and .jpg in frontend/static/illustrations/{book_id}/
+           - If update_db: Update chapters table with illustration_url
+        4. Report file size reductions
+
+    Database Update Logic (Lines 186-208):
+        if db:  # Only if update_db=True and not dry_run
+            try:
+                # Get existing chapter data
+                chapter = db.get_chapter(book_id, int(chapter_num))
+                if chapter:
+                    # Create URL pattern
+                    illustration_url = f"/static/illustrations/{book_id}/{chapter_num}.png"
+
+                    # Update chapter with new illustration_url
+                    # Preserves all existing fields (title, summary, text, section)
+                    db.add_chapter(
+                        book_id=book_id,
+                        chapter_number=int(chapter_num),
+                        chapter_title=chapter.get('chapter_title', ''),
+                        summary=chapter.get('summary', ''),
+                        chapter_text=chapter.get('chapter_text'),
+                        section_id=chapter.get('section_id'),
+                        illustration_url=illustration_url
+                    )
+                    print(f"  📝 Updated database: {illustration_url}")
+
+    Returns:
+        True if all images processed successfully
+    """
+```
+
+**`process_book_covers()` - Lines 229-322:**
+
+Similar to `process_book_illustrations()` but:
+- Reads from `data/cover_originals/`
+- Outputs to `frontend/static/covers/`
+- Default max_width: 400px (covers displayed smaller than illustrations)
+
+### Performance Impact
+
+**Before Optimization:**
+- Chapter page load: ~7MB per illustration
+- 10-chapter book: 70MB total image data
+- Slow loading on mobile/slow connections
+- Higher bandwidth costs
+
+**After Optimization:**
+- Chapter page load: ~0.3MB per illustration (WebP) or ~0.4MB (JPG)
+- 10-chapter book: 3-4MB total image data
+- 95% reduction in data transfer
+- Faster page loads, lower bandwidth costs
+
+**Network Transfer Comparison:**
+
+| Scenario | Before | After (WebP) | After (JPG) | Savings |
+|----------|--------|--------------|-------------|---------|
+| Single chapter | 7 MB | 0.3 MB | 0.4 MB | 95% / 94% |
+| 10 chapters | 70 MB | 3 MB | 4 MB | 96% / 94% |
+| 48 chapters (Books 1,6,47) | 331 MB | 14.4 MB | 19.2 MB | 96% / 94% |
+
+### Database Integration
+
+**Current Schema:**
+- `chapters.illustration_url` stores path like `/static/illustrations/47/1.png`
+- Database not updated during generation (deferred until optimization)
+- Frontend JavaScript strips `.png` extension to generate `.webp` and `.jpg` URLs
+- No database migration needed - backward compatible
+
+**Future Consideration:**
+- Could store base URL without extension: `/static/illustrations/47/1`
+- Would require database migration
+- Current approach works without schema changes
+
+### Git Strategy
+
+**Tracked in Git:**
+- `frontend/static/covers/*.{webp,jpg}` - Optimized covers (~0.2MB each)
+- `frontend/static/illustrations/**/*.{webp,jpg}` - Optimized illustrations (~0.35MB each)
+
+**Gitignored:**
+- `data/cover_originals/*.png` - Original covers (~7MB each)
+- `data/illustration_originals/**/*.png` - Original illustrations (~7MB each)
+
+**Rationale:**
+- Optimized files small enough for git (36MB total for 48 illustrations)
+- Original files too large for git (331MB for same 48 illustrations)
+- Originals can be regenerated with Gemini API if needed
+- Local backups of `data/` directory recommended
+
+### Error Handling
+
+**Missing Source Files:**
+```bash
+❌ Source directory not found: /path/to/data/illustration_originals/999
+```
+
+**RGBA/PNG Conversion:**
+```python
+# Handles PNG transparency by converting to RGB with white background
+if img.mode in ('RGBA', 'LA', 'P'):
+    background = Image.new('RGB', img.size, (255, 255, 255))
+    background.paste(img, mask=img.split()[-1])
+    img = background
+```
+
+**Partial Failures:**
+- Script continues processing remaining images
+- Reports success/failure counts
+- Returns non-zero exit code if any failures
+
+### Testing
+
+**Manual Verification:**
+
+```bash
+# Dry run to preview operations
+python scripts/reduce_illustration_resolution.py --book-id 47 --dry-run
+
+# Process single book
+python scripts/reduce_illustration_resolution.py --book-id 47
+
+# Verify output
+ls -lh frontend/static/illustrations/47/
+# Should show .webp and .jpg files, no .png files
+```
+
+**Size Comparison:**
+```bash
+# Original size
+du -sh data/illustration_originals/47
+# Expected: ~79M
+
+# Optimized size
+du -sh frontend/static/illustrations/47
+# Expected: ~9.5M (88% reduction)
+```
+
+### Integration with Gemini System
+
+**Workflow Integration:**
+
+1. **Generate Illustrations:**
+   ```bash
+   python scripts/generate_gemini_illustrations.py --book-id 47 --chapters-only
+   # Saves originals to data/illustration_originals/47/*.png
+   # Outputs: "ℹ️  Run reduce_illustration_resolution.py to create optimized versions"
+   ```
+
+2. **Optimize for Web:**
+   ```bash
+   python scripts/reduce_illustration_resolution.py --book-id 47
+   # Creates frontend/static/illustrations/47/*.{webp,jpg}
+   ```
+
+3. **Deploy:**
+   - Only `frontend/static/` directory deployed
+   - Optimized images (<1MB each) transferred to production
+   - Original files remain local in `data/` directory
+
+### Future Enhancements
+
+**Potential Improvements:**
+1. **Automatic Optimization:** Integrate optimization into generation script
+2. **AVIF Format:** Add AVIF support (even better compression than WebP)
+3. **Responsive Images:** Generate multiple sizes (srcset with different widths)
+4. **Lazy Loading:** Add native lazy loading attributes
+5. **CDN Integration:** Upload optimized images to CDN automatically
+
+**Current Design Philosophy:**
+- Explicit two-stage workflow (generation → optimization)
+- Source-of-truth originals preserved locally
+- Optimized versions committed to git
+- No database schema changes required
+- Gradual adoption (works with existing PNG URLs)
 
 ---
