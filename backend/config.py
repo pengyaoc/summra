@@ -15,6 +15,7 @@ DATABASE_PATH = BASE_DIR / 'data' / 'database.db'
 BOOKS_DIR = BASE_DIR / 'data' / 'books'
 SUMMARIES_DIR = BASE_DIR / 'data' / 'summaries'
 COVERS_DIR = BASE_DIR / 'frontend' / 'static' / 'covers'
+ILLUSTRATIONS_DIR = BASE_DIR / 'frontend' / 'static' / 'illustrations'
 
 # Gemini API configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')

@@ -93,6 +93,14 @@ class Database:
             # Column already exists
             pass
 
+        # Add cover_source column if it doesn't exist (migration for existing databases)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN cover_source TEXT DEFAULT 'unknown'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Book sections table (for two-level structure: Part/Book/Act → Chapters)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS book_sections (
@@ -110,6 +118,14 @@ class Database:
         # Add section_id column to chapters table if it doesn't exist (migration)
         try:
             cursor.execute("ALTER TABLE chapters ADD COLUMN section_id INTEGER REFERENCES book_sections(id)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
+        # Add illustration_url column to chapters table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE chapters ADD COLUMN illustration_url TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             # Column already exists
@@ -174,16 +190,23 @@ class Database:
 
         return book_id
 
-    def update_book_cover(self, book_id: int, gutenberg_id: int, cover_image_url: str):
-        """Update book cover image URL and Gutenberg ID"""
+    def update_book_cover(self, book_id: int, gutenberg_id: int, cover_image_url: str, cover_source: str = None):
+        """Update book cover image URL, Gutenberg ID, and cover source"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
-            UPDATE books
-            SET gutenberg_id = ?, cover_image_url = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (gutenberg_id, cover_image_url, book_id))
+        if cover_source:
+            cursor.execute('''
+                UPDATE books
+                SET gutenberg_id = ?, cover_image_url = ?, cover_source = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (gutenberg_id, cover_image_url, cover_source, book_id))
+        else:
+            cursor.execute('''
+                UPDATE books
+                SET gutenberg_id = ?, cover_image_url = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (gutenberg_id, cover_image_url, book_id))
 
         conn.commit()
         conn.close()
@@ -262,7 +285,7 @@ class Database:
 
     def add_chapter(self, book_id: int, chapter_number: int,
                     chapter_title: str, summary: str, chapter_text: str = None,
-                    section_id: int = None) -> int:
+                    section_id: int = None, illustration_url: str = None) -> int:
         """Add or update a chapter summary"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -271,9 +294,9 @@ class Database:
 
         cursor.execute('''
             INSERT OR REPLACE INTO chapters
-            (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id))
+            (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url))
 
         chapter_id = cursor.lastrowid
         conn.commit()
@@ -303,7 +326,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url
             FROM chapters
             WHERE book_id = ?
             ORDER BY chapter_number
@@ -422,7 +445,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url
             FROM chapters
             WHERE section_id = ?
             ORDER BY chapter_number
@@ -457,7 +480,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url
             FROM chapters
             WHERE book_id = ? AND section_id IS NULL
             ORDER BY chapter_number

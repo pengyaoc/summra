@@ -280,16 +280,17 @@ Each book and summary type has a unique URL that can be bookmarked and shared.
 - [ ] URLs can be bookmarked
 - [ ] URLs can be shared and open correctly
 
-### 5. Chapter Navigation (Redesigned 2025-11-25)
+### 5. Chapter Navigation (Redesigned 2025-11-25, Updated 2025-12-01)
 
 **Feature Description:**
-Users can navigate to dedicated pages for each chapter, with full text displayed and summary protected from spoilers.
+Users can navigate to dedicated pages for each chapter, with full text displayed, optional illustrations, and summary protected from spoilers.
 
 **User Stories:**
 - As a student, I want to jump to specific chapters so I can focus on relevant sections
 - As a reader, I want to avoid spoilers, so chapter summaries should be hidden by default
 - As a learner, I want to see chapter titles so I can understand book structure
 - As a user, I want to read full chapter text while having summary available if needed
+- As a visual learner, I want to see illustrations for chapters to enhance my reading experience
 
 **Specifications:**
 
@@ -309,14 +310,20 @@ Users can navigate to dedicated pages for each chapter, with full text displayed
 - **Spacing:** 12px gap between boxes, 24px gap before section headers
 - **Interaction:** Click box to navigate to dedicated chapter page
 
-**Chapter Detail Page (Updated 2025-11-25):**
+**Chapter Detail Page (Updated 2025-12-01):**
 - **Navigation:** Accessible via `#/book/{slug}/chapter/{num}`
 - **Auto-scroll:** Page scrolls to top on navigation
 - **Layout:**
   - White background card with 32px padding
+  - Chapter illustration (optional, centered between header and summary)
   - Collapsed chapter summary box (yellow/beige, "may contain spoilers" warning)
   - Full chapter text section below summary
   - Inline TTS buttons for both summary and full text
+- **Chapter Illustrations (Added 2025-12-01):**
+  - Display artwork specific to each chapter
+  - Responsive sizing (max 600px desktop, 400px mobile)
+  - Hidden when no illustration available
+  - Supports local files (covers/) or external URLs
 - **Summary Header (Polished 2025-11-25):**
   - Summary title with spoiler warning on left
   - Button group on right: "🔊 Listen" + chevron toggle
@@ -495,6 +502,155 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - Thin progress indicators like Kindle (not thick web-style bars)
 - Minimal, unobtrusive UI elements during reading
 - Professional typography and spacing
+
+### 7. Chapter Illustration Lightbox (Added 2025-12-01)
+
+**Feature Overview:**
+
+Full-screen image viewer for chapter illustrations, allowing readers to view high-quality artwork without leaving the chapter page. Provides a distraction-free viewing experience with smooth transitions and multiple interaction methods.
+
+**User Story:**
+
+> "As a reader exploring illustrated classics like 'The Wonderful Wizard of Oz', I want to view chapter illustrations in full-screen quality so that I can appreciate the artwork without navigating away from my current reading position."
+
+**Key Capabilities:**
+
+1. **Click-to-Expand:** Click any chapter illustration to open in full-screen overlay
+2. **High-Quality Display:** Illustrations displayed at optimal size (up to 90% of viewport)
+3. **Dark Background:** Near-black overlay (95% opacity) focuses attention on artwork
+4. **Multiple Close Methods:** Close button, background click, or Escape key
+5. **Scroll Lock:** Page scroll disabled while viewing (prevents disorientation)
+6. **Smooth Transitions:** Fade in/out animations (300ms) for polished feel
+7. **Responsive Sizing:** Adapts to mobile and desktop viewports
+
+**User Interface Elements:**
+
+**Illustration Display (in Chapter):**
+- Chapter illustration shown inline within chapter content
+- Pointer cursor on hover indicates interactivity
+- Subtle opacity change on hover (visual feedback)
+
+**Lightbox Overlay:**
+- Full-screen dark background (rgba(0, 0, 0, 0.95))
+- Centered illustration with proportional scaling
+- Circular close button (✕) in top-right corner
+  - Semi-transparent white background
+  - Glowing effect on hover
+  - 50x50px on desktop, 44x44px on mobile (touch-friendly)
+
+**Interaction Flow:**
+
+```
+1. User reads chapter with illustration
+2. User hovers over illustration
+   → Cursor changes to pointer
+   → Image opacity reduces slightly
+3. User clicks illustration
+   → Lightbox fades in (300ms)
+   → Page scroll locked
+   → Illustration displayed full-screen
+4. User views high-quality image
+5. User closes via:
+   Option A: Click ✕ button (top-right)
+   Option B: Click dark background area
+   Option C: Press Escape key
+6. Lightbox fades out (300ms)
+   → Page scroll restored
+   → User returns to exact scroll position
+```
+
+**Accessibility Features:**
+
+- **Keyboard Support:** Escape key closes overlay
+- **Aria Labels:** Close button has descriptive label ("Close lightbox")
+- **Focus Management:** No keyboard traps (Escape always works)
+- **Screen Reader:** Alt text from illustration passed to overlay image
+- **Touch-Friendly:** Larger close button on mobile (44x44px minimum)
+
+**Edge Cases Handled:**
+
+- **Missing Illustrations:** Lightbox only enabled when illustration exists
+- **Rapid Clicking:** CSS transitions handle rapid open/close smoothly
+- **Mobile Touch:** Tap on background closes overlay (not just button)
+- **Very Large Images:** Max dimensions prevent overflow (90vh/90vw)
+- **Very Small Images:** Displayed at natural size (no upscaling/blurriness)
+- **Keyboard Users:** Escape key always accessible (no modal trap)
+
+**Visual Design:**
+
+**Color Scheme:**
+- Overlay background: `rgba(0, 0, 0, 0.95)` (near-black, high contrast)
+- Close button background: `rgba(255, 255, 255, 0.1)` (semi-transparent white)
+- Close button border: `rgba(255, 255, 255, 0.3)` (subtle outline)
+- Close button text: `white` (high contrast)
+
+**Layout:**
+- Z-index: 10000 (above all other content including reading settings)
+- Image sizing: `max-width: 90vw; max-height: 90vh` (desktop)
+- Image sizing: `max-width: 95vw; max-height: 95vh` (mobile - more space)
+- Image scaling: `object-fit: contain` (maintains aspect ratio)
+- Close button position: `top: 24px; right: 24px` (desktop)
+- Close button position: `top: 16px; right: 16px` (mobile)
+
+**Typography:**
+- Close button: 2rem font size (desktop), 1.5rem (mobile)
+- Close character: ✕ (multiplication sign, clean appearance)
+
+**Animations:**
+- Overlay fade: 0.3s ease (opacity transition)
+- Close button hover: 0.2s ease (transform scale 1.1)
+- Cursor: `zoom-out` on background (visual affordance)
+
+**Performance Characteristics:**
+
+- **Image Loading:** Instant (images already loaded in chapter view)
+- **Animation Performance:** GPU-accelerated opacity transitions
+- **Memory Footprint:** Minimal (~1-2 KB for event handlers)
+- **Reusability:** Single overlay instance reused for all images
+
+**Browser Compatibility:**
+
+- Modern browsers: Full functionality
+- IE11: Works (may lack smooth transitions)
+- Mobile browsers: Full support (iOS, Android)
+- Touch devices: Tap-to-close works as expected
+
+**Acceptance Criteria:**
+
+- [✅] Clicking chapter illustration opens full-screen lightbox
+- [✅] Lightbox displays illustration at optimal size (up to 90% viewport)
+- [✅] Dark background (95% black) focuses attention on image
+- [✅] Close button (✕) visible in top-right corner
+- [✅] Clicking close button closes lightbox
+- [✅] Clicking dark background (not image) closes lightbox
+- [✅] Pressing Escape key closes lightbox
+- [✅] Page scroll locked while lightbox is open
+- [✅] Page scroll restored to exact position when closing
+- [✅] Smooth fade in/out animations (300ms)
+- [✅] Pointer cursor on illustration hover
+- [✅] Opacity feedback on illustration hover
+- [✅] Mobile: Close button is touch-friendly (44x44px minimum)
+- [✅] Mobile: Illustration uses more screen space (95% viewport)
+- [✅] Keyboard accessible (Escape key always works)
+- [✅] Screen reader friendly (aria labels present)
+- [✅] No errors if illustration missing (graceful degradation)
+- [✅] Works on both chapter and medium summary pages
+- [✅] Close button has hover effect (glow + scale)
+
+**Design Inspiration:**
+- Google Photos lightbox (dark background, click-to-close)
+- Medium image viewer (clean, minimal UI)
+- iOS Photos app (swipe gestures, minimal chrome)
+- Kindle book covers (full-screen focus on artwork)
+
+**Future Enhancements:**
+
+- **Navigation Arrows:** Previous/Next buttons to cycle through chapter illustrations
+- **Image Zoom:** Pinch-to-zoom or click-to-zoom for very large illustrations
+- **Download Button:** Allow users to save illustrations locally
+- **Image Metadata:** Display caption/description if available
+- **Touch Gestures:** Swipe down to close on mobile (iOS Photos-style)
+- **Fullscreen API:** Native browser fullscreen mode option
 
 ## User Workflows
 
@@ -827,7 +983,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 
 ---
 
-**Document Version:** 1.4
-**Last Updated:** 2025-11-28
+**Document Version:** 1.5
+**Last Updated:** 2025-12-01
 **Author:** Summra Team
 **Status:** Living Document

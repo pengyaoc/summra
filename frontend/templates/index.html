@@ -145,6 +145,11 @@
                 </div>
 
                 <div class="chapter-detail-content" id="chapter-detail-content">
+                    <!-- Chapter Illustration -->
+                    <div class="chapter-illustration-container hidden" id="chapter-illustration-container">
+                        <img id="chapter-illustration" class="chapter-illustration" alt="Chapter illustration" />
+                    </div>
+
                     <!-- Summary (Collapsed by default) -->
                     <div class="chapter-summary-box collapsed" id="chapter-summary-box">
                         <div class="chapter-summary-header" id="chapter-summary-header">
@@ -289,6 +294,12 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Image Lightbox Overlay -->
+    <div class="lightbox-overlay hidden" id="lightbox-overlay">
+        <button class="lightbox-close" id="lightbox-close" aria-label="Close lightbox">✕</button>
+        <img class="lightbox-image" id="lightbox-image" alt="" />
     </div>
 
     <!-- Markdown parser -->

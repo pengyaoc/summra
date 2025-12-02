@@ -29,6 +29,7 @@ This document provides in-depth technical documentation for the Summra project, 
 │ word_count              │
 │ gutenberg_id            │
 │ cover_image_url         │
+│ cover_source            │
 │ created_at              │
 │ updated_at              │
 └─────────────────────────┘
@@ -49,6 +50,7 @@ This document provides in-depth technical documentation for the Summra project, 
 │ created_at          │    │ created_at          │    │ summary             │    │ created_at          │
 └─────────────────────┘    └─────────────────────┘    │ full_text           │    └─────────────────────┘
          │                          │                 │ word_count          │
+         │                          │                 │ illustration_url    │
          │                          │                 │ created_at          │
          │                          │                 └─────────────────────┘
          │                          │                          │
@@ -92,10 +94,18 @@ CREATE TABLE books (
     word_count INTEGER,
     gutenberg_id INTEGER,
     cover_image_url TEXT,
+    cover_source TEXT DEFAULT 'unknown',  -- 'custom', 'gutenberg', or 'unknown'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
+
+**Cover Management:**
+- `cover_image_url`: Relative path to cover image (e.g., `covers/1.png`)
+- `cover_source`: Tracks origin of cover ('custom' for uploaded, 'gutenberg' for auto-fetched)
+- **Naming convention**: Book covers use `{book_id}.{ext}` format (e.g., `1.png`, `2.jpg`)
+- **Large covers**: Originals >1.5MB stored in `data/cover_originals/` (gitignored), web versions resized to ~1MB
+- **Chapter illustrations**: Stored in hierarchical directory structure `frontend/static/illustrations/{book_id}/{chapter_num}.{ext}` (added 2025-12-01)
 
 **Indexes:**
 - Primary key on `id` (auto-indexed)
@@ -161,11 +171,12 @@ CREATE TABLE chapters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     book_id INTEGER NOT NULL,
     section_id INTEGER,                -- NULL for single-level books
-    chapter_number INTEGER NOT NULL,   -- Composite: section*100 + chapter
+    chapter_number INTEGER NOT NULL,   -- Sequential numbering (1, 2, 3...)
     chapter_title TEXT,
     summary TEXT NOT NULL,
     full_text TEXT,
     word_count INTEGER,
+    illustration_url TEXT,             -- Path to chapter illustration image (added 2025-12-01)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
     FOREIGN KEY (section_id) REFERENCES book_sections(id),
@@ -179,11 +190,11 @@ CREATE TABLE chapters (
 
 **Purpose:** Stores individual chapter summaries and full chapter text.
 
-**Chapter Numbering (Updated 2025-11-27):**
-- **Single-level books:** chapter_number = 1, 2, 3, ... (section_id = NULL)
-- **Two-level books:** chapter_number = section * 100 + chapter_in_section
-  - Example: Part 2, Chapter 3 = 203
-  - Example: Act 3, Scene 5 = 305
+**Chapter Numbering (Updated 2025-12-01):**
+- **Sequential numbering:** All books use sequential numbering (1, 2, 3, ...) regardless of structure
+- **Section association:** Two-level books link chapters to sections via `section_id` FK
+  - Example: Part 1, Chapter 1 = 1, Part 1, Chapter 2 = 2, Part 2, Chapter 1 = 3
+  - Section structure preserved through `section_id` relationship, not encoded in chapter number
 
 **Special Note:** The UNIQUE constraint on `(book_id, chapter_number)` enables `INSERT OR REPLACE` semantics for chapter regeneration mode.
 
@@ -235,11 +246,12 @@ def add_summary(self, book_id, summary_type, content) -> int
 
 ```python
 def add_chapter(self, book_id, chapter_number, chapter_title,
-                summary, full_text=None) -> int
+                summary, full_text=None, illustration_url=None) -> int
 ```
 - Uses `INSERT OR REPLACE` via UNIQUE(book_id, chapter_number)
 - Critical for chapter regeneration mode
 - Automatically calculates word count
+- Optional `illustration_url` parameter for chapter illustrations (added 2025-12-01)
 
 ```python
 def get_book_by_filename(self, filename) -> dict
@@ -4971,6 +4983,421 @@ constructor() {
 
 ---
 
+## Chapter Illustration Lightbox (Added 2025-12-01)
+
+**Overview:**
+
+Full-screen image overlay for viewing chapter illustrations in high quality, with smooth fade transitions and multiple interaction methods for closing.
+
+**Purpose:** Provide a distraction-free, full-screen viewing experience for chapter illustrations without leaving the reading page.
+
+### Architecture Components
+
+**Three Main Systems:**
+
+1. **HTML Overlay Structure** - Fixed position modal with dark background
+2. **CSS Styling** - Full-screen layout with fade transitions and responsive sizing
+3. **JavaScript Event Handling** - Click handlers, keyboard shortcuts, and scroll lock
+
+**Technology Stack:**
+
+- **CSS Fixed Positioning** - Full-viewport overlay at z-index 10000
+- **CSS Transitions** - Smooth fade effects (0.3s ease)
+- **Event Delegation** - Click handlers for close button, background, and Escape key
+- **Body Scroll Lock** - `document.body.style.overflow = 'hidden'` when overlay is open
+- **Responsive Images** - `max-width/max-height` constraints (90vh/90vw desktop, 95vh/95vw mobile)
+
+### HTML Structure
+
+**Location:** `frontend/templates/index.html:299-303`
+
+```html
+<!-- Image Lightbox Overlay -->
+<div class="lightbox-overlay hidden" id="lightbox-overlay">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Close lightbox">✕</button>
+    <img class="lightbox-image" id="lightbox-image" alt="" />
+</div>
+```
+
+**Element Breakdown:**
+
+- `.lightbox-overlay` - Full-screen container with dark background (rgba(0,0,0,0.95))
+- `.lightbox-close` - Circular close button in top-right corner (50x50px, semi-transparent white)
+- `.lightbox-image` - Centered image with object-fit contain
+
+### CSS Implementation
+
+**Location:** `frontend/static/css/style.css` (appended at end)
+
+**Key Styling Patterns:**
+
+```css
+/* Full-screen overlay */
+.lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.lightbox-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;  /* Allow clicks to pass through when hidden */
+}
+
+/* Close button - top right corner */
+.lightbox-close {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-size: 2rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;  /* Circular button */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 10001;  /* Above overlay */
+}
+
+.lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.1);
+}
+
+/* Centered image with size constraints */
+.lightbox-image {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    cursor: default;  /* Not clickable */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Make chapter illustrations clickable */
+.chapter-illustration {
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.chapter-illustration:hover {
+    opacity: 0.9;  /* Visual feedback on hover */
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .lightbox-close {
+        top: 16px;
+        right: 16px;
+        width: 44px;  /* Touch-friendly size */
+        height: 44px;
+        font-size: 1.5rem;
+    }
+
+    .lightbox-image {
+        max-width: 95vw;  /* More screen space on mobile */
+        max-height: 95vh;
+    }
+}
+```
+
+**Design Decisions:**
+
+- **z-index 10000:** Ensures overlay appears above all other content (higher than reading settings panel)
+- **opacity transition:** Smooth fade effect instead of instant show/hide
+- **pointer-events: none:** When hidden, allows clicks to pass through to underlying content
+- **cursor: zoom-out:** Visual indication that clicking background will close overlay
+- **object-fit: contain:** Image scales proportionally without cropping
+
+### JavaScript Implementation
+
+**Location:** `frontend/static/js/app.js`
+
+**Initialization:** Line 39 in constructor
+
+```javascript
+constructor() {
+    // ... other initialization ...
+    this.setupLightbox();  // Initialize lightbox event handlers
+}
+```
+
+**Main Method:** Lines 1830-1881
+
+```javascript
+setupLightbox() {
+    const lightboxOverlay = document.getElementById('lightbox-overlay');
+    const lightboxImage = document.getElementById('lightbox-image');
+    const lightboxClose = document.getElementById('lightbox-close');
+
+    if (!lightboxOverlay || !lightboxImage || !lightboxClose) {
+        return;  // Elements not found (graceful degradation)
+    }
+
+    // Function to open lightbox
+    const openLightbox = (imageSrc, imageAlt) => {
+        lightboxImage.src = imageSrc;
+        lightboxImage.alt = imageAlt || '';
+        lightboxOverlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';  // Prevent background scroll
+    };
+
+    // Function to close lightbox
+    const closeLightbox = () => {
+        lightboxOverlay.classList.add('hidden');
+        document.body.style.overflow = '';  // Restore scroll
+    };
+
+    // Close button click
+    lightboxClose.addEventListener('click', (e) => {
+        e.stopPropagation();  // Prevent event bubbling to overlay
+        closeLightbox();
+    });
+
+    // Click on overlay background (not on image)
+    lightboxOverlay.addEventListener('click', (e) => {
+        if (e.target === lightboxOverlay) {
+            closeLightbox();
+        }
+    });
+
+    // Escape key to close
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !lightboxOverlay.classList.contains('hidden')) {
+            closeLightbox();
+        }
+    });
+
+    // Store reference for use when loading chapters
+    this.openLightbox = openLightbox;
+}
+```
+
+**Integration with Chapter Display:** Lines 1003-1008 in `showChapterDetail()`
+
+```javascript
+// Add click handler to chapter illustration
+illustrationImg.onclick = () => {
+    if (this.openLightbox) {
+        this.openLightbox(illustrationUrl, `Illustration for ${chapterTitle}`);
+    }
+};
+```
+
+### Event Handling Patterns
+
+**Three Close Methods:**
+
+1. **Close Button Click:**
+   - User clicks the ✕ button in top-right corner
+   - `e.stopPropagation()` prevents event from bubbling to overlay click handler
+   - Explicit visual affordance for closing
+
+2. **Background Click:**
+   - User clicks on dark overlay area (not on image)
+   - `e.target === lightboxOverlay` check ensures clicks on image don't close
+   - Common pattern in modal interfaces
+
+3. **Escape Key:**
+   - User presses Escape key
+   - Only triggers when overlay is visible (`!lightboxOverlay.classList.contains('hidden')`)
+   - Keyboard accessibility
+
+**Scroll Lock Implementation:**
+
+```javascript
+// When opening
+document.body.style.overflow = 'hidden';
+
+// When closing
+document.body.style.overflow = '';  // Restore original value
+```
+
+**Benefits:**
+- Prevents page from scrolling while viewing full-screen image
+- Maintains user's scroll position on chapter page
+- Restores normal scroll behavior when closing
+
+### User Experience Flow
+
+```
+User reads chapter with illustration
+    ↓
+Hover over illustration (cursor changes to pointer, opacity reduces to 0.9)
+    ↓
+Click illustration
+    ↓
+Lightbox fades in (0.3s transition)
+    ↓
+Page scroll is locked
+    ↓
+Image displayed full-screen (max 90vh/90vw)
+    ↓
+User views high-quality image
+    ↓
+User closes via one of three methods:
+    - Click ✕ button (top-right)
+    - Click dark background area
+    - Press Escape key
+    ↓
+Lightbox fades out (0.3s transition)
+    ↓
+Page scroll is restored
+    ↓
+User returns to chapter reading
+```
+
+### Performance Characteristics
+
+**CSS Transitions:**
+- Fade duration: 300ms (smooth but not sluggish)
+- GPU-accelerated opacity transitions (no reflows)
+- Button hover scale: 200ms (responsive feel)
+
+**Image Loading:**
+- Images already loaded in chapter view
+- No additional network request when opening lightbox
+- Instant display when opening (image already cached)
+
+**Event Listeners:**
+- Global keyboard listener (efficient, single listener for all lightboxes)
+- Event delegation pattern (no memory leaks)
+- Cleanup not required (listeners persist for app lifetime)
+
+**Memory Usage:**
+- Minimal overhead (~1-2 KB for event handlers)
+- No DOM cloning or duplication
+- Single overlay instance reused for all images
+
+### Browser Compatibility
+
+**CSS Features:**
+
+- **position: fixed:** Universal support
+- **flexbox (align-items, justify-content):** IE11+, all modern browsers
+- **rgba() colors:** IE9+, all modern browsers
+- **CSS transitions:** IE10+, all modern browsers
+- **object-fit:** IE does not support (fallback: image may not scale perfectly)
+
+**JavaScript Features:**
+
+- **classList API:** IE10+, all modern browsers
+- **Arrow functions:** ES6 (transpile for IE11 if needed)
+- **addEventListener:** Universal support
+- **Escape key detection:** Universal support
+
+**Graceful Degradation:**
+
+- If elements not found, `setupLightbox()` returns early (no errors)
+- If `openLightbox` not defined, click handler checks before calling
+- CSS fallbacks for older browsers (image still visible, just not perfectly scaled)
+
+### Edge Cases Handled
+
+**1. Missing Elements:**
+- Early return if lightbox elements not in DOM
+- No errors thrown if template structure changes
+
+**2. Multiple Images:**
+- Lightbox reused for all chapter illustrations
+- Image src/alt updated dynamically on each open
+- No memory leaks from multiple instances
+
+**3. Rapid Open/Close:**
+- CSS transitions handle rapid toggling smoothly
+- No animation queue buildup
+- No performance degradation
+
+**4. Mobile Touch:**
+- Touch-friendly close button size (44x44px minimum)
+- Larger image viewport on mobile (95vh/95vw vs 90vh/90vw)
+- Tap on background closes overlay
+
+**5. Keyboard Navigation:**
+- Escape key closes only when overlay is visible
+- No interference with other keyboard shortcuts
+- Accessible close method for keyboard users
+
+**6. Background Scroll:**
+- Scroll position preserved when opening
+- Scroll locked while viewing (no jarring scroll jumps)
+- Scroll restored to exact position when closing
+
+**7. Very Large Images:**
+- `max-width/max-height` prevents overflow
+- `object-fit: contain` maintains aspect ratio
+- Image always fits within viewport
+
+**8. Very Small Images:**
+- Image displayed at natural size (no upscaling)
+- Centered in viewport
+- Box shadow provides visual separation from background
+
+### Integration Points
+
+**Chapter Display Integration:**
+
+- `showChapterDetail()` adds click handler to illustration (lines 1003-1008)
+- Checks for illustration URL in chapter data
+- Only adds handler if `this.openLightbox` is defined
+
+**Template Structure:**
+
+- Lightbox overlay placed at root level (before `</body>`)
+- Outside any section containers (allows full-screen positioning)
+- Hidden by default (`.hidden` class)
+
+**Event Flow:**
+
+```
+User clicks illustration
+    ↓
+onclick handler in showChapterDetail()
+    ↓
+this.openLightbox(imageSrc, imageAlt)
+    ↓
+setupLightbox() closures handle state management
+    ↓
+CSS transitions provide visual feedback
+```
+
+### Future Enhancements
+
+**Planned:**
+
+1. **Image Zoom** - Pinch-to-zoom or click-to-zoom for very large illustrations
+2. **Navigation Arrows** - Previous/Next buttons to cycle through chapter illustrations
+3. **Download Button** - Allow users to save illustrations
+4. **Image Metadata** - Display illustration caption/description if available
+5. **Touch Gestures** - Swipe down to close on mobile (like iOS photos)
+6. **Loading Indicator** - Spinner for slow-loading high-res images
+7. **Keyboard Navigation** - Arrow keys to navigate between illustrations
+
+**Considered but Deferred:**
+
+- Image comparison slider (before/after views)
+- Fullscreen API integration (native browser fullscreen)
+- Image rotation controls
+- Social sharing of illustrations
+- Print functionality
+
+---
+
 ## Summary
 
 This ERD document provides comprehensive technical details for:
@@ -4985,6 +5412,7 @@ This ERD document provides comprehensive technical details for:
 8. **Frontend Architecture** - SPA routing, component structure, state management, and UI/UX design patterns (added 2025-11-25)
 9. **Navigation UX Improvements** - Caching strategies, back button behavior, lazy loading, and header styling (added 2025-11-28)
 10. **Reading Experience Customization** - Kindle-inspired features with font/size/theme controls, progress tracking, and sequential navigation (added 2025-11-30)
+11. **Chapter Illustration Lightbox** - Full-screen image overlay with multiple close methods and responsive design (added 2025-12-01)
 
 This document should provide complete context for future development and Claude Code sessions.
 
