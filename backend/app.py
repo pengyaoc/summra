@@ -44,46 +44,18 @@ def generate_tts():
 
         tts = TTSHandler()
 
-        # Check for cached audio with prioritization: Gemini > VITS > Legacy complete
-        if audio_id:
-            # Priority 1: Check for Gemini TTS (pre-generated offline)
-            gemini_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
-            if gemini_audio_path.exists():
-                logger.info(f"Using Gemini TTS audio: {gemini_audio_path}")
-                relative_path = str(gemini_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
-                return jsonify({
-                    'success': True,
-                    'audio_url': f'/static/{relative_path}',
-                    'streaming': False,
-                    'cached': True,
-                    'provider': 'gemini'
-                })
-
-            # Priority 2: Check for VITS TTS (previously generated)
-            vits_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_vits.wav"
-            if vits_audio_path.exists():
-                logger.info(f"Using VITS TTS audio: {vits_audio_path}")
-                relative_path = str(vits_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
-                return jsonify({
-                    'success': True,
-                    'audio_url': f'/static/{relative_path}',
-                    'streaming': False,
-                    'cached': True,
-                    'provider': 'vits'
-                })
-
-            # Priority 3: Check for legacy concatenated audio (backward compatibility)
-            cached_audio_path = config.TTS_OUTPUT_DIR / f"{audio_id}_complete.wav"
-            if cached_audio_path.exists():
-                logger.info(f"Using legacy cached audio: {cached_audio_path}")
-                relative_path = str(cached_audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
-                return jsonify({
-                    'success': True,
-                    'audio_url': f'/static/{relative_path}',
-                    'streaming': False,
-                    'cached': True,
-                    'provider': 'vits_legacy'
-                })
+        # Check for cached audio using shared utility function
+        import tts_utils
+        cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.BASE_DIR)
+        if cached_audio:
+            logger.info(f"Using cached audio: {cached_audio['provider']}")
+            return jsonify({
+                'success': True,
+                'audio_url': cached_audio['audio_url'],
+                'streaming': False,
+                'cached': cached_audio['cached'],
+                'provider': cached_audio['provider']
+            })
 
         # Use streaming for better UX (immediate playback)
         if use_streaming and len(text) > 100:  # Lower threshold for streaming

@@ -621,6 +621,139 @@ body {
 
 /* Book Content Sections */
 
+/* About This Book Section */
+.about-section {
+    margin-bottom: 48px;
+    padding: 24px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.about-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 24px;
+}
+
+.about-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.about-heading {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    font-weight: 600;
+    margin: 0 0 12px 0;
+}
+
+.about-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #333;
+    margin: 0;
+}
+
+.author-metadata-bar {
+    display: flex;
+    gap: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #d0d0d0;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.author-country {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.author-country-label {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.author-country-value {
+    font-size: 0.9rem;
+    color: #333;
+    font-weight: 600;
+}
+
+.author-other-books-container {
+    position: relative;
+}
+
+.more-by-author-toggle {
+    background: transparent;
+    border: none;
+    color: var(--primary-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: opacity 0.2s;
+}
+
+.more-by-author-toggle:hover {
+    opacity: 0.7;
+}
+
+.toggle-arrow {
+    font-size: 0.75rem;
+    transition: transform 0.2s;
+}
+
+.other-books-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: white;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 12px;
+    margin-top: 8px;
+    min-width: 250px;
+    max-width: 350px;
+    z-index: 10;
+}
+
+.other-book-item {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.other-book-item:last-child {
+    border-bottom: none;
+}
+
+/* Responsive design for about section */
+@media (max-width: 768px) {
+    .about-columns {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+
+    .about-section {
+        padding: 20px;
+    }
+
+    .author-metadata-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+}
+
 .concise-summary-section,
 .medium-preview-section,
 .chapters-section {

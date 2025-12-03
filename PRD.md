@@ -203,8 +203,18 @@ Users can browse a curated collection of classic books with cover images and met
   - Eliminates flash/reload when returning to category pages
   - Improves navigation performance and user experience
 
-**Book Detail Page (Redesigned 2025-11-25):**
+**Book Detail Page (Redesigned 2025-11-25, Enhanced 2025-12-03):**
 - **Minimal Header:** Smaller cover image (120px) with title and author side-by-side
+- **About This Book Section (Added 2025-12-03):**
+  - Displays AI-generated editorial metadata about the book
+  - Two-column layout on desktop (stacks on mobile):
+    - **Left:** "About This Book" (150-200 word engaging summary)
+    - **Right:** "Why Read This Now?" (100-150 word relevance statement)
+  - **Author Metadata Bar:**
+    - Author's country of origin displayed
+    - "More by [Author]" expandable dropdown showing author's other notable works
+  - **Design:** Light gray card with subtle border, placed between header and summaries
+  - **Backward Compatible:** Section hidden for books without metadata
 - **Quick Summary:** Concise summary shown by default with inline Listen button
 - **Detailed Overview Preview:** Medium summary with fade effect (300px max height)
   - Shows full formatted text with gradient fade at bottom
@@ -238,6 +248,11 @@ Users can browse a curated collection of classic books with cover images and met
 - [✅] Category detail page shows grid of books (2025-11-28)
 - [✅] All Categories page shows all category carousels (2025-11-28)
 - [✅] Categories section hidden when viewing book details (2025-11-28)
+- [✅] "About This Book" section displays when metadata exists (2025-12-03)
+- [✅] Section hidden for books without metadata (backward compatible) (2025-12-03)
+- [✅] Two-column layout on desktop, stacked on mobile (2025-12-03)
+- [✅] Author country displays when available (2025-12-03)
+- [✅] "More by Author" dropdown toggles correctly (2025-12-03)
 
 ### 4. URL Routing and Navigation
 
@@ -514,7 +529,190 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - Minimal, unobtrusive UI elements during reading
 - Professional typography and spacing
 
-### 7. Chapter Illustration Lightbox (Added 2025-12-01)
+### 7. Breadcrumb Navigation (Added 2025-12-02)
+
+**Feature Description:**
+Context-aware breadcrumb navigation replaces traditional back buttons, showing users their location in the site hierarchy and providing quick access to parent pages.
+
+**User Stories:**
+- As a user, I want to see where I am in the site structure so I can navigate back to any parent page
+- As a reader exploring categories, I want breadcrumbs that reflect how I got to the current book
+- As a user, I want breadcrumbs on all pages so navigation is consistent
+
+**Specifications:**
+
+**Breadcrumb Trails:**
+```
+Home
+Home → All Books
+Home → Categories
+Home → Categories → Victorian Literature
+Home → All Books → Pride and Prejudice
+Home → All Books → Pride and Prejudice → Summary
+Home → All Books → Pride and Prejudice → Chapter 1
+```
+
+**Context-Aware Behavior:**
+- When book selected from category page: `Home → Categories → Romance → Pride and Prejudice`
+- When book selected from All Books: `Home → All Books → Pride and Prejudice`
+- Context tracked automatically based on navigation path
+
+**Visual Design:**
+- First breadcrumb has back arrow (`← Home`)
+- Breadcrumbs separated by `›` symbol
+- Current page shown in plain text (not clickable)
+- Links use secondary color (#3498db)
+- Hover effect: darker blue
+- Responsive: wraps on mobile
+
+**Placement:**
+- Replaces all "Back" buttons throughout site
+- Appears at top of every page (below header, above content)
+- Consistent position across all routes
+- Margin: 16px top, 24px bottom
+
+**SEO Benefits:**
+- Structured data (Schema.org BreadcrumbList)
+- Search engines understand site hierarchy
+- Rich snippets in search results
+- Improved crawlability
+
+**Accessibility:**
+- Semantic HTML (`<nav>`, `<ol>`, `<li>`)
+- ARIA label: `aria-label="Breadcrumb"`
+- Keyboard navigable (all links focusable)
+- Screen reader friendly
+
+**UI Requirements:**
+- Clean, minimal design (no borders or backgrounds)
+- Touch-friendly tap targets on mobile
+- Text-only design (no icons except back arrow)
+- Consistent with site's minimal aesthetic
+
+**Acceptance Criteria:**
+- [✅] Breadcrumbs shown on all pages except home
+- [✅] First breadcrumb always goes to home with back arrow
+- [✅] Current page shown as plain text
+- [✅] Links navigate correctly via hash routing
+- [✅] Context-aware trails based on navigation path
+- [✅] Breadcrumbs wrap gracefully on mobile
+- [✅] Structured data included for SEO
+- [✅] Accessible to keyboard and screen readers
+
+### 8. Related Books Recommendations (Added 2025-12-02)
+
+**Feature Description:**
+Personalized book recommendations displayed as a carousel at the bottom of each book detail page, helping readers discover similar works based on author, category, and country.
+
+**User Stories:**
+- As a reader who enjoyed a book, I want to see similar books so I can continue reading in the same genre
+- As a fan of an author, I want to see their other works so I can read more by them
+- As a user exploring literature, I want to discover books by authors from the same country
+
+**Specifications:**
+
+**Recommendation Algorithm:**
+
+1. **By Author** (Priority 1):
+   - All other books by the same author
+   - Excludes current book
+   - Random order for variety
+
+2. **By Category** (Priority 2):
+   - Books in same categories (Romance, Victorian Literature, etc.)
+   - Excludes books by same author (already shown)
+   - Random order
+
+3. **By Country** (Priority 3):
+   - Books by authors from same country
+   - Excludes books already shown
+   - Random order
+
+**Deduplication:**
+- Frontend merges all three lists
+- Removes duplicate books (may appear in multiple categories)
+- Limits to 10 total recommendations
+
+**Visual Design:**
+
+**Carousel Style:**
+- Horizontal scrolling row (same as category carousels on home page)
+- Left/right navigation arrows
+- Smooth scroll animation (3 cards at a time)
+- No visible scrollbar
+- Touch-friendly horizontal scrolling
+
+**Book Cards:**
+- Cover image (200px wide × 300px high on desktop)
+- Book title (2 lines max, truncated)
+- Author name (1 line, truncated)
+- Hover: scale to 1.05x
+- Click: navigate to book detail page
+
+**Responsive Sizing:**
+- Desktop: 200px wide, 300px cover
+- Tablet: 150px wide, 200px cover
+- Mobile: 130px wide, 180px cover
+
+**Section Header:**
+- "You May Also Like"
+- Same styling as "Chapters" header
+- Border-top separator (1px, #e0e0e0)
+- Margin-top: 48px (space above section)
+
+**Placement:**
+- Bottom of book detail page
+- After chapters section
+- Before footer
+- Hidden if no related books found
+
+**Navigation Arrows:**
+- Circular white buttons with shadow
+- Left/right chevrons (‹ and ›)
+- Disabled at carousel edges
+- Smooth scroll by 3 cards
+- Touch-friendly (44×44px minimum)
+
+**Loading Behavior:**
+- Lazy loaded (fetched when book detail page opens)
+- Separate API call: `GET /api/books/<id>/related`
+- Graceful failure (section hidden on error)
+- No loading skeleton (instant display)
+
+**API Response:**
+```json
+{
+  "success": true,
+  "related": {
+    "by_author": [...],
+    "by_category": [...],
+    "by_country": [...]
+  }
+}
+```
+
+**UI Requirements:**
+- Consistent styling with home page carousels
+- Smooth animations and transitions
+- Mobile-friendly scrolling
+- Clear visual hierarchy
+- Professional, clean design
+
+**Acceptance Criteria:**
+- [✅] Section appears at bottom of book detail page
+- [✅] Up to 10 related books shown
+- [✅] Books prioritized by author → category → country
+- [✅] Duplicates removed automatically
+- [✅] Carousel scrolls smoothly left/right
+- [✅] Navigation arrows work correctly
+- [✅] Arrows disabled at edges
+- [✅] Books clickable (navigate to detail page)
+- [✅] Section hidden if no related books
+- [✅] Responsive on mobile/tablet/desktop
+- [✅] Touch-friendly horizontal scrolling
+- [✅] Cover images lazy-loaded
+
+### 9. Chapter Illustration Lightbox (Added 2025-12-01)
 
 **Feature Overview:**
 
@@ -626,7 +824,7 @@ Full-screen image viewer for chapter illustrations, allowing readers to view hig
 
 ---
 
-### 8. Optimized Image Loading (Added 2025-12-02)
+### 10. Optimized Image Loading (Added 2025-12-02)
 
 **Feature Description:**
 Chapter illustrations use modern image formats (WebP/JPG) with automatic browser selection for optimal loading performance, reducing page load times by ~95% compared to original high-resolution images.

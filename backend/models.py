@@ -239,11 +239,16 @@ class Database:
         conn.close()
 
     def get_book(self, book_id: int) -> Optional[Dict]:
-        """Get book by ID"""
+        """Get book by ID with author metadata"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT * FROM books WHERE id = ?', (book_id,))
+        cursor.execute('''
+            SELECT b.*, a.country as author_country, a.other_books as author_other_books
+            FROM books b
+            LEFT JOIN authors a ON b.author_id = a.id
+            WHERE b.id = ?
+        ''', (book_id,))
         row = cursor.fetchone()
         conn.close()
 
@@ -265,11 +270,16 @@ class Database:
         return None
 
     def get_book_by_slug(self, slug: str) -> Optional[Dict]:
-        """Get book by slug (SEO-friendly URL identifier)"""
+        """Get book by slug (SEO-friendly URL identifier) with author metadata"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT * FROM books WHERE slug = ?', (slug,))
+        cursor.execute('''
+            SELECT b.*, a.country as author_country, a.other_books as author_other_books
+            FROM books b
+            LEFT JOIN authors a ON b.author_id = a.id
+            WHERE b.slug = ?
+        ''', (slug,))
         row = cursor.fetchone()
         conn.close()
 
@@ -851,11 +861,16 @@ class Database:
             book_id = summary_row['book_id']
             summary_type = summary_row['summary_type']
 
-            # Check for pre-generated files with naming pattern: book_{book_id}_{type}_{provider}.wav
-            # Priority order: gemini > vits > legacy complete
+            # Check for pre-generated files with naming pattern: book_{book_id}_{type}_{provider}.{ext}
+            # Priority order: opus > gemini wav > vits > legacy complete
             audio_id = f"book_{book_id}_{summary_type}"
 
-            # Check Gemini TTS
+            # Check Opus (compressed, speech-optimized)
+            opus_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.opus"
+            if opus_path.exists():
+                return True
+
+            # Check Gemini TTS WAV (fallback)
             gemini_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
             if gemini_path.exists():
                 return True
@@ -909,12 +924,18 @@ class Database:
             book_id = chapter_row['book_id']
             chapter_number = chapter_row['chapter_number']
 
-            # Check for pre-generated files with naming pattern: book_{book_id}_chapter_{chapter_number}_{type}_{provider}.wav
+            # Check for pre-generated files with naming pattern: book_{book_id}_chapter_{chapter_number}_{type}_{provider}.{ext}
             # We check for both summary and fulltext variants
+            # Priority order: opus > gemini wav > vits > legacy complete
             for content_type in ['summary', 'fulltext']:
                 audio_id = f"book_{book_id}_chapter_{chapter_number}_{content_type}"
 
-                # Check Gemini TTS
+                # Check Opus (compressed, speech-optimized)
+                opus_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.opus"
+                if opus_path.exists():
+                    return True
+
+                # Check Gemini TTS WAV (fallback)
                 gemini_path = config.TTS_OUTPUT_DIR / f"{audio_id}_gemini.wav"
                 if gemini_path.exists():
                     return True
