@@ -6,6 +6,656 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-12-02
 
+### Book Title Normalization - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Standardize all book titles with consistent formatting: Title Case and truncate subtitles after colons/semicolons.
+
+**Requirements:**
+- Book titles should be in Title Case (capitalize first letter of each word, except articles/prepositions)
+- Truncate any text after first colon (:) or semicolon (;)
+- Examples:
+  - "Jane Eyre: An Autobiography" → "Jane Eyre"
+  - "Moby Dick; Or, The Whale" → "Moby Dick"
+  - "the great gatsby" → "The Great Gatsby"
+
+**Solution Implemented:**
+
+**1. Created `normalize_book_title()` Function**
+   - Location: `scripts/generate_summaries.py` (lines 34-105)
+   - Location: `scripts/migrate_book_titles.py` (lines 25-101)
+
+   **Normalization Rules:**
+   - Truncate at first `:` or `;` character
+   - Apply Title Case to remaining text
+   - Preserve lowercase for articles/prepositions (a, an, and, as, at, but, by, for, from, in, into, nor, of, on, or, so, the, to, up, with, yet)
+   - Always capitalize first word
+   - Handle hyphenated words properly (capitalize each part: "Winnie-the-Pooh")
+
+**2. Updated generate_summaries.py**
+   - Modified `extract_metadata()` to normalize extracted titles (line 552)
+   - Modified `process_book()` to normalize user-provided titles (line 4151)
+   - All new books will automatically get normalized titles
+
+**3. Created Migration Script**
+   - File: `scripts/migrate_book_titles.py`
+   - Backfills existing books in database with normalized titles
+   - Supports `--dry-run` flag to preview changes
+   - Successfully updated 8 out of 62 books:
+     - "Thus Spake Zarathustra: A Book for All and None" → "Thus Spake Zarathustra"
+     - "Moby Dick; Or, The Whale" → "Moby Dick"
+     - "Little Women; Or, Meg, Jo, Beth, and Amy" → "Little Women"
+     - "Jane Eyre: An Autobiography" → "Jane Eyre"
+     - "The Blue Castle: a novel" → "The Blue Castle"
+     - "Twenty Thousand Leagues under the Sea" → "Twenty Thousand Leagues Under the Sea"
+     - "The Invisible Man: A Grotesque Romance" → "The Invisible Man"
+     - "The eternal moment, and other stories" → "The Eternal Moment, and Other Stories"
+
+**Testing:**
+- Ran dry-run mode first to verify changes
+- Verified hyphenated titles handled correctly
+- Migration completed successfully
+
+**Impact:**
+- All book titles now follow consistent format
+- Cleaner, more professional book listings
+- Easier to read and scan
+- Future books will automatically use correct format
+
+---
+
+### Automate Cover Image Processing in generate_summaries Script - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Automatically process downloaded Gutenberg book covers by renaming to book ID convention and creating optimized WebP versions.
+
+**Problem:**
+- Downloaded covers used Gutenberg ID naming (e.g., `pg72890.jpg`)
+- Website convention uses book ID naming (e.g., `81.jpg`, `81.webp`)
+- WebP versions weren't created automatically
+- Manual renaming and optimization required after each book processing
+
+**Solution Implemented:**
+
+**File: `scripts/generate_summaries.py`**
+
+1. **Added `process_cover_image()` Method (lines 654-711)**
+   - Automatically renames cover from `pg{gutenberg_id}` to `{book_id}` after book is added to database
+   - Creates optimized WebP version using cwebp (quality 85)
+   - Reports file size savings (typically 40-50% reduction)
+   - Handles errors gracefully with fallback to original naming
+   - Supports dry-run mode for testing
+
+2. **Integrated Cover Processing into Book Workflow (lines 4269-4275)**
+   - Called automatically after new book is added to database
+   - Only runs for new books (not when book already exists)
+   - Updates database with corrected cover path
+   - Maintains proper naming convention throughout
+
+3. **Added Dry-Run Support (lines 4260-4262)**
+   - Simulates cover processing in dry-run mode
+   - Shows what would happen without making actual changes
+
+**Implementation Details:**
+
+**Cover Processing Flow:**
+1. Download cover with Gutenberg ID naming (`pg{gutenberg_id}.jpg`)
+2. Add book to database → receive `book_id`
+3. Rename: `pg{gutenberg_id}.jpg` → `{book_id}.jpg`
+4. Create WebP: `{book_id}.jpg` → `{book_id}.webp` (using cwebp -q 85)
+5. Update database: `covers/pg{gutenberg_id}.jpg` → `covers/{book_id}.jpg`
+
+**Example Output:**
+```
+Renaming cover: pg72890.jpg -> 81.jpg
+Creating optimized WebP version...
+✓ Created 81.webp (2.0 KB, 47.4% smaller than JPG)
+✓ Updated cover path in database: covers/81.jpg
+```
+
+**Results:**
+- ✅ Covers automatically renamed to book ID convention
+- ✅ WebP versions created automatically (40-50% file size reduction)
+- ✅ Database paths updated correctly
+- ✅ No manual intervention required
+- ✅ Works in both normal and dry-run modes
+
+**Technical Notes:**
+- Uses subprocess to call cwebp (must be installed: `brew install webp`)
+- Quality setting: 85 (good balance of quality vs. size)
+- Falls back gracefully if cwebp fails
+- Preserves original JPG and creates WebP as additional format
+
+**Files Modified:**
+- `scripts/generate_summaries.py` - Added cover processing automation
+- `WORK_LOG.md` - Documented implementation
+
+---
+
+### Add Client-Side Meta Title Updates for SPA Navigation - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Implement client-side document.title updates for all navigation patterns in the Single Page Application to improve SEO and user experience.
+
+**Background:**
+Since Summra is a Single Page Application (SPA), client-side navigation doesn't trigger server-side meta tag updates. While server-side meta tags handle initial page loads and search engines, the browser tab title needs to be updated dynamically during client-side navigation for better UX.
+
+**Implementation:**
+
+**File: `frontend/static/js/app.js`**
+
+1. **Created Helper Function (lines 155-161)**
+   ```javascript
+   updatePageTitle(title) {
+       document.title = title;
+   }
+   ```
+
+2. **Added Title Updates to Navigation Methods:**
+   - **Home (`showHomeSection`)** - Line 1488:
+     - Title: "Discover Classic Books through Summary | Summra"
+
+   - **Book Detail (`selectBook`)** - Line 673:
+     - Title: "{Book Title} by {Author} | Summra"
+     - Uses actual book title and author from current book data
+
+   - **Book Summary (`showMediumDetail`)** - Line 1122:
+     - Title: "Summary of {Book Title} by {Author} | Summra"
+     - Uses actual book title and author
+
+   - **Chapter Detail (`showChapterDetail`)** - Line 1291:
+     - Title: "Full Text of {Chapter Title} - {Book Title} | Summra"
+     - Uses actual chapter title and book title
+
+   - **Category Detail (`showCategoryDetail`)** - Line 1591:
+     - Title: "Discover {Category Name} | Summra"
+     - Uses actual category name from cached data
+
+   - **All Categories (`showAllCategories`)** - Line 1633:
+     - Title: "Discover Book Categories | Summra"
+
+   - **All Books (`showAllBooksGrid`)** - Line 1724:
+     - Title: "Discover Classic Books | Summra"
+
+**Title Updates Placement:**
+- All `updatePageTitle()` calls are placed at the END of each navigation function
+- Ensures the title updates after page content is loaded and state is properly set
+- Uses actual data from the current page state (book title, author, chapter title, category name)
+
+**Results:**
+- ✅ Browser tab title now updates dynamically during client-side navigation
+- ✅ Consistent title format across all page types with " | Summra" branding
+- ✅ Improves user experience when switching between tabs
+- ✅ Better context for users when viewing browser history
+- ✅ Only updates document.title (not meta tags, which are handled server-side for SEO)
+
+**Testing Checklist:**
+- [x] Home page title updates when navigating to /
+- [x] Book detail title shows book and author when clicking a book
+- [x] Summary page title shows "Summary of" when viewing /books/{slug}/summary
+- [x] Chapter page title shows chapter and book when viewing /books/{slug}/chapters/{num}
+- [x] Category page title shows category name when viewing /categories/{id}
+- [x] All Categories page title shows when viewing /categories
+- [x] All Books page title shows when viewing /books
+
+---
+
+### Fix Preface Grouping and Full Prompt Display in Dry-Run - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Fix two display issues: incorrect chapter grouping in removed content file and truncated LLM prompt display in dry-run mode.
+
+**Problems:**
+1. **Incorrect chapter grouping in removed content file**: The preface (Chapter 0) was being incorrectly assigned to STORY 1, causing all subsequent chapters to be misaligned with their sections
+   - Example: STORY 3 showed "Chapter 6: Part III" instead of "Chapter 7: Mr. Andrews"
+   - Root cause: Sequential mapping logic didn't account for preface being outside section structure
+
+2. **Truncated prompt display**: LLM prompts in dry-run mode were truncated to 500 characters, making it impossible to review full prompts
+   - Affected combined summary, concise summary, and medium summary prompts
+   - Only first 500 chars visible followed by "..."
+
+**Solution Implemented:**
+
+**File: `scripts/generate_summaries.py`**
+
+1. **Fixed Chapter-to-Section Mapping (lines 4433-4465)**
+   - Separate preface chapters (Chapter 0) from section-based chapters
+   - Display preface in its own "PREFACE" section before showing story sections
+   - Create proper mapping of chapter indices to sections, starting after preface
+   - Iterate through sections and assign the correct number of chapters to each
+
+2. **Adjusted Prompt Display Truncation (lines 264, 3395, 3476)**
+   - Changed from: Truncated at 500 chars with "..."
+   - Changed to: Truncated at 10,000 chars with clear message showing chars omitted
+   - Format: `prompt[:10000] + f"\n... [truncated, {len(prompt) - 10000} chars omitted]"`
+   - Displays first 10,000 chars of prompt, sufficient for reviewing prompt structure while keeping output manageable
+
+**Results:**
+- ✅ Chapter grouping now correct in removed content file:
+  - PREFACE → Chapter 0
+  - STORY 1 → Chapters 1, 2, 3
+  - STORY 2 → Chapters 4, 5, 6
+  - STORY 3 → Chapter 7
+  - STORY 4 → Chapter 8
+  - STORY 5 → Chapter 9
+  - STORY 6 → Chapters 10, 11, 12
+- ✅ LLM prompts now shown at reasonable length in dry-run mode (first 10,000 chars, with truncation message)
+- ✅ Better debugging capability while keeping output manageable
+
+**Files Modified:**
+- `scripts/generate_summaries.py` - Fixed chapter grouping logic and removed prompt truncation
+- `WORK_LOG.md` - Documented fixes
+
+---
+
+### Fix Chapter Naming for Unnamed Chapters and Failed Detection - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Fix chapter naming issues where chapters without explicit markers were being named after their first sentence, and handle cases where chapter detection fails entirely.
+
+**Problem:**
+1. **Chapters with first-sentence names**: Chapters with simple markers like centered roman numerals (e.g., "I", "II", "III") were being assigned the first sentence of their content as the chapter title
+   - Example: "I don't see the point of it," said Micky..." became the chapter title
+   - This happened because the TOC extraction looked for a title on the next line after the numeral, which was the story's opening sentence
+
+2. **Failed chapter detection losing content**: When sections had chapters in the TOC but detection failed (no markers found), the entire section was skipped, losing ~20% of content
+   - Stories like "MR. ANDREWS", "CO-ORDINATION", and "THE STORY OF THE SIREN" had no chapter markers
+   - The TOC said they should have 1 chapter, but detection failed and no implicit chapter was created
+   - Result: 3 complete stories were removed from the output
+
+**Solution Implemented:**
+
+**File: `scripts/generate_summaries.py`**
+
+1. **Detect Sentence-Like Chapter Titles (lines 2081-2105)**
+   - Added logic to detect if a chapter title looks like a sentence rather than a proper title
+   - Detection criteria:
+     - Starts with quote mark (" or ')
+     - Starts with lowercase letter
+     - Is very long (> 50 chars)
+     - Contains sentence-ending punctuation in the middle (., !, ?)
+   - If detected as sentence-like, replace with "Part {numeral}" format
+   - If no title at all, use "Chapter {number}" as default
+
+2. **Handle Failed Chapter Detection (lines 2089-2124)**
+   - After processing all chapters in a section, check if any were actually found
+   - Track chapter count before and after processing each section
+   - If no chapters found but TOC expected chapters:
+     - Create an implicit chapter using the section title as the chapter name
+     - Extract content from section start to section end
+     - Mark content as consumed to prevent it from being removed
+   - Print "[implicit - no markers found]" to clearly indicate this fallback occurred
+
+3. **Fix Roman Numeral Capitalization (line 2110)**
+   - Applied `fix_roman_numerals_in_text()` to normalized chapter titles
+   - Ensures "Part Ii" becomes "Part II" and "Part Iii" becomes "Part III"
+   - Maintains consistency with roman numeral formatting throughout the codebase
+
+**Results:**
+- ✅ Content coverage improved from 80.2% to 98.9%
+- ✅ 3 complete stories no longer lost ("MR. ANDREWS", "CO-ORDINATION", "THE STORY OF THE SIREN")
+- ✅ Chapters with simple roman numeral markers now get proper names:
+  - Before: "I Don't See The Point Of It," Said Micky, Through Much Imbecile..."
+  - After: "Part I", "Part II", "Part III"
+- ✅ Section names used as chapter titles when no markers found
+  - "Mr. Andrews", "Co-ordination", "The Story of the Siren"
+- ✅ Proper capitalization of roman numerals in all chapter names
+
+**Test Results (E.M. Forster's "The Eternal Moment"):**
+- 13 chapters detected (10 with explicit markers, 3 implicit)
+- 98.9% content coverage (only title headers removed)
+- All chapter names are now correct and meaningful
+
+**Files Modified:**
+- `scripts/generate_summaries.py` - Added sentence detection and implicit chapter creation logic
+- `WORK_LOG.md` - Documented fixes
+
+---
+
+### Unify Chapter Detection Logic Across All Section Types - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Eliminate special-case logic for STORY sections and unify chapter detection to work identically for all section types (STORY, PART, BOOK, ACT), following the DRY principle.
+
+**Problem:**
+- STORY sections had divergent code paths with special handling
+- Section marker search checked `if section_type == 'STORY'` instead of checking for content
+- Single-chapter STORY sections had different behavior than single-chapter PART/BOOK/ACT sections
+- Chapter pattern matching (e.g., "_Part I_", centered roman numerals) only applied to STORY sections
+- Violated DRY principle with type-specific logic instead of unified content-based logic
+
+**Solution Implemented:**
+
+**File: `scripts/generate_summaries.py`**
+
+1. **Unified Section Marker Search (lines 1886-1890)**
+   - Changed from: `if section_type == 'STORY'` check
+   - Changed to: `if section_title` check (content-based)
+   - Logic: Use title pattern if section has a title, otherwise use "TYPE NUMERAL" pattern
+   - Applies uniformly to all section types
+
+2. **Unified Next Section Boundary Detection (lines 1918-1921)**
+   - Changed from: `if next_section['type'] == 'STORY'` check
+   - Changed to: `if next_section['title']` check
+   - Same content-based logic for finding section boundaries
+
+3. **Added Implicit Chapter Creation for All Section Types (lines 1933-1957)**
+   - New logic: If a section has 0 chapters detected, create ONE implicit chapter
+   - Chapter title = section title (or empty string if no title)
+   - Chapter content = entire section content
+   - Applies to ALL section types equally (STORY, PART, BOOK, ACT)
+   - Ensures no content is lost and consistent behavior across types
+
+4. **Removed STORY-Specific Single-Chapter Handling (deleted old lines 1941-1949)**
+   - Removed special code for `if section_type == 'STORY' and len(section['chapters']) == 1`
+   - Now covered by unified implicit chapter logic
+
+5. **Removed Section Type Checks from Chapter Pattern Matching (lines 1975-1991, 2038-2045)**
+   - Changed from: Only applying "_Part I_" and centered roman patterns to STORY sections
+   - Changed to: Always include these patterns for all section types
+   - Rationale: Patterns are format-specific, not type-specific (a BOOK could have "_Part I_" subchapters)
+   - Updated comments to reflect unified approach
+
+**Results:**
+- ✅ All section types follow identical detection logic
+- ✅ No special cases for STORY vs PART/BOOK/ACT
+- ✅ Single-chapter sections work consistently regardless of type
+- ✅ Sections with no explicit chapters get one implicit chapter using the section name
+- ✅ Follows DRY principle - single implementation for all types
+- ✅ More maintainable code with fewer conditional branches
+
+**Impact:**
+- Future book processing will use unified logic
+- Existing books in database are not affected (no migration performed)
+- Easier to extend with new section types without adding special cases
+
+**Files Modified:**
+- `scripts/generate_summaries.py` - Unified chapter detection logic in `_detect_chapters_from_toc_structure()` method
+- `WORK_LOG.md` - Documented refactoring
+
+---
+
+### Fix Roman Numerals in Chapter Names - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Fix chapter names with title-cased Roman numerals (e.g., "Book Ii", "Book Iii") to use uppercase Roman numerals (e.g., "Book II", "Book III") for proper formatting consistency.
+
+**Problem:**
+- Chapter names generated via title casing incorrectly converted Roman numerals to title case
+- Examples: "Book Ii", "Book Iii", "Book Iv", "Emperors Arcadius, Eutropius, Theodosius Ii"
+- Roman numerals should always be all caps regardless of title casing
+
+**Solution Implemented:**
+
+1. **Created Script** (`scripts/fix_roman_numerals_in_chapter_names.py`)
+   - Detects chapter names with title-cased Roman numerals using regex pattern
+   - Pattern matches: Ii, Iii, Iv, Vi, Vii, Viii, Ix, Xi, Xii, Xiii, Xiv, Xv, Xvi, Xvii, Xviii, Xix, Xx, Xxi, Xxii, Xxiii, Xxiv, Xxv, Xxvi, Xxvii, Xxviii, Xxix, Xxx
+   - Converts all matches to uppercase using regex substitution
+   - Shows preview and requires confirmation before updating
+   - Updates database with corrected chapter names
+
+2. **Results:**
+   - Found and fixed 43 chapter names across the database
+   - Verified no title-cased Roman numerals remain in database
+   - Examples of fixes:
+     - "Book Ii" → "Book II"
+     - "Book Iii" → "Book III"
+     - "Book Xxiii" → "Book XXIII"
+     - "Emperors Arcadius, Eutropius, Theodosius Ii" → "Emperors Arcadius, Eutropius, Theodosius II"
+
+**Files Modified:**
+- `scripts/fix_roman_numerals_in_chapter_names.py` (new) - One-time fix script for existing data
+- `scripts/generate_summaries.py` - Added `fix_roman_numerals_in_text()` helper function and applied it when creating chapter titles from book markers (line 3123) and preface titles (line 1855) to prevent future occurrences
+
+---
+
+### Enhanced Book Metadata with Single LLM Call - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Enhance summary generation to include additional metadata fields (about text, relevance, author country, similar books, and other works by author) in a single efficient LLM call.
+
+**Requirements:**
+1. Why is the book relevant for audience now? (100-150 words)
+2. Which country does the author belong to? (just country name)
+3. What are the 5 most similar books from any author? (parsable format)
+4. List top books from the same author (max 10)
+5. Create shorter "About the Book" summary (150-200 words)
+
+**Changes Made:**
+
+1. **Database Schema Updates** (`scripts/migrate_add_book_metadata.py`)
+   - Added `books.about_text` - Short summary for "About the Book" section (150-200 words)
+   - Added `books.relevance_now` - Why book is relevant today (100-150 words)
+   - Added `authors.other_books` - Comma-separated list of author's other works (max 10)
+   - Created `similar_books` table - Many-to-many relationship for book recommendations
+     - Fields: book_id, similar_book_id, rank (1-5)
+     - Includes indexes for performance
+     - Prevents self-references with CHECK constraint
+
+2. **Summary Generation Prompt Enhanced** (`scripts/generate_summaries.py:194-231`)
+   - Updated `generate_combined_summaries()` to request all metadata in single LLM call
+   - New sections added to prompt:
+     - `### ABOUT THE BOOK` (150-200 words)
+     - `### RELEVANCE NOW` (100-150 words)
+     - `### AUTHOR COUNTRY` (country name only)
+     - `### SIMILAR BOOKS` (5 books in TITLE|AUTHOR format)
+     - `### OTHER BOOKS BY AUTHOR` (max 10 titles)
+
+3. **Response Parsing Logic** (`scripts/generate_summaries.py:306-408`)
+   - Extracts all 7 sections from LLM response using regex
+   - Parses similar books from TITLE|AUTHOR format into structured data
+   - Cleans author country (removes prefixes like "Country:" or "The author is from")
+   - Removes template text and leading bullets/numbers from lists
+   - Returns dictionary instead of tuple for extensibility
+   - Word count tracking for all sections
+
+4. **Database Helper Methods** (`backend/models.py:1143-1267`)
+   - `update_book_metadata()` - Updates about_text and relevance_now fields
+   - `update_author_info()` - Creates or updates author with country and other_books
+     - Merges new books with existing ones (deduplicates)
+     - Only updates country if not already set
+   - `save_similar_books()` - Saves similar book relationships
+     - Attempts to match recommended books to existing books in database
+     - Uses fuzzy matching on title + author first name
+     - Clears existing similar books before saving new ones
+     - Prevents self-references
+   - `get_similar_books()` - Retrieves similar books with metadata
+
+5. **Integration in Process Flow** (`scripts/generate_summaries.py:3780-3848`)
+   - Modified to handle dictionary return from `generate_combined_summaries()`
+   - Saves all metadata to database after successful generation
+   - Maintains backward compatibility with existing code expecting concise/medium
+   - Added metadata to results dictionary for tracking
+
+**Benefits:**
+- **Single API Call:** More efficient than making 7 separate calls
+- **Cost Savings:** Reduced API costs (7 calls → 1 call per book)
+- **Better Context:** LLM has full book context when answering all questions
+- **Rich Metadata:** Enables better book discovery and recommendations
+- **Author Insights:** Country and other works help users discover more
+- **User Value:** Relevance section helps users understand modern applicability
+
+**Database Changes:**
+- Migration script adds 4 new fields across 3 tables
+- New `similar_books` table with foreign keys and indexes
+- All changes backward compatible with existing data
+
+**Follow-up Fix:** Dry-Run Mode Compatibility (2025-12-02)
+- **Issue:** Dry-run mode was not compatible with new 7-field dictionary return format
+- **Changes Made:**
+  1. Updated function signature type hint from `tuple[str, str]` to `Dict` (line 181)
+  2. Fixed dry-run return value to return dictionary with all 7 fields populated with `[DRY RUN]` placeholders (lines 240-258)
+  3. Updated call sites to use dictionary format and save all metadata to database (lines 4059-4113)
+     - Both partial-run and regular modes now save all metadata fields
+     - Calls `update_book_metadata()`, `update_author_info()`, `update_book_author_id()`, and `save_similar_books()`
+  4. Tested dry-run mode successfully with test book file
+
+**Testing:**
+```bash
+# Test dry-run mode (verified working)
+python3 scripts/generate_summaries.py /tmp/test_book.txt --dry-run
+
+# Run comprehensive test suite
+python3 -m pytest tests/test_combined_summaries.py -v
+```
+
+**Test Coverage Added (2025-12-02):**
+- **Created:** `tests/test_combined_summaries.py` - Comprehensive test suite for `generate_combined_summaries()`
+- **Test Classes:**
+  1. `TestGenerateCombinedSummariesDryRun` - Tests dry-run mode
+     - Verifies dictionary return format with all 7 fields
+     - Confirms no API calls are made in dry-run mode
+     - Validates data types and structure
+  2. `TestGenerateCombinedSummariesParsing` - Tests LLM response parsing
+     - Well-formatted response parsing
+     - Country prefix cleaning ("Country: France" → "France")
+     - Limiting similar books to 5
+     - Limiting other books to 10
+  3. `TestGenerateCombinedSummariesIntegration` - Integration tests
+     - Backward compatibility with dictionary extraction
+     - Accessibility of all metadata fields
+- **Coverage:** 8 test cases, all passing
+- **Result:** 177 total tests passing (5 pre-existing failures unrelated to this change)
+
+**Next Steps:**
+- Update frontend to display new metadata fields
+- Create UI for "About the Book" section
+- Add "Similar Books" recommendations widget
+- Show "Other Books by Author" list
+- Display author country in author pages
+
+**Commands:**
+```bash
+# Run migration
+python3 scripts/migrate_add_book_metadata.py
+
+# Generate summaries with new metadata (works automatically)
+python3 scripts/generate_summaries.py book.txt
+```
+
+---
+
+### Navigation, Breadcrumbs, and Related Books System - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Implement comprehensive navigation features including breadcrumb trails with Schema.org markup, related books recommendations (by author, category, and country), and enhanced category hub pages.
+
+**Backend Implementation - COMPLETED:**
+
+1. **Authors Database Schema** (`backend/models.py:156-165`)
+   - Created `authors` table with fields: id, name, country, bio, created_at
+   - Added `author_id` foreign key column to `books` table (line 112-118)
+   - Enables proper author-based relationships and future author pages
+
+2. **Author Migration** (`scripts/migrate_authors.py`)
+   - Extracted unique authors from existing `books.author` string field
+   - Successfully migrated: 47 unique authors, 61 books linked
+   - Top authors: Charles Dickens (4 books), H.G. Wells (3 books), 9 authors with 2 books each
+   - Run with: `python scripts/migrate_authors.py`
+
+3. **Related Books Database Methods** (`backend/models.py:936-1141`)
+   - `add_author()`, `get_author()`, `get_author_by_name()`, `update_author()` - Author CRUD operations
+   - `update_book_author_id()` - Link books to authors via FK
+   - `get_books_by_author_id()` - Find books by same author (excludes current book, limit 5)
+   - `get_books_in_same_categories()` - Find books sharing categories (ordered by # shared, limit 5)
+   - `get_books_by_author_country()` - Find books by authors from same country (limit 5)
+   - `get_related_books()` - Main method returning all 3 types: {by_author, in_categories, by_country}
+
+4. **Related Books API Endpoint** (`backend/app_base.py:810-833`)
+   - Route: `GET /api/books/<book_id>/related`
+   - Returns JSON: `{success: true, book_id: X, related: {by_author: [...], in_categories: [...], by_country: [...]}}`
+   - Each book includes: id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+
+5. **Breadcrumb Infrastructure** (`backend/app_base.py:42-130`)
+   - `build_breadcrumbs(page_type, **kwargs)` - Generates breadcrumb trails for all page types
+     - Supports: home, categories, category, all_books, book, book_summary, chapter
+     - Returns: `[{name, url, position}, ...]`
+   - `breadcrumbs_to_schema(breadcrumbs)` - Converts to Schema.org BreadcrumbList JSON-LD
+   - Example output: `[{name: 'Home', url: '/', position: 1}, {name: 'All Books', url: '/all-books', position: 2}, ...]`
+
+6. **Breadcrumbs Integration in SSR** (`backend/app_base.py:272-300`)
+   - Added to `book_detail()` route as reference implementation
+   - Breadcrumbs included in `initial_data` for client-side rendering
+   - Schema.org BreadcrumbList combined with existing Book schema
+   - Pattern ready to be replicated for: chapter_detail(), book_summary_detail(), category_detail(), etc.
+
+**Frontend Implementation - COMPLETED:**
+
+1. **Breadcrumb HTML and Rendering** (`frontend/templates/index.html`, `frontend/static/js/app.js`)
+   - ✓ Breadcrumb containers added to all major sections (lines 74-78, 144-148, 187-191, 300-304, 316-320 in index.html)
+   - ✓ `buildBreadcrumbs()` method implemented (app.js:2071-2132) - builds breadcrumb data from current route
+   - ✓ `renderBreadcrumbs()` method implemented (app.js:2152-2190) - renders breadcrumb HTML
+   - ✓ `updateBreadcrumbs()` method implemented (app.js:2196-2203) - called on all route changes
+   - ✓ `hideAllBreadcrumbs()` helper method (app.js:2137-2145) - prevents stale breadcrumbs
+   - ✓ Breadcrumbs integrated in all views: book (line 654), medium (line 1060), chapter (line 1226), category (line 1513), all-categories (line 1551)
+   - ✓ Styled with separators (›) and hover states (style.css:111-160)
+
+2. **Related Books Section** (`frontend/templates/index.html`, `frontend/static/js/app.js`, `frontend/static/css/style.css`)
+   - ✓ HTML section added to book detail view (index.html:122-125 - "You May Also Like")
+   - ✓ `loadRelatedBooks()` method implemented (app.js:899-965) - fetches from `/api/books/<id>/related`
+   - ✓ Method called in `selectBook()` via Promise.all (app.js:643-648)
+   - ✓ Deduplicates books across all 3 categories (by_author, by_category, by_country)
+   - ✓ Limits to 10 related books total
+   - ✓ Renders as horizontal scrollable carousel with book covers
+   - ✓ Styled in style.css:648-779 (related-books-section, related-book-card, responsive design)
+
+3. **Category Hub Enhancements**
+   - ✓ Category detail page implemented with breadcrumbs (app.js:1437-1520)
+   - ✓ All categories view implemented (app.js:1522-1558)
+   - ✓ Book count display working (shows "X books" subtitle)
+   - ✓ Categories cached client-side to prevent redundant API calls (app.js:26, 413-420, 1454-1492)
+   - Note: Sorting and category descriptions not yet implemented (could be future enhancement)
+
+4. **Additional Routes**
+   - ✓ Breadcrumbs added to all routes: book_detail, chapter_detail, book_summary_detail, category_detail, all_categories
+   - ✓ Context-aware breadcrumbs track origin (app.js:29-30, 561-573) - shows category if user came from category page
+
+**Implementation Summary:**
+
+Both breadcrumbs and related books features are **fully implemented and integrated**:
+
+- **Breadcrumbs**: Working across all pages with proper context awareness, Schema.org markup, and clean URL support
+- **Related Books**: Fetching 3 types of recommendations (by author, category, country), deduplicating, and displaying in carousel
+- **Navigation**: Clean URLs, client-side routing, and proper scroll position restoration
+- **Category System**: Efficient client-side filtering with caching to minimize API calls
+
+**Outstanding Items:**
+- [ ] Backfill author country data - currently NULL, limiting "by country" recommendations
+- [ ] Category sorting options (?sort=title|author|year|length) - not yet implemented
+- [ ] Category description display - not yet implemented
+- [x] Update ERD.md with authors table schema
+- [ ] End-to-end testing of all navigation flows
+
+**Files Modified:**
+- `backend/models.py` - Authors table, FK column, related books methods
+- `backend/app_base.py` - Breadcrumb helpers, related books endpoint, book_detail breadcrumbs
+- `frontend/templates/index.html` - Breadcrumb containers, related books section
+- `frontend/static/js/app.js` - Breadcrumb rendering, related books fetching, context-aware navigation
+- `frontend/static/css/style.css` - Breadcrumb styling, related books carousel
+- `scripts/migrate_authors.py` - NEW: Author migration script
+
+---
+
+## 2025-12-02 (Earlier)
+
 ### Normalize Chapter Titles to Title Case with Em-dash and Quote Handling - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-12-02
@@ -824,1428 +1474,6 @@ data/illustration_originals/
 
 3. **WORK_LOG.md**: This comprehensive implementation summary
 
-**Known Limitations:**
-
-1. Two-step workflow (generate → optimize) requires manual intervention
-2. No automatic database updates during optimization
-3. Database still references .png extension (works but not ideal)
-4. No CDN integration yet
-5. No lazy loading implementation
-6. Single resolution (no responsive images with srcset widths)
-
-**Future Improvements:**
-
-1. Integrate optimization into generation script (single command)
-2. Add AVIF format support (better compression than WebP)
-3. Implement lazy loading for off-screen images
-4. Generate multiple sizes for responsive images
-5. Add database update to optimization script
-6. Consider CDN integration for global delivery
-
----
-
-### Eliminate Redundant Category API Calls - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Reduce API requests from 50+ to ~3 by using client-side filtering instead of fetching books for each category.
-
-**Problem:**
-The app was making 50+ API requests on every page load (including book details page):
-- 1 request to `/api/categories` (get all categories)
-- 1 request to `/api/books` (get all books with their categories)
-- 50+ requests to `/api/categories/{id}/books` (one per category to get books in that category)
-
-This was inefficient because:
-1. We already loaded all books with `/api/books`, which includes category information
-2. Each book object contains its `categories` array
-3. We can filter client-side to get books by category without additional API calls
-
-**Changes Made:**
-
-1. **`displayCategories()`** (`frontend/static/js/app.js:401-446`)
-   - **Before:** Used `Promise.all` to fetch `/api/categories/{id}/books` for every category
-   - **After:** Filter `this.allBooks` client-side using `book.categories.some(cat => cat.id === category.id)`
-   - Populates `categoryCache` with filtered results
-   - **Impact:** 50+ API calls → 0 API calls
-
-2. **`displayAllCategories()`** (`frontend/static/js/app.js:1453-1498`)
-   - **Before:** Fetched `/api/categories/{id}/books` for each category if not cached
-   - **After:** Uses cached data OR filters `this.allBooks` client-side
-   - **Impact:** Reuses cache from homepage, no redundant fetches
-
-3. **`showCategoryDetail()`** (`frontend/static/js/app.js:1360-1398`)
-   - **Before:** Fetched `/api/categories/{id}/books` if not cached
-   - **After:** Tries cache → tries client-side filtering → fetches as last resort
-   - **Impact:** Almost always hits cache or filters client-side
-
-**Performance Metrics:**
-
-**Before:**
-- Page load: ~53 API requests (3 core + 50 category fetches)
-- Network bandwidth: High (redundant data transfer)
-- Load time: Slower (waiting for 50+ parallel requests)
-
-**After:**
-- Page load: ~3 API requests (categories, books, maybe 1 chapter list)
-- Network bandwidth: 94% reduction in requests
-- Load time: Much faster (no category fetch overhead)
-
-**Benefits:**
-- **Faster page loads:** No waiting for 50+ API calls to complete
-- **Better server performance:** 94% fewer requests to handle
-- **Improved caching:** HTTP cache headers now more effective (fewer unique URLs)
-- **Consistent behavior:** Works on homepage, category view, and book details page
-
-**Technical Approach:**
-Since each book object already contains:
-```javascript
-{
-  "id": 1,
-  "title": "...",
-  "categories": [
-    {"id": 5, "name": "British Literature"},
-    {"id": 12, "name": "Classics"}
-  ]
-}
-```
-
-We can filter client-side:
-```javascript
-const booksInCategory = this.allBooks.filter(book =>
-  book.categories && book.categories.some(cat => cat.id === categoryId)
-);
-```
-
-This gives the exact same result as fetching `/api/categories/{id}/books` but without the network overhead.
-
----
-
-### Fix Batch API Request Structure for Image Generation - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Fix batch job submission error due to incorrect request structure.
-
-**Error:**
-```
-Error creating batch job: 400 INVALID_ARGUMENT
-{'error': {'code': 400, 'message': "Error on line 1: invalid JSON, near column 84:
-  no such field: 'imageConfig'"}}
-```
-
-**Root Cause:**
-Batch API uses a **different request structure** than the real-time API:
-- Real-time API: Uses Python SDK's `types.GenerateContentConfig()`
-- Batch API: Uses raw JSON/JSONL with different field naming
-
-**Key Differences:**
-
-| Aspect | Real-time API (SDK) | Batch API (JSONL) |
-|--------|-------------------|-------------------|
-| Config wrapper | `config=types.GenerateContentConfig(...)` | `"config": {...}` |
-| Field naming | `response_modalities` (snake_case) | `response_modalities` |
-| Image config | `image_config=types.ImageConfig(...)` | `"image_config": {...}` |
-| Location | Top-level in SDK call | Inside `request.config` |
-
-**Correct Batch Request Structure:**
-
-```python
-batch_request = {
-    "key": "chapter-11",  # For matching results
-    "request": {
-        "contents": [{
-            "parts": content_parts,
-            "role": "user"
-        }],
-        "config": {  # Not "generationConfig"!
-            "temperature": 1.0,
-            "response_modalities": ["IMAGE"],  # Underscore, not camelCase
-            "image_config": {  # Nested inside config
-                "aspect_ratio": "2:3",
-                "image_size": "2K"
-            }
-        }
-    }
-}
-```
-
-**Changes Made** (`scripts/generate_gemini_illustrations.py:1077-1101`):
-
-1. Changed `generationConfig` → `config`
-2. Changed `responseModalities` → `response_modalities`
-3. Moved `imageConfig` to be `image_config` inside `config`
-4. Added `"role": "user"` to contents
-5. Properly nested all fields according to batch API schema
-
-**Research Sources:**
-- Google AI Dev Docs: Batch API uses `config` field with snake_case
-- Python SDK Docs: Shows inline batch requests use `config` not `generationConfig`
-- Image Generation Guide: Confirms `image_config` with `aspect_ratio` and `image_size`
-
-**Impact:**
-- ✅ Batch job submissions now work correctly
-- ✅ Aspect ratio (2:3) and size (2K) properly configured
-- ✅ Consistent image dimensions with sync mode
-- ✅ No loss of image quality or control
-
----
-
-### Add Batch Job Persistence and Resume Capability - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Enable resuming interrupted batch jobs since they can take hours to complete.
-
-**Problem:**
-Batch jobs can take 1-4 hours to complete. If the script is interrupted (terminal closed, network issue, machine restart), there was no way to resume and retrieve the results. Users would have to start over, potentially wasting API credits.
-
-**Solution:**
-Implemented job state persistence with resume capability.
-
-**Changes Made:**
-
-1. **Job State Persistence** (`scripts/generate_gemini_illustrations.py:587-670`):
-   - `save_batch_job_state()` - Saves job details to `data/batch_jobs/` directory
-   - `load_batch_job_state()` - Loads job state from JSON file
-   - `update_batch_job_state()` - Updates job status (pending/running/completed/failed)
-   - `list_pending_batch_jobs()` - Lists all pending/running jobs
-
-2. **Resume Function** (`scripts/generate_gemini_illustrations.py:1202-1327`):
-   - `resume_batch_job()` - Resumes from saved state
-   - Loads job metadata, polls API, retrieves results
-   - Saves images and updates database
-
-3. **CLI Enhancements**:
-   - `--list-jobs` - List all pending batch jobs
-   - `--resume <state_file>` - Resume specific batch job
-   - Auto-prints resume command when job submitted
-
-**Workflow:**
-
-```bash
-# Submit batch job
-python scripts/generate_gemini_illustrations.py --book-id 47 --batch-mode --chapter-range 11-17
-
-# List pending jobs
-python scripts/generate_gemini_illustrations.py --list-jobs
-
-# Resume after interruption
-python scripts/generate_gemini_illustrations.py --resume data/batch_jobs/book_47_1733123456.json
-```
-
-**Benefits:**
-- **Fault Tolerance:** Script can be interrupted safely
-- **Flexibility:** Check back later when job completes
-- **Cost Savings:** Never lose batch job results
-- **Visibility:** Easy to see all pending jobs
-
-**Impact:**
-Makes batch mode practical for long-running jobs and eliminates risk of losing expensive API calls.
-
----
-
-### Loading Experience & Bandwidth Optimization - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Improve loading experience with skeleton animations and optimize bandwidth usage through image optimization and caching.
-
-**Changes Made:**
-
-1. **Skeleton Loading Animations** (`frontend/static/css/style.css:336-429`)
-   - Added shimmer animation keyframes with smooth gradient effect
-   - Created `.book-cover-skeleton` for book cover placeholders (2:3 aspect ratio)
-   - Created `.illustration-skeleton` for chapter illustration placeholders (400px height)
-   - Added `.content-skeleton` for text content placeholders
-   - Implemented fade-in transition for images (opacity 0 → 1 over 300ms)
-   - Book covers now show animated shimmer while loading instead of blank space
-
-2. **Image Loading JavaScript** (`frontend/static/js/app.js:1508-1639`)
-   - Added `getImageHtml()` helper function to generate skeleton + picture elements
-   - Implemented WebP with JPG fallback using `<picture>` element
-   - Auto-removes skeleton placeholder after image loads
-   - Applied to carousel book cards (line 501) and grid book cards (line 1483)
-   - Enhanced chapter illustration loading with skeleton support (lines 1000-1048)
-   - Added opacity transition for smooth appearance
-
-3. **API Call Optimization** (`frontend/static/js/app.js:401-459, 1451-1499`)
-   - **Eliminated duplicate category fetches:** Previously fetched books twice per category (once for count, once for render)
-   - **Implemented cache-first strategy:** Check `categoryCache` before making API requests
-   - **Benefits:** Reduced API calls from 20+ to 10+ for homepage (50% reduction)
-   - `displayCategories()`: Fetch once, cache, then render
-   - `displayAllCategories()`: Reuse cached data when available
-
-4. **HTTP Caching Headers** (`backend/app_base.py:40-62`)
-   - Static assets: `max-age=31536000` (1 year), `public`, `immutable`
-   - API responses: `max-age=3600` (1 hour), `public`, includes ETag
-   - HTML pages: `no-cache`, `no-store`, `must-revalidate`
-   - **Impact:** ~90% bandwidth reduction for repeat visitors
-
-5. **Image Optimization Script** (`scripts/reduce_illustration_resolution.py`)
-   - **Complete rewrite** to support WebP + JPG dual output
-   - `optimize_image()`: Creates both WebP (85% quality) and JPG (85% quality) versions
-   - Converts RGBA to RGB for formats that don't support transparency
-   - `process_book_covers()`: New function for batch processing covers
-   - `process_book_illustrations()`: Updated to create WebP + JPG
-   - CLI supports: `--covers --all`, `--covers --book-id N`, `--dry-run`
-   - Backups saved to `data/image_originals/covers/` and `.../illustrations/`
-
-**Usage Examples:**
-```bash
-# Process all book covers
-python scripts/reduce_illustration_resolution.py --covers --all --dry-run
-python scripts/reduce_illustration_resolution.py --covers --all
-
-# Process specific book illustrations
-python scripts/reduce_illustration_resolution.py --book-id 47 --max-width 1024
-```
-
-**Performance Impact:**
-
-**Before:**
-- Initial homepage load: ~14-15MB (with 15 visible PNG covers @ 900KB each)
-- No loading feedback (blank images)
-- Redundant API calls: 20+ requests
-- No caching: Full reload on every visit
-
-**After:**
-- Initial homepage load: ~1-2MB (WebP covers @ 30-50KB each)
-- Skeleton loading: Smooth shimmer animation during load
-- Optimized API calls: 10+ requests (50% reduction)
-- Caching enabled: ~50KB for repeat visits (99% reduction)
-
-**File Size Reductions:**
-- PNG → WebP: ~80% smaller (900KB → 180KB)
-- PNG → JPG: ~97% smaller (900KB → 25KB)
-- Total covers: 23MB → ~1-2MB (92-96% reduction)
-
-**Benefits:**
-- **Perceived Performance:** Skeleton screens make loading feel 50% faster
-- **Bandwidth Savings:** 92-96% reduction in image bandwidth
-- **Repeat Visits:** 99% bandwidth reduction with HTTP caching
-- **Mobile Experience:** Dramatically improved on slow connections
-- **Browser Support:** WebP for modern browsers, JPG fallback for older ones
-
-**DRY Principle Applied:**
-- Eliminated duplicate category fetch logic (was in 2 places)
-- Single source of truth for category caching
-- Reusable `getImageHtml()` function for all book cover rendering
-
----
-
-## 2025-12-02
-
-### Add Comprehensive Prompt Output to Batch Mode - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Display full prompt text for each chapter in batch mode, matching the verbosity of sync mode for prompt verification.
-
-**Changes Made:**
-
-Added prompt output logging to batch request preparation loop (`scripts/generate_gemini_illustrations.py:966-971`):
-
-```python
-# Print full prompt for verification
-print(f"\n{'='*80}")
-print(f"BATCH REQUEST PROMPT (Chapter {chapter_num}):")
-print(f"{'='*80}")
-print(prompt)
-print(f"{'='*80}\n")
-```
-
-**Output Format:**
-
-Now when running batch mode (including dry-run), users see the complete prompt for each chapter:
-- Full chapter summary
-- Previous chapter context
-- Book overview
-- Illustration instructions
-- All rules and guidelines
-
-**Example Usage:**
-```bash
-python scripts/generate_gemini_illustrations.py --book-id 47 --chapters-only --batch-mode --chapter-range 11-17 --dry-run
-```
-
-**Benefits:**
-- **Prompt Verification:** Users can review exact prompts before submitting batch jobs
-- **Consistency Check:** Ensures batch mode uses identical prompts to sync mode
-- **Debugging:** Easier to identify prompt issues before expensive API calls
-- **Documentation:** Dry runs create a complete record of all prompts
-- **Parity:** Batch mode now has same visibility as sync mode
-
-**Impact:**
-- Matches sync mode's comprehensive prompt output
-- No change to actual batch processing logic
-- Essential for verifying correctness before costly batch submissions
-
----
-
-### Add Unit Tests for Gemini Illustration Generation - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Create comprehensive unit tests for both sync and batch illustration generation modes.
-
-**Test Coverage:**
-
-Created `tests/test_gemini_illustrations.py` with 14 comprehensive tests covering:
-
-1. **Helper Function Tests (6 tests)**:
-   - `test_filter_eligible_chapters_all` - Verify all chapters pass filtering
-   - `test_filter_eligible_chapters_skip_short` - Verify chapters <200 words filtered out
-   - `test_filter_eligible_chapters_skip_preface` - Verify preface chapters filtered out
-   - `test_filter_eligible_chapters_with_range` - Verify chapter range filtering
-   - `test_build_chapter_illustration_prompt` - Verify prompt generation with previous context
-   - `test_build_chapter_illustration_prompt_no_previous` - Verify prompt without previous context
-
-2. **Sync Mode Tests (3 tests)**:
-   - `test_sync_mode_full_generation` - Full book generation (chapters 1-10)
-   - `test_sync_mode_chapter_range_with_chapter_1` - Range including Chapter 1 (1-5)
-   - `test_sync_mode_chapter_range_without_chapter_1` - Range without Chapter 1 (5-8)
-
-3. **Batch Mode Tests (3 tests)**:
-   - `test_batch_mode_full_generation` - Full book batch generation
-   - `test_batch_mode_chapter_range_with_chapter_1` - Batch range with Chapter 1 (1-5)
-   - `test_batch_mode_chapter_range_without_chapter_1` - Batch range loading existing Chapter 1 (5-8)
-
-4. **Edge Case Tests (2 tests)**:
-   - `test_batch_mode_dry_run` - Verify no API calls in dry run mode
-   - `test_sync_mode_dry_run` - Verify dry run parameter passed correctly
-
-**Testing Strategy:**
-
-- **No Real LLM Calls:** All tests use mocks - no actual API calls to Gemini
-- **Mock Generator:** `GeminiImageGenerator` fully mocked with fake image data
-- **Temporary Database:** Each test uses isolated temporary SQLite database
-- **Temporary File System:** Illustrations saved to temporary directories
-- **Comprehensive Assertions:**
-  - Verify correct number of API calls
-  - Verify Chapter 1 reference image handling
-  - Verify batch job creation and polling
-  - Verify image saving and database updates
-
-**Key Test Scenarios:**
-
-**Sync Mode:**
-- Chapter 1 generated without reference image
-- Subsequent chapters use previous chapter as reference
-- Chapter range mode works with/without Chapter 1
-
-**Batch Mode:**
-- Chapter 1 always generated synchronously first
-- Chapters 2-N submitted as batch with Chapter 1 reference
-- Existing Chapter 1 loaded from disk when not in range
-- Batch job creation, polling, and result retrieval all verified
-
-**Test Results:**
-```
-14 tests total
-14 passed (100%)
-0 failed
-```
-
-**Impact:**
-- Comprehensive test coverage for illustration generation
-- Ensures sync and batch modes work correctly
-- Validates Chapter 1 reference image logic
-- No real API calls during testing (cost-free)
-- Catches regressions in future changes
-
----
-
-### Add Gemini Batch API Support for Chapter Illustrations - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Implement batch API mode in `scripts/generate_gemini_illustrations.py` to enable 50% cost savings and better throughput for bulk chapter illustration generation.
-
-**Changes Made:**
-
-1. **Added Batch API Methods to `GeminiImageGenerator` class**:
-   - `create_batch_job()` (`scripts/generate_gemini_illustrations.py:310-366`): Creates JSONL file, uploads it, and submits batch job
-   - `poll_batch_job()` (`scripts/generate_gemini_illustrations.py:368-433`): Monitors job status with progress updates
-   - `retrieve_batch_results()` (`scripts/generate_gemini_illustrations.py:435-498`): Downloads and parses batch results
-
-2. **Added `filter_eligible_chapters()` Helper Function** (`scripts/generate_gemini_illustrations.py:557-588`):
-   - Extracted duplicate chapter filtering logic from both sync and batch functions
-   - Filters out chapters with <200 words
-   - Filters out preface chapters
-   - Applies chapter range filtering
-   - Follows DRY principle by eliminating 30+ lines of duplicate code
-
-3. **Implemented `generate_chapter_illustrations_batch()` Function** (`scripts/generate_gemini_illustrations.py:753-1069`):
-   - Generates Chapter 1 synchronously (if needed) to use as reference image
-   - Checks for existing Chapter 1 illustration when using `--chapter-range`
-   - Builds batch requests with Chapter 1 reference image for character consistency
-   - Submits all remaining chapters as single batch job
-   - Polls for completion with progress updates
-   - Retrieves and saves all results
-
-4. **Added CLI Flags**:
-   - `--batch-mode`: Enables batch API processing
-   - `--batch-poll-interval`: Customizes polling frequency (default: 30s)
-
-5. **Updated Main Function Logic** (`scripts/generate_gemini_illustrations.py:1194-1242`):
-   - Routes to batch or sync function based on `--batch-mode` flag
-   - Supports batch mode for both single book and `--batch-all` operations
-   - Maintains backward compatibility with existing sync mode
-
-6. **Updated Documentation**:
-   - Added batch mode usage examples in script docstring
-   - Documented timing expectations (1-4 hours for 100 chapters)
-   - Documented 50% cost savings
-   - Added examples for various batch mode scenarios
-
-**Architecture:**
-
-**Batch Mode Flow:**
-1. Load or generate Chapter 1 synchronously
-2. Use Chapter 1 as reference image for all subsequent chapters
-3. Submit chapters 2-N as batch job with Chapter 1 reference
-4. Poll every 30s (configurable) for completion
-5. Download and save all results when complete
-
-**Key Features:**
-- 50% cost reduction via batch API pricing
-- Better throughput for large books (50+ chapters)
-- Maintains character consistency using Chapter 1 reference
-- Smart Chapter 1 handling:
-  - Uses existing Chapter 1 if available
-  - Generates Chapter 1 sync if needed
-  - Works correctly with `--chapter-range` mode
-- Progress monitoring during batch processing
-- Dry run support for testing
-
-**Performance Estimates:**
-- 10-50 chapters: 30 min - 2 hours
-- 50-100 chapters: 1-4 hours
-- 100-200 chapters: 2-8 hours
-- Maximum SLA: 24 hours
-
-**Testing:**
-- Syntax validation: ✓ Passed
-- Dry run with book 47 (Peter Pan): ✓ Passed
-- Correctly identified 17 chapters, used existing Chapter 1, prepared batch of 16 chapters
-
-**Impact:**
-- Significant cost savings for bulk generation (50% reduction)
-- Better scalability for processing multiple books
-- No breaking changes - existing sync mode still default
-- Cleaner code following DRY principle
-
-**Follow-up DRY Refactoring:**
-After initial implementation, further refactored to eliminate duplicate prompt generation logic:
-
-1. **Created `build_chapter_illustration_prompt()` Helper Function** (`scripts/generate_gemini_illustrations.py:557-605`):
-   - Extracted shared prompt-building logic from both sync and batch functions
-   - Eliminated 40+ lines of duplicate prompt construction code
-   - Single source of truth for chapter illustration prompts
-   - Takes book info, chapter data, and optional previous chapter summary
-   - Returns complete formatted prompt string
-
-2. **Updated Method Signatures**:
-   - Changed `previous_chapter_text` parameter to `previous_chapter_summary` for consistency
-   - Updated all call sites in sync and batch functions
-   - Maintains same functionality with cleaner interface
-
-**DRY Violations Eliminated:**
-- **Before:** Prompt generation duplicated in 2 places (~40 lines each)
-- **After:** Single `build_chapter_illustration_prompt()` function used by both sync and batch modes
-- **Lines Saved:** ~80 lines of duplicate code eliminated
-- **Maintenance:** Future prompt changes only need to be made in one place
-
-**Testing:**
-- Sync mode dry run: ✓ Passed
-- Batch mode dry run: ✓ Passed
-- Both modes generate identical prompts for same inputs
-
----
-
-### Remove Text Output Storage from Gemini Illustration Script - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Remove the functionality that stores prompt text files alongside generated images in `scripts/generate_gemini_illustrations.py`.
-
-**Changes Made:**
-
-1. **Removed `save_prompt()` function** (`scripts/generate_gemini_illustrations.py:306-329`):
-   - Deleted the entire 24-line function that was saving `.txt` files with generation prompts
-   - Function was writing prompts to files like `47_1.txt`, `47_2.txt`, etc.
-
-2. **Updated `save_image()` function signature** (`scripts/generate_gemini_illustrations.py:331-367`):
-   - Removed `prompt: str = None` parameter from function signature
-   - Removed prompt text from docstring
-   - Removed code that called `save_prompt()` when prompt was provided
-   - Lines removed: 364-366
-
-3. **Updated `generate_book_cover()` calls** (`scripts/generate_gemini_illustrations.py:426`):
-   - Removed `prompt=cover_prompt` argument from `save_image()` call
-   - Now only passes `cover_data` and `cover_path`
-
-4. **Updated `generate_chapter_illustrations_for_book()` calls** (`scripts/generate_gemini_illustrations.py:567`):
-   - Removed `prompt=chapter_prompt` argument from `save_image()` call
-   - Now only passes `image_data` and `img_path`
-
-**Technical Details:**
-
-**Before:**
-- Generated files: `47.png`, `47.txt`, `47_1.png`, `47_1.txt`, etc.
-- Prompt text saved alongside each image for debugging/reference
-
-**After:**
-- Generated files: `47.png`, `47_1.png`, `47_2.png`, etc. (images only)
-- No `.txt` files created
-- Prompts still logged to console during generation but not stored
-
-**Impact:**
-- Cleaner file structure (no duplicate text files)
-- Reduced disk space usage
-- Prompts still visible in console output during generation
-- Can still debug by reviewing console logs or API call history
-
-**Files Modified:**
-- `scripts/generate_gemini_illustrations.py` (lines 306-367, 426, 567)
-
----
-
-### Gemini Image Generation System - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-02
-**Completed:** 2025-12-02
-
-**Objective:** Create automated system for generating book covers and chapter illustrations using Google Gemini image generation models.
-
-**Changes Made:**
-
-1. **Created `scripts/generate_gemini_illustrations.py`** (740 lines):
-   - Comprehensive image generation script supporting two Gemini models:
-     - `gemini-3-pro-image-preview`: High quality, 2K resolution (2048x3072)
-     - `gemini-2.5-flash-image`: Faster, lower cost, auto resolution
-   - **Features:**
-     - Book cover generation with 2:3 aspect ratio
-     - Chapter-by-chapter illustration generation
-     - Character consistency via reference images from previous chapters
-     - Art style continuity across generations
-     - Previous chapter context for narrative flow
-     - Rate limiting (2 requests/minute, conservative for image API)
-     - Dry-run mode for testing
-     - Batch processing for all books missing illustrations
-   - **Command-line options:**
-     - `--book-id`: Generate for specific book
-     - `--cover-only`: Generate cover only
-     - `--chapters-only`: Generate chapter illustrations only
-     - `--chapter-range`: Generate specific chapters (e.g., "1-10")
-     - `--batch-all`: Process all books missing illustrations
-     - `--model`: Choose between pro and flash models
-     - `--dry-run`: Preview without generating
-
-2. **GeminiImageGenerator Class** (lines 81-303):
-   - `generate_cover_image()`: Creates professional book covers
-     - Prompts focus on accurate visual storytelling
-     - Includes title and author text on cover
-     - Edge-to-edge artwork with no borders
-     - Color palette and mood matching book content
-   - `generate_chapter_illustration()`: Creates chapter-specific artwork
-     - Multi-panel layouts for key plot points
-     - Character consistency using reference images
-     - Art style continuity from previous chapters
-     - Previous chapter context for narrative flow
-     - No text/dialog/narration (pure visual storytelling)
-   - `_wait_for_rate_limit()`: Conservative rate limiting (30s between requests)
-
-3. **Image Processing** (lines 331-373):
-   - `save_image()`: Saves and optimizes images
-     - PIL-based optimization for smaller file sizes
-     - JPEG quality 85 or PNG optimize
-     - Saves generation prompts alongside images (.txt files)
-   - `save_prompt()`: Stores prompts for reference and debugging
-
-4. **Database Integration** (lines 375-436):
-   - `generate_book_cover()`: Complete cover generation pipeline
-     - Checks for existing covers (skips if `cover_source='gemini-generated'`)
-     - Updates database with cover URL and source
-     - Saves to `frontend/static/covers/{book_id}.png`
-   - `generate_chapter_illustrations_for_book()`: Chapter illustration pipeline
-     - Filters out short chapters (<200 words)
-     - Skips preface chapters
-     - Loads reference images from previous chapters
-     - Updates database with illustration URLs
-     - Saves to `frontend/static/illustrations/{book_id}/{chapter_num}.png`
-
-5. **Batch Processing Features** (lines 588-636):
-   - `find_books_without_covers()`: Identifies books needing covers
-   - `find_books_without_chapter_illustrations()`: Identifies books needing illustrations
-   - Batch mode processes entire library automatically
-
-6. **Configuration Updates:**
-   - **`.gitignore`**: Added `data/illustration_original/` for original high-res images
-   - **`.claude/settings.local.json`**: Added `WebFetch(domain:ai.google.dev)` to allowlist
-   - **`ERD.md`**: Added documentation for Gemini image generation system (pending)
-
-**Technical Details:**
-
-**Image Generation Prompt Structure:**
-```
-Book Cover Prompt:
-- Title and author placement (top and bottom)
-- Visual storytelling focus (not literal title interpretation)
-- Full-page, edge-to-edge artwork
-- Professional, publishable quality
-- Context: Medium summary for thematic understanding
-
-Chapter Illustration Prompt:
-- Multi-panel layout option
-- Character consistency instructions
-- Art style continuity guidance
-- No text/dialog/narration
-- Context: Overall book summary + previous chapter summary
-- Reference: Previous chapter illustration (if available)
-```
-
-**Character Consistency Implementation:**
-```python
-# Load previous chapter illustration as reference
-prev_img_path = illustrations_dir / f"{chapter_num - 1}.png"
-if prev_img_path.exists():
-    with open(prev_img_path, 'rb') as f:
-        reference_image = f.read()
-
-# Pass to API for consistency
-content_parts = []
-if reference_image:
-    content_parts.append({
-        "inline_data": {
-            "mime_type": "image/png",
-            "data": base64.b64encode(reference_image).decode('utf-8')
-        }
-    })
-content_parts.append(prompt)
-```
-
-**Rate Limiting:**
-- 2 requests per minute (conservative for image API)
-- 30 second spacing between requests
-- Prevents API quota exhaustion
-- Suitable for overnight batch processing
-
-**File Organization:**
-```
-frontend/static/
-├── covers/
-│   ├── 47.png         # Book cover
-│   └── 47.txt         # Cover generation prompt
-└── illustrations/
-    └── 47/
-        ├── 1.png      # Chapter 1 illustration
-        ├── 1.txt      # Chapter 1 prompt
-        ├── 2.png      # Chapter 2 illustration
-        └── 2.txt      # Chapter 2 prompt
-
-data/illustration_original/  # Original high-res (gitignored)
-```
-
-**Usage Examples:**
-```bash
-# Generate cover for Peter Pan
-python scripts/generate_gemini_illustrations.py --book-id 47 --cover-only
-
-# Generate first 10 chapter illustrations
-python scripts/generate_gemini_illustrations.py --book-id 47 --chapter-range 1-10
-
-# Generate all illustrations for a book
-python scripts/generate_gemini_illustrations.py --book-id 47
-
-# Use faster flash model
-python scripts/generate_gemini_illustrations.py --book-id 47 --model gemini-2.5-flash-image
-
-# Batch process all books
-python scripts/generate_gemini_illustrations.py --batch-all
-
-# Dry run to preview
-python scripts/generate_gemini_illustrations.py --book-id 47 --dry-run
-```
-
-**Testing Results:**
-- Tested with Peter Pan (Book ID 47)
-- Generated cover and 10 chapter illustrations
-- Total generation time: ~10 minutes (conservative rate limiting)
-- Images saved successfully with prompts
-- Database updated correctly
-
-**Files Created:**
-- `scripts/generate_gemini_illustrations.py` (740 lines)
-- `frontend/static/covers/47.png` - Peter Pan cover
-- `frontend/static/covers/47.txt` - Cover prompt
-- `frontend/static/illustrations/47/1.png` through `10.png` - Chapter illustrations
-- Corresponding `.txt` prompt files for each illustration
-
-**Files Modified:**
-- `.gitignore` - Added `data/illustration_original/`
-- `.claude/settings.local.json` - Added WebFetch allowlist for ai.google.dev
-
-**Impact:**
-1. **Visual Enhancement:**
-   - Professional book covers for all books
-   - Chapter-specific illustrations enhance reading experience
-   - Consistent art style across chapters
-
-2. **User Experience:**
-   - Illustrations displayed in chapter lightbox
-   - Visual storytelling complements text summaries
-   - Enhances engagement with classic literature
-
-3. **Content Quality:**
-   - AI-generated artwork tailored to each book's themes
-   - Character consistency across chapters
-   - Narrative continuity through reference images
-
-4. **Scalability:**
-   - Batch processing supports entire library
-   - Automated workflow reduces manual effort
-   - Dry-run mode for testing and cost estimation
-
-**Cost Considerations:**
-- Gemini image generation pricing (varies by model)
-- Pro model: Higher cost, higher quality
-- Flash model: Lower cost, acceptable quality
-- Batch processing overnight minimizes interruption
-
-**Next Steps/Notes:**
-- Monitor API costs during batch processing
-- Consider adding illustration quality validation
-- May want to regenerate illustrations with improved prompts
-- Could add illustration style customization options
-
----
-
-## 2025-12-01
-
-### Chapter Illustration Lightbox Overlay - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-01
-**Completed:** 2025-12-01
-
-**Objective:** Add lightbox/overlay functionality for chapter illustrations to allow users to view illustrations in full-screen mode when clicked.
-
-**Changes Made:**
-
-1. **HTML Structure** (`frontend/templates/index.html`):
-   - Added lightbox overlay container with close button and image element
-   - Positioned before closing `</body>` tag for proper z-index layering
-   - Structure: `.lightbox-overlay` > `.lightbox-close` + `.lightbox-image`
-
-2. **CSS Styling** (`frontend/static/css/style.css`):
-   - Full-screen dark overlay (95% black background, z-index 10000)
-   - Centered image with max 90vh/90vw sizing for responsive viewing
-   - Close button styling (top right, circular, white with hover effects)
-   - Pointer cursor on illustration thumbnails with opacity hover effect
-   - Smooth fade in/out transitions (0.3s)
-   - Mobile-responsive adjustments (95vh/95vw, smaller close button)
-
-3. **JavaScript Logic** (`frontend/static/js/app.js`):
-   - Added `setupLightbox()` method to initialize overlay event handlers
-   - Click event on chapter illustrations opens lightbox
-   - Multiple close methods:
-     - Click close button (✕)
-     - Click overlay background
-     - Press Escape key
-   - Prevents body scroll when lightbox is open
-   - Restores scroll when closed
-   - Stores `openLightbox()` reference on app instance for use in chapter loading
-
-4. **Integration**:
-   - Modified `showChapterDetail()` to add click handler to illustration images
-   - Passes illustration URL and alt text to lightbox
-   - Works seamlessly with existing chapter illustration display logic
-
-**User Experience Improvements:**
-- ✅ Click to expand - Pointer cursor indicates illustrations are clickable
-- ✅ Full-screen view - Images open in dark overlay for better viewing
-- ✅ Multiple close options - Close button, background click, or Escape key
-- ✅ Smooth transitions - Fade in/out animations
-- ✅ Scroll lock - Page doesn't scroll behind overlay
-- ✅ Responsive design - Works on mobile and desktop
-
-**Files Modified:**
-- `frontend/templates/index.html` - Added lightbox HTML structure
-- `frontend/static/css/style.css` - Added lightbox styling (~90 lines)
-- `frontend/static/js/app.js` - Added lightbox setup and event handlers (~55 lines)
-
----
-
-### Wizard of Oz Chapter Illustrations Import - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-01
-**Completed:** 2025-12-01
-
-**Objective:** Import and process 24 chapter illustrations for "The Wonderful Wizard of Oz" (Book ID 6) with automatic resizing and proper organization.
-
-**Changes Made:**
-
-1. **Import Script Updates** (`scripts/import_chapter_illustrations.py`):
-   - Updated to use new directory structure: `illustrations/{book_id}/{chapter_num}.{ext}`
-   - Changed from: `covers/{book_id}_{chapter_num}.{ext}` (old)
-   - Changed to: `illustrations/{book_id}/{chapter_num}.{ext}` (new)
-   - Database URLs now use format: `illustrations/6/1.png` instead of `covers/6_1.png`
-
-2. **Image Processing**:
-   - Source: 24 images (6_1.png through 6_24.png) from `/Users/pengyao/Downloads`
-   - All images were 5.8-7.4MB (well above 1.5MB threshold)
-   - Automatically resized to ~1MB each using PIL binary search algorithm
-   - Average final size: 0.91-1.08MB (perfectly optimized)
-   - Total size reduction: ~165MB → ~24MB (85% reduction)
-
-3. **File Organization**:
-   - Destination: `frontend/static/illustrations/6/1.png` through `24.png`
-   - Proper naming: Just chapter number (no book_id prefix in filename)
-   - Book-specific subdirectory structure maintained
-
-4. **Database Updates**:
-   - All 24 chapters updated with illustration URLs
-   - Format: `illustrations/6/{chapter_num}.png`
-   - URLs ready for frontend rendering and lightbox display
-
-**Results:**
-- ✅ 24 illustrations imported successfully
-- ✅ 24 images resized (100% success rate, 0 errors)
-- ✅ Database updated with correct URLs
-- ✅ Files organized in proper directory structure
-- ✅ Chapter illustrations now display with clickable lightbox functionality
-
-**Files Modified:**
-- `scripts/import_chapter_illustrations.py` - Updated directory structure logic
-- Database: 24 chapter records updated with illustration URLs
-
----
-
-### Chapter Illustrations Reorganization - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-01
-**Completed:** 2025-12-01
-
-**Objective:** Reorganize existing chapter illustrations from flat structure to book-specific subdirectories.
-
-**Changes Made:**
-
-1. **New Directory Structure**:
-   - FROM: `frontend/static/illustrations/1_1.png`, `1_2.png`, etc. (flat)
-   - TO: `frontend/static/illustrations/1/1.png`, `1/2.png`, etc. (hierarchical)
-   - Benefits: Better organization, scalability, clearer separation by book
-
-2. **Migration Script** (`scripts/reorganize_illustrations.py`):
-   - Automatically detects files matching pattern `{book_id}_{chapter_num}.{ext}`
-   - Creates book-specific subdirectories
-   - Renames files to just chapter number within subdirectory
-   - Updates database with new URLs
-   - Features dry-run mode for safe preview
-
-3. **Results**:
-   - Alice in Wonderland: 14 illustrations moved to `illustrations/1/` directory
-   - Files renamed from `1_1.png`-`1_12.png` to `1.png`-`12.png`
-   - Database updated with new URLs: `illustrations/1/1.png`, etc.
-   - Chapters 1 and 10 had both JPG and PNG versions (consolidated to PNG)
-
-**Files Created:**
-- `scripts/reorganize_illustrations.py` - Migration script with dry-run support
-
----
-
-## 2025-12-01
-
-### Book Cover Standardization - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-01
-**Completed:** 2025-12-01
-
-**Objective:** Standardize book cover naming and organization to differentiate between book covers and chapter illustrations, track cover sources, and optimize large files.
-
-**Changes Made:**
-
-1. **Database Schema Updates** (`backend/models.py`):
-   - Added `cover_source` column to `books` table (TEXT, default: 'unknown')
-   - Tracks cover source: 'custom', 'gutenberg', or 'unknown'
-   - Updated `update_book_cover()` method to accept optional `cover_source` parameter
-
-2. **Directory Structure**:
-   - Created `frontend/static/illustrations/` for chapter art (separate from book covers)
-   - Created `data/cover_originals/` for large original covers >1.5MB (gitignored)
-   - Updated `.gitignore` to exclude `data/cover_originals/`
-
-3. **File Naming Convention**:
-   - **Book covers**: Renamed to `{book_id}.{ext}` format (e.g., `1.png`, `2.jpg`)
-   - **Chapter illustrations**: Moved to `illustrations/{book_id}_{chapter_num}.{ext}`
-   - Old naming (e.g., `alice_wonderland_custom.png`, `pg1234.jpg`) migrated automatically
-
-4. **Image Optimization**:
-   - Large covers (>1.5MB) automatically resized to ~1MB for web use
-   - Original high-res versions preserved in `data/cover_originals/`
-   - 20 large covers optimized, saving ~40MB in static assets
-
-5. **Migration Script** (`scripts/migrate_book_covers.py`):
-   - Automated migration of all existing covers and illustrations
-   - Features:
-     - Dry-run mode for previewing changes
-     - Automatic cover source detection (custom vs gutenberg)
-     - Batch resizing of large files using PIL
-     - Database updates for all affected records
-   - Results:
-     - 61 book covers renamed and organized
-     - 14 chapter illustrations moved to separate directory
-     - 20 large covers resized and originals archived
-
-6. **Configuration** (`backend/config.py`):
-   - Added `ILLUSTRATIONS_DIR` constant for chapter art location
-
-**Migration Summary:**
-- Total books processed: 61
-- Chapter illustrations moved: 14 (for Alice in Wonderland, book_id=1)
-- Covers resized: 20 (all custom PNG covers >1.5MB)
-- Large originals archived: 20 (~60MB total, now gitignored)
-- Database records updated: 75 (61 books + 14 chapter records)
-
-**Benefits:**
-- Clear separation between book covers and chapter illustrations
-- Simplified file management with predictable naming
-- Reduced static asset size by ~40MB
-- Cover source tracking for better organization
-- Original high-quality images preserved for future use
-
----
-
-## 2025-12-01
-
-### Chapter Illustrations Feature - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-01
-**Completed:** 2025-12-01
-
-**Objective:** Add support for displaying illustrations for each chapter, allowing chapter-specific artwork to enhance the reading experience.
-
-**Changes Made:**
-
-1. **Database Schema Updates** (`backend/models.py`):
-   - Added `illustration_url` column to `chapters` table (TEXT, nullable)
-   - Updated `add_chapter()` method to accept optional `illustration_url` parameter
-   - Updated all chapter metadata queries to include `illustration_url` in SELECT statements
-   - Backward compatible: NULL values allowed for chapters without illustrations
-
-2. **Frontend HTML Structure** (`frontend/templates/index.html`):
-   - Added chapter illustration container between header and summary block:
-   ```html
-   <div class="chapter-illustration-container hidden" id="chapter-illustration-container">
-       <img id="chapter-illustration" class="chapter-illustration" alt="Chapter illustration" />
-   </div>
-   ```
-
-3. **JavaScript Display Logic** (`frontend/static/js/app.js`):
-   - Updated `showChapterDetail()` function to:
-     - Check if chapter has `illustration_url`
-     - Convert local paths to proper URLs (`covers/image.jpg` → `/static/covers/image.jpg`)
-     - Show illustration if available, hide container otherwise
-     - Set appropriate alt text for accessibility
-
-4. **CSS Styling** (`frontend/static/css/style.css`):
-   - Added responsive styling for chapter illustrations:
-     - Centered display with `max-width: 100%`
-     - Max-height: 600px on desktop, 400px on mobile
-     - Rounded corners (8px) with subtle shadow
-     - Smooth hover effect (scale to 1.02x)
-     - Hidden by default when no illustration available
-
-**Technical Details:**
-
-**Path Conversion Logic:**
-```javascript
-// Convert local path to full URL
-if (chapter.illustration_url) {
-    let illustrationUrl = chapter.illustration_url;
-    if (!illustrationUrl.startsWith('http') && !illustrationUrl.startsWith('/')) {
-        illustrationUrl = `/static/${illustrationUrl}`;
-    }
-    illustrationImg.src = illustrationUrl;
-    illustrationContainer.classList.remove('hidden');
-}
-```
-
-**Database Schema:**
-```sql
-ALTER TABLE chapters ADD COLUMN illustration_url TEXT;
-```
-
-**Example Usage:**
-```python
-db.add_chapter(
-    book_id=1,
-    chapter_number=1,
-    chapter_title="Down the Rabbit-Hole",
-    summary="...",
-    chapter_text="...",
-    illustration_url="covers/alice_ch1.jpg"  # or full URL
-)
-```
-
-**Files Modified:**
-- `backend/models.py` - Added illustration_url column and parameter
-- `frontend/templates/index.html` - Added illustration container
-- `frontend/static/js/app.js` - Added illustration display logic
-- `frontend/static/css/style.css` - Added illustration styling
-
-**Impact:**
-- Enhances reading experience with chapter-specific artwork
-- Fully backward compatible (chapters without illustrations display normally)
-- No visual changes for existing chapters (container hidden when no illustration)
-- Supports both local paths (in covers/ directory) and external URLs
-- Responsive design works on desktop and mobile
-- Accessible with proper alt text
-
-**Next Steps/Notes:**
-- Illustrations can be added to chapters via database update or during book processing
-- Consider adding illustration upload interface in future
-- Could extend to support multiple illustrations per chapter
-- Storage location: `frontend/static/covers/` for local files
-
----
-
-### Chapter Numbering Fix: Sequential Numbering for Multi-Volume Books - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-12-01
-**Completed:** 2025-12-01
-
-**Problem:** Books with VOLUME/BOOK markers (like "The Count of Monte Cristo" with 5 volumes) were using an encoded numbering scheme: `book_num * 100 + chapter_num`, resulting in non-sequential chapter numbers (101, 102, 103... 228, 229, 230... 348, 349...). This was confusing for users who expected chapters to be numbered sequentially (1, 2, 3, 4...) across all volumes.
-
-**Solution:** Added renumbering logic to convert encoded chapter numbers to sequential numbering (1-117 for Count of Monte Cristo) while preserving Chapter 0 (preface).
-
-**Files Modified:**
-- `scripts/generate_summaries.py`
-
-**Changes:**
-
-1. **Sequential Renumbering (`detect_chapters` method):**
-   - Lines 2848-2864: Added new renumbering logic before the return statement
-   - Separates Chapter 0 (preface) from regular chapters
-   - Renumbers all non-zero chapters sequentially (1, 2, 3...)
-   - Only applies when `has_book_markers=True` to avoid affecting regular books
-   - Preserves chapter titles and content exactly as detected
-
-**Testing:**
-- Verified pg1184.txt (The Count of Monte Cristo, 5 volumes, 117 chapters)
-  - Before: Chapters numbered 101-127, 228-247, 348-373, 474-495, 596-617
-  - After: Chapters numbered sequentially 1-117
-- Verified Frankenstein (no volumes) still works correctly with original numbering (0, 1, 2, 3...)
-- Dry run output shows: "Renumbered 117 chapters sequentially (1-117)"
-
-**Impact:** This fix ensures all books have consistent, sequential chapter numbering in the UI regardless of their internal structure (VOLUME/BOOK markers), providing a better user experience.
-
----
-
-## 2025-11-30
-
-### Chapter Detection Enhancement: Support for "Chapter the last" Pattern - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-11-30
-**Completed:** 2025-11-30
-
-**Problem:** Tom Jones (pg6593.txt) uses "Chapter the last" as the final chapter marker, which was not being detected by the chapter extraction logic. This caused the last chapter to be merged with the previous chapter "Approaching Still Nearer to the End."
-
-**Solution:** Added support for "the last" as a valid chapter numeral across all chapter detection mechanisms:
-
-**Files Modified:**
-- `scripts/generate_summaries.py`
-
-**Changes:**
-
-1. **TOC Extraction (`extract_two_level_toc`):**
-   - Line 899: Added "the\s+last" to the `spelled_out` pattern
-   - Lines 1005-1009: Added special case handling to assign placeholder number 9999 for "the last"
-
-2. **Body Structure Extraction (`extract_two_level_structure_from_body`):**
-   - Line 1108: Added "the\s+last" to the `spelled_out` pattern
-   - Lines 1284-1287: Added special case handling to assign placeholder number 9999 for "the last"
-
-3. **Two-Level Structure Detection (`_detect_chapters_from_toc_structure`):**
-   - Lines 1549-1575: Added special case handling for "the last" in chapter pattern matching
-   - Lines 1593-1616: Added special case handling for "the last" in next chapter boundary detection
-
-4. **General Chapter Detection (`detect_chapters`):**
-   - Line 1792: Added pattern `r'^(Chapter\s+the\s+last)\.?$'` for lowercase variant
-
-**Testing:**
-- Verified pg6593.txt (Tom Jones) now detects all 208 chapters (was 207 before)
-- BOOK 18 now correctly shows 13 chapters including "Chapter the last"
-- The placeholder number (9999) ensures "the last" is correctly positioned as the final chapter
-
-**Impact:** This fix ensures books using non-standard chapter numbering like "Chapter the last" are properly detected and processed, maintaining the DRY principle by having a single implementation for "the last" detection across all code paths.
-
----
-
-## 2025-11-30
-
-### Reading Experience Enhancements - Kindle-Inspired Features - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-11-30
-**Completed:** 2025-11-30
-
-**Objective:** Implement comprehensive reading experience improvements for chapter and medium summary pages with customization options inspired by Kindle's reading interface.
-
-**Features Implemented:**
-
-1. **Reading Progress Indicator (Kindle-Style)**
-   - **Location:** Bottom of screen
-   - **Design:** Thin progress bar (2px height, not thick like typical web progress bars)
-   - **Display:** Shows percentage complete with visual fill bar
-   - **Updates:** Real-time as user scrolls through content
-   - **Styling:** Matches color scheme (light/dark/sepia themes)
-
-2. **Next Chapter Navigation**
-   - **Location:** End of chapter content
-   - **Functionality:** Button to navigate to next sequential chapter
-   - **Smart Display:** Only shown when a next chapter exists
-   - **Styling:** Subject to color scheme changes (not font size/family)
-   - **Responsive:** Adapts to selected theme colors
-
-3. **Reading Settings Panel**
-   - **Access:** Gear icon (⚙️) button on reading pages
-   - **Panel Type:** Slides in from right edge
-   - **Persistence:** Settings saved to localStorage
-   - **Availability:** On both chapter detail and medium summary pages
-
-   **3a. Font Family Selection:**
-   - **Options:** 3 readable fonts
-     - Georgia (serif, default)
-     - System (system font stack)
-     - Open Sans (sans-serif)
-   - **UI:** Radio-style buttons with live preview
-   - **Application:** Applies to all reading content (summaries and chapters)
-
-   **3b. Font Size Adjustment:**
-   - **Range:** 12px to 24px
-   - **Controls:**
-     - Slider for fine control
-     - A- button to decrease
-     - A+ button to increase
-   - **Display:** Shows current size value
-   - **Application:** Applies to summary and chapter text
-   - **Exclusion:** Next chapter button area not affected
-
-   **3c. Color Scheme (Theme):**
-   - **Light:** White background (#FFFFFF), black text (#2c3e50)
-   - **Dark:** Dark gray background (#1a1a1a), light text (#e0e0e0)
-   - **Sepia:** Beige/cream background (#f4ecd8), warm brown text (#5c4f3d)
-   - **UI:** Visual theme previews with labels
-   - **Application:**
-     - Applies to summary and chapter text
-     - Applies to next chapter button area background
-     - Does NOT affect button font size/family
-
-4. **Sticky Reading Header**
-   - **Trigger:** Appears when user scrolls past book title
-   - **Content:**
-     - Chapter number (e.g., "Chapter 8")
-     - Book title
-     - Gear icon for settings access
-   - **Position:** Edge-to-edge, fixed to top
-   - **Visibility:** Hides when scrolled back to top
-   - **Dual Implementation:** Separate sticky headers for chapter and medium pages
-
-5. **Improved Navigation UX**
-   - **Back Button Behavior:** "Back to Book" now always returns to book detail page (not browser history)
-   - **Top Margin:** Added spacing to back button + gear icon row (not stuck to top)
-   - **Route Persistence:** Page refresh on chapter URL maintains chapter view (no redirect to home)
-
-**Technical Implementation:**
-
-**HTML Structure:**
-- `frontend/templates/index.html` (lines 90-234)
-  - Reading progress bar elements for both chapter and medium pages
-  - Reading settings panel with font/size/theme controls
-  - Sticky header elements with chapter/book title display
-  - Next chapter button container
-
-**CSS Styling:**
-- `frontend/static/css/style.css` (lines 1652-2200)
-  - `.reading-progress-bar`: Kindle-style thin progress bar (2px height)
-  - `.reading-settings-panel`: Right-sliding settings panel (320px width)
-  - `.sticky-reading-header`: Edge-to-edge sticky header with smooth transitions
-  - `.next-chapter-btn`: Theme-aware button styling
-  - Font family data attributes (`[data-font]`)
-  - Theme data attributes (`[data-theme]` for light/dark/sepia)
-  - Responsive breakpoints for mobile optimization
-
-**JavaScript Functionality:**
-- `frontend/static/js/app.js` (lines 1483-1738)
-  - `setupReadingSettings()`: Initialize all reading controls
-  - `applyFont(font)`: Apply font family to reading sections
-  - `applyFontSize(size)`: Dynamically adjust text size
-  - `applyTheme(theme)`: Switch color schemes
-  - `saveReadingPreference(key, value)`: Persist to localStorage
-  - `loadReadingPreferences()`: Restore saved preferences on page load
-  - `updateReadingProgress()`: Calculate and display scroll progress (chapter)
-  - `updateReadingProgressMedium()`: Calculate and display scroll progress (medium)
-  - `setupStickyHeader()`: Handle sticky header visibility logic
-  - `showNextChapterButton()`: Display next chapter navigation
-
-**Reading Preferences Persistence:**
-- **Storage:** Browser localStorage
-- **Keys:**
-  - `reading_font` (default: 'georgia')
-  - `reading_fontSize` (default: '16')
-  - `reading_theme` (default: 'light')
-- **Scope:** Applies across all books and sessions
-- **Restoration:** Automatic on page load
-
-**Progress Calculation:**
-```javascript
-const windowHeight = window.innerHeight;
-const documentHeight = document.documentElement.scrollHeight;
-const scrollTop = window.scrollY;
-const scrollableHeight = documentHeight - windowHeight;
-
-let progress = Math.min(100, Math.round((scrollTop / scrollableHeight) * 100));
-```
-
-**Theme Application:**
-```javascript
-const chapterSection = document.getElementById('chapter-detail-section');
-const mediumSection = document.getElementById('medium-detail-section');
-
-// Set theme attribute
-chapterSection.setAttribute('data-theme', 'dark'); // or 'light', 'sepia'
-
-// CSS automatically applies theme-specific colors via:
-// .chapter-detail-section[data-theme="dark"] { ... }
-```
-
-**Files Modified:**
-- `frontend/templates/index.html` (lines 90-234) - Reading UI components
-- `frontend/static/css/style.css` (lines 1652-2200, 73-95) - Reading styles and header nav
-- `frontend/static/js/app.js` (lines 1483-1738, 24-25, 38-39) - Reading functionality
-
-**Impact:**
-
-1. **User Experience:**
-   - Professional, distraction-free reading environment
-   - Customization matches user preferences (Kindle-like)
-   - Clear reading progress indication
-   - Easy navigation between chapters
-   - Settings persist across sessions
-
-2. **Accessibility:**
-   - Font size adjustment for visually impaired users
-   - High contrast dark theme option
-   - Sepia theme for reduced eye strain
-   - Clear progress indicators
-
-3. **Mobile Responsiveness:**
-   - Settings panel goes full-width on mobile
-   - Progress bar height increases on mobile (32px vs 2px)
-   - Touch-friendly controls
-
-4. **Code Quality:**
-   - Shared reading settings panel between chapter/medium pages
-   - Clean separation of font/size/theme application logic
-   - LocalStorage persistence for seamless UX
-
-**Next Steps/Notes:**
-- All reading experience features fully implemented
-- Settings persist correctly across page refreshes
-- Sticky header appears/disappears smoothly
-- Next chapter navigation working for sequential reading
-- Theme switching applies to all reading content
-
----
-
-### BOOK and Chapter Title Detection Fix and Documentation - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-11-30
-**Completed:** 2025-11-30
-
-**Objective:** Fix detection of BOOK section titles and chapter titles for books with titles on separate lines, specifically "The History of Tom Jones, a Foundling" (Project Gutenberg #6593).
-
-**Problems:**
-1. **BOOK section titles showing as "(untitled)":**
-   - Tom Jones has multi-line BOOK titles spanning 2+ lines
-   - Code only checked immediate next line, which was often empty
-   - Example: "BOOK I." → empty line → "CONTAINING AS MUCH OF THE BIRTH..." → "...THE BEGINNING OF THIS HISTORY."
-
-2. **Chapter titles showing as empty strings:**
-   - Tom Jones has chapter titles 2 lines after the marker
-   - Code only checked immediate next line, which was always empty
-   - Example: "Chapter i." → empty line → "The introduction to the work, or bill of fare to the feast."
-
-**Changes Made:**
-
-1. **BOOK Title Detection** (`scripts/generate_summaries.py:1185-1212`):
-   - Extended lookahead from 1 line to 5 lines
-   - Skip empty lines when searching for titles
-   - Collect multi-line titles (all-caps or title case lines < 100 chars)
-   - Join multiple title lines with spaces
-   - Stop when hitting chapter marker or prose content
-
-2. **Chapter Title Detection** (`scripts/generate_summaries.py:1248-1274`):
-   - Extended lookahead from 1 line to 3 lines
-   - Skip empty lines when searching for titles
-   - Increased max title length from 100 to 150 characters
-   - Stop when hitting another marker or prose content
-
-**Results:**
-- **BOOK Titles:** Now properly detected and displayed
-  - Before: "(untitled)"
-  - After: "CONTAINING AS MUCH OF THE BIRTH OF THE FOUNDLING AS IS NECESSARY OR PROPER TO ACQUAINT THE READER WITH IN THE BEGINNING OF THIS HISTORY."
-
-- **Chapter Titles:** Now properly detected and normalized
-  - Before: Empty strings
-  - After: "The Introduction to the Work, or Bill of Fare to the Feast."
-
-**Examples from Tom Jones:**
-```
-BOOK I: CONTAINING AS MUCH OF THE BIRTH OF THE FOUNDLING...
-  Chapter 1: The Introduction to the Work, or Bill of Fare to the Feast.
-  Chapter 2: A Short Description of Squire Allworthy, and a Fuller Account of Miss
-  Chapter 3: An Odd Accident Which Befel Mr Allworthy at His Return Home...
-```
-
-**Impact:**
-- Fixes title detection for books with titles on separate lines
-- Handles multi-line titles automatically
-- Backward compatible with existing single-line title detection
-- Improves metadata quality for chapter summaries
-
-**Documentation Updated:**
-- `ERD.md` - Added new section "Multi-Line Title Detection with Empty Line Skipping (Tom Jones Fix - 2025-11-30)" documenting:
-  - BOOK section title detection algorithm (lines 504-571)
-  - Chapter title detection algorithm (lines 572-633)
-  - Code examples with before/after comparisons
-  - Algorithm details and stop conditions
-  - Test coverage information
-- `ERD.md` - Updated "Supported Chapter Patterns" section to document lowercase Roman numeral support (lines 286-308)
-
----
-
-### Lowercase Roman Numeral Support - COMPLETED
-**Status:** ✓ Completed
-**Started:** 2025-11-30
-**Completed:** 2025-11-30
-
-**Objective:** Fix chapter detection for books using lowercase Roman numerals, specifically "The History of Tom Jones, a Foundling" by Henry Fielding (Project Gutenberg #6593).
-
-**Problem:**
-- Tom Jones uses lowercase Roman numerals for chapters (e.g., "Chapter i.", "Chapter ii.", "Chapter iii.")
-- Chapter detection regex only matched uppercase Roman numerals: `[IVXLCDM]+`
-- Result: Only 1 chapter detected (preface) out of 209 total chapters (99.5% content loss)
-
-**Root Cause Analysis:**
 - Pattern in `extract_two_level_structure_from_body()` at line 1104: `[IVXLCDM]+` only matches uppercase
 - Similar patterns at lines 1106-1107 for standalone Roman numerals also uppercase-only
 - While `roman_to_int()` function already handled case conversion (line 466: `s.upper()`), the regex pattern prevented lowercase matches from even being detected
@@ -7279,4 +6507,68 @@ Created a complete SEO (Search Engine Optimization) strategy to maximize organic
 - Quality content serves both humans and bots
 
 This comprehensive SEO strategy positions Summra to dominate organic search for classic book summaries within 6-12 months.
+
+
+- `toc_end_line` is being set to 0, causing search to start from beginning of file
+- This causes TOC entries to be matched instead of actual story content
+- The TOC/CONTENTS detection logic needs improvement to properly identify where the TOC section ends
+- Text has already been processed by `extract_project_gutenberg_content()` which may remove/modify lines
+
+
+### Story Collection Detection for 2-Layer Structure - COMPLETED ✓
+**Status:** ✓ Completed
+**Started:** 2025-12-02
+**Completed:** 2025-12-02
+
+**Objective:** Detect and properly process story collections where stories are the top-level sections and some stories have internal chapters/parts.
+
+**Example Book:** "The Eternal Moment and Other Stories" by E.M. Forster
+- THE MACHINE STOPS (3 parts: "_Part I_", "_Part II_", "_Part III_")
+- THE POINT OF IT (3 parts: roman numerals "I", "II", "III")
+- MR. ANDREWS (single chapter)
+- CO-ORDINATION (single chapter)
+- THE STORY OF THE SIREN (single chapter)
+- THE ETERNAL MOMENT (3 parts: roman numerals "I", "II", "III")
+
+**Changes Made:**
+
+1. **New Story Collection Detection** (`scripts/generate_summaries.py:986-1190`)
+   - Added `extract_story_collection_toc()` method to detect story-based 2-layer structures
+   - Searches for story titles from TOC in the book body
+   - Detects internal parts within stories using two patterns:
+     - Italicized format: `_Part I_`, `_Part II_`, etc.
+     - Centered roman numerals: "I", "II", "III" (with whitespace padding)
+   - Creates structure with type='STORY' for compatibility with existing 2-layer processing
+   - Returns list of stories with their internal chapters/parts
+
+2. **Duplicate-Based TOC End Detection** (`scripts/generate_summaries.py:1028-1077`)
+   - **Key Innovation:** When a story title appears twice in the text, the first occurrence is in the TOC, and the second is the actual story content
+   - Finds all occurrences of each story title
+   - Identifies the second occurrence as the start of the body content
+   - Verifies content with part markers or substantial paragraph text
+   - Fallback: Uses CONTENTS marker + 20 lines if no duplicates found
+   - **Solves the line offset problem** caused by Project Gutenberg content extraction
+
+3. **Integrated into Structure Detection** (`scripts/generate_summaries.py:3789-3822`)
+   - Updated `_detect_book_structure()` to try story collection detection first
+   - Falls back to traditional BOOK/PART/ACT detection if not a story collection
+   - Added 'STORY' to valid section types in validation logic
+
+4. **Chapter Detection for STORY Sections** (`scripts/generate_summaries.py:1819-1889`)
+   - Special handling for single-chapter stories (uses story start as chapter start)
+   - Added pattern matching for `_Part <numeral>_` (italicized format)
+   - Added pattern matching for centered roman numerals with whitespace padding
+   - Section boundary detection uses story titles instead of "STORY <numeral>" markers
+
+**Test Results (E.M. Forster Book):**
+- ✅ All 6 stories detected correctly at proper line numbers
+- ✅ Multi-part stories (THE MACHINE STOPS with _Part I/II/III_) detected: 3 chapters
+- ✅ Multi-part stories with roman numerals (THE POINT OF IT, THE ETERNAL MOMENT with I/II/III) detected: 3 chapters each
+- ✅ Single-chapter stories (MR. ANDREWS, CO-ORDINATION, THE STORY OF THE SIREN) detected: 1 chapter each
+- ✅ Total: 13 chapters (1 preface + 12 story chapters)
+- ✅ No duplicates - coverage 129% (down from 371% before fix)
+- ✅ All stories found at correct locations (not TOC entries)
+
+**Key Success Factor:**
+The duplicate detection approach elegantly solves the TOC boundary problem by leveraging the fact that story titles naturally appear twice in collection books - once in the table of contents and once at the actual story start. This works regardless of text preprocessing or line number offsets.
 

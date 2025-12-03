@@ -71,9 +71,11 @@
 
             <!-- Book Detail Section -->
             <section class="summary-section hidden" id="summary-section">
-                <div class="back-button-container">
-                    <button class="back-button" id="back-button">← Back to Books</button>
-                </div>
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-book" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-book">
+                        <!-- Breadcrumbs will be dynamically loaded here -->
+                    </ol>
+                </nav>
 
                 <div class="book-detail-header">
                     <img id="book-info-cover" class="book-detail-cover hidden" alt="Book cover">
@@ -112,8 +114,14 @@
 
                     <!-- Chapters List -->
                     <div class="chapters-section" id="chapters-section">
-                        <h3>Chapters</h3>
+                        <h3>Chapter Full Text & Summary</h3>
                         <div class="chapters-list" id="chapters-list"></div>
+                    </div>
+
+                    <!-- Related Books Section -->
+                    <div class="related-books-section hidden" id="related-books-section">
+                        <h3>You May Also Like</h3>
+                        <div class="related-books-carousel" id="related-books-carousel"></div>
                     </div>
                 </div>
             </section>
@@ -133,7 +141,11 @@
             <!-- Medium Summary Detail Section -->
             <section class="medium-detail-section hidden" id="medium-detail-section">
                 <div class="back-button-container">
-                    <button class="back-button" id="medium-back-button">← Back to Book</button>
+                    <nav class="breadcrumb-nav" id="breadcrumb-nav-medium" aria-label="Breadcrumb">
+                        <ol class="breadcrumb-list" id="breadcrumb-list-medium">
+                            <!-- Breadcrumbs will be dynamically loaded here -->
+                        </ol>
+                    </nav>
                     <button class="reading-settings-toggle" id="reading-settings-toggle-medium" title="Reading Settings">⚙️</button>
                 </div>
 
@@ -172,7 +184,11 @@
             <!-- Chapter Detail Section -->
             <section class="chapter-detail-section hidden" id="chapter-detail-section">
                 <div class="back-button-container">
-                    <button class="back-button" id="chapter-back-button">← Back to Book</button>
+                    <nav class="breadcrumb-nav" id="breadcrumb-nav-chapter" aria-label="Breadcrumb">
+                        <ol class="breadcrumb-list" id="breadcrumb-list-chapter">
+                            <!-- Breadcrumbs will be dynamically loaded here -->
+                        </ol>
+                    </nav>
                     <button class="reading-settings-toggle" id="reading-settings-toggle" title="Reading Settings">⚙️</button>
                 </div>
 
@@ -281,9 +297,11 @@
 
             <!-- Category Detail Section -->
             <section class="category-detail-section hidden" id="category-detail-section">
-                <div class="back-button-container">
-                    <button class="back-button" id="category-back-button">← Back to Home</button>
-                </div>
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-category" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-category">
+                        <!-- Breadcrumbs will be dynamically loaded here -->
+                    </ol>
+                </nav>
 
                 <div class="category-detail-header">
                     <h2 id="category-detail-title"></h2>
@@ -295,9 +313,11 @@
 
             <!-- All Categories Section -->
             <section class="all-categories-section hidden" id="all-categories-section">
-                <div class="back-button-container">
-                    <button class="back-button" id="all-categories-back-button">← Back to Home</button>
-                </div>
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-all-categories" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-all-categories">
+                        <!-- Breadcrumbs will be dynamically loaded here -->
+                    </ol>
+                </nav>
 
                 <h2 class="section-title">All Categories</h2>
                 <div class="categories-container" id="all-categories-container"></div>
@@ -306,8 +326,9 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <p>Summra - Exploring public domain classics with AI assistance</p>
-            <p class="small">Summaries generated using Google Gemini AI | TTS powered by VITS</p>
+            <p>Summra - Free summaries and full text of classic literature</p>
+            <p class="small">Comprehensive book summaries, chapter-by-chapter analysis, and complete texts</p>
+            <p class="small">© 2025 Summra. All rights reserved.</p>
         </footer>
     </div>
 

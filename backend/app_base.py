@@ -37,6 +37,99 @@ CORS(app)
 db = models.Database()
 
 
+# Helper Functions
+
+def build_breadcrumbs(page_type, **kwargs):
+    """
+    Build breadcrumb data for SEO and navigation.
+
+    Returns list of breadcrumb items with:
+    - name: Display text
+    - url: Relative URL
+    - position: Position in breadcrumb trail (starts at 1)
+    """
+    breadcrumbs = [
+        {'name': 'Home', 'url': '/', 'position': 1}
+    ]
+
+    if page_type == 'categories':
+        breadcrumbs.append({'name': 'Categories', 'url': '/categories', 'position': 2})
+
+    elif page_type == 'category':
+        category = kwargs.get('category')
+        breadcrumbs.append({'name': 'Categories', 'url': '/categories', 'position': 2})
+        if category:
+            breadcrumbs.append({
+                'name': category['name'],
+                'url': f"/categories/{category['id']}",
+                'position': 3
+            })
+
+    elif page_type == 'all_books':
+        breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+
+    elif page_type == 'book':
+        book = kwargs.get('book')
+        if book:
+            breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+            breadcrumbs.append({
+                'name': book['title'],
+                'url': f"/books/{book['slug']}",
+                'position': 3
+            })
+
+    elif page_type == 'book_summary':
+        book = kwargs.get('book')
+        if book:
+            breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+            breadcrumbs.append({
+                'name': book['title'],
+                'url': f"/books/{book['slug']}",
+                'position': 3
+            })
+            breadcrumbs.append({
+                'name': 'Summary',
+                'url': f"/books/{book['slug']}/summary",
+                'position': 4
+            })
+
+    elif page_type == 'chapter':
+        book = kwargs.get('book')
+        chapter = kwargs.get('chapter')
+        if book:
+            breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+            breadcrumbs.append({
+                'name': book['title'],
+                'url': f"/books/{book['slug']}",
+                'position': 3
+            })
+            if chapter:
+                breadcrumbs.append({
+                    'name': f"Chapter {chapter['chapter_number']}",
+                    'url': f"/books/{book['slug']}/chapters/{chapter['chapter_number']}",
+                    'position': 4
+                })
+
+    return breadcrumbs
+
+
+def breadcrumbs_to_schema(breadcrumbs):
+    """Convert breadcrumbs list to Schema.org BreadcrumbList JSON-LD"""
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": crumb['position'],
+                "name": crumb['name'],
+                "item": f"https://summra.com{crumb['url']}" if crumb['position'] < len(breadcrumbs) else None
+            }
+            for crumb in breadcrumbs
+        ]
+    }
+
+
 # HTTP Caching Headers
 @app.after_request
 def add_cache_headers(response):
@@ -68,7 +161,8 @@ def add_cache_headers(response):
 @app.route('/')
 def index():
     """Serve the main page"""
-    return render_template('index.html')
+    return render_template('index.html',
+                         meta_title='Free Classic Book Summaries, Chapter Summaries & Full Text | Summra')
 
 
 @app.route('/robots.txt')
@@ -176,6 +270,13 @@ def book_detail(slug):
     if cover_url:
         structured_data["image"] = og_image
 
+    # Build breadcrumbs
+    breadcrumbs = build_breadcrumbs('book', book=book)
+    breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
+
+    # Combine structured data (Book + BreadcrumbList)
+    combined_structured_data = [structured_data, breadcrumb_schema]
+
     # Pass initial data to speed up client-side rendering
     initial_data = {
         'type': 'book',
@@ -184,7 +285,8 @@ def book_detail(slug):
             'title': book['title'],
             'author': book['author'],
             'slug': slug
-        }
+        },
+        'breadcrumbs': breadcrumbs
     }
 
     return render_template(
@@ -195,7 +297,7 @@ def book_detail(slug):
         canonical_url=canonical_url,
         og_type='book',
         og_image=og_image,
-        structured_data=structured_data,
+        structured_data=combined_structured_data,
         initial_data=initial_data
     )
 
@@ -400,8 +502,8 @@ def all_books():
     book_count = len(books)
 
     # Prepare meta tags
-    meta_title = f"All {book_count} Classic Books - AI Summaries | Summra"
-    meta_description = f"Browse our complete collection of {book_count} classic books with AI-generated summaries. From Shakespeare to Tolstoy, explore timeless literature with concise and comprehensive analyses."
+    meta_title = f"Browse {book_count} Classic Books - Free Summaries | Summra"
+    meta_description = f"Browse our complete collection of {book_count} classic books with free summaries. From Shakespeare to Tolstoy, explore timeless literature with concise and comprehensive analyses."
     canonical_url = "https://summra.com/books"
 
     # Pass initial data
@@ -413,7 +515,7 @@ def all_books():
         'index.html',
         meta_title=meta_title,
         meta_description=meta_description,
-        meta_keywords="classic books, literature, AI summaries, book collection, timeless literature",
+        meta_keywords="classic books, literature, free summaries, book collection, timeless literature",
         canonical_url=canonical_url,
         og_type='website',
         initial_data=initial_data
@@ -801,6 +903,32 @@ def get_book_categories(book_id):
         })
     except Exception as e:
         logger.error(f"Error fetching categories for book {book_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/books/<int:book_id>/related', methods=['GET'])
+def get_related_books(book_id):
+    """Get related books for a specific book (by author, category, and country)"""
+    try:
+        book = db.get_book(book_id)
+        if not book:
+            return jsonify({
+                'success': False,
+                'error': 'Book not found'
+            }), 404
+
+        related = db.get_related_books(book_id)
+
+        return jsonify({
+            'success': True,
+            'book_id': book_id,
+            'related': related
+        })
+    except Exception as e:
+        logger.error(f"Error fetching related books for book {book_id}: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

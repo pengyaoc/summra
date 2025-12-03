@@ -4,6 +4,7 @@ class SummraApp {
     constructor() {
         this.apiBase = '/api';
         this.currentBook = null;
+        this.currentCategory = null;
         this.currentSummaryType = null;
         this.allBooks = [];
         this.booksLoaded = false;
@@ -25,6 +26,8 @@ class SummraApp {
         this.categoryCache = {}; // { categoryId: { category: {...}, books: [...] } }
         // Cache shuffled book orders for carousels
         this.carouselOrderCache = {}; // { carouselId: [shuffled books array] }
+        // Track where user came from for context-aware breadcrumbs
+        this.originCategory = null; // Store category when book is selected from category page
         this.init();
     }
 
@@ -147,6 +150,14 @@ class SummraApp {
             .replace(/\s+/g, '-')
             .replace(/--+/g, '-')
             .trim();
+    }
+
+    /**
+     * Update document title for client-side navigation
+     * @param {string} title - The new page title
+     */
+    updatePageTitle(title) {
+        document.title = title;
     }
 
     saveScrollPosition() {
@@ -367,36 +378,8 @@ class SummraApp {
     }
 
     setupEventListeners() {
-        const backButton = document.getElementById('back-button');
-        if (backButton) {
-            backButton.addEventListener('click', () => {
-                this.saveScrollPosition();
-                window.history.pushState(null, '', '/');
-                this.handleRoute();
-            });
-        }
-
-        const mediumBackButton = document.getElementById('medium-back-button');
-        if (mediumBackButton) {
-            mediumBackButton.addEventListener('click', () => {
-                if (this.currentBook) {
-                    const slug = this.slugify(this.currentBook.title);
-                    window.history.pushState(null, '', `/books/${slug}`);
-                    this.handleRoute();
-                }
-            });
-        }
-
-        const chapterBackButton = document.getElementById('chapter-back-button');
-        if (chapterBackButton) {
-            chapterBackButton.addEventListener('click', () => {
-                if (this.currentBook) {
-                    const slug = this.slugify(this.currentBook.title);
-                    window.history.pushState(null, '', `/books/${slug}`);
-                    this.handleRoute();
-                }
-            });
-        }
+        // Note: Back buttons have been replaced with breadcrumb navigation
+        // Breadcrumbs are updated via updateBreadcrumbs() in each view method
 
         const headerHomeLink = document.getElementById('header-home-link');
         if (headerHomeLink) {
@@ -583,6 +566,20 @@ class SummraApp {
     }
 
     async selectBook(book, restoreScroll = false) {
+        // Track origin category for context-aware breadcrumbs BEFORE changing view
+        // If we're currently viewing a category, store it as the origin
+        if (this.currentView === 'category' && this.currentCategory) {
+            this.originCategory = {
+                id: this.currentCategory.id,
+                name: this.currentCategory.name
+            };
+        }
+        // If navigating from All Books or home, clear origin category
+        else if (this.currentView === 'all-books' || this.currentView === 'home') {
+            this.originCategory = null;
+        }
+        // Otherwise, keep the existing originCategory (e.g., when navigating within book pages)
+
         this.currentBook = book;
         this.currentView = 'book';
 
@@ -607,8 +604,16 @@ class SummraApp {
         }
 
         if (bookCoverContainer && book.cover_image_url) {
+            // Prepend /static/ to the path if it starts with /covers/ or covers/ (for consistency with other pages)
+            let fullImageUrl = book.cover_image_url;
+            if (book.cover_image_url.startsWith('/covers/')) {
+                fullImageUrl = '/static' + book.cover_image_url;
+            } else if (book.cover_image_url.startsWith('covers/')) {
+                fullImageUrl = '/static/' + book.cover_image_url;
+            }
+
             // Get base URL without extension for WebP/JPG support
-            const urlWithoutExt = book.cover_image_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+            const urlWithoutExt = fullImageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
 
             // If it's still the original <img> element, replace with <picture>
             if (bookCoverContainer.tagName === 'IMG') {
@@ -650,15 +655,22 @@ class SummraApp {
         // Show book detail section
         this.showBookDetail(restoreScroll);
 
-        // Load summaries and chapters
+        // Load summaries, chapters, and related books
         await Promise.all([
             this.loadConciseSummary(),
             this.loadMediumSummary(),
-            this.loadChapters()
+            this.loadChapters(),
+            this.loadRelatedBooks()
         ]);
 
         // Update URL
         this.updateURL(book);
+
+        // Update breadcrumbs
+        this.updateBreadcrumbs('book');
+
+        // Update page title
+        this.updatePageTitle(`${book.title} by ${book.author} | Summra`);
     }
 
     showBookDetail(restoreScroll = false) {
@@ -903,6 +915,114 @@ class SummraApp {
         }
     }
 
+    async loadRelatedBooks() {
+        const relatedBooksSection = document.getElementById('related-books-section');
+        const relatedBooksCarousel = document.getElementById('related-books-carousel');
+
+        if (!relatedBooksSection || !relatedBooksCarousel) return;
+
+        try {
+            const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/related`);
+            const data = await response.json();
+
+            if (data.success && data.related) {
+                const allRelated = [
+                    ...(data.related.by_author || []),
+                    ...(data.related.by_category || []),
+                    ...(data.related.by_country || [])
+                ];
+
+                // Remove duplicates (books may appear in multiple categories)
+                const uniqueBooks = [];
+                const seenIds = new Set();
+                for (const book of allRelated) {
+                    if (!seenIds.has(book.id)) {
+                        seenIds.add(book.id);
+                        uniqueBooks.push(book);
+                    }
+                }
+
+                // Limit to 10 related books
+                const relatedBooks = uniqueBooks.slice(0, 10);
+
+                if (relatedBooks.length > 0) {
+                    // Create carousel container
+                    const carousel = document.createElement('div');
+                    carousel.className = 'carousel-container';
+
+                    // Add navigation buttons
+                    const leftBtn = document.createElement('button');
+                    leftBtn.className = 'carousel-nav-btn left';
+                    leftBtn.innerHTML = '‹';
+                    leftBtn.disabled = true;  // Start disabled (at beginning)
+
+                    const rightBtn = document.createElement('button');
+                    rightBtn.className = 'carousel-nav-btn right';
+                    rightBtn.innerHTML = '›';
+                    rightBtn.disabled = false;  // Start enabled (can scroll right)
+
+                    // Create scroll container
+                    const scrollContainer = document.createElement('div');
+                    scrollContainer.className = 'related-books-scroll';
+
+                    relatedBooks.forEach(book => {
+                        const bookCard = document.createElement('div');
+                        bookCard.className = 'related-book-card';
+
+                        const coverImageHtml = book.cover_image_url
+                            ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'related-book-cover')
+                            : '';
+
+                        bookCard.innerHTML = `
+                            ${coverImageHtml}
+                            <h4 class="related-book-title">${this.escapeHtml(book.title)}</h4>
+                            <p class="related-book-author">${this.escapeHtml(book.author)}</p>
+                        `;
+
+                        bookCard.addEventListener('click', () => this.selectBook(book));
+                        scrollContainer.appendChild(bookCard);
+                    });
+
+                    // Carousel navigation logic
+                    const scrollAmount = 220; // Width of one card + gap
+
+                    leftBtn.addEventListener('click', () => {
+                        scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
+                    });
+
+                    rightBtn.addEventListener('click', () => {
+                        scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
+                    });
+
+                    // Update button states on scroll
+                    const updateButtonStates = () => {
+                        leftBtn.disabled = scrollContainer.scrollLeft <= 0;
+                        rightBtn.disabled = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 1;
+                    };
+
+                    scrollContainer.addEventListener('scroll', updateButtonStates);
+
+                    // Wait for DOM to render before checking initial state
+                    setTimeout(() => updateButtonStates(), 0);
+
+                    carousel.appendChild(leftBtn);
+                    carousel.appendChild(scrollContainer);
+                    carousel.appendChild(rightBtn);
+                    relatedBooksCarousel.innerHTML = '';
+                    relatedBooksCarousel.appendChild(carousel);
+                    relatedBooksSection.classList.remove('hidden');
+                } else {
+                    relatedBooksSection.classList.add('hidden');
+                }
+            } else {
+                relatedBooksSection.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error loading related books:', error);
+            relatedBooksSection.classList.add('hidden');
+        }
+    }
+
     showChapterDetailPage(chapterNum) {
         this.updateURL(this.currentBook, chapterNum);
         this.showChapterDetail(this.currentBook, chapterNum);
@@ -994,6 +1114,12 @@ class SummraApp {
 
         // Initialize reading progress for medium summary
         setTimeout(() => this.updateReadingProgressMedium(), 100);
+
+        // Update breadcrumbs
+        this.updateBreadcrumbs('medium');
+
+        // Update page title
+        this.updatePageTitle(`Summary of ${book.title} by ${book.author} | Summra`);
     }
 
     async showChapterDetail(book, chapterNum, restoreScroll = false) {
@@ -1157,6 +1283,12 @@ class SummraApp {
 
         // Initialize reading progress
         setTimeout(() => this.updateReadingProgress(), 100);
+
+        // Update breadcrumbs
+        this.updateBreadcrumbs('chapter');
+
+        // Update page title
+        this.updatePageTitle(`Full Text of ${chapterTitle} - ${book.title} | Summra`);
     }
 
     async generateTTS(text, type, buttonElement) {
@@ -1350,11 +1482,19 @@ class SummraApp {
         if (categoriesSection) categoriesSection.classList.remove('hidden');
 
         this.currentBook = null;
+        this.currentCategory = null;
         this.currentSummaryType = null;
         this.currentChapter = null;
         this.mediumSummaryContent = null;
+        this.originCategory = null;
+
+        // Hide all breadcrumbs when on home page
+        this.hideAllBreadcrumbs();
 
         this.restoreScrollPosition('home');
+
+        // Update page title
+        this.updatePageTitle('Free Classic Book Summaries, Chapter Summaries & Full Text | Summra');
     }
 
     // Keep backward compatibility
@@ -1421,6 +1561,9 @@ class SummraApp {
 
         // Render cached or freshly fetched data
         if (categoryData) {
+            // Store current category for breadcrumbs
+            this.currentCategory = categoryData.category;
+
             document.getElementById('category-detail-title').textContent = categoryData.category.name;
             document.getElementById('category-detail-subtitle').textContent =
                 `${categoryData.books.length} book${categoryData.books.length !== 1 ? 's' : ''}`;
@@ -1434,17 +1577,18 @@ class SummraApp {
             });
         }
 
-        // Setup back button - always go to home
-        const backBtn = document.getElementById('category-back-button');
-        backBtn.onclick = () => {
-            this.saveScrollPosition();
-            this.showHomeSection();
-        };
+        // Update breadcrumbs
+        this.updateBreadcrumbs('category');
 
         if (restoreScroll) {
             this.restoreScrollPosition(pageKey);
         } else {
             window.scrollTo(0, 0);
+        }
+
+        // Update page title
+        if (categoryData && categoryData.category) {
+            this.updatePageTitle(`${categoryData.category.name} - Classic Books | Summra`);
         }
     }
 
@@ -1476,18 +1620,17 @@ class SummraApp {
             console.error('Error loading categories:', error);
         }
 
-        // Setup back button - always go to home
-        const backBtn = document.getElementById('all-categories-back-button');
-        backBtn.onclick = () => {
-            this.saveScrollPosition();
-            this.showHomeSection();
-        };
+        // Update breadcrumbs
+        this.updateBreadcrumbs('all-categories');
 
         if (restoreScroll) {
             this.restoreScrollPosition('all-categories');
         } else {
             window.scrollTo(0, 0);
         }
+
+        // Update page title
+        this.updatePageTitle('Browse Categories - Classic Book Summaries | Summra');
     }
 
     async displayAllCategories(categories) {
@@ -1542,6 +1685,9 @@ class SummraApp {
         this.currentView = 'all-books';
         this.setCurrentPage('all-books');
 
+        // Clear category state since we're not viewing a category
+        this.currentCategory = null;
+
         // Reuse category detail section for all books grid
         const sections = ['categories-section', 'summary-section',
                          'medium-detail-section', 'chapter-detail-section', 'all-categories-section'];
@@ -1565,18 +1711,17 @@ class SummraApp {
             grid.appendChild(bookCard);
         });
 
-        // Setup back button - always go to home
-        const backBtn = document.getElementById('category-back-button');
-        backBtn.onclick = () => {
-            this.saveScrollPosition();
-            this.showHomeSection();
-        };
+        // Update breadcrumbs for All Books page
+        this.updateBreadcrumbs('category');
 
         if (restoreScroll) {
             this.restoreScrollPosition('all-books');
         } else {
             window.scrollTo(0, 0);
         }
+
+        // Update page title
+        this.updatePageTitle('Browse Classic Books - Free Summaries | Summra');
     }
 
     createBookCard(book) {
@@ -1657,8 +1802,16 @@ class SummraApp {
         // Escape attributes for safety
         const escapedAlt = this.escapeHtml(alt);
 
+        // Prepend /static/ to the path if it starts with /covers/ or covers/ (for consistency with other pages)
+        let fullImageUrl = imageUrl;
+        if (imageUrl.startsWith('/covers/')) {
+            fullImageUrl = '/static' + imageUrl;
+        } else if (imageUrl.startsWith('covers/')) {
+            fullImageUrl = '/static/' + imageUrl;
+        }
+
         // Get base URL without extension
-        const urlWithoutExt = imageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+        const urlWithoutExt = fullImageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
 
         // Create picture element with WebP source and JPG fallback
         return `
@@ -1997,6 +2150,143 @@ class SummraApp {
         if (progressText) {
             progressText.textContent = `${progress}%`;
         }
+    }
+
+    /**
+     * Build breadcrumbs based on current view
+     */
+    buildBreadcrumbs() {
+        const breadcrumbs = [
+            { name: 'Home', url: '/', position: 1 }
+        ];
+
+        const path = window.location.pathname;
+
+        // Parse different page types
+        const bookMatch = path.match(/^\/books\/([^\/]+)$/);
+        const summaryMatch = path.match(/^\/books\/([^\/]+)\/summary$/);
+        const chapterMatch = path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/);
+        const categoryMatch = path.match(/^\/categories\/(\d+)$/);
+        const categoriesMatch = path === '/categories';
+        const allBooksMatch = path === '/books';
+
+        if (categoriesMatch) {
+            breadcrumbs.push({ name: 'Categories', url: '/categories', position: 2 });
+        } else if (categoryMatch) {
+            breadcrumbs.push({ name: 'Categories', url: '/categories', position: 2 });
+            // Get category name from current data if available
+            const categoryId = parseInt(categoryMatch[1]);
+            const categoryName = this.currentCategory?.name || `Category ${categoryId}`; // Fallback to ID if name not available
+            breadcrumbs.push({ name: categoryName, url: `/categories/${categoryId}`, position: 3 });
+        } else if (allBooksMatch) {
+            breadcrumbs.push({ name: 'All Books', url: '/books', position: 2 });
+        } else if (this.currentBook) {
+            // Use origin category if user came from a category page, otherwise use All Books
+            if (this.originCategory) {
+                breadcrumbs.push({ name: 'Categories', url: '/categories', position: 2 });
+                breadcrumbs.push({
+                    name: this.originCategory.name,
+                    url: `/categories/${this.originCategory.id}`,
+                    position: 3
+                });
+                breadcrumbs.push({
+                    name: this.currentBook.title,
+                    url: `/books/${this.slugify(this.currentBook.title)}`,
+                    position: 4
+                });
+            } else {
+                breadcrumbs.push({ name: 'All Books', url: '/books', position: 2 });
+                breadcrumbs.push({
+                    name: this.currentBook.title,
+                    url: `/books/${this.slugify(this.currentBook.title)}`,
+                    position: 3
+                });
+            }
+
+            if (summaryMatch) {
+                breadcrumbs.push({ name: 'Summary', url: path, position: breadcrumbs.length + 1 });
+            } else if (chapterMatch) {
+                const chapterNum = parseInt(chapterMatch[2]);
+                breadcrumbs.push({
+                    name: `Chapter ${chapterNum}`,
+                    url: path,
+                    position: breadcrumbs.length + 1
+                });
+            }
+        }
+
+        return breadcrumbs;
+    }
+
+    /**
+     * Hide all breadcrumb navigations
+     */
+    hideAllBreadcrumbs() {
+        const sections = ['book', 'medium', 'chapter', 'category', 'all-categories'];
+        sections.forEach(section => {
+            const breadcrumbNav = document.getElementById(`breadcrumb-nav-${section}`);
+            if (breadcrumbNav) {
+                breadcrumbNav.classList.add('hidden');
+            }
+        });
+    }
+
+    /**
+     * Render breadcrumbs in the navigation
+     * @param {Array} breadcrumbs - Array of breadcrumb objects
+     * @param {string} section - Section identifier (book, medium, chapter, category, all-categories)
+     */
+    renderBreadcrumbs(breadcrumbs, section = 'book') {
+        const breadcrumbNav = document.getElementById(`breadcrumb-nav-${section}`);
+        const breadcrumbList = document.getElementById(`breadcrumb-list-${section}`);
+
+        if (!breadcrumbNav || !breadcrumbList) return;
+
+        // Hide breadcrumbs on home page
+        if (breadcrumbs.length <= 1) {
+            breadcrumbNav.classList.add('hidden');
+            return;
+        }
+
+        // Show breadcrumbs
+        breadcrumbNav.classList.remove('hidden');
+
+        // Build breadcrumb HTML
+        const breadcrumbHTML = breadcrumbs.map((crumb, index) => {
+            const isLast = index === breadcrumbs.length - 1;
+
+            if (isLast) {
+                // Last item - current page (no link)
+                return `
+                    <li class="breadcrumb-item">
+                        <span class="breadcrumb-current">${this.escapeHtml(crumb.name)}</span>
+                    </li>
+                `;
+            } else {
+                // Intermediate items - with links
+                return `
+                    <li class="breadcrumb-item">
+                        <a href="${crumb.url}" class="breadcrumb-link">${this.escapeHtml(crumb.name)}</a>
+                        <span class="breadcrumb-separator">›</span>
+                    </li>
+                `;
+            }
+        }).join('');
+
+        breadcrumbList.innerHTML = breadcrumbHTML;
+    }
+
+    /**
+     * Update breadcrumbs based on current page
+     * @param {string} section - Section identifier (book, medium, chapter, category, all-categories)
+     */
+    updateBreadcrumbs(section = 'book') {
+        // Hide all breadcrumbs first to prevent persistence
+        this.hideAllBreadcrumbs();
+
+        // Build and render breadcrumbs for the active section
+        const breadcrumbs = this.buildBreadcrumbs();
+        this.renderBreadcrumbs(breadcrumbs, section);
     }
 
     setupLightbox() {
