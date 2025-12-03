@@ -336,6 +336,10 @@ class SummraApp {
         }
 
         persistentAudio.src = chunkUrl;
+
+        // Update MediaSession metadata for Bluetooth/lock screen
+        this.updateMediaSessionMetadata();
+
         try {
             await persistentAudio.play();
             const playPauseBtn = document.getElementById('player-play-pause');
@@ -593,6 +597,9 @@ class SummraApp {
         if (bookTitle) bookTitle.textContent = book.title;
         if (bookAuthor) bookAuthor.textContent = `by ${book.author}`;
 
+        // Fetch full book data to get metadata (about_text, relevance_now, author info)
+        this.loadBookMetadata(book.id);
+
         // Handle book cover - check for both <img> and <picture> elements
         let bookCoverContainer = document.getElementById('book-info-cover');
 
@@ -694,6 +701,115 @@ class SummraApp {
             this.restoreScrollPosition(pageKey);
         } else {
             window.scrollTo(0, 0);
+        }
+    }
+
+    updateAboutSection(book) {
+        // Get section and elements
+        const aboutSection = document.getElementById('about-section');
+        const aboutText = document.getElementById('about-text');
+        const relevanceText = document.getElementById('relevance-text');
+        const authorCountryContainer = document.getElementById('author-country-container');
+        const authorCountry = document.getElementById('author-country');
+        const authorOtherBooksContainer = document.getElementById('author-other-books-container');
+        const otherBooksList = document.getElementById('other-books-list');
+
+        // Check if we have any data to display (backward compatibility)
+        const hasAbout = book.about_text && book.about_text.trim();
+        const hasRelevance = book.relevance_now && book.relevance_now.trim();
+        const hasCountry = book.author_country && book.author_country.trim();
+        const hasOtherBooks = book.author_other_books && book.author_other_books.trim();
+
+        // Debug logging
+        console.log('updateAboutSection called for:', book.title);
+        console.log('Has metadata:', { hasAbout, hasRelevance, hasCountry, hasOtherBooks });
+
+        // Only show section if we have at least some data
+        if (!hasAbout && !hasRelevance && !hasCountry && !hasOtherBooks) {
+            if (aboutSection) aboutSection.classList.add('hidden');
+            return;
+        }
+
+        // Show section
+        if (aboutSection) aboutSection.classList.remove('hidden');
+
+        // Populate about text
+        if (aboutText) {
+            aboutText.textContent = hasAbout ? book.about_text : '';
+            aboutText.parentElement.style.display = hasAbout ? 'block' : 'none';
+        }
+
+        // Populate relevance text
+        if (relevanceText) {
+            relevanceText.textContent = hasRelevance ? book.relevance_now : '';
+            relevanceText.parentElement.style.display = hasRelevance ? 'block' : 'none';
+        }
+
+        // Populate author country
+        if (authorCountry && hasCountry) {
+            authorCountry.textContent = book.author_country;
+            if (authorCountryContainer) authorCountryContainer.style.display = 'flex';
+        } else {
+            if (authorCountryContainer) authorCountryContainer.style.display = 'none';
+        }
+
+        // Populate other books by author
+        if (hasOtherBooks) {
+            const booksArray = book.author_other_books.split(',').map(b => b.trim()).filter(b => b);
+
+            if (booksArray.length > 0) {
+                otherBooksList.innerHTML = booksArray.map(bookTitle =>
+                    `<div class="other-book-item">${this.escapeHtml(bookTitle)}</div>`
+                ).join('');
+
+                // Setup toggle for "More by Author"
+                const toggle = document.getElementById('more-by-author-toggle');
+                const label = document.getElementById('more-by-author-label');
+
+                if (toggle && label) {
+                    // Update label with author name
+                    label.textContent = `More by ${book.author}`;
+
+                    if (authorOtherBooksContainer) authorOtherBooksContainer.style.display = 'block';
+
+                    // Remove old event listeners by cloning
+                    const newToggle = toggle.cloneNode(true);
+                    toggle.parentNode.replaceChild(newToggle, toggle);
+
+                    newToggle.addEventListener('click', () => {
+                        const isExpanded = !otherBooksList.classList.contains('hidden');
+                        const arrow = newToggle.querySelector('.toggle-arrow');
+
+                        if (isExpanded) {
+                            otherBooksList.classList.add('hidden');
+                            if (arrow) arrow.textContent = '▼';
+                        } else {
+                            otherBooksList.classList.remove('hidden');
+                            if (arrow) arrow.textContent = '▲';
+                        }
+                    });
+                }
+            } else {
+                if (authorOtherBooksContainer) authorOtherBooksContainer.style.display = 'none';
+            }
+        } else {
+            if (authorOtherBooksContainer) authorOtherBooksContainer.style.display = 'none';
+        }
+    }
+
+    async loadBookMetadata(bookId) {
+        // Fetch full book data from API to get metadata fields
+        try {
+            const response = await fetch(`${this.apiBase}/books/${bookId}`);
+            const data = await response.json();
+
+            if (data.success && data.book) {
+                // Update the about section with the full book data
+                this.updateAboutSection(data.book);
+            }
+        } catch (error) {
+            console.error('Error loading book metadata:', error);
+            // Silently fail - section will remain hidden
         }
     }
 
@@ -1386,6 +1502,63 @@ class SummraApp {
     updatePlayerInfo(bookTitle, chapterTitle) {
         document.getElementById('player-title').textContent = bookTitle;
         document.getElementById('player-subtitle').textContent = chapterTitle;
+    }
+
+    updateMediaSessionMetadata() {
+        // Update MediaSession API for Bluetooth/CarPlay/Android Auto/lock screen
+        if ('mediaSession' in navigator && this.currentPlayback) {
+            const bookTitle = this.currentPlayback.bookTitle || 'Unknown Book';
+            const chapterTitle = this.currentPlayback.chapterTitle || 'Summary';
+
+            // Get book cover URL if available
+            const coverUrl = this.currentBook && this.currentBook.cover_image_url
+                ? window.location.origin + this.currentBook.cover_image_url
+                : null;
+
+            // Set metadata
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: chapterTitle,
+                artist: bookTitle,
+                album: 'Summra Audiobook Summaries',
+                artwork: coverUrl ? [
+                    { src: coverUrl, sizes: '512x512', type: 'image/jpeg' },
+                    { src: coverUrl, sizes: '256x256', type: 'image/jpeg' },
+                    { src: coverUrl, sizes: '128x128', type: 'image/jpeg' }
+                ] : []
+            });
+
+            // Set up playback controls
+            navigator.mediaSession.setActionHandler('play', () => {
+                const playPauseBtn = document.getElementById('player-play-pause');
+                if (playPauseBtn) playPauseBtn.click();
+            });
+
+            navigator.mediaSession.setActionHandler('pause', () => {
+                const playPauseBtn = document.getElementById('player-play-pause');
+                if (playPauseBtn) playPauseBtn.click();
+            });
+
+            navigator.mediaSession.setActionHandler('stop', () => {
+                this.stopPlayback();
+            });
+
+            // Previous/Next track handlers (if multi-chunk)
+            if (this.currentPlayback.audioUrls && this.currentPlayback.audioUrls.length > 1) {
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    if (this.currentPlayback.currentChunk > 0) {
+                        this.currentPlayback.currentChunk--;
+                        this.playNextChunk();
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    if (this.currentPlayback.currentChunk < this.currentPlayback.audioUrls.length - 1) {
+                        this.currentPlayback.currentChunk++;
+                        this.playNextChunk();
+                    }
+                });
+            }
+        }
     }
 
     async startPersistentPlayback(audioUrls, bookTitle, chapterTitle, audioId = null) {
@@ -2207,8 +2380,14 @@ class SummraApp {
                 breadcrumbs.push({ name: 'Summary', url: path, position: breadcrumbs.length + 1 });
             } else if (chapterMatch) {
                 const chapterNum = parseInt(chapterMatch[2]);
+                // Try to find the chapter in the loaded chapters to get the title
+                const chapter = this.chapters.find(c => c.chapter_number === chapterNum);
+                const chapterTitle = chapter?.chapter_title || null;
+                const chapterName = chapterTitle
+                    ? `${chapterNum}. ${chapterTitle}`
+                    : `Chapter ${chapterNum}`;
                 breadcrumbs.push({
-                    name: `Chapter ${chapterNum}`,
+                    name: chapterName,
                     url: path,
                     position: breadcrumbs.length + 1
                 });

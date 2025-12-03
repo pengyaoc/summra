@@ -24,6 +24,7 @@ import sys
 import time
 import argparse
 import wave
+import subprocess
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -34,6 +35,43 @@ sys.path.insert(0, str(project_root / "backend"))
 from models import Database
 from gemini_tts_handler import GeminiTTSHandler
 import tts_utils
+
+
+def convert_wav_to_opus(wav_path: str, opus_path: str) -> bool:
+    """Convert WAV file to Opus format using ffmpeg
+
+    Opus is specifically optimized for speech compression and provides
+    excellent quality at very low bitrates (32kbps).
+
+    Args:
+        wav_path: Path to input WAV file
+        opus_path: Path to output Opus file
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Use ffmpeg to convert WAV to Opus
+        # -b:a 32k sets bitrate to 32kbps (optimal for speech)
+        # -application voip optimizes for speech clarity
+        subprocess.run([
+            'ffmpeg',
+            '-i', wav_path,
+            '-codec:a', 'libopus',
+            '-b:a', '32k',
+            '-application', 'voip',  # Optimized for speech
+            opus_path,
+            '-y',  # Overwrite output file
+            '-loglevel', 'error'  # Only show errors
+        ], check=True, capture_output=True)
+
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error converting to Opus: {e.stderr.decode() if e.stderr else str(e)}")
+        return False
+    except FileNotFoundError:
+        print("Error: ffmpeg not found. Please install ffmpeg: brew install ffmpeg")
+        return False
 
 
 def find_books_without_audio(db: Database, summary_type: str) -> list:
@@ -69,7 +107,8 @@ def find_books_without_audio(db: Database, summary_type: str) -> list:
     audio_dir = project_root / "frontend" / "static" / "audio"
     for row in results:
         book_id = row[0]
-        audio_path = audio_dir / f"book_{book_id}_{summary_type}_gemini.wav"
+        # Check for Opus file instead of WAV
+        audio_path = audio_dir / f"book_{book_id}_{summary_type}_gemini.opus"
 
         # Only include books that don't have audio file on disk
         if not audio_path.exists():
@@ -126,44 +165,66 @@ def generate_audio_for_book(db: Database, tts_handler: GeminiTTSHandler,
         print(f"[DRY RUN] Cleaned text preview (first 500 chars):\n{cleaned_text[:500]}")
         return True
 
-    # Generate audio
+    # Generate audio (WAV first)
     audio_id = f"book_{book['book_id']}_{summary_type}"
 
     try:
-        audio_path = tts_handler.generate_audio(
+        wav_path = tts_handler.generate_audio(
             text=cleaned_text,
             audio_id=audio_id
         )
 
-        if audio_path:
-            print(f"✅ Generated audio: {audio_path}")
+        if wav_path:
+            print(f"✅ Generated WAV audio: {wav_path}")
 
-            # Calculate duration and save to database
-            try:
-                with wave.open(audio_path, 'rb') as wav_file:
-                    frames = wav_file.getnframes()
-                    rate = wav_file.getframerate()
-                    duration = frames / float(rate)
+            # Convert WAV to Opus
+            opus_path = wav_path.replace('.wav', '.opus')
+            print(f"\nConverting to Opus (32kbps, speech-optimized)...")
 
-                # Save to database
-                db.add_audio_file(
-                    summary_id=book['summary_id'],
-                    chapter_id=None,
-                    audio_path=audio_path,
-                    duration=duration
-                )
-                print(f"✅ Saved audio file to database (duration: {duration:.2f}s)")
-            except Exception as db_error:
-                print(f"⚠️  Warning: Failed to save to database: {db_error}")
-                # Don't fail the whole operation if database save fails
+            if convert_wav_to_opus(wav_path, opus_path):
+                print(f"✅ Generated Opus audio: {opus_path}")
 
-            return True
+                # Move WAV to archive
+                archive_dir = project_root / "data" / "audios"
+                archive_dir.mkdir(parents=True, exist_ok=True)
+                archive_path = archive_dir / Path(wav_path).name
+
+                import shutil
+                shutil.move(wav_path, archive_path)
+                print(f"✅ Archived WAV to: {archive_path}")
+
+                # Calculate duration from Opus for database
+                try:
+                    # Read the original WAV from archive to get duration
+                    with wave.open(str(archive_path), 'rb') as wav_file:
+                        frames = wav_file.getnframes()
+                        rate = wav_file.getframerate()
+                        duration = frames / float(rate)
+
+                    # Save Opus path to database
+                    db.add_audio_file(
+                        summary_id=book['summary_id'],
+                        chapter_id=None,
+                        audio_path=opus_path,
+                        duration=duration
+                    )
+                    print(f"✅ Saved audio file to database (duration: {duration:.2f}s)")
+                except Exception as db_error:
+                    print(f"⚠️  Warning: Failed to save to database: {db_error}")
+                    # Don't fail the whole operation if database save fails
+
+                return True
+            else:
+                print(f"❌ Failed to convert to Opus")
+                return False
         else:
             print(f"❌ Failed to generate audio")
             return False
 
     except Exception as e:
         print(f"❌ Error generating audio: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -240,7 +301,7 @@ def main():
 
         # Check if audio already exists
         audio_dir = project_root / "frontend" / "static" / "audio"
-        audio_path = audio_dir / f"book_{args.book_id}_{summary_type}_gemini.wav"
+        audio_path = audio_dir / f"book_{args.book_id}_{summary_type}_gemini.opus"
 
         if audio_path.exists() and not args.dry_run:
             print(f"⚠️  Audio file already exists: {audio_path}")

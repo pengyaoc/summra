@@ -104,8 +104,15 @@ def build_breadcrumbs(page_type, **kwargs):
                 'position': 3
             })
             if chapter:
+                # Use chapter title if available, otherwise fall back to chapter number
+                chapter_title = chapter.get('chapter_title')
+                chapter_name = (
+                    f"{chapter['chapter_number']}. {chapter_title}"
+                    if chapter_title
+                    else f"Chapter {chapter['chapter_number']}"
+                )
                 breadcrumbs.append({
-                    'name': f"Chapter {chapter['chapter_number']}",
+                    'name': chapter_name,
                     'url': f"/books/{book['slug']}/chapters/{chapter['chapter_number']}",
                     'position': 4
                 })

@@ -35,7 +35,8 @@
       "Bash(find:*)",
       "Bash(ls:*)",
       "WebFetch(domain:googleapis.github.io)",
-      "Bash(cwebp:*)"
+      "Bash(cwebp:*)",
+      "Bash(brew install:*)"
     ],
     "deny": [],
     "ask": []
