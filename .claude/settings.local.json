@@ -34,7 +34,8 @@
       "WebFetch(domain:ai.google.dev)",
       "Bash(find:*)",
       "Bash(ls:*)",
-      "WebFetch(domain:googleapis.github.io)"
+      "WebFetch(domain:googleapis.github.io)",
+      "Bash(cwebp:*)"
     ],
     "deny": [],
     "ask": []

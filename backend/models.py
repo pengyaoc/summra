@@ -109,6 +109,14 @@ class Database:
             # Column already exists
             pass
 
+        # Add author_id column for foreign key relationship (migration for existing databases)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN author_id INTEGER REFERENCES authors(id)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Book sections table (for two-level structure: Part/Book/Act → Chapters)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS book_sections (
@@ -150,6 +158,17 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE,
                 FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Authors table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS authors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                country TEXT,
+                bio TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 
@@ -911,3 +930,376 @@ class Database:
                     return True
 
         return False
+
+    # Author-related methods
+
+    def add_author(self, name: str, country: str = None, bio: str = None) -> int:
+        """Add a new author"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO authors (name, country, bio)
+            VALUES (?, ?, ?)
+        ''', (name, country, bio))
+
+        author_id = cursor.lastrowid
+
+        # If INSERT was ignored (author already exists), get the existing author_id
+        if author_id == 0:
+            cursor.execute('SELECT id FROM authors WHERE name = ?', (name,))
+            row = cursor.fetchone()
+            if row:
+                author_id = row['id']
+
+        conn.commit()
+        conn.close()
+
+        return author_id
+
+    def get_author(self, author_id: int) -> Optional[Dict]:
+        """Get author by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM authors WHERE id = ?', (author_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def get_author_by_name(self, name: str) -> Optional[Dict]:
+        """Get author by name"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM authors WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def update_author(self, author_id: int, country: str = None, bio: str = None):
+        """Update author information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        updates = []
+        params = []
+
+        if country is not None:
+            updates.append('country = ?')
+            params.append(country)
+
+        if bio is not None:
+            updates.append('bio = ?')
+            params.append(bio)
+
+        if updates:
+            params.append(author_id)
+            query = f"UPDATE authors SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, params)
+            conn.commit()
+
+        conn.close()
+
+    def update_book_author_id(self, book_id: int, author_id: int):
+        """Update book's author_id foreign key"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE books
+            SET author_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (author_id, book_id))
+
+        conn.commit()
+        conn.close()
+
+    def get_books_by_author_id(self, author_id: int, exclude_book_id: int = None, limit: int = 5) -> List[Dict]:
+        """Get books by author ID, optionally excluding a specific book"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        if exclude_book_id:
+            cursor.execute('''
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                FROM books
+                WHERE author_id = ? AND id != ?
+                ORDER BY title
+                LIMIT ?
+            ''', (author_id, exclude_book_id, limit))
+        else:
+            cursor.execute('''
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                FROM books
+                WHERE author_id = ?
+                ORDER BY title
+                LIMIT ?
+            ''', (author_id, limit))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_books_in_same_categories(self, book_id: int, limit: int = 10) -> List[Dict]:
+        """
+        Get books that share categories with the given book.
+        Prioritizes books from categories with fewer total books (more specific categories).
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Get all categories for this book, ordered by category size (smallest first)
+        cursor.execute('''
+            SELECT bc.category_id, COUNT(bc2.book_id) as category_size
+            FROM book_categories bc
+            LEFT JOIN book_categories bc2 ON bc.category_id = bc2.category_id
+            WHERE bc.book_id = ?
+            GROUP BY bc.category_id
+            ORDER BY category_size ASC
+        ''', (book_id,))
+
+        categories = cursor.fetchall()
+
+        # Collect books from each category in order (smallest categories first)
+        seen_book_ids = {book_id}  # Don't include the current book
+        related_books = []
+
+        for category_row in categories:
+            category_id = category_row['category_id']
+
+            # Get books from this category that we haven't seen yet
+            cursor.execute('''
+                SELECT b.id, b.title, b.author, b.filename, b.word_count,
+                       b.gutenberg_id, b.cover_image_url, b.slug
+                FROM books b
+                INNER JOIN book_categories bc ON b.id = bc.book_id
+                WHERE bc.category_id = ? AND b.id NOT IN ({})
+                ORDER BY b.title
+            '''.format(','.join('?' * len(seen_book_ids))),
+            (category_id, *seen_book_ids))
+
+            category_books = cursor.fetchall()
+
+            for book in category_books:
+                if book['id'] not in seen_book_ids:
+                    related_books.append(dict(book))
+                    seen_book_ids.add(book['id'])
+
+                    # Stop if we've reached the limit
+                    if len(related_books) >= limit:
+                        conn.close()
+                        return related_books
+
+        conn.close()
+        return related_books
+
+    def get_books_by_author_country(self, country: str, exclude_book_id: int = None, limit: int = 5) -> List[Dict]:
+        """Get books by authors from the same country"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        if exclude_book_id:
+            cursor.execute('''
+                SELECT b.id, b.title, b.author, b.filename, b.word_count,
+                       b.gutenberg_id, b.cover_image_url, b.slug
+                FROM books b
+                INNER JOIN authors a ON b.author_id = a.id
+                WHERE a.country = ? AND b.id != ?
+                ORDER BY b.title
+                LIMIT ?
+            ''', (country, exclude_book_id, limit))
+        else:
+            cursor.execute('''
+                SELECT b.id, b.title, b.author, b.filename, b.word_count,
+                       b.gutenberg_id, b.cover_image_url, b.slug
+                FROM books b
+                INNER JOIN authors a ON b.author_id = a.id
+                WHERE a.country = ?
+                ORDER BY b.title
+                LIMIT ?
+            ''', (country, limit))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_related_books(self, book_id: int) -> Dict:
+        """
+        Get related books for a given book, ordered and deduplicated.
+
+        Returns books in this priority order (up to 10 total):
+        1. Books by the same author
+        2. Books in the same categories (prioritizing smaller/more specific categories)
+
+        Returns:
+        {
+            'by_author': [...],
+            'by_category': [...],
+            'by_country': []  # Kept for backwards compatibility but not used
+        }
+        """
+        book = self.get_book(book_id)
+        if not book:
+            return {'by_author': [], 'by_category': [], 'by_country': []}
+
+        seen_book_ids = {book_id}
+        related_books_by_author = []
+        related_books_by_category = []
+
+        # 1. Get books by same author (up to 10)
+        if book.get('author_id'):
+            author_books = self.get_books_by_author_id(book['author_id'], exclude_book_id=book_id, limit=10)
+            for book_dict in author_books:
+                if book_dict['id'] not in seen_book_ids:
+                    related_books_by_author.append(book_dict)
+                    seen_book_ids.add(book_dict['id'])
+
+        # 2. Get books in same categories (fill up to 10 total)
+        remaining_slots = 10 - len(related_books_by_author)
+        if remaining_slots > 0:
+            category_books = self.get_books_in_same_categories(book_id, limit=remaining_slots)
+            for book_dict in category_books:
+                if book_dict['id'] not in seen_book_ids:
+                    related_books_by_category.append(book_dict)
+                    seen_book_ids.add(book_dict['id'])
+
+        return {
+            'by_author': related_books_by_author,
+            'by_category': related_books_by_category,
+            'by_country': []  # No longer used, kept for backwards compatibility
+        }
+
+    def update_book_metadata(self, book_id: int, about_text: str = None, relevance_now: str = None):
+        """Update book metadata fields (about_text, relevance_now)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        updates = []
+        params = []
+
+        if about_text is not None:
+            updates.append("about_text = ?")
+            params.append(about_text)
+
+        if relevance_now is not None:
+            updates.append("relevance_now = ?")
+            params.append(relevance_now)
+
+        if updates:
+            params.append(book_id)
+            query = f"UPDATE books SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, params)
+            conn.commit()
+
+        conn.close()
+
+    def update_author_info(self, author_name: str, country: str = None, other_books: List[str] = None):
+        """Update or create author with country and other books information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Check if author exists
+        cursor.execute("SELECT id, country, other_books FROM authors WHERE name = ?", (author_name,))
+        author = cursor.fetchone()
+
+        if author:
+            # Update existing author
+            author_id = author['id']
+            updates = []
+            params = []
+
+            if country and not author['country']:  # Only update if not already set
+                updates.append("country = ?")
+                params.append(country)
+
+            if other_books:
+                # Merge with existing books
+                existing_books = author['other_books'].split(',') if author['other_books'] else []
+                all_books = list(set(existing_books + other_books))  # Remove duplicates
+                updates.append("other_books = ?")
+                params.append(','.join(all_books[:10]))  # Limit to 10
+
+            if updates:
+                params.append(author_id)
+                query = f"UPDATE authors SET {', '.join(updates)} WHERE id = ?"
+                cursor.execute(query, params)
+        else:
+            # Create new author
+            other_books_str = ','.join(other_books[:10]) if other_books else None
+            cursor.execute(
+                "INSERT INTO authors (name, country, other_books) VALUES (?, ?, ?)",
+                (author_name, country, other_books_str)
+            )
+            author_id = cursor.lastrowid
+
+        conn.commit()
+        conn.close()
+        return author_id
+
+    def save_similar_books(self, book_id: int, similar_books: List[Dict[str, str]]):
+        """
+        Save similar books for a given book.
+        similar_books is a list of dicts with 'title' and 'author' keys.
+        This method will try to match them to existing books in the database.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # First, clear existing similar books for this book
+        cursor.execute("DELETE FROM similar_books WHERE book_id = ?", (book_id,))
+
+        # Try to match each similar book to an existing book in our database
+        for rank, similar_book in enumerate(similar_books[:5], start=1):
+            title = similar_book['title']
+            author = similar_book['author']
+
+            # Try to find matching book in our database
+            # First try exact match on title
+            cursor.execute(
+                "SELECT id FROM books WHERE title = ? AND author LIKE ?",
+                (title, f"%{author.split()[0]}%")  # Match on first name of author
+            )
+            result = cursor.fetchone()
+
+            if result:
+                similar_book_id = result['id']
+                # Don't create self-reference
+                if similar_book_id != book_id:
+                    try:
+                        cursor.execute(
+                            "INSERT INTO similar_books (book_id, similar_book_id, rank) VALUES (?, ?, ?)",
+                            (book_id, similar_book_id, rank)
+                        )
+                    except sqlite3.IntegrityError:
+                        # Already exists, skip
+                        pass
+
+        conn.commit()
+        conn.close()
+
+    def get_similar_books(self, book_id: int, limit: int = 5) -> List[Dict]:
+        """Get similar books for a given book"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT b.id, b.title, b.author, b.slug, b.cover_image_url, sb.rank
+            FROM similar_books sb
+            JOIN books b ON sb.similar_book_id = b.id
+            WHERE sb.book_id = ?
+            ORDER BY sb.rank
+            LIMIT ?
+        """, (book_id, limit))
+
+        books = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return books

@@ -6,12 +6,14 @@ This document provides in-depth technical documentation for the Summra project, 
 
 1. [Database Schema & ERD](#database-schema--erd)
 2. [SEO Architecture](#seo-architecture)
-3. [Chapter Parser Implementation](#chapter-parser-implementation)
-4. [TTS Engine Implementation](#tts-engine-implementation)
-5. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
-6. [Bulk Summary Processing](#bulk-summary-processing)
-7. [Project Gutenberg Integration](#project-gutenberg-integration)
-8. [Gemini Image Generation System](#gemini-image-generation-system)
+3. [Related Books System](#related-books-system)
+4. [Chapter Parser Implementation](#chapter-parser-implementation)
+5. [TTS Engine Implementation](#tts-engine-implementation)
+6. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
+7. [Bulk Summary Processing](#bulk-summary-processing)
+8. [Project Gutenberg Integration](#project-gutenberg-integration)
+9. [Gemini Image Generation System](#gemini-image-generation-system)
+10. [Book Metadata Enrichment](#book-metadata-enrichment)
 
 ---
 
@@ -20,66 +22,88 @@ This document provides in-depth technical documentation for the Summra project, 
 ### Entity Relationship Diagram
 
 ```
-┌─────────────────────────┐
-│       books             │
-├─────────────────────────┤
-│ id (PK)                 │
-│ title                   │
-│ author                  │
-│ filename (UNIQUE)       │
-│ full_text               │
-│ word_count              │
-│ gutenberg_id            │
-│ cover_image_url         │
-│ cover_source            │
-│ created_at              │
-│ updated_at              │
-└─────────────────────────┘
-         │
-         │ 1:N
-         │
-         ├──────────────────────────┬──────────────────────────┬──────────────────────────┐
-         │                          │                          │                          │
-         ▼                          ▼                          ▼                          ▼
-┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│    summaries        │    │   book_sections     │    │     chapters        │    │   audio_files       │
-├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
-│ id (PK)             │    │ id (PK)             │    │ id (PK)             │    │ id (PK)             │
-│ book_id (FK)        │    │ book_id (FK)        │    │ book_id (FK)        │    │ summary_id (FK)     │
-│ summary_type        │    │ section_type        │    │ section_id (FK)     │◄───┼─┤ chapter_id (FK)     │
-│ content             │    │ section_number      │    │ chapter_number      │    │ file_path           │
-│ word_count          │    │ section_title       │    │ chapter_title       │    │ duration_seconds    │
-│ created_at          │    │ created_at          │    │ summary             │    │ created_at          │
-└─────────────────────┘    └─────────────────────┘    │ full_text           │    └─────────────────────┘
-         │                          │                 │ word_count          │
-         │                          │                 │ illustration_url    │
-         │                          │                 │ created_at          │
-         │                          │                 └─────────────────────┘
-         │                          │                          │
-         │                          │                          │
-         └──────────────────────────┴──────────────────────────┘
-                    │
-                    ▼
-            ┌─────────────────────┐
-            │   audio_files       │
-            │  (linked to both)   │
-            └─────────────────────┘
+                                    ┌─────────────────────────┐
+                                    │       authors           │
+                                    │  (added 2025-12-02)     │
+                                    ├─────────────────────────┤
+                                    │ id (PK)                 │
+                                    │ name (UNIQUE)           │
+                                    │ country                 │
+                                    │ bio                     │
+                                    │ other_books             │
+                                    │ created_at              │
+                                    └─────────────────────────┘
+                                              │
+                                              │ 1:N
+                                              ▼
+┌─────────────────────────┐         ┌─────────────────────────┐         ┌─────────────────────────┐
+│    categories           │         │       books             │         │   similar_books         │
+│                         │         │                         │         │  (added 2025-12-02)     │
+├─────────────────────────┤         ├─────────────────────────┤         ├─────────────────────────┤
+│ id (PK)                 │         │ id (PK)                 │         │ id (PK)                 │
+│ name (UNIQUE)           │         │ title                   │◄────────┤ book_id (FK)            │
+│ description             │         │ author                  │◄────────┤ similar_book_id (FK)    │
+│ created_at              │         │ author_id (FK)          │         │ rank (1-5)              │
+└─────────────────────────┘         │ filename (UNIQUE)       │         │ created_at              │
+         │                          │ full_text               │         └─────────────────────────┘
+         │                          │ word_count              │
+         │                          │ gutenberg_id            │         Many-to-many (self-ref)
+         │                          │ slug (UNIQUE)           │         Stores LLM-generated
+         │                          │ cover_image_url         │         book recommendations
+         │                          │ cover_source            │
+         │                          │ about_text              │
+         │                          │ relevance_now           │
+         │ N:N                      │ created_at              │
+         │                          │ updated_at              │
+         │                          └─────────────────────────┘
+         │                                    │
+         │                                    │ 1:N
+         │                                    │
+         │                                    ├──────────────────────────┬──────────────────────────┬──────────────────────────┐
+         │                                    │                          │                          │                          │
+         ▼                                    ▼                          ▼                          ▼                          ▼
+┌─────────────────────┐            ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│  book_categories    │            │    summaries        │    │   book_sections     │    │     chapters        │    │   audio_files       │
+├─────────────────────┤            ├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
+│ id (PK)             │            │ id (PK)             │    │ id (PK)             │    │ id (PK)             │    │ id (PK)             │
+│ book_id (FK)        │            │ book_id (FK)        │    │ book_id (FK)        │    │ book_id (FK)        │    │ summary_id (FK)     │
+│ category_id (FK)    │            │ summary_type        │    │ section_type        │    │ section_id (FK)     │◄───┼─┤ chapter_id (FK)     │
+│ created_at          │            │ content             │    │ section_number      │    │ chapter_number      │    │ file_path           │
+└─────────────────────┘            │ word_count          │    │ section_title       │    │ chapter_title       │    │ duration_seconds    │
+         ▲                         │ created_at          │    │ created_at          │    │ summary             │    │ created_at          │
+         │                         └─────────────────────┘    └─────────────────────┘    │ full_text           │    └─────────────────────┘
+         │                                  │                          │                 │ word_count          │
+         │                                  │                          │                 │ illustration_url    │
+         └──────────────────────────────────┴──────────────────────────┘                 │ created_at          │
+                                                                                         └─────────────────────┘
 
 UNIQUE Constraints:
-- books: (filename)
+- books: (filename), (slug)
+- authors: (name)
+- categories: (name)
 - summaries: (book_id, summary_type)
 - book_sections: (book_id, section_number)
 - chapters: (book_id, chapter_number)
+- book_categories: (book_id, category_id)
+- similar_books: (book_id, similar_book_id)
 
 Foreign Keys:
+- books.author_id → authors.id
 - summaries.book_id → books.id
 - book_sections.book_id → books.id
 - chapters.book_id → books.id
 - chapters.section_id → book_sections.id
 - audio_files.summary_id → summaries.id
 - audio_files.chapter_id → chapters.id
+- book_categories.book_id → books.id
+- book_categories.category_id → categories.id
+- similar_books.book_id → books.id
+- similar_books.similar_book_id → books.id
 
-Note: section_id in chapters is nullable (NULL for single-level books)
+Notes:
+- section_id in chapters is nullable (NULL for single-level books)
+- similar_books is self-referential (book_id and similar_book_id both reference books table)
+- Enhanced metadata fields added 2025-12-02: about_text, relevance_now, author country, similar books
 ```
 
 ### Table Definitions
@@ -247,6 +271,129 @@ CREATE TABLE audio_files (
 
 **Constraint:** Audio file must be linked to EITHER a summary OR a chapter, not both or neither.
 
+#### authors Table
+
+```sql
+CREATE TABLE authors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    country TEXT,
+    bio TEXT,
+    other_books TEXT,  -- Comma-separated list of other works (max 10, added 2025-12-02)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+**Indexes:**
+- Primary key on `id`
+- Unique index on `name` (auto-created from UNIQUE constraint)
+
+**Purpose:** Stores author metadata including country of origin and other notable works.
+
+**Fields (Enhanced 2025-12-02):**
+- `name`: Author's full name (unique constraint prevents duplicates)
+- `country`: Country of origin (e.g., "England", "United States", "France")
+- `bio`: Author biography (optional, future use)
+- `other_books`: Comma-separated list of author's other notable works (max 10 titles)
+  - Generated by LLM during summary creation
+  - Used for "Other Books by This Author" sections
+  - Deduplicates when multiple books by same author are processed
+
+**Usage:**
+- Linked from `books.author_id` for relational integrity
+- Enables author-based book recommendations
+- Supports "Books by Country" filtering and discovery
+
+#### similar_books Table
+
+```sql
+CREATE TABLE similar_books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    similar_book_id INTEGER NOT NULL,
+    rank INTEGER NOT NULL,  -- 1-5, indicating order of similarity
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    FOREIGN KEY (similar_book_id) REFERENCES books(id) ON DELETE CASCADE,
+    UNIQUE(book_id, similar_book_id),
+    CHECK(book_id != similar_book_id)  -- Prevent self-references
+)
+```
+
+**Indexes:**
+- Primary key on `id`
+- Index on `book_id` (for efficient recommendation queries)
+- Index on `similar_book_id` (for reverse lookups)
+- Unique constraint on `(book_id, similar_book_id)` (prevents duplicates)
+
+**Purpose:** Stores book similarity relationships for recommendation features.
+
+**Fields:**
+- `book_id`: The source book (FK to books table)
+- `similar_book_id`: The recommended similar book (FK to books table)
+- `rank`: Order of recommendation (1 = most similar, 5 = least similar)
+  - Enables "Top 5 Similar Books" queries with ORDER BY rank
+  - Generated by LLM during summary creation
+
+**Constraints:**
+- `UNIQUE(book_id, similar_book_id)`: Each pair can only exist once
+- `CHECK(book_id != similar_book_id)`: Book cannot be similar to itself
+- Both FKs use `ON DELETE CASCADE` (cleanup when book is deleted)
+
+**Relationship:** Many-to-many between books and books (self-referential)
+
+**Usage Pattern:**
+```python
+# Get similar books for a book
+similar = db.get_similar_books(book_id=1, limit=5)
+# Returns: [{'title': 'Book A', 'author': 'Author A', 'rank': 1}, ...]
+
+# Save similar books (LLM-generated)
+similar_books = [
+    {'title': 'Pride and Prejudice', 'author': 'Jane Austen'},
+    {'title': 'Emma', 'author': 'Jane Austen'},
+    ...
+]
+db.save_similar_books(book_id=1, similar_books=similar_books)
+# Attempts fuzzy matching to existing books in database
+# Only creates relationships for books that exist in our collection
+```
+
+**Matching Logic:**
+- When saving similar books, attempts to match LLM recommendations to existing books
+- Uses title matching + author first name fuzzy matching
+- If no match found, recommendation is not stored (only tracks books we have)
+- This ensures all `similar_book_id` values point to valid books in our collection
+
+#### categories Table
+
+```sql
+CREATE TABLE categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+**Purpose:** Stores book genre/category taxonomy for discovery and filtering.
+
+#### book_categories Table
+
+```sql
+CREATE TABLE book_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    category_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE(book_id, category_id)
+)
+```
+
+**Purpose:** Many-to-many junction table linking books to categories. Books can have multiple categories, categories can have multiple books.
+
 ### Database Operations
 
 #### Models Layer (models.py)
@@ -281,6 +428,344 @@ def add_chapter(self, book_id, chapter_number, chapter_title,
 def get_book_by_filename(self, filename) -> dict
 ```
 - Checks if book already exists before processing
+
+---
+
+## SEO Architecture
+
+### Overview
+
+**Added:** 2025-12-02
+
+The SEO architecture provides search engine optimization through breadcrumb navigation, structured data, and context-aware meta tags. This improves discoverability and user navigation throughout the site.
+
+### Breadcrumb Navigation System
+
+**Location:** `backend/app_base.py:40-93`
+
+**Purpose:** Replace traditional back buttons with context-aware breadcrumb trails that show the user's current location in the site hierarchy.
+
+#### build_breadcrumbs() Function
+
+```python
+def build_breadcrumbs(page_type, **kwargs):
+    """
+    Build breadcrumb data for SEO and navigation.
+
+    Returns list of breadcrumb items with:
+    - name: Display text
+    - url: Relative URL
+    - position: Position in breadcrumb trail (starts at 1)
+    """
+```
+
+**Supported Page Types:**
+- `'home'`: Home page (no breadcrumbs shown)
+- `'categories'`: All Categories page
+- `'category'`: Specific category detail page
+- `'all_books'`: All Books grid page
+- `'book'`: Book detail page
+- `'book_summary'`: Medium summary page
+- `'chapter'`: Chapter detail page
+
+**Example Breadcrumb Trails:**
+
+```
+Home
+Home → All Books
+Home → Categories
+Home → Categories → Victorian Literature
+Home → All Books → Pride and Prejudice
+Home → All Books → Pride and Prejudice → Summary
+Home → All Books → Pride and Prejudice → Chapter 1
+```
+
+**Context-Aware Breadcrumbs:**
+
+When a user selects a book from a category page, the breadcrumb trail reflects this:
+```
+Home → Categories → Romance → Pride and Prejudice
+```
+
+When selected from All Books page:
+```
+Home → All Books → Pride and Prejudice
+```
+
+This is tracked via `app.originCategory` in the frontend (`frontend/static/js/app.js:29`).
+
+#### breadcrumbs_to_schema() Function
+
+**Location:** `backend/app_base.py:95-106`
+
+Converts breadcrumb data to Schema.org BreadcrumbList JSON-LD format for search engines.
+
+**Output Example:**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://summra.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "All Books",
+      "item": "https://summra.com/all-books"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Pride and Prejudice"
+    }
+  ]
+}
+```
+
+**Note:** Last breadcrumb item has no `item` URL (represents current page).
+
+### Frontend Breadcrumb Rendering
+
+**Location:** `frontend/static/js/app.js:1625-1731` (`updateBreadcrumbs()` method)
+
+**HTML Structure:**
+```html
+<nav class="breadcrumb-nav" aria-label="Breadcrumb">
+    <ol class="breadcrumb-list">
+        <li class="breadcrumb-item">
+            <a href="/" class="breadcrumb-link">← Home</a>
+        </li>
+        <li class="breadcrumb-item">
+            <span class="breadcrumb-separator">›</span>
+            <a href="/all-books" class="breadcrumb-link">All Books</a>
+        </li>
+        <li class="breadcrumb-item">
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-current">Pride and Prejudice</span>
+        </li>
+    </ol>
+</nav>
+```
+
+**Styling:** `frontend/static/css/style.css:111-159`
+
+**Features:**
+- First breadcrumb automatically gets back arrow (`← `)
+- Links are clickable (navigate via hash routing)
+- Current page shown in plain text (not a link)
+- Responsive design (wraps on mobile)
+- Accessible (semantic HTML + ARIA labels)
+
+### Page Title Updates
+
+**Location:** `frontend/static/js/app.js:159-161` (`updatePageTitle()` method)
+
+Each route dynamically updates `document.title` for:
+- Browser tabs
+- Bookmarks
+- Search engine results
+- Social media sharing
+
+**Examples:**
+```
+Home: "Free Classic Book Summaries, Chapter Summaries & Full Text | Summra"
+Book: "Pride and Prejudice by Jane Austen | Summra"
+Summary: "Summary of Pride and Prejudice by Jane Austen | Summra"
+Chapter: "Full Text of Chapter 1 - Pride and Prejudice | Summra"
+```
+
+### Meta Tag Improvements
+
+**Location:** `backend/app_base.py`
+
+**Updated Routes:**
+- `/` (line 164): `meta_title='Free Classic Book Summaries, Chapter Summaries & Full Text | Summra'`
+- `/books` (line 505): Changed "AI Summaries" to "Free Summaries"
+- Footer (template line 329): Updated to emphasize "Free summaries and full text"
+
+**SEO Benefits:**
+- Keyword-rich titles for search ranking
+- Clear value proposition ("Free")
+- Emphasizes comprehensive content (summaries + full text)
+- Brand consistency (all titles end with "| Summra")
+
+---
+
+## Related Books System
+
+### Overview
+
+**Added:** 2025-12-02
+
+The Related Books system provides personalized book recommendations based on author, category, and country. This increases user engagement and helps readers discover similar works.
+
+### Database Schema
+
+**New Table:** `similar_books`
+
+```sql
+CREATE TABLE similar_books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    similar_book_id INTEGER NOT NULL,
+    rank INTEGER,  -- 1-5 (order of recommendation)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (book_id) REFERENCES books(id),
+    FOREIGN KEY (similar_book_id) REFERENCES books(id),
+    UNIQUE(book_id, similar_book_id)
+)
+```
+
+**Purpose:** Store AI-generated book recommendations (many-to-many self-referential).
+
+**New Table:** `authors`
+
+```sql
+CREATE TABLE authors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    country TEXT,
+    bio TEXT,
+    other_books TEXT,  -- JSON array of other book titles
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+**Purpose:** Normalize author data for author-based queries and recommendations.
+
+**Modified Table:** `books`
+- Added `author_id INTEGER` foreign key to `authors` table
+- Keeps `author TEXT` for backward compatibility
+
+### Related Books API
+
+**Endpoint:** `GET /api/books/<book_id>/related`
+
+**Location:** `backend/app_base.py:912-935`
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "book_id": 1,
+  "related": {
+    "by_author": [
+      {"id": 5, "title": "Sense and Sensibility", "author": "Jane Austen", "cover_image_url": "..."}
+    ],
+    "by_category": [
+      {"id": 12, "title": "Emma", "author": "Jane Austen", "cover_image_url": "..."}
+    ],
+    "by_country": [
+      {"id": 23, "title": "Wuthering Heights", "author": "Emily Brontë", "cover_image_url": "..."}
+    ]
+  }
+}
+```
+
+**Algorithm:**
+
+**Location:** `backend/models.py:933-1019` (`get_related_books()` method)
+
+```python
+def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
+    """
+    Get related books for a specific book
+
+    Returns dictionary with three lists:
+    - by_author: Books by same author
+    - by_category: Books in same categories (excluding same author)
+    - by_country: Books by authors from same country (excluding above)
+    """
+```
+
+**Selection Strategy:**
+
+1. **By Author** (priority 1):
+   - Find all books by the same author
+   - Exclude the current book
+   - Order: Random (for variety)
+   - Limit: No limit (all books by author)
+
+2. **By Category** (priority 2):
+   - Find books in same categories as current book
+   - Exclude books by same author (already in list)
+   - Exclude current book
+   - Order: Random
+   - Limit: No limit
+
+3. **By Country** (priority 3):
+   - Find books by authors from same country
+   - Exclude books already in by_author or by_category
+   - Exclude current book
+   - Order: Random
+   - Limit: No limit
+
+**Frontend Deduplication:**
+- Frontend merges all three lists
+- Removes duplicates (books may appear in multiple categories)
+- Limits to 10 total books
+
+### Frontend Related Books Carousel
+
+**Location:** `frontend/static/js/app.js:918-1023` (`loadRelatedBooks()` method)
+
+**UI Components:**
+
+1. **Carousel Container**: Horizontal scrolling row
+2. **Book Cards**: Cover + title + author (same style as category carousels)
+3. **Navigation Arrows**: Left/right scroll buttons
+4. **Responsive**: Adapts to mobile/tablet/desktop
+
+**Styling:** `frontend/static/css/style.css:648-774`
+
+**Card Dimensions:**
+- Desktop: 200px wide, 300px cover height
+- Tablet: 150px wide, 200px cover height
+- Mobile: 130px wide, 180px cover height
+
+**Scroll Behavior:**
+- Smooth scroll by 3 cards at a time
+- Arrow buttons disabled at edges
+- Touch-friendly horizontal scrolling
+- No visible scrollbar
+
+**Section Header:** "You May Also Like" (`frontend/templates/index.html:122`)
+
+**Visibility:**
+- Hidden if no related books found
+- Displayed at bottom of book detail page (after chapters)
+- Separated by border-top divider
+
+### Database Methods
+
+**Location:** `backend/models.py:933-1305`
+
+**Author Management:**
+```python
+def add_author(self, name: str, country: str = None, bio: str = None) -> int
+def get_author(self, author_id: int) -> Optional[Dict]
+def get_author_by_name(self, name: str) -> Optional[Dict]
+def update_author(self, author_id: int, country: str = None, bio: str = None)
+def get_books_by_author(self, author_id: int) -> List[Dict]
+```
+
+**Similar Books Management:**
+```python
+def add_similar_book(self, book_id: int, similar_book_id: int, rank: int = None)
+def get_similar_books(self, book_id: int) -> List[Dict]
+def remove_similar_book(self, book_id: int, similar_book_id: int)
+```
+
+**Performance Considerations:**
+- Queries use indexes on `author_id`, `category_id`, and foreign keys
+- Random ordering via `ORDER BY RANDOM()`
+- Frontend caching of category data reduces redundant API calls
+- Lazy loading of related books (only fetched when viewing book detail)
 
 ---
 
@@ -2185,9 +2670,196 @@ class SummaryGenerator:
         )
 ```
 
-### Concise Summary Generation
+### Combined Summary & Metadata Generation (Added 2025-12-02)
+
+**Purpose:** Generate all summaries (concise + medium) and book metadata in a single LLM call for efficiency and cost savings.
+
+**Model:** `gemini-2.5-flash`
+
+**Location:** `scripts/generate_summaries.py:181-408`
+
+**Returns:** Dictionary with 7 fields:
+1. `about_text` - Short "About the Book" section (150-200 words)
+2. `concise_summary` - Spoiler-free overview (500 words)
+3. `medium_summary` - Comprehensive analysis (2000-3000 words)
+4. `relevance_now` - Why relevant today (100-150 words)
+5. `author_country` - Author's country of origin (country name only)
+6. `similar_books` - List of 5 similar books (title/author pairs)
+7. `other_books_by_author` - List of author's other notable works (max 10)
+
+```python
+def generate_combined_summaries(self, text: str, title: str, author: str,
+                                dry_run: bool = False) -> Dict:
+    """
+    Generate summaries and metadata in a single API call.
+    Returns dictionary with: about_text, concise_summary, medium_summary,
+    relevance_now, author_country, similar_books, other_books_by_author
+    """
+    model_name = config.SUMMARY_CONFIGS['concise']['model']
+
+    # Cap text at maximum chars per call
+    max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
+
+    prompt = f"""Analyze "{title}" by {author} and provide the following information.
+Follow the format exactly with each section clearly marked:
+
+### ABOUT THE BOOK (150-200 words)
+[Generate a short, engaging summary for the "About the Book" section - 150-200 words]
+
+This should be concise but compelling, suitable for a book overview page.
+
+### CONCISE SUMMARY (500 words)
+[Generate a concise 500-word summary here]
+
+Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers
+(no plot twists, endings, or major reveals). For non-fiction, cover main arguments
+and key takeaways. Write in an engaging, accessible style.
+
+### MEDIUM SUMMARY (2000-3000 words)
+[Generate a comprehensive 2000-3000 word summary here]
+
+Cover all major plot points, themes, and character developments in chronological order.
+Discuss the author's writing style and analyze major themes. Spoilers are acceptable.
+For non-fiction, cover all main arguments, evidence, and conclusions.
+
+### RELEVANCE NOW (100-150 words)
+[Explain why this book is relevant to modern audiences - 100-150 words]
+
+Discuss how themes, ideas, or narratives connect to contemporary issues, values,
+or experiences.
+
+### AUTHOR COUNTRY
+[State ONLY the country name where the author is from, without any other text]
+
+### SIMILAR BOOKS
+[List exactly 5 books similar to this one, in this exact format:]
+TITLE|AUTHOR
+TITLE|AUTHOR
+TITLE|AUTHOR
+TITLE|AUTHOR
+TITLE|AUTHOR
+
+### OTHER BOOKS BY AUTHOR
+[List the author's other notable works, maximum 10 books, one per line]
+
+### BOOK TEXT:
+{text[:max_chars]}"""
+
+    if dry_run:
+        return {
+            'about_text': '[DRY RUN] About the Book (150-200 words)...',
+            'concise_summary': '[DRY RUN] Concise summary (500 words)...',
+            'medium_summary': '[DRY RUN] Medium summary (2000-3000 words)...',
+            'relevance_now': '[DRY RUN] Relevance Now (100-150 words)...',
+            'author_country': '[DRY RUN] Country Name',
+            'similar_books': [
+                {'title': '[DRY RUN] Similar Book 1', 'author': '[DRY RUN] Author 1'},
+                # ... 5 total
+            ],
+            'other_books_by_author': [
+                '[DRY RUN] Other Book 1',
+                # ... max 10
+            ]
+        }
+
+    # Make API call
+    response = self.client.models.generate_content(
+        model=model_name,
+        contents=prompt
+    )
+
+    result = response.text
+
+    # Parse all 7 sections using regex
+    about_match = re.search(r'### ABOUT THE BOOK.*?\n(.*?)(?=### CONCISE SUMMARY|###|$)',
+                           result, re.DOTALL | re.IGNORECASE)
+    concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)(?=### MEDIUM SUMMARY|###|$)',
+                             result, re.DOTALL | re.IGNORECASE)
+    medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)(?=### RELEVANCE NOW|###|$)',
+                            result, re.DOTALL | re.IGNORECASE)
+    relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)(?=### AUTHOR COUNTRY|###|$)',
+                               result, re.DOTALL | re.IGNORECASE)
+    country_match = re.search(r'### AUTHOR COUNTRY.*?\n(.*?)(?=### SIMILAR BOOKS|###|$)',
+                             result, re.DOTALL | re.IGNORECASE)
+    similar_match = re.search(r'### SIMILAR BOOKS.*?\n(.*?)(?=### OTHER BOOKS|###|$)',
+                             result, re.DOTALL | re.IGNORECASE)
+    other_match = re.search(r'### OTHER BOOKS BY AUTHOR.*?\n(.*?)(?=###|$)',
+                           result, re.DOTALL | re.IGNORECASE)
+
+    # Extract and clean each section
+    about_text = self.clean_llm_response(about_match.group(1)) if about_match else ''
+    concise_summary = self.clean_llm_response(concise_match.group(1)) if concise_match else ''
+    medium_summary = self.clean_llm_response(medium_match.group(1)) if medium_match else ''
+    relevance_now = self.clean_llm_response(relevance_match.group(1)) if relevance_match else ''
+
+    # Clean author country (remove prefixes like "Country:", "The author is from", etc.)
+    author_country = ''
+    if country_match:
+        country_text = country_match.group(1).strip()
+        # Remove common prefixes
+        country_text = re.sub(r'^(Country:|The author is from|The author was from)\s*', '',
+                             country_text, flags=re.IGNORECASE)
+        author_country = country_text.strip()
+
+    # Parse similar books from TITLE|AUTHOR format
+    similar_books = []
+    if similar_match:
+        similar_text = similar_match.group(1).strip()
+        for line in similar_text.split('\n'):
+            if '|' in line:
+                parts = line.split('|')
+                if len(parts) >= 2:
+                    similar_books.append({
+                        'title': parts[0].strip(),
+                        'author': parts[1].strip()
+                    })
+
+    # Parse other books by author (one per line)
+    other_books_by_author = []
+    if other_match:
+        other_text = other_match.group(1).strip()
+        for line in other_text.split('\n'):
+            line = line.strip()
+            # Remove leading numbers, bullets, dashes
+            line = re.sub(r'^[\d\.\-\*\•]+\s*', '', line)
+            if line and len(line) > 3:  # Filter out very short/empty lines
+                other_books_by_author.append(line)
+
+    return {
+        'about_text': about_text,
+        'concise_summary': concise_summary,
+        'medium_summary': medium_summary,
+        'relevance_now': relevance_now,
+        'author_country': author_country,
+        'similar_books': similar_books[:5],  # Limit to 5
+        'other_books_by_author': other_books_by_author[:10]  # Limit to 10
+    }
+```
+
+**Benefits:**
+- **Cost Efficiency:** 85% reduction (7 separate calls → 1 call)
+- **Better Context:** LLM sees full book when answering all questions
+- **Consistency:** All metadata generated with same understanding of the book
+- **Performance:** Faster than sequential calls (2-3 min vs 10-15 min for 7 calls)
+
+**Typical Usage:**
+- Input: 100k-300k words (book)
+- Output: ~3,000-4,000 total words across all sections
+- Time: 2-3 minutes
+- Database Storage: Metadata saved to `books` table (about_text, relevance_now), `authors` table (country, other_books), and `similar_books` table
+
+**Integration:** Called from `process_book()` during book ingestion. Results are automatically saved to database using helper methods:
+- `update_book_metadata()` - Saves about_text and relevance_now
+- `update_author_info()` - Creates/updates author with country and other_books
+- `save_similar_books()` - Fuzzy matches and stores similar book relationships
+
+---
+
+### Concise Summary Generation (Legacy)
 
 **Purpose:** 500-word overview without spoilers (fiction) or with key takeaways (non-fiction)
+
+**Note:** This method is now deprecated in favor of `generate_combined_summaries()` which is more efficient.
 
 **Model:** `gemini-2.0-flash-exp`
 
