@@ -2308,19 +2308,23 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             preface_pool = all_lines[:first_chapter_line]
 
             # Filter out non-content lines
+            # Strategy: Keep everything before first chapter EXCEPT:
+            # 1. TOC entries
+            # 2. Illustration captions
+            # 3. Title page boilerplate
             filtered_preface_lines = []
             filtered_line_indices = set()
 
             in_toc = False
             in_illustration = False
-            in_preface_content = False  # Once we hit a preface header, keep all remaining content
+            has_content = False  # Track if we've seen any actual content yet
 
             for i, line in enumerate(preface_pool):
                 line_stripped = line.strip()
 
                 # Skip empty lines at the start, but keep them once we have content
                 if not line_stripped:
-                    if filtered_preface_lines:  # Only keep if we already have content
+                    if has_content:  # Only keep if we already have content
                         filtered_preface_lines.append(line)
                         filtered_line_indices.add(i)
                     continue
@@ -2360,34 +2364,25 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         in_illustration = False
                     continue
 
-                # Check if this is a preface/dedication/introduction header
-                # Once we hit one of these, keep ALL remaining content (stop filtering)
-                is_preface_header = re.match(r'^\s*(AUTHOR[\'\']S\s+PREFACE|TRANSLATOR[\'\']S\s+PREFACE|PREFACE|DEDICATION|INTRODUCTION|PROLOGUE|TO\s+)', line_stripped, re.IGNORECASE)
-                if is_preface_header:
-                    in_preface_content = True
+                # Skip title page elements (all caps, centered, short lines)
+                # Only do this before we've seen real content (first 100 lines)
+                # Be conservative - only skip obvious boilerplate, not actual content
+                if not has_content and i < 100:
+                    is_title_page_element = (
+                        re.match(r'^BY\s*$', line_stripped, re.IGNORECASE) or
+                        re.match(r'^Illustrated\.?$', line_stripped) or
+                        re.match(r'^(BOSTON|LONDON|NEW YORK|CHICAGO|PHILADELPHIA):', line_stripped) or
+                        re.match(r'^COPYRIGHT', line_stripped, re.IGNORECASE) or
+                        re.match(r'^All rights reserved', line_stripped, re.IGNORECASE) or
+                        re.match(r'^\d{4}\.?$', line_stripped)  # Just a year
+                    )
+                    if is_title_page_element:
+                        continue
 
-                # If we're in preface content, keep everything
-                if in_preface_content:
-                    filtered_preface_lines.append(line)
-                    filtered_line_indices.add(i)
-                    continue
-
-                # Otherwise, skip title page elements (all caps, centered, short lines)
-                if (
-                    re.match(r'^(THE\s+)?\w+(\s+\w+){0,3}$', line_stripped) and line_stripped.isupper() and len(line_stripped) < 50 or
-                    re.match(r'^BY\s*$', line_stripped, re.IGNORECASE) or
-                    re.match(r'^Illustrated\.?$', line_stripped) or
-                    re.match(r'^(BOSTON|LONDON|NEW YORK|CHICAGO|PHILADELPHIA):', line_stripped) or
-                    re.match(r'^COPYRIGHT', line_stripped, re.IGNORECASE) or
-                    re.match(r'^All rights reserved', line_stripped, re.IGNORECASE) or
-                    re.match(r'^\d{4}\.?$', line_stripped) or  # Just a year
-                    re.match(r'^[A-Z\s,\.&]+$', line_stripped) and len(line_stripped) < 60 and i < 100  # Publisher info (only in first 100 lines)
-                ):
-                    continue
-
-                # Keep this line
+                # Keep this line as preface content
                 filtered_preface_lines.append(line)
                 filtered_line_indices.add(i)
+                has_content = True
 
             initial_preface_text = filtered_preface_lines
             combined_preface_line_indices = filtered_line_indices
@@ -2506,7 +2501,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 if current_chapter is not None and not in_illustration:
                     current_text.append(line)
                     consumed_line_indices.add(i)
-                elif not found_first_chapter and not in_illustration:
+                elif not found_first_chapter and not in_illustration and i not in combined_preface_line_indices:
                     preface_text.append(line)
                     consumed_line_indices.add(i)
                 continue
@@ -2571,7 +2566,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     if current_chapter is not None and not in_illustration:
                         current_text.append(line)
                         consumed_line_indices.add(i)
-                    elif not found_first_chapter and not in_illustration:
+                    elif not found_first_chapter and not in_illustration and i not in combined_preface_line_indices:
                         preface_text.append(line)
                         consumed_line_indices.add(i)
                     continue
@@ -2724,6 +2719,8 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # For this pattern, the title is ALWAYS on the next line
                     # BUT: Only apply if we're in an appropriate context (not in TOC, preceded by blank lines)
                     is_standalone_number = False
+                    is_standalone_roman = False
+
                     if pattern == r'^([0-9]+)$':
                         # Check context:
                         # 1. Must be past TOC section (if TOC exists)
@@ -2754,6 +2751,41 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
 
                         # If context validation failed, skip this match entirely
                         if not is_standalone_number:
+                            continue
+
+                    # Check if this is the standalone Roman numeral pattern (e.g., "I", "II", "III")
+                    # or Roman numeral with period and title on same line (e.g., "I. Title")
+                    # Similar validation as standalone numbers but more lenient
+                    elif pattern in [r'^([IVXLCDM]+)$', r'^([IVXLCDM]+)\.$', r'^([IVXLCDM]+)\.\s+(.+)$']:
+                        # Check context:
+                        # 1. Must be past TOC section (if TOC exists)
+                        # 2. Must be preceded by at least 1 blank line (chapter break context)
+                        # 3. Roman numeral should be valid and reasonable (convert to number, check range)
+
+                        # Check if past TOC
+                        past_toc = (toc_end_line == 0) or (i >= toc_end_line)
+
+                        # Check if preceded by at least 1 blank line
+                        # (less strict than numbers since Roman numerals are more explicit chapter markers)
+                        preceded_by_blank = False
+                        if i >= 1:
+                            line_before = lines[i - 1].strip() if i - 1 >= 0 else None
+                            preceded_by_blank = (line_before == "")
+
+                        # Check if Roman numeral is valid and reasonable
+                        try:
+                            # Convert Roman numeral to integer (remove period and any title part)
+                            roman_part = chapter_marker.rstrip('.').split()[0] if ' ' in chapter_marker else chapter_marker.rstrip('.')
+                            rom_value = self.roman_to_int(roman_part)
+                            reasonable_roman = 1 <= rom_value <= 200
+                        except (ValueError, AttributeError):
+                            reasonable_roman = False
+
+                        # Only treat as standalone Roman if all conditions met
+                        is_standalone_roman = past_toc and preceded_by_blank and reasonable_roman
+
+                        # If context validation failed, skip this match entirely
+                        if not is_standalone_roman:
                             continue
 
                     # Check if next line is a continuation of the title (for multi-line titles)
@@ -2801,6 +2833,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                             )
 
                             # For standalone number pattern, ALWAYS use next line as title (if it's not another chapter marker)
+                            # For standalone Roman numeral patterns, also use next line as title
                             # For other patterns, only use next line if title is empty or it looks like continuation
                             if is_standalone_number:
                                 # Standalone number pattern - next line is ALWAYS the title
@@ -2809,15 +2842,39 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                                     continuation_line_idx = i + next_line_idx_offset
                                     # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
                                     consumed_lines.add(i + next_line_idx_offset)
+                            elif is_standalone_roman and not chapter_title:
+                                # Standalone Roman numeral pattern WITHOUT title on same line - next line is the title
+                                # Don't override chapter_title if it was already extracted (e.g., "I. TITLE" format)
+                                # (unless it's another Roman numeral chapter marker)
+                                if next_line and not re.match(r'^[IVXLCDM]+\.?\s*$', next_line) and len(next_line) > 0:
+                                    chapter_title = next_line
+                                    continuation_line_idx = i + next_line_idx_offset
+                                    # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                                    consumed_lines.add(i + next_line_idx_offset)
                             elif not chapter_title:
                                 # Title is empty - use next line as title ONLY if it looks like a title
-                                # Don't use it if it looks like content (long sentence, ends with dash/em-dash)
+                                # Don't use it if it looks like content (long sentence, ends with dash/em-dash, or part of a paragraph)
+
+                                # Check if next line is part of a paragraph by looking at the line after it
+                                # If the line after next is also text (not blank), it's likely a paragraph
+                                is_part_of_paragraph = False
+                                if next_line and i + next_line_idx_offset + 1 < len(lines):
+                                    line_after_next = lines[i + next_line_idx_offset + 1].strip()
+                                    # If the line after next has lowercase content or is long, it's part of a paragraph
+                                    if line_after_next and (any(c.islower() for c in line_after_next) or len(line_after_next) > 20):
+                                        is_part_of_paragraph = True
+
+                                # A proper title should be:
+                                # 1. Reasonably short (<= 150 chars as specified)
+                                # 2. Not ending with dashes
+                                # 3. Not part of a paragraph (standalone)
                                 looks_like_title = (
                                     is_continuation and
                                     len(next_line) > 3 and
-                                    len(next_line) <= 50 and  # Titles are usually short
+                                    len(next_line) <= 150 and  # Titles can be long (max 150 chars)
                                     not next_line.endswith('—') and  # Em-dash indicates continuation
-                                    not next_line.endswith('-')      # Regular dash indicates continuation
+                                    not next_line.endswith('-') and  # Regular dash indicates continuation
+                                    not is_part_of_paragraph  # Not part of a multi-line paragraph
                                 )
                                 if looks_like_title:
                                     chapter_title = next_line
@@ -3137,7 +3194,8 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     consumed_line_indices.add(i)
             else:
                 # No chapter started yet - collect into preface if we haven't found first chapter
-                if not found_first_chapter and not in_illustration:
+                # Skip if already in combined_preface_line_indices to avoid duplication
+                if not found_first_chapter and not in_illustration and i not in combined_preface_line_indices:
                     preface_text.append(line)
                     consumed_line_indices.add(i)
 

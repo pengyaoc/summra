@@ -2,14 +2,11 @@
 """
 Tests for generate_combined_summaries() function.
 
-Tests the new 7-field dictionary return format for enhanced book metadata:
-1. about_text (150-200 words)
+Tests the 4-field dictionary return format:
+1. about_text (75-100 words, no spoilers)
 2. concise_summary (500 words)
 3. medium_summary (2000-3000 words)
-4. relevance_now (100-150 words)
-5. author_country (country name)
-6. similar_books (list of 5 dicts with title/author)
-7. other_books_by_author (list of max 10 titles)
+4. relevance_now (75-100 words)
 """
 
 import sys
@@ -44,7 +41,7 @@ class TestGenerateCombinedSummariesDryRun:
     """Test dry-run mode returns proper dictionary format."""
 
     def test_dry_run_returns_dictionary(self):
-        """Test that dry-run mode returns a dictionary with all 7 fields."""
+        """Test that dry-run mode returns a dictionary with all 4 fields."""
         generator = SummaryGenerator(api_key="test_key")
 
         result = generator.generate_combined_summaries(
@@ -57,15 +54,12 @@ class TestGenerateCombinedSummariesDryRun:
         # Verify it's a dictionary
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
 
-        # Verify all 7 keys are present
+        # Verify all 4 keys are present
         expected_keys = [
             'about_text',
             'concise_summary',
             'medium_summary',
-            'relevance_now',
-            'author_country',
-            'similar_books',
-            'other_books_by_author'
+            'relevance_now'
         ]
 
         for key in expected_keys:
@@ -76,27 +70,12 @@ class TestGenerateCombinedSummariesDryRun:
         assert isinstance(result['concise_summary'], str)
         assert isinstance(result['medium_summary'], str)
         assert isinstance(result['relevance_now'], str)
-        assert isinstance(result['author_country'], str)
-        assert isinstance(result['similar_books'], list)
-        assert isinstance(result['other_books_by_author'], list)
-
-        # Verify list contents
-        assert len(result['similar_books']) == 5
-        for book in result['similar_books']:
-            assert isinstance(book, dict)
-            assert 'title' in book
-            assert 'author' in book
-
-        assert len(result['other_books_by_author']) == 3
-        for title in result['other_books_by_author']:
-            assert isinstance(title, str)
 
         # Verify DRY RUN placeholders
         assert '[DRY RUN]' in result['about_text']
         assert '[DRY RUN]' in result['concise_summary']
         assert '[DRY RUN]' in result['medium_summary']
         assert '[DRY RUN]' in result['relevance_now']
-        assert '[DRY RUN]' in result['author_country']
 
     def test_dry_run_no_api_calls(self):
         """Test that dry-run mode makes no API calls."""
@@ -119,12 +98,12 @@ class TestGenerateCombinedSummariesParsing:
     """Test parsing of LLM response into dictionary format."""
 
     def test_parse_well_formatted_response(self, mock_genai_client):
-        """Test parsing of properly formatted LLM response."""
+        """Test parsing of properly formatted LLM response with 4 sections."""
         generator = SummaryGenerator(api_key="test_key")
 
-        # Mock LLM response with all sections
+        # Mock LLM response with all 4 sections
         mock_response = Mock()
-        mock_response.text = """### ABOUT THE BOOK (150-200 words)
+        mock_response.text = """### ABOUT THE BOOK (75-100 words, no spoilers)
 This is a compelling story about adventure and discovery. The protagonist embarks on a journey
 that transforms their understanding of the world. Written with elegant prose and deep insight,
 this classic work explores timeless themes of human nature, morality, and the search for meaning.
@@ -142,27 +121,10 @@ developments, and thematic elements in great detail. The summary explores the au
 techniques, narrative structure, and the historical context of the work. It examines
 how the various storylines interconnect and build toward the conclusion.
 
-### RELEVANCE NOW (100-150 words)
+### RELEVANCE NOW (75-100 words)
 This book remains relevant today because it addresses universal human experiences and
 emotions that transcend time periods. The themes of identity, belonging, and moral
 choice resonate with contemporary readers facing similar challenges in modern society.
-
-### AUTHOR COUNTRY
-England
-
-### SIMILAR BOOKS
-Pride and Prejudice|Jane Austen
-Wuthering Heights|Emily Brontë
-Jane Eyre|Charlotte Brontë
-Middlemarch|George Eliot
-Tess of the d'Urbervilles|Thomas Hardy
-
-### OTHER BOOKS BY AUTHOR
-Sense and Sensibility
-Emma
-Mansfield Park
-Northanger Abbey
-Persuasion
 """
 
         # Mock the API client
@@ -179,170 +141,13 @@ Persuasion
 
         # Verify dictionary structure
         assert isinstance(result, dict)
-        assert len(result) == 7
+        assert len(result) == 4
 
         # Verify content (check for actual content, not template markers)
         assert "compelling story" in result['about_text']
-        assert "central conflict" in result['concise_summary']  # Check actual content, not template text
+        assert "central conflict" in result['concise_summary']
         assert "comprehensive analysis" in result['medium_summary']
         assert "remains relevant" in result['relevance_now']
-        assert result['author_country'] == 'England'
-
-        # Verify similar books parsing
-        assert len(result['similar_books']) == 5
-        assert result['similar_books'][0]['title'] == 'Pride and Prejudice'
-        assert result['similar_books'][0]['author'] == 'Jane Austen'
-        assert result['similar_books'][4]['title'] == "Tess of the d'Urbervilles"
-
-        # Verify other books parsing
-        assert len(result['other_books_by_author']) == 5
-        assert 'Sense and Sensibility' in result['other_books_by_author']
-        assert 'Persuasion' in result['other_books_by_author']
-
-    def test_parse_response_with_country_prefix(self, mock_genai_client):
-        """Test that country prefixes are cleaned (e.g., 'Country: France' -> 'France')."""
-        generator = SummaryGenerator(api_key="test_key")
-
-        mock_response = Mock()
-        mock_response.text = """### ABOUT THE BOOK (150-200 words)
-Short about text.
-
-### CONCISE SUMMARY (500 words)
-Concise summary text.
-
-### MEDIUM SUMMARY (2000-3000 words)
-Medium summary text.
-
-### RELEVANCE NOW (100-150 words)
-Relevance text.
-
-### AUTHOR COUNTRY
-Country: France
-
-### SIMILAR BOOKS
-Book 1|Author 1
-Book 2|Author 2
-Book 3|Author 3
-Book 4|Author 4
-Book 5|Author 5
-
-### OTHER BOOKS BY AUTHOR
-Other Book 1
-"""
-
-        mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_response
-        generator.client = mock_client
-
-        result = generator.generate_combined_summaries(
-            text="Sample", title="Test", author="Author", dry_run=False
-        )
-
-        # Verify country prefix was removed
-        assert result['author_country'] == 'France'
-        assert 'Country:' not in result['author_country']
-
-    def test_parse_response_with_limited_similar_books(self, mock_genai_client):
-        """Test that only first 5 similar books are returned even if more are provided."""
-        generator = SummaryGenerator(api_key="test_key")
-
-        mock_response = Mock()
-        mock_response.text = """### ABOUT THE BOOK (150-200 words)
-About text.
-
-### CONCISE SUMMARY (500 words)
-Concise text.
-
-### MEDIUM SUMMARY (2000-3000 words)
-Medium text.
-
-### RELEVANCE NOW (100-150 words)
-Relevance text.
-
-### AUTHOR COUNTRY
-USA
-
-### SIMILAR BOOKS
-Book 1|Author 1
-Book 2|Author 2
-Book 3|Author 3
-Book 4|Author 4
-Book 5|Author 5
-Book 6|Author 6
-Book 7|Author 7
-
-### OTHER BOOKS BY AUTHOR
-Other 1
-"""
-
-        mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_response
-        generator.client = mock_client
-
-        result = generator.generate_combined_summaries(
-            text="Sample", title="Test", author="Author", dry_run=False
-        )
-
-        # Should only return first 5
-        assert len(result['similar_books']) == 5
-        assert result['similar_books'][0]['title'] == 'Book 1'
-        assert result['similar_books'][4]['title'] == 'Book 5'
-
-    def test_parse_response_with_limited_other_books(self, mock_genai_client):
-        """Test that only first 10 other books are returned even if more are provided."""
-        generator = SummaryGenerator(api_key="test_key")
-
-        mock_response = Mock()
-        mock_response.text = """### ABOUT THE BOOK (150-200 words)
-About text.
-
-### CONCISE SUMMARY (500 words)
-Concise text.
-
-### MEDIUM SUMMARY (2000-3000 words)
-Medium text.
-
-### RELEVANCE NOW (100-150 words)
-Relevance text.
-
-### AUTHOR COUNTRY
-USA
-
-### SIMILAR BOOKS
-Book 1|Author 1
-Book 2|Author 2
-Book 3|Author 3
-Book 4|Author 4
-Book 5|Author 5
-
-### OTHER BOOKS BY AUTHOR
-Book 1
-Book 2
-Book 3
-Book 4
-Book 5
-Book 6
-Book 7
-Book 8
-Book 9
-Book 10
-Book 11
-Book 12
-"""
-
-        mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_response
-        generator.client = mock_client
-
-        result = generator.generate_combined_summaries(
-            text="Sample", title="Test", author="Author", dry_run=False
-        )
-
-        # Should only return first 10
-        assert len(result['other_books_by_author']) == 10
-        assert 'Book 1' in result['other_books_by_author']
-        assert 'Book 10' in result['other_books_by_author']
-        assert 'Book 11' not in result['other_books_by_author']
 
 
 class TestGenerateCombinedSummariesIntegration:
@@ -366,7 +171,7 @@ class TestGenerateCombinedSummariesIntegration:
         assert len(medium) > 0
 
     def test_all_metadata_fields_accessible(self):
-        """Test that all metadata fields can be accessed independently."""
+        """Test that all 4 fields can be accessed independently."""
         generator = SummaryGenerator(api_key="test_key")
 
         result = generator.generate_combined_summaries(
@@ -375,16 +180,19 @@ class TestGenerateCombinedSummariesIntegration:
 
         # Verify each field can be accessed
         about = result.get('about_text')
+        concise = result.get('concise_summary')
+        medium = result.get('medium_summary')
         relevance = result.get('relevance_now')
-        country = result.get('author_country')
-        similar = result.get('similar_books', [])
-        other = result.get('other_books_by_author', [])
 
         assert about is not None
+        assert concise is not None
+        assert medium is not None
         assert relevance is not None
-        assert country is not None
-        assert isinstance(similar, list)
-        assert isinstance(other, list)
+
+        assert isinstance(about, str)
+        assert isinstance(concise, str)
+        assert isinstance(medium, str)
+        assert isinstance(relevance, str)
 
 
 if __name__ == "__main__":

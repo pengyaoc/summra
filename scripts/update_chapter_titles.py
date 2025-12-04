@@ -91,12 +91,12 @@ if __name__ == '__main__':
     # Database and file paths
     db = models.Database()
 
-    # Get book ID for "The History of the Decline and Fall of the Roman Empire"
-    book = db.get_book_by_filename("The_History_of_the_Decline_and_Fall_of_the_Roman_Empire.txt")
+    # Get book ID for Winnie-the-Pooh
+    book = db.get_book_by_filename("pg67098.txt")
 
     if not book:
         print("ERROR: Book not found in database")
-        print("Looking for: The_History_of_the_Decline_and_Fall_of_the_Roman_Empire.txt")
+        print("Looking for: pg67098.txt")
         sys.exit(1)
 
     book_id = book['id']
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     print(f"Found book: {book_title} (ID: {book_id})")
 
     # Path to book file
-    book_file = Path("data/books/The_History_of_the_Decline_and_Fall_of_the_Roman_Empire.txt")
+    book_file = Path("data/books/pg67098.txt")
 
     if not book_file.exists():
         print(f"ERROR: Book file not found: {book_file}")

@@ -73,6 +73,31 @@ def normalize_chapter_title(title: str) -> str:
             capitalize_next = True
             continue
 
+        # Handle hyphenated words - capitalize each part appropriately
+        if '-' in word and not starts_with_quote:
+            parts = word.split('-')
+            capitalized_parts = []
+            for j, part in enumerate(parts):
+                # First part or parts that aren't lowercase words
+                # Also capitalize if we need to capitalize next word (after colon/period)
+                if j == 0:
+                    # First part: capitalize if capitalize_next is True, otherwise apply normal rules
+                    if capitalize_next or in_quotes:
+                        capitalized_parts.append(part.capitalize())
+                        capitalize_next = False
+                    elif part.lower() in lowercase_words and i > 0:
+                        capitalized_parts.append(part.lower())
+                    else:
+                        capitalized_parts.append(part.capitalize())
+                elif part.lower() not in lowercase_words:
+                    # Non-lowercase words: always capitalize
+                    capitalized_parts.append(part.capitalize())
+                else:
+                    # Lowercase words in non-first position: keep lowercase
+                    capitalized_parts.append(part.lower())
+            result.append('-'.join(capitalized_parts))
+            continue
+
         if starts_with_quote:
             # Word starts with quote - capitalize first letter after quote
             # e.g., "it -> "It
