@@ -6,6 +6,330 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-12-03
 
+### AI Prompt Enhancement: Stricter No-Spoiler Policy for "About This Book" - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-04
+**Completed:** 2025-12-04
+
+**Objective:** Strengthen the AI prompt to ensure absolutely no spoilers in the "About This Book" summary section.
+
+**Changes Implemented:**
+
+**1. Updated AI Prompt (scripts/generate_summaries.py:297-300)**
+- Added **ABSOLUTELY NO SPOILERS** instruction in bold to the prompt
+- Explicitly listed forbidden content: plot twists, endings, character fates, or major reveals
+- Clarified focus areas: premise, themes, and setting only
+- This ensures the 75-100 word "About This Book" section remains completely spoiler-free
+
+**2. Updated Dry Run Placeholder (scripts/generate_summaries.py:327)**
+- Updated dry run text to reflect spoiler-free requirement
+- Added "with absolutely no spoilers" to the placeholder description
+
+**Technical Details:**
+- Modified prompt in `generate_combined_summaries()` method
+- Prompt now explicitly states: **ABSOLUTELY NO SPOILERS** - do not reveal plot twists, endings, character fates, or major reveals. Focus only on the premise, themes, and setting.
+- Applied to all future book metadata generations
+
+**Impact:**
+- Better user experience - readers won't encounter spoilers in the "About This Book" section
+- More reliable spoiler-free content for fiction works
+- Clearer guidance for the AI model on what to include/exclude
+- Maintains the engaging, compelling nature of the summary while protecting the reading experience
+
+**Files Modified:**
+- scripts/generate_summaries.py (lines 297-300, 327)
+
+---
+
+### UI Enhancement: Summary Tab Labels and Read More Buttons - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-03
+**Completed:** 2025-12-03
+
+**Objective:** Improve summary tab naming and simplify "Read more" button text for better UX.
+
+**Changes Implemented:**
+
+**1. Updated Summary Tab Labels (frontend/templates/index.html:125-126)**
+- Changed "500-word Summary" → "Short Summary"
+- Changed "2000-word Summary" → "Full Summary"
+- More user-friendly and concise labels
+- Removes technical word count from user-facing UI
+
+**2. Simplified Read More Buttons (frontend/templates/index.html:137, 146)**
+- Changed "Read Full 500-word Summary →" → "Read more"
+- Changed "Read Full 2000-word Summary →" → "Read more"
+- Consistent, clean button text across both summary tabs
+- Removed word count references and directional arrow
+
+**3. Fixed Collapse Button Text (frontend/static/js/app.js:979)**
+- Changed collapse text from "Read Quick Summary →" → "Read more"
+- Ensures consistency when user expands then collapses Short Summary
+- Button text now consistent throughout expand/collapse lifecycle
+
+**4. Updated Product Requirements Document (PRD.md)**
+- Documented new tab labeling convention
+- Added acceptance criteria for consistent button text
+- Updated UI requirements section
+
+**Technical Details:**
+- HTML changes in summary tab structure
+- JavaScript toggle function updated for consistent labeling
+- No CSS changes required
+
+**Impact:**
+- Clearer, more intuitive tab labels for users
+- Simpler, more conventional "Read more" button text
+- Reduced visual clutter and improved readability
+- Consistent UI language throughout the summary interface
+- Better user experience with predictable button behavior
+
+---
+
+### Enhancement: Summary Tab Listen Button & Author Books Carousel - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-03
+**Completed:** 2025-12-03
+
+**Objective:** Improve UX by relocating listen button and convert author books to carousel with direct DB queries.
+
+**Changes Implemented:**
+
+**1. Relocated Listen Button in Summary Tabs (frontend/templates/index.html:123-129)**
+- Moved listen button from inside tab content to header container
+- Now positioned to the right of tab buttons
+- Single unified button that changes function based on active tab
+- Better visual hierarchy and accessibility
+
+**2. Updated CSS for Listen Button Placement (frontend/static/css/style.css:767-785)**
+- New `.summary-tabs-header-container` for flex layout
+- Listen button aligned to right with proper spacing
+- Maintains consistent styling across tabs
+
+**3. Dynamic TTS Button Management (frontend/static/js/app.js:431-457, 904, 1000)**
+- Added `updateSummaryTTSButton()` method
+- Button updates when switching between 500-word and 2000-word tabs
+- Shows/hides based on audio availability for each summary type
+- Stores summary content and audio flags for both types
+
+**4. Author Books Section Converted to Carousel (frontend/templates/index.html:112-115)**
+- Changed from static grid to scrollable carousel
+- Removed "on Summra" from heading ("Books by this author")
+- Matches "You May Also Like" carousel design
+- Better UX for authors with many books
+
+**5. Database Direct Query for Author Books (backend/models.py:1072-1097)**
+- Added `get_books_by_author_name()` method
+- Direct SQL query with LOWER() for case-insensitive matching
+- Supports excluding current book via parameter
+- Limit of 20 books (configurable)
+- More efficient than filtering all books
+
+**6. Backend API Enhancement (backend/app_base.py:945-990)**
+- Updated `/api/books/by-author/<author_name>` endpoint
+- Now accepts `?exclude=<book_id>` query parameter
+- Queries database directly instead of filtering all books
+- Checks for cover images in both database and static files
+- Returns properly formatted book data with cover URLs
+
+**7. Frontend Carousel Implementation (frontend/static/js/app.js:832-915)**
+- Matches "related books" carousel pattern
+- Left/right navigation buttons
+- Smooth scrolling by 3 cards at a time
+- Button states update based on scroll position
+- Click handlers navigate to selected book
+- Reuses existing carousel CSS classes
+
+**Results:**
+- Cleaner summary section with better button placement
+- Consistent carousel UX across the page
+- Faster author books loading with direct DB queries
+- Improved scalability for authors with many books
+- Better visual consistency with existing design patterns
+
+### Feature: Book Details Page Redesign - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-03
+**Completed:** 2025-12-03
+
+**Objective:** Redesign the book details page with improved layout and new "About the Author" section.
+
+**Changes Implemented:**
+
+**1. Reorganized "About This Book" Section (frontend/templates/index.html:88-117)**
+- Changed from 2-column layout to stacked single-column layout
+- New order: "About This Book" → "Why Read This Now?" → "About the Author"
+- Removed old author metadata bar
+
+**2. Added "About the Author" Section**
+- Displays author name and country inline
+- Placeholder bio text (100 words) - ready for backend integration
+- "Books by this author on Summra" subsection with:
+  - Book cover grid display when covers available
+  - Fallback text list when no covers
+  - Click-to-navigate functionality
+
+**3. Merged Summary Sections into Tabbed Interface (frontend/templates/index.html:121-148)**
+- Combined "Quick Summary" and "Full Summary" into single tabbed section
+- Renamed to "500-word Summary" and "2000-word Summary"
+- Left tab (500-word) active by default
+- Tab switching preserves all functionality (TTS, expand/collapse)
+
+**4. Updated CSS Styling (frontend/static/css/style.css:624-810)**
+- New `.about-single-column` for stacked layout
+- Added `.author-info-bar`, `.author-bio-text` for author section
+- Added `.author-books-grid` for book display grid
+- Implemented `.summary-tabs-header` and `.summary-tab` for tab UI
+- Tab active state with color and border styling
+- Responsive grid for author books
+
+**5. JavaScript Updates (frontend/static/js/app.js)**
+- Added `setupSummaryTabs()` (lines 408-426) for tab switching
+- Updated `updateAboutSection()` (lines 737-799) to populate new author section
+- Added `loadAuthorBooks()` (lines 801-870) to fetch and display author's other books
+- Tab content shows/hides based on active tab
+
+**6. Backend API Enhancement (backend/app_base.py:945-979)**
+- New endpoint: `GET /api/books/by-author/<author_name>`
+- Returns all books by specific author with:
+  - Book ID, title, author name
+  - `has_cover` flag for conditional display
+  - Case-insensitive author matching
+  - URL-decoded author name support
+
+**7. Chapter Summary UX Improvement (frontend/static/js/app.js:1411-1439)**
+- Made entire yellow summary box header clickable (not just toggle button)
+- Cursor changes to pointer on hover
+- Prevents toggle when clicking TTS button
+- Improved collapsed/expanded state management
+
+**Results:**
+- Cleaner, more organized book details page
+- Better author discovery through related books
+- Improved summary navigation with tabs
+- Enhanced chapter summary interaction
+- Placeholder bio ready for AI-generated content
+
+**TODO:**
+- Generate and populate actual author biographies
+- Consider adding author portrait images
+
+### Bug Fix: Underscore Emphasis Not Rendering in Chapter Text - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-03
+**Completed:** 2025-12-03
+
+**Objective:** Fix underscore-wrapped text (e.g., `_word_`) not being rendered as italic emphasis in chapter full text.
+
+**Problem:**
+- Book content from Project Gutenberg uses underscores to indicate emphasis: `_word_` should be italic
+- Chapter summaries were correctly rendering `_text_` as italic (using `renderMarkdown()` with marked.js)
+- Chapter full text was displaying underscores as literal characters instead of converting to `<em>` tags
+- Inconsistent styling between summaries and full text
+
+**Examples Found in Books:**
+- Wuthering Heights: `"Is _he_ to have any?"`, `"I want you to _tell_ me my way"`
+- Alice in Wonderland: `"they all _thought_ in chorus"`
+- Various books: `_vis-à-vis_`, `_said_`, `_dare_`, `_once_`
+
+**Root Cause:**
+- `formatChapterText()` in `frontend/static/js/app.js:375-382` only escaped HTML and wrapped text in `<p>` tags
+- Did not process markdown-style underscore emphasis like `renderMarkdown()` does for summaries
+
+**Solution Implemented:**
+- Updated `formatChapterText()` in `frontend/static/js/app.js:375-389`
+- Added regex replacement: `/\b_([^_]+?)_\b/g` → `<em>$1</em>`
+- Preserves HTML escaping for security (XSS prevention)
+- Converts underscore emphasis after escaping HTML entities
+
+**Implementation:**
+```javascript
+formatChapterText(text) {
+    if (!text) return '';
+    const paragraphs = text.split(/\n/);
+    return paragraphs
+        .filter(p => p.trim().length > 0)
+        .map(p => {
+            // Escape HTML first to prevent XSS
+            let escaped = this.escapeHtml(p.trim());
+            // Convert _text_ to <em>text</em> for italic emphasis
+            escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+            return `<p>${escaped}</p>`;
+        })
+        .join('');
+}
+```
+
+**Result:**
+- `"He _said_ something"` now renders as "He _said_ something" (italic)
+- Consistent with existing CSS styling for `<em>` tags (italic font-style)
+- Maintains security by escaping HTML before applying emphasis formatting
+
+### Bug Fix: EPILOGUE Duplication from Frontmatter Detection - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-03
+**Completed:** 2025-12-03
+
+**Objective:** Fix AUTHOR'S PREFACE and other frontmatter content being incorrectly parsed into EPILOGUE chapter.
+
+**Problem:**
+- EPILOGUE appearing in TOC or frontmatter (without chapter number) was being treated as Chapter 999
+- Both frontmatter EPILOGUE and actual epilogue were being merged: "Merged Chapter 999 parts: 4504 + 2546 = 7052 chars"
+- AUTHOR'S PREFACE content was duplicated in both Chapter 0 (Preface) and Chapter 68 (Epilogue)
+- Frontmatter patterns (PREFACE, INTRODUCTION, EPILOGUE) before first_chapter_line should be part of Chapter 0 or skipped, not treated as separate chapters
+
+**Example Case (The Three Musketeers - pg1257.txt):**
+- Line 102: "EPILOGUE" (in frontmatter, after TOC)
+- Line 107: "AUTHOR'S PREFACE" (actual preface)
+- Line 176: First chapter detection point
+- Line 31067: "EPILOGUE" (actual epilogue at end)
+- Both EPILOGUE instances were being detected and merged
+
+**Solution Implemented:**
+
+**Updated TOC Entry Patterns (lines 2358, 2415):**
+- Added EPILOGUE|PREFACE|AUTHOR|DEDICATION|INTRODUCTION|PROLOGUE to TOC detection
+- Filters these from preface extraction
+- Result: Preface reduced from 174 lines (7129 chars) to 105 lines (4497 chars)
+
+**Added Frontmatter Pattern Skip Logic (lines 2766-2780):**
+```python
+# Skip PREFACE/INTRODUCTION/AUTHOR'S PREFACE/EPILOGUE patterns that appear before first_chapter_line
+frontmatter_patterns = [
+    r'^(INTRODUCTION)', r'^(Introduction)',
+    r'^(PREFACE)(?:\s+.*)?', r'^(Preface)(?:\s+.*)?',
+    r"^TRANSLATOR'S PREFACE$", r"^Translator's Preface$",
+    r"^AUTHOR'S PREFACE$", r"^Author's Preface$",
+    r'^(EPILOGUE)', r'^(Epilogue)',  # EPILOGUE in TOC or frontmatter
+]
+is_frontmatter_pattern = any(re.match(p, line_stripped) for p in frontmatter_patterns)
+if is_frontmatter_pattern and first_chapter_line is not None and i < first_chapter_line:
+    continue
+```
+
+**Benefits:**
+- EPILOGUE as special chapter (without chapter number) is now handled correctly
+- Only content after last numbered chapter is parsed into EPILOGUE
+- No more "Merged Chapter 999 parts" - single EPILOGUE detection only
+- Preface content stays in Chapter 0, not duplicated in EPILOGUE
+- Everything before first chapter (excluding TOC) correctly goes to Preface
+
+**Testing Results:**
+
+The Three Musketeers (pg1257.txt):
+- ✓ No "Merged Chapter 999 parts" message
+- ✓ Total Chapters: 69 (maintained)
+- ✓ Chapter 0: Preface (9085 chars - properly sized)
+- ✓ Chapter 68: Epilogue (2546 chars - no duplication)
+- ✓ EPILOGUE only detected once at line 31067
+
+**Files Modified:**
+- scripts/generate_summaries.py (lines 2358, 2415, 2766-2780)
+
+---
+
+## 2025-12-03
+
 ### Code Refactoring: DRY - Shared Audio Cache Checking - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-12-03

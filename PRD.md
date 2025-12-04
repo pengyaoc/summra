@@ -79,18 +79,24 @@ Users can choose from three different summary lengths to match their needs and a
 - **Generation Time:** 5-30 minutes (full book)
 
 **UI Requirements:**
-- Three clearly labeled option cards on book detail page
+- Tab interface for Short Summary and Full Summary on book detail page (Updated 2025-12-03)
+- Tab labels: "Short Summary" and "Full Summary" (formerly "500-word Summary" and "2000-word Summary")
+- "Read more" expand button for both summary previews (Updated 2025-12-03)
 - Visual distinction between summary types
 - Clear indication of which summary is currently selected
 - Smooth transition when switching between summary types
+- Short Summary preview collapsed at 300px height with expand/collapse toggle
+- Full Summary preview with fade effect and "Read more" button to full page view
 
 **Acceptance Criteria:**
-- [ ] User can select any of three summary types
-- [ ] Selected summary type is visually highlighted
-- [ ] Summary content updates immediately when selection changes
-- [ ] Concise summaries contain no spoilers for fiction works
-- [ ] Medium summaries are between 1800-3500 words
-- [ ] Comprehensive view shows expandable chapter list
+- [✅] User can select between Short Summary and Full Summary tabs
+- [✅] Selected summary type is visually highlighted
+- [✅] Summary content updates immediately when selection changes
+- [✅] Concise summaries contain no spoilers for fiction works
+- [✅] Medium summaries are between 1800-3500 words
+- [✅] Comprehensive view shows expandable chapter list
+- [✅] "Read more" button text consistent across all summary views (2025-12-03)
+- [✅] Short Summary expand/collapse toggles with consistent button text (2025-12-03)
 
 ### 2. Text-to-Speech (TTS)
 
@@ -1338,7 +1344,104 @@ Chapter illustrations use modern image formats (WebP/JPG) with automatic browser
 
 ---
 
-**Document Version:** 1.5
-**Last Updated:** 2025-12-01
+
+## Recent Feature Updates (2025-12-03)
+
+### Summary Tabs with Unified Listen Button
+
+**Feature Description:**
+Book summaries are now presented in a tabbed interface with "Short Summary" and "Full Summary" tabs, making it easier to switch between summary lengths.
+
+**User Experience:**
+- **Tab Navigation:** Click between "Short Summary" (500-word) and "Full Summary" (2000-word) without page reload
+- **Unified Listen Button:** Single listen button positioned to the right of tabs
+  - Automatically updates to play audio for the currently active tab
+  - Shows/hides based on audio availability for each summary type
+  - Consistent position regardless of which tab is active
+- **Read More:** Expandable summaries with "Read more" button for longer content
+
+**User Benefits:**
+- Cleaner, more organized interface
+- Easier comparison between summary lengths
+- Consistent audio playback controls
+- Better visual hierarchy
+
+### About the Author Section
+
+**Feature Description:**
+Each book details page now includes an "About the Author" section with author information and related books.
+
+**User Experience:**
+- **Author Information:**
+  - Author name displayed prominently
+  - Country of origin shown inline with name
+  - Author biography (placeholder: 100 words, ready for AI-generated content)
+
+- **Books by This Author:**
+  - Scrollable carousel of other books by the same author available on Summra
+  - Book covers displayed when available
+  - Left/right navigation arrows for browsing
+  - Click any book to navigate to its details page
+
+**User Stories:**
+- As a reader who enjoys an author's style, I want to discover other books by the same author so I can continue reading their work
+- As a student researching an author, I want quick access to their other works so I can understand their writing evolution
+- As a curious reader, I want to learn about the author's background so I can better understand the context of their writing
+
+**Specifications:**
+- Shows up to 20 books by the same author
+- Excludes the current book from the carousel
+- Automatically hides section if author has no other books on Summra
+- Reuses carousel design from "You May Also Like" for consistency
+
+### Enhanced Chapter Experience
+
+**Chapter Summary Box:**
+- **Clickable Header:** Entire yellow summary box header is now clickable to expand/collapse
+- **Visual Feedback:** Cursor changes to pointer when hovering over header
+- **Smart Clicking:** TTS button within header doesn't trigger expansion (isolated click target)
+- **Collapsed State:** Summary box starts collapsed to reduce page clutter
+
+**Text Formatting:**
+- **Italic Emphasis:** Project Gutenberg's underscore emphasis (`_word_`) now renders as proper italic text
+- **Examples:**
+  - `"He _said_ something"` displays as "He *said* something"
+  - Preserves original formatting intent from classic texts
+- **Security:** HTML escaping prevents XSS attacks while preserving emphasis
+
+**User Benefits:**
+- More intuitive interaction with chapter summaries
+- Better reading experience with proper text formatting
+- Reduced visual clutter with collapsed summaries
+- Consistent with original book formatting conventions
+
+### Reorganized Book Information
+
+**Layout Updates:**
+The "About This Book" section has been reorganized for better information flow:
+
+1. **About This Book** - What the book is about
+2. **Why Read This Now?** - Contemporary relevance and context
+3. **About the Author** - Author biography and related works
+
+**Previous Layout:**
+- Two-column layout with "About This Book" and "Why Read This Now?" side by side
+- Author information in a metadata bar below
+
+**Current Layout:**
+- Stacked single-column sections for better readability
+- Author section includes biography and book discovery
+- More scannable on mobile devices
+
+**User Benefits:**
+- Better information hierarchy
+- Easier to read on all screen sizes
+- Author discovery integrated naturally into the flow
+- More engaging with carousel of related books
+
+---
+
+**Document Version:** 1.6
+**Last Updated:** 2025-12-03
 **Author:** Summra Team
 **Status:** Living Document
