@@ -1277,6 +1277,63 @@ This was incorrectly detected as a TOC entry with Roman numeral "I" and title "h
 - Correctly identifies TOC end boundary
 - Fixed Gulliver's Travels preface detection (was starting at line 47 instead of 0)
 
+### Preface Extraction Logic (Chapter 0)
+
+**Location:** `scripts/generate_summaries.py:2301-2398, 2462-3143`
+
+**Objective:** Collect all introductory material before the first numbered chapter into Chapter 0 (Preface).
+
+**Two-Phase Collection Strategy:**
+
+The preface extraction uses two complementary collection mechanisms with deduplication:
+
+**Phase 1: Initial Preface Extraction (lines 2301-2398)**
+- **What:** Filters lines from start of book to first chapter marker
+- **How:** Removes TOC, illustrations, and title page boilerplate
+- **Output:** `initial_preface_text` + `combined_preface_line_indices`
+
+**Phase 2: Main Loop Collection (lines 2462+)**
+- **What:** Collects any remaining pre-chapter content during chapter parsing
+- **How:** Adds lines before `found_first_chapter = True` if not already in `combined_preface_line_indices`
+- **Output:** `preface_text`
+
+**Final Combination (line 3064):**
+```python
+combined_preface = initial_preface_text + preface_text
+```
+
+**Deduplication Fix (2025-12-04):**
+
+**Problem:** Content appearing twice in preface for books like "Ten Years Later":
+- Lines 31-105: Transcriber's Notes (not filtered by Phase 1)
+- Lines 106-223: Introduction section
+- Lines 106-223 were collected in BOTH phases, causing duplication
+
+**Solution:** Added deduplication check at lines 2505, 2570, 3137:
+```python
+if not found_first_chapter and not in_illustration and i not in combined_preface_line_indices:
+    preface_text.append(line)
+```
+
+**Filtering Strategy (Simplified 2025-12-04):**
+
+Previously relied on regex matching specific preface headers:
+```python
+# OLD APPROACH (removed)
+is_preface_header = re.match(r'^\s*(AUTHOR[\'\']S\s+PREFACE|TRANSLATOR[\'\']S\s+PREFACE|...')
+```
+
+**New Approach:** Keep everything before Chapter 1 EXCEPT:
+1. **TOC entries** - detected by CONTENTS header and page number patterns
+2. **Illustration captions** - `[Illustration...]` blocks
+3. **Title page boilerplate** - BY, COPYRIGHT, publisher info, years
+
+**Benefits:**
+- Simpler, more maintainable code
+- No need to maintain exhaustive list of preface keywords
+- Works for any introductory content (Transcriber's Notes, Prelude, Introduction, etc.)
+- Eliminates duplication bug
+
 **TOC Title Deduplication (2025-11-25):**
 
 Titles extracted from title-only TOC are deduplicated while preserving order:

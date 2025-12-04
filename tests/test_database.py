@@ -9,9 +9,7 @@ Tests CRUD operations, constraints, and relationships for all tables:
 import sys
 import os
 from pathlib import Path
-import tempfile
 import pytest
-import uuid
 
 # Add parent directories to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
@@ -23,17 +21,11 @@ class TestDatabase:
     """Test database operations"""
 
     @pytest.fixture
-    def temp_db(self):
+    def temp_db(self, test_db_path):
         """Create a unique temporary database for testing"""
-        # Use UUID-based temporary file for complete isolation
-        temp_file = f"/tmp/test_db_{uuid.uuid4()}.db"
-        db = models.Database(db_path=temp_file)
-
+        db = models.Database(db_path=test_db_path)
         yield db
-
-        # Cleanup temporary database file
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
+        # Cleanup handled by conftest.py cleanup_test_artifacts
 
     def test_add_book(self, temp_db):
         """Test adding a book to database"""

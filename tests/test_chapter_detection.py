@@ -235,7 +235,7 @@ illustrations help clarify abstract concepts and demonstrate practical applicati
         assert "second edition" in ch0_text.lower()
 
     def test_nested_book_chapter_structure(self, generator):
-        """Test handling of nested BOOK/CHAPTER structure (e.g., Book I Chapter 1 = 101)"""
+        """Test handling of nested BOOK/CHAPTER structure - uses sequential numbering with book_sections table"""
         test_text = """
 PREFACE
 
@@ -249,8 +249,8 @@ BOOK I
 
 CHAPTER I: First Topic
 
-This is Book 1, Chapter 1. The chapter numbering should encode this as 101
-to preserve the book structure while allowing proper ordering. Adding more
+This is Book 1, Chapter 1. The chapter numbering now uses sequential numbers (1, 2, 3, 4)
+while book structure is preserved in the book_sections table. Adding more
 content to make this chapter substantial enough to pass the minimum length
 requirement for chapter detection and validation. We include multiple paragraphs
 of content to ensure this chapter is long enough to not be mistaken for a table
@@ -261,7 +261,7 @@ that distinguishes actual chapters from TOC entries in our detection logic.
 
 CHAPTER II: Second Topic
 
-This is Book 1, Chapter 2, which should be encoded as 102. More content here
+This is Book 1, Chapter 2, which is numbered as 2 in the sequential scheme. More content here
 to ensure the chapter is long enough to be recognized as a valid chapter
 rather than a table of contents entry or other metadata. We continue with
 additional paragraphs to make sure this chapter has sufficient length for
@@ -275,19 +275,17 @@ BOOK II
 
 CHAPTER I: New Beginning
 
-This is Book 2, Chapter 1, which should be encoded as 201 to show it's in
-the second book while being the first chapter of that book. Additional text
-is included to meet the minimum length requirements for proper chapter
-detection and to distinguish this from TOC entries. We provide multiple
-paragraphs of substantive content to ensure this chapter passes all validation
-checks. The encoding scheme allows us to maintain the book structure while
-ensuring chapters are properly ordered within their respective books. This
-is essential for works that are divided into multiple books or volumes, each
-with their own chapter sequences.
+This is Book 2, Chapter 1, which is numbered as 3 in the sequential scheme to show it's
+the third chapter overall. Additional text is included to meet the minimum length
+requirements for proper chapter detection and to distinguish this from TOC entries.
+We provide multiple paragraphs of substantive content to ensure this chapter passes
+all validation checks. The numbering scheme allows us to maintain simple sequential
+ordering while book structure is preserved separately. This is essential for works
+that are divided into multiple books or volumes, each with their own chapter sequences.
 
 CHAPTER II: Continuation
 
-This is Book 2, Chapter 2, encoded as 202. This chapter also needs sufficient
+This is Book 2, Chapter 2, numbered as 4. This chapter also needs sufficient
 length to pass validation, so we include more content to ensure it meets the
 minimum character threshold for being recognized as a real chapter. Additional
 sentences and paragraphs are added to provide the necessary length for proper
@@ -299,16 +297,16 @@ and ensures that multi-volume works are properly organized.
 
         chapters, _ = generator.detect_chapters(test_text)
 
-        # Should detect 5 chapters (0=Preface, 101, 102, 201, 202) with proper encoding
+        # Should detect 5 chapters (0=Preface, 1, 2, 3, 4) with sequential numbering
         assert len(chapters) == 5
 
-        # Check encoded chapter numbers
+        # Check sequential chapter numbers (current implementation renumbers sequentially)
         chapter_nums = [ch_num for ch_num, _, _ in chapters]
         assert 0 in chapter_nums, "Should have Preface as Chapter 0"
-        assert 101 in chapter_nums, "Book 1 Chapter 1 should be 101"
-        assert 102 in chapter_nums, "Book 1 Chapter 2 should be 102"
-        assert 201 in chapter_nums, "Book 2 Chapter 1 should be 201"
-        assert 202 in chapter_nums, "Book 2 Chapter 2 should be 202"
+        assert 1 in chapter_nums, "Book 1 Chapter 1 should be renumbered to 1"
+        assert 2 in chapter_nums, "Book 1 Chapter 2 should be renumbered to 2"
+        assert 3 in chapter_nums, "Book 2 Chapter 1 should be renumbered to 3"
+        assert 4 in chapter_nums, "Book 2 Chapter 2 should be renumbered to 4"
 
     def test_coverage_validation(self, generator):
         """Test that parsed chapters capture >90% of original content"""
@@ -505,13 +503,15 @@ character development, and advances the plot in meaningful ways.
         assert ch0_num == 0  # Preface
         assert ch1_num == 1
         assert "Antonines" in ch1_title, f"Chapter 1 title truncated: {ch1_title}"
-        assert ch1_title == "The Extent Of The Empire In The Age Of The Antonines", \
-            f"Expected full title, got: {ch1_title}"
+        # Title should be normalized to title case (lowercase articles/prepositions)
+        assert ch1_title == "The Extent of the Empire in the Age of the Antonines", \
+            f"Expected normalized title case, got: {ch1_title}"
 
         assert ch2_num == 2
         assert "Antonines" in ch2_title, f"Chapter 2 title truncated: {ch2_title}"
-        assert ch2_title == "The Internal Prosperity In The Age Of The Antonines", \
-            f"Expected full title, got: {ch2_title}"
+        # Title should be normalized to title case (lowercase articles/prepositions)
+        assert ch2_title == "The Internal Prosperity in the Age of the Antonines", \
+            f"Expected normalized title case, got: {ch2_title}"
 
     def test_part_marker_split_across_lines(self, generator):
         """Test handling of part markers split across lines (e.g., '—Part\\n I.')"""
@@ -568,8 +568,9 @@ content provides context and advances the narrative in meaningful ways.
         ch1_num, ch1_title, ch1_text = chapters[1]
         assert ch0_num == 0  # Preface
         assert ch1_num == 1
-        assert ch1_title == "The Extent Of The Empire In The Age Of The Antonines", \
-            f"Expected clean title without part markers, got: {ch1_title}"
+        # Title should be normalized to title case
+        assert ch1_title == "The Extent of the Empire in the Age of the Antonines", \
+            f"Expected clean title without part markers (normalized title case), got: {ch1_title}"
         assert "part one" in ch1_text.lower() and "part two" in ch1_text.lower(), \
             "Chapter I should contain both parts"
 
@@ -618,8 +619,9 @@ or metadata. The content provides context and advances the narrative in meaningf
         ch1_num, ch1_title, ch1_text = chapters[1]
         assert ch0_num == 0  # Preface
         assert ch1_num == 1
-        assert ch1_title == "The Constitution In The Age Of The Antonines", \
-            f"Expected clean title without '. Part IV', got: {ch1_title}"
+        # Title should be normalized to title case
+        assert ch1_title == "The Constitution in the Age of the Antonines", \
+            f"Expected clean title without '. Part IV' (normalized title case), got: {ch1_title}"
         assert "Part" not in ch1_title, f"Title should not contain 'Part': {ch1_title}"
         assert "IV" not in ch1_title or "Antonines" in ch1_title, \
             f"Title should not contain standalone 'IV': {ch1_title}"
@@ -685,25 +687,25 @@ functionality rather than testing the fallback behavior for short chapters.
         # Should have 5 chapters (0=Preface, 1-4)
         assert len(chapters) == 5, f"Expected 5 chapters, got {len(chapters)}"
 
-        # All chapters should have clean titles (no part markers)
+        # All chapters should have clean titles (no part markers, normalized title case)
         ch0_num, ch0_title, _ = chapters[0]
         assert ch0_num == 0  # Preface
 
         ch1_num, ch1_title, _ = chapters[1]
-        assert ch1_title == "Title With Dash", \
-            f"Chapter 1 should have 'Title With Dash', got: {ch1_title}"
+        assert ch1_title == "Title with Dash", \
+            f"Chapter 1 should have 'Title with Dash', got: {ch1_title}"
 
         ch2_num, ch2_title, _ = chapters[2]
-        assert ch2_title == "Title With Period", \
-            f"Chapter 2 should have 'Title With Period', got: {ch2_title}"
+        assert ch2_title == "Title with Period", \
+            f"Chapter 2 should have 'Title with Period', got: {ch2_title}"
 
         ch3_num, ch3_title, _ = chapters[3]
-        assert ch3_title == "Title With Period", \
-            f"Chapter 3 should have 'Title With Period', got: {ch3_title}"
+        assert ch3_title == "Title with Period", \
+            f"Chapter 3 should have 'Title with Period', got: {ch3_title}"
 
         ch4_num, ch4_title, _ = chapters[4]
-        assert ch4_title == "Title With No Marker", \
-            f"Chapter 4 should have 'Title With No Marker', got: {ch4_title}"
+        assert ch4_title == "Title with No Marker", \
+            f"Chapter 4 should have 'Title with No Marker', got: {ch4_title}"
 
     def test_decline_and_fall_examples(self, generator):
         """Test the specific examples from 'The History of the Decline and Fall of the Roman Empire'"""
@@ -769,13 +771,13 @@ don't span multiple lines unlike some of the previous examples.
         # Should have 5 chapters (0=Preface, I, II, III, IV)
         assert len(chapters) == 5, f"Expected 5 chapters, got {len(chapters)}"
 
-        # Verify all titles are clean and complete
+        # Verify all titles are clean and complete (normalized title case)
         expected_titles = [
             "Preface",  # Chapter 0
-            "The Extent Of The Empire In The Age Of The Antonines",
-            "The Internal Prosperity In The Age Of The Antonines",
-            "The Constitution In The Age Of The Antonines",
-            "The Cruelty, Follies And Murder Of Commodus"
+            "The Extent of the Empire in the Age of the Antonines",
+            "The Internal Prosperity in the Age of the Antonines",
+            "The Constitution in the Age of the Antonines",
+            "The Cruelty, Follies and Murder of Commodus"
         ]
 
         for i, (ch_num, ch_title, _) in enumerate(chapters):
@@ -907,8 +909,9 @@ text that demonstrates this is actual chapter content rather than table of conte
             assert len(ch_text) > 200, f"Chapter {ch_num} is too short"
 
     def test_book_markers_preserve_backward_compatibility(self, generator):
-        """Test that nested BOOK/CHAPTER structure still works (backward compatibility)"""
-        # This is the existing behavior - BOOK markers with nested chapters
+        """Test that nested BOOK/CHAPTER structure uses sequential numbering with book_sections table"""
+        # Current implementation: BOOK markers with nested chapters use sequential numbering
+        # Book structure is preserved in book_sections table
         test_text = """
 PREFACE
 
@@ -953,14 +956,15 @@ this is actual chapter content rather than table of contents entries or metadata
 
         chapters, _ = generator.detect_chapters(test_text)
 
-        # Should detect 4 chapters (0=Preface, 101, 102, 201) with nested encoding
+        # Should detect 4 chapters (0=Preface, 1, 2, 3) with sequential numbering
+        # Book structure is preserved separately in book_sections table
         assert len(chapters) == 4, f"Expected 4 chapters, got {len(chapters)}"
 
         chapter_nums = [ch_num for ch_num, _, _ in chapters]
         assert 0 in chapter_nums, "Should have Preface as Chapter 0"
-        assert 101 in chapter_nums, "Book 1 Chapter 1 should be encoded as 101"
-        assert 102 in chapter_nums, "Book 1 Chapter 2 should be encoded as 102"
-        assert 201 in chapter_nums, "Book 2 Chapter 1 should be encoded as 201"
+        assert 1 in chapter_nums, "Book 1 Chapter 1 should be renumbered to 1"
+        assert 2 in chapter_nums, "Book 1 Chapter 2 should be renumbered to 2"
+        assert 3 in chapter_nums, "Book 2 Chapter 1 should be renumbered to 3"
 
     def test_title_only_toc_first_chapter(self, generator):
         """

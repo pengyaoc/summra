@@ -28,6 +28,8 @@ class SummraApp {
         this.carouselOrderCache = {}; // { carouselId: [shuffled books array] }
         // Track where user came from for context-aware breadcrumbs
         this.originCategory = null; // Store category when book is selected from category page
+        // Track short summary expanded state
+        this.conciseSummaryExpanded = false;
         this.init();
     }
 
@@ -411,6 +413,11 @@ class SummraApp {
             tab.addEventListener('click', (e) => {
                 const targetTab = e.target.dataset.tab;
 
+                // If switching to full summary and short summary is expanded, collapse it
+                if (targetTab === '2000-word' && this.conciseSummaryExpanded) {
+                    this.collapseConciseSummary();
+                }
+
                 // Remove active class from all tabs and contents
                 document.querySelectorAll('.summary-tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.summary-tab-content').forEach(c => c.classList.remove('active'));
@@ -647,6 +654,9 @@ class SummraApp {
 
         this.currentBook = book;
         this.currentView = 'book';
+
+        // Reset short summary expanded state when switching books
+        this.conciseSummaryExpanded = false;
 
         // Save current scroll position
         this.saveScrollPosition();
@@ -930,6 +940,20 @@ class SummraApp {
         }
     }
 
+    collapseConciseSummary() {
+        const previewContainer = document.getElementById('concise-preview-container');
+        const expandButton = document.getElementById('concise-expand-button');
+        const previewFade = document.getElementById('concise-preview-fade');
+
+        if (!previewContainer || !expandButton || !previewFade) return;
+
+        // Collapse the summary
+        previewContainer.classList.remove('expanded');
+        previewFade.classList.remove('hidden');
+        expandButton.textContent = 'Read more';
+        this.conciseSummaryExpanded = false;
+    }
+
     async loadConciseSummary() {
         const conciseSummaryText = document.getElementById('concise-summary-text');
         conciseSummaryText.innerHTML = '<div class="loading">Loading...</div>';
@@ -963,11 +987,10 @@ class SummraApp {
                         expandButton.classList.remove('hidden');
 
                         // Setup expand/collapse toggle
-                        let isExpanded = false;
                         expandButton.onclick = () => {
-                            isExpanded = !isExpanded;
+                            this.conciseSummaryExpanded = !this.conciseSummaryExpanded;
 
-                            if (isExpanded) {
+                            if (this.conciseSummaryExpanded) {
                                 // Expand
                                 previewContainer.classList.add('expanded');
                                 previewFade.classList.add('hidden');

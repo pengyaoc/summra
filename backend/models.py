@@ -147,6 +147,21 @@ class Database:
             # Column already exists
             pass
 
+        # Add about_text and relevance_now columns to books table if they don't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN about_text TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN relevance_now TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Audio files table (for TTS)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS audio_files (
@@ -168,6 +183,7 @@ class Database:
                 name TEXT UNIQUE NOT NULL,
                 country TEXT,
                 bio TEXT,
+                other_books TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')

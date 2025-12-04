@@ -116,8 +116,11 @@ at Mrs. Wilkins with a puzzled expression.
         chapter_1_num, chapter_1_title, chapter_1_text = chapter_1
 
         self.assertEqual(chapter_1_num, 1, "First chapter should be numbered 1")
-        self.assertEqual(chapter_1_title, "Chapter 1", "First chapter should be titled 'Chapter 1'")
-        self.assertIn("Woman's Club in London", chapter_1_text, "Chapter 1 should contain correct content")
+        # When TOC is detected, chapter titles come from TOC, not first line inference
+        # In this case, TOC has "Chapter 1" with no title, so we use "Chapter 1" as the title
+        self.assertEqual(chapter_1_title, "Chapter 1", "Chapter 1 title should be from TOC marker")
+        # Content should include the full chapter text (including first line, since it wasn't used as title)
+        self.assertIn("It began in a Woman's Club", chapter_1_text, "Chapter 1 should contain correct content")
 
     def test_no_preface_when_chapter_1_exists(self):
         """Test that no Preface (Chapter 0) is created when Chapter 1 exists in TOC."""
