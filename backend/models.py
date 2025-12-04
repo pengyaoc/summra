@@ -1069,6 +1069,33 @@ class Database:
 
         return [dict(row) for row in rows]
 
+    def get_books_by_author_name(self, author_name: str, exclude_book_id: int = None, limit: int = 20) -> List[Dict]:
+        """Get books by author name, optionally excluding a specific book"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        if exclude_book_id:
+            cursor.execute('''
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                FROM books
+                WHERE LOWER(author) = LOWER(?) AND id != ?
+                ORDER BY title
+                LIMIT ?
+            ''', (author_name, exclude_book_id, limit))
+        else:
+            cursor.execute('''
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                FROM books
+                WHERE LOWER(author) = LOWER(?)
+                ORDER BY title
+                LIMIT ?
+            ''', (author_name, limit))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
     def get_books_in_same_categories(self, book_id: int, limit: int = 10) -> List[Dict]:
         """
         Get books that share categories with the given book.

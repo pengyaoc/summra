@@ -36,7 +36,11 @@
       "Bash(ls:*)",
       "WebFetch(domain:googleapis.github.io)",
       "Bash(cwebp:*)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "WebFetch(domain:www.gutenberg.org)",
+      "Bash(tee:*)",
+      "Bash(/Users/pengyao/Documents/dev/summra/ERD.md)",
+      "Bash(/Users/pengyao/Documents/dev/summra/PRD.md)"
     ],
     "deny": [],
     "ask": []

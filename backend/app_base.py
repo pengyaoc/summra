@@ -942,6 +942,54 @@ def get_related_books(book_id):
         }), 500
 
 
+@app.route('/api/books/by-author/<path:author_name>', methods=['GET'])
+def get_books_by_author(author_name):
+    """Get all books by a specific author"""
+    try:
+        # Decode URL-encoded author name
+        from urllib.parse import unquote
+        author_name = unquote(author_name)
+
+        # Get exclude_book_id from query params if provided
+        exclude_book_id = request.args.get('exclude', type=int)
+
+        # Query database directly for books by author
+        author_books_raw = db.get_books_by_author_name(author_name, exclude_book_id=exclude_book_id, limit=20)
+
+        # Format response with cover image URLs
+        author_books = []
+        for book in author_books_raw:
+            book_data = {
+                'id': book['id'],
+                'title': book['title'],
+                'author': book['author']
+            }
+
+            # Check if cover image exists
+            if book.get('cover_image_url'):
+                book_data['cover_image_url'] = book['cover_image_url']
+            else:
+                # Check for static cover file
+                cover_path = os.path.join(app.static_folder, 'covers', f"{book['id']}.webp")
+                if os.path.exists(cover_path):
+                    book_data['cover_image_url'] = f"/static/covers/{book['id']}.webp"
+
+            author_books.append(book_data)
+
+        return jsonify({
+            'success': True,
+            'author': author_name,
+            'books': author_books,
+            'count': len(author_books)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching books by author {author_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/covers/<path:filename>')
 def serve_cover(filename):
     """Serve cover images"""

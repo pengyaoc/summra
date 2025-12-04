@@ -8237,3 +8237,155 @@ if book_id and gutenberg_id and not dry_run:
 - Dry-run support for testing
 
 ---
+
+
+## Frontend UI Components & Architecture
+
+### Book Details Page Layout (Updated 2025-12-03)
+
+**Component Hierarchy:**
+```
+book-detail-section (frontend/templates/index.html:73-155)
+├── book-detail-header
+│   ├── book-detail-cover (WebP with fallback)
+│   └── book-detail-info (title, author)
+│
+├── about-section (3 stacked sections)
+│   ├── About This Book (about_text)
+│   ├── Why Read This Now? (relevance_now)
+│   └── About the Author
+│       ├── author-info-bar (name + country)
+│       ├── author-bio-text (placeholder: 100 words)
+│       └── author-books-carousel (scrollable carousel)
+│
+└── book-content
+    ├── summary-tabs-section
+    │   ├── summary-tabs-header-container
+    │   │   ├── Tab: "Short Summary" (500-word)
+    │   │   ├── Tab: "Full Summary" (2000-word)
+    │   │   └── unified-tts-button (changes based on active tab)
+    │   ├── tab-500-word (concise summary content)
+    │   └── tab-2000-word (medium summary content)
+    │
+    ├── chapters-section (list of all chapters)
+    └── related-books-section (carousel)
+```
+
+**Key Technical Details:**
+
+**Summary Tabs (frontend/static/js/app.js:408-457)**
+- Single-page tab switching without reload
+- `setupSummaryTabs()`: Handles tab click events
+- `updateSummaryTTSButton()`: Dynamically shows/hides TTS button based on:
+  - Active tab (500-word vs 2000-word)
+  - Audio availability for that summary type
+- Stores summary content in `this.conciseSummaryContent` and `this.mediumSummaryContent`
+- CSS classes: `.summary-tab.active`, `.summary-tab-content.active`
+
+**Author Books Carousel (frontend/static/js/app.js:832-915)**
+- Reuses carousel pattern from "You May Also Like"
+- API call: `GET /api/books/by-author/{author}?exclude={current_book_id}`
+- Left/right navigation buttons
+- Smooth scroll by 3 cards at a time
+- Button states update on scroll (disabled at start/end)
+- CSS classes: `.carousel-container`, `.related-books-scroll`, `.related-book-card`
+
+**Chapter Summary Box (frontend/static/js/app.js:1417-1439)**
+- Yellow collapsed box with expandable content
+- Entire header is clickable (not just toggle button)
+- Prevents toggle when clicking TTS button
+- Cursor changes to pointer on hover
+- CSS class: `.chapter-summary-box.collapsed`
+
+---
+
+## API Endpoints
+
+### Author Books Endpoint (Added 2025-12-03)
+
+**Endpoint:** `GET /api/books/by-author/<author_name>`
+
+**Location:** `backend/app_base.py:945-990`
+
+**Query Parameters:**
+- `exclude` (int, optional): Book ID to exclude from results
+
+**Database Method:** `get_books_by_author_name()` in `backend/models.py:1072-1097`
+```sql
+SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+FROM books
+WHERE LOWER(author) = LOWER(?) AND id != ?
+ORDER BY title
+LIMIT ?
+```
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "author": "Charles Dickens",
+  "books": [
+    {
+      "id": 42,
+      "title": "Great Expectations",
+      "author": "Charles Dickens",
+      "cover_image_url": "/static/covers/42.webp"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Cover Image Logic:**
+1. Check `cover_image_url` in database
+2. If null, check for static file at `/static/covers/{book_id}.webp`
+3. Only include `cover_image_url` in response if image exists
+
+**Performance:**
+- Direct SQL query (no in-memory filtering)
+- Case-insensitive author matching
+- Efficient exclusion of current book
+- Limit of 20 books per author
+
+---
+
+## Text Formatting & Rendering
+
+### Underscore Emphasis (Added 2025-12-03)
+
+**Function:** `formatChapterText()` in `frontend/static/js/app.js:375-389`
+
+**Purpose:** Convert Project Gutenberg underscore emphasis to HTML `<em>` tags
+
+**Pattern:** `_text_` → `<em>text</em>`
+
+**Implementation:**
+```javascript
+formatChapterText(text) {
+    const paragraphs = text.split(/\n/);
+    return paragraphs
+        .filter(p => p.trim().length > 0)
+        .map(p => {
+            let escaped = this.escapeHtml(p.trim());
+            // Convert _text_ to <em>text</em>
+            escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+            return `<p>${escaped}</p>`;
+        })
+        .join('');
+}
+```
+
+**Security:** HTML escaping happens first to prevent XSS attacks
+
+**Examples:**
+- `"He _said_ something"` → `"He <em>said</em> something"`
+- `"_vis-à-vis_ the text"` → `"<em>vis-à-vis</em> the text"`
+
+**CSS Styling:** `frontend/static/css/style.css:1376-1380`
+```css
+.full-text-content em {
+    font-style: italic;
+}
+```
+
+---

@@ -377,7 +377,14 @@ class SummraApp {
         const paragraphs = text.split(/\n/);
         return paragraphs
             .filter(p => p.trim().length > 0)
-            .map(p => `<p>${this.escapeHtml(p.trim())}</p>`)
+            .map(p => {
+                // Escape HTML first to prevent XSS
+                let escaped = this.escapeHtml(p.trim());
+                // Convert _text_ to <em>text</em> for italic emphasis
+                // Match underscores that wrap words (not at word boundaries with spaces)
+                escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+                return `<p>${escaped}</p>`;
+            })
             .join('');
     }
 
@@ -392,6 +399,60 @@ class SummraApp {
                 this.saveScrollPosition();
                 this.showBooksSection();
             });
+        }
+
+        // Setup summary tab switching
+        this.setupSummaryTabs();
+    }
+
+    setupSummaryTabs() {
+        const tabs = document.querySelectorAll('.summary-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetTab = e.target.dataset.tab;
+
+                // Remove active class from all tabs and contents
+                document.querySelectorAll('.summary-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.summary-tab-content').forEach(c => c.classList.remove('active'));
+
+                // Add active class to clicked tab and corresponding content
+                e.target.classList.add('active');
+                const targetContent = document.getElementById(`tab-${targetTab}`);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                }
+
+                // Update TTS button for active tab
+                this.updateSummaryTTSButton();
+            });
+        });
+    }
+
+    updateSummaryTTSButton() {
+        const ttsBtn = document.getElementById('active-summary-tts-button');
+        if (!ttsBtn) return;
+
+        // Determine which tab is active
+        const activeTab = document.querySelector('.summary-tab.active');
+        if (!activeTab) return;
+
+        const tabName = activeTab.dataset.tab;
+
+        // Update button based on active tab
+        if (tabName === '500-word') {
+            if (this.conciseSummaryHasAudio) {
+                ttsBtn.classList.remove('hidden');
+                ttsBtn.onclick = () => this.generateTTS(this.conciseSummaryContent, 'concise', ttsBtn);
+            } else {
+                ttsBtn.classList.add('hidden');
+            }
+        } else if (tabName === '2000-word') {
+            if (this.mediumSummaryHasAudio) {
+                ttsBtn.classList.remove('hidden');
+                ttsBtn.onclick = () => this.generateTTS(this.mediumSummaryContent, 'medium', ttsBtn);
+            } else {
+                ttsBtn.classList.add('hidden');
+            }
         }
     }
 
@@ -709,23 +770,23 @@ class SummraApp {
         const aboutSection = document.getElementById('about-section');
         const aboutText = document.getElementById('about-text');
         const relevanceText = document.getElementById('relevance-text');
-        const authorCountryContainer = document.getElementById('author-country-container');
-        const authorCountry = document.getElementById('author-country');
-        const authorOtherBooksContainer = document.getElementById('author-other-books-container');
-        const otherBooksList = document.getElementById('other-books-list');
+        const authorNameDisplay = document.getElementById('author-name-display');
+        const authorCountryInline = document.getElementById('author-country-inline');
+        const authorBioText = document.getElementById('author-bio-text');
+        const authorBooksGrid = document.getElementById('author-books-grid');
+        const authorBooksSection = document.getElementById('author-books-section');
 
         // Check if we have any data to display (backward compatibility)
         const hasAbout = book.about_text && book.about_text.trim();
         const hasRelevance = book.relevance_now && book.relevance_now.trim();
         const hasCountry = book.author_country && book.author_country.trim();
-        const hasOtherBooks = book.author_other_books && book.author_other_books.trim();
 
         // Debug logging
         console.log('updateAboutSection called for:', book.title);
-        console.log('Has metadata:', { hasAbout, hasRelevance, hasCountry, hasOtherBooks });
+        console.log('Has metadata:', { hasAbout, hasRelevance, hasCountry });
 
         // Only show section if we have at least some data
-        if (!hasAbout && !hasRelevance && !hasCountry && !hasOtherBooks) {
+        if (!hasAbout && !hasRelevance) {
             if (aboutSection) aboutSection.classList.add('hidden');
             return;
         }
@@ -745,55 +806,111 @@ class SummraApp {
             relevanceText.parentElement.style.display = hasRelevance ? 'block' : 'none';
         }
 
-        // Populate author country
-        if (authorCountry && hasCountry) {
-            authorCountry.textContent = book.author_country;
-            if (authorCountryContainer) authorCountryContainer.style.display = 'flex';
-        } else {
-            if (authorCountryContainer) authorCountryContainer.style.display = 'none';
+        // Populate author name
+        if (authorNameDisplay) {
+            authorNameDisplay.textContent = book.author || '';
         }
 
-        // Populate other books by author
-        if (hasOtherBooks) {
-            const booksArray = book.author_other_books.split(',').map(b => b.trim()).filter(b => b);
+        // Populate author country
+        if (authorCountryInline && hasCountry) {
+            authorCountryInline.textContent = book.author_country;
+        } else if (authorCountryInline) {
+            authorCountryInline.textContent = '';
+        }
 
-            if (booksArray.length > 0) {
-                otherBooksList.innerHTML = booksArray.map(bookTitle =>
-                    `<div class="other-book-item">${this.escapeHtml(bookTitle)}</div>`
-                ).join('');
+        // Populate author bio with placeholder
+        if (authorBioText) {
+            // TODO: Replace with actual bio from backend
+            const placeholderBio = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium totam rem aperiam.';
+            authorBioText.textContent = placeholderBio;
+        }
 
-                // Setup toggle for "More by Author"
-                const toggle = document.getElementById('more-by-author-toggle');
-                const label = document.getElementById('more-by-author-label');
+        // Load books by same author
+        this.loadAuthorBooks(book.author, book.id);
+    }
 
-                if (toggle && label) {
-                    // Update label with author name
-                    label.textContent = `More by ${book.author}`;
+    async loadAuthorBooks(authorName, currentBookId) {
+        const authorBooksCarousel = document.getElementById('author-books-carousel');
+        const authorBooksSection = document.getElementById('author-books-section');
 
-                    if (authorOtherBooksContainer) authorOtherBooksContainer.style.display = 'block';
+        if (!authorBooksCarousel || !authorBooksSection) return;
 
-                    // Remove old event listeners by cloning
-                    const newToggle = toggle.cloneNode(true);
-                    toggle.parentNode.replaceChild(newToggle, toggle);
+        try {
+            const response = await fetch(`${this.apiBase}/books/by-author/${encodeURIComponent(authorName)}?exclude=${currentBookId}`);
+            const data = await response.json();
 
-                    newToggle.addEventListener('click', () => {
-                        const isExpanded = !otherBooksList.classList.contains('hidden');
-                        const arrow = newToggle.querySelector('.toggle-arrow');
+            if (data.success && data.books && data.books.length > 0) {
+                authorBooksSection.classList.remove('hidden');
 
-                        if (isExpanded) {
-                            otherBooksList.classList.add('hidden');
-                            if (arrow) arrow.textContent = '▼';
-                        } else {
-                            otherBooksList.classList.remove('hidden');
-                            if (arrow) arrow.textContent = '▲';
-                        }
-                    });
-                }
+                // Create carousel container
+                const carousel = document.createElement('div');
+                carousel.className = 'carousel-container';
+
+                // Add navigation buttons
+                const leftBtn = document.createElement('button');
+                leftBtn.className = 'carousel-nav-btn left';
+                leftBtn.innerHTML = '‹';
+                leftBtn.disabled = true;  // Start disabled (at beginning)
+
+                const rightBtn = document.createElement('button');
+                rightBtn.className = 'carousel-nav-btn right';
+                rightBtn.innerHTML = '›';
+                rightBtn.disabled = false;  // Start enabled by default
+
+                // Create scroll container
+                const scrollContainer = document.createElement('div');
+                scrollContainer.className = 'related-books-scroll';
+
+                data.books.forEach(book => {
+                    const bookCard = document.createElement('div');
+                    bookCard.className = 'related-book-card';
+
+                    const coverImageHtml = book.cover_image_url
+                        ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'related-book-cover')
+                        : '';
+
+                    bookCard.innerHTML = `
+                        ${coverImageHtml}
+                        <h4 class="related-book-title">${this.escapeHtml(book.title)}</h4>
+                        <p class="related-book-author">${this.escapeHtml(book.author)}</p>
+                    `;
+
+                    bookCard.addEventListener('click', () => this.selectBook(book));
+                    scrollContainer.appendChild(bookCard);
+                });
+
+                // Carousel navigation logic
+                const scrollAmount = 220; // Width of one card + gap
+
+                leftBtn.addEventListener('click', () => {
+                    scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
+                });
+
+                rightBtn.addEventListener('click', () => {
+                    scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
+                });
+
+                // Update button states on scroll
+                scrollContainer.addEventListener('scroll', () => {
+                    const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+                    leftBtn.disabled = scrollContainer.scrollLeft === 0;
+                    rightBtn.disabled = scrollContainer.scrollLeft >= maxScroll - 1;
+                });
+
+                // Assemble carousel
+                carousel.appendChild(leftBtn);
+                carousel.appendChild(scrollContainer);
+                carousel.appendChild(rightBtn);
+
+                // Clear and add to page
+                authorBooksCarousel.innerHTML = '';
+                authorBooksCarousel.appendChild(carousel);
             } else {
-                if (authorOtherBooksContainer) authorOtherBooksContainer.style.display = 'none';
+                authorBooksSection.classList.add('hidden');
             }
-        } else {
-            if (authorOtherBooksContainer) authorOtherBooksContainer.style.display = 'none';
+        } catch (error) {
+            console.error('Error loading author books:', error);
+            authorBooksSection.classList.add('hidden');
         }
     }
 
@@ -824,14 +941,12 @@ class SummraApp {
             if (data.success && data.summary) {
                 conciseSummaryText.innerHTML = this.renderMarkdown(data.summary.content);
 
-                // Setup TTS button - only show if audio is available
-                const ttsBtn = document.getElementById('concise-tts-button');
-                if (data.has_audio) {
-                    ttsBtn.classList.remove('hidden');
-                    ttsBtn.onclick = () => this.generateTTS(data.summary.content, 'concise', ttsBtn);
-                } else {
-                    ttsBtn.classList.add('hidden');
-                }
+                // Store concise summary data for TTS
+                this.conciseSummaryContent = data.summary.content;
+                this.conciseSummaryHasAudio = data.has_audio || false;
+
+                // Update the unified TTS button
+                this.updateSummaryTTSButton();
 
                 // Check if content height exceeds the preview container max-height
                 const previewContainer = document.getElementById('concise-preview-container');
@@ -861,7 +976,7 @@ class SummraApp {
                                 // Collapse
                                 previewContainer.classList.remove('expanded');
                                 previewFade.classList.remove('hidden');
-                                expandButton.textContent = 'Read Quick Summary →';
+                                expandButton.textContent = 'Read more';
 
                                 // Scroll back to the top of the Quick Summary section
                                 document.getElementById('concise-summary-section').scrollIntoView({
@@ -894,6 +1009,9 @@ class SummraApp {
                 this.mediumSummaryHasAudio = data.has_audio || false; // Cache the audio flag
                 // Show full content in preview (will be faded by CSS)
                 mediumPreviewText.innerHTML = this.renderMarkdown(this.mediumSummaryContent);
+
+                // Update the unified TTS button
+                this.updateSummaryTTSButton();
 
                 // Setup expand button to navigate to new page
                 const expandBtn = document.getElementById('medium-expand-button');
@@ -1336,22 +1454,35 @@ class SummraApp {
             summaryBox.style.display = '';
             summaryText.innerHTML = this.renderMarkdown(chapter.summary);
 
-            // Setup toggle button
+            // Setup toggle - make entire summary box clickable
             const toggleBtn = document.getElementById('toggle-summary-btn');
+            const summaryHeader = document.getElementById('chapter-summary-header');
             const summaryContent = document.getElementById('chapter-summary-content');
             let isSummaryExpanded = false;
 
-            toggleBtn.onclick = () => {
+            const toggleSummary = (e) => {
+                // Don't toggle if clicking on TTS button
+                if (e && e.target.closest('.tts-button-inline')) {
+                    return;
+                }
+
                 if (isSummaryExpanded) {
                     summaryContent.classList.add('hidden');
                     toggleBtn.textContent = '▼';
+                    summaryBox.classList.add('collapsed');
                     isSummaryExpanded = false;
                 } else {
                     summaryContent.classList.remove('hidden');
                     toggleBtn.textContent = '▲';
+                    summaryBox.classList.remove('collapsed');
                     isSummaryExpanded = true;
                 }
             };
+
+            // Make both the header and toggle button clickable
+            summaryHeader.style.cursor = 'pointer';
+            summaryHeader.onclick = toggleSummary;
+            toggleBtn.onclick = toggleSummary;
 
             // Setup summary TTS button - only show if audio is available
             const summaryTtsBtn = document.getElementById('chapter-summary-tts-button');

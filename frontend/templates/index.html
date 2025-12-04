@@ -87,57 +87,64 @@
 
                 <!-- About This Book Section -->
                 <div class="about-section hidden" id="about-section">
-                    <div class="about-columns">
-                        <div class="about-column">
-                            <h3 class="about-heading">About This Book</h3>
-                            <p class="about-text" id="about-text"></p>
-                        </div>
-                        <div class="about-column">
-                            <h3 class="about-heading">Why Read This Now?</h3>
-                            <p class="about-text" id="relevance-text"></p>
-                        </div>
+                    <!-- About This Book -->
+                    <div class="about-single-column">
+                        <h3 class="about-heading">About This Book</h3>
+                        <p class="about-text" id="about-text"></p>
                     </div>
 
-                    <div class="author-metadata-bar" id="author-metadata-bar">
-                        <div class="author-country" id="author-country-container">
-                            <span class="author-country-label">Author from:</span>
-                            <span class="author-country-value" id="author-country"></span>
+                    <!-- Why Read This Now -->
+                    <div class="about-single-column">
+                        <h3 class="about-heading">Why Read This Now?</h3>
+                        <p class="about-text" id="relevance-text"></p>
+                    </div>
+
+                    <!-- About the Author -->
+                    <div class="about-single-column">
+                        <h3 class="about-heading">About the Author</h3>
+                        <div class="author-info-bar">
+                            <span class="author-name-display" id="author-name-display"></span>
+                            <span class="author-country-inline" id="author-country-inline"></span>
                         </div>
-                        <div class="author-other-books-container" id="author-other-books-container">
-                            <button class="more-by-author-toggle" id="more-by-author-toggle">
-                                <span id="more-by-author-label">More by this author</span>
-                                <span class="toggle-arrow">▼</span>
-                            </button>
-                            <div class="other-books-list hidden" id="other-books-list"></div>
+                        <p class="author-bio-text" id="author-bio-text"></p>
+
+                        <!-- Books by Same Author -->
+                        <div class="author-books-section hidden" id="author-books-section">
+                            <h4 class="author-books-heading">Books by this author</h4>
+                            <div class="author-books-carousel" id="author-books-carousel"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Main Content Area -->
                 <div class="book-content" id="book-content">
-                    <!-- Concise Summary -->
-                    <div class="concise-summary-section" id="concise-summary-section">
-                        <div class="section-header">
-                            <h3>Quick Summary</h3>
-                            <button class="tts-button-inline" id="concise-tts-button">🔊 Listen</button>
+                    <!-- Tabbed Summary Section -->
+                    <div class="summary-tabs-section" id="summary-tabs-section">
+                        <div class="summary-tabs-header-container">
+                            <div class="summary-tabs-header">
+                                <button class="summary-tab active" data-tab="500-word">Short Summary</button>
+                                <button class="summary-tab" data-tab="2000-word">Full Summary</button>
+                            </div>
+                            <button class="tts-button-inline" id="active-summary-tts-button">🔊 Listen</button>
                         </div>
-                        <div class="concise-preview-container" id="concise-preview-container">
-                            <div class="summary-text concise-preview-text" id="concise-summary-text"></div>
-                            <div class="concise-preview-fade" id="concise-preview-fade"></div>
-                        </div>
-                        <button class="expand-link centered hidden" id="concise-expand-button">Read Quick Summary →</button>
-                    </div>
 
-                    <!-- Medium Summary Preview -->
-                    <div class="medium-preview-section" id="medium-preview-section">
-                        <div class="section-header">
-                            <h3>Full Summary</h3>
+                        <!-- 500-word Summary Tab Content -->
+                        <div class="summary-tab-content active" id="tab-500-word">
+                            <div class="concise-preview-container" id="concise-preview-container">
+                                <div class="summary-text concise-preview-text" id="concise-summary-text"></div>
+                                <div class="concise-preview-fade" id="concise-preview-fade"></div>
+                            </div>
+                            <button class="expand-link centered hidden" id="concise-expand-button">Read more</button>
                         </div>
-                        <div class="medium-preview-container">
-                            <div class="summary-text medium-preview-text" id="medium-preview-text"></div>
-                            <div class="preview-fade"></div>
+
+                        <!-- 2000-word Summary Tab Content -->
+                        <div class="summary-tab-content" id="tab-2000-word">
+                            <div class="medium-preview-container">
+                                <div class="summary-text medium-preview-text" id="medium-preview-text"></div>
+                                <div class="preview-fade"></div>
+                            </div>
+                            <button class="expand-link centered" id="medium-expand-button">Read more</button>
                         </div>
-                        <button class="expand-link centered" id="medium-expand-button">Read Full Summary →</button>
                     </div>
 
                     <!-- Chapters List -->

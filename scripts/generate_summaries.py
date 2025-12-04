@@ -294,10 +294,10 @@ class SummaryGenerator:
 
         prompt = f"""Analyze "{title}" by {author} and provide the following information. Follow the format exactly with each section clearly marked:
 
-### ABOUT THE BOOK (150-200 words)
-[Generate a short, engaging summary for the "About the Book" section - 150-200 words]
+### ABOUT THE BOOK (75-100 words)
+[Generate a short, engaging summary for the "About the Book" section - 75-100 words]
 
-This should be concise but compelling, suitable for a book overview page.
+This should be concise but compelling, suitable for a book overview page. **ABSOLUTELY NO SPOILERS** - do not reveal plot twists, endings, character fates, or major reveals. Focus only on the premise, themes, and setting.
 
 ### CONCISE SUMMARY (500 words)
 [Generate a concise 500-word summary here]
@@ -309,24 +309,10 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
 
 Cover all major plot points, themes, and character developments in chronological order. Discuss the author's writing style and analyze major themes. Spoilers are acceptable. For non-fiction, cover all main arguments, evidence, and conclusions.
 
-### RELEVANCE NOW (100-150 words)
-[Explain why this book is relevant to modern audiences - 100-150 words]
+### RELEVANCE NOW (75-100 words)
+[Explain why this book is relevant to modern audiences - 75-100 words]
 
 Focus on contemporary themes, timeless insights, or how it speaks to current issues.
-
-### AUTHOR COUNTRY
-[State ONLY the country name where the author is from, without any other text]
-
-### SIMILAR BOOKS
-[List exactly 5 books similar to this one, in this exact format:]
-TITLE|AUTHOR
-TITLE|AUTHOR
-TITLE|AUTHOR
-TITLE|AUTHOR
-TITLE|AUTHOR
-
-### OTHER BOOKS BY AUTHOR
-[List the author's other notable works, maximum 10 books, one per line. If fewer than 10, list all known works. Just titles, no additional text.]
 
 ### BOOK TEXT:
 {text[:max_chars]}"""
@@ -338,23 +324,10 @@ TITLE|AUTHOR
             print(prompt[:10000] + f"\n... [truncated, {len(prompt) - 10000} chars omitted]" if len(prompt) > 10000 else prompt)
             print("-" * 60)
             return {
-                'about_text': '[DRY RUN] About the Book (150-200 words): This would contain a concise, engaging summary suitable for the book overview page.',
+                'about_text': '[DRY RUN] About the Book (75-100 words): This would contain a concise, engaging summary suitable for the book overview page with absolutely no spoilers.',
                 'concise_summary': '[DRY RUN] Concise summary (500 words): This would contain the spoiler-free summary with main themes and central conflict.',
                 'medium_summary': '[DRY RUN] Medium summary (2000-3000 words): This would contain the comprehensive analysis with all major plot points and themes.',
-                'relevance_now': '[DRY RUN] Relevance Now (100-150 words): This would explain why the book is relevant to modern audiences.',
-                'author_country': '[DRY RUN] Country Name',
-                'similar_books': [
-                    {'title': '[DRY RUN] Similar Book 1', 'author': '[DRY RUN] Author 1'},
-                    {'title': '[DRY RUN] Similar Book 2', 'author': '[DRY RUN] Author 2'},
-                    {'title': '[DRY RUN] Similar Book 3', 'author': '[DRY RUN] Author 3'},
-                    {'title': '[DRY RUN] Similar Book 4', 'author': '[DRY RUN] Author 4'},
-                    {'title': '[DRY RUN] Similar Book 5', 'author': '[DRY RUN] Author 5'}
-                ],
-                'other_books_by_author': [
-                    '[DRY RUN] Other Book 1',
-                    '[DRY RUN] Other Book 2',
-                    '[DRY RUN] Other Book 3'
-                ]
+                'relevance_now': '[DRY RUN] Relevance Now (75-100 words): This would explain why the book is relevant to modern audiences.'
             }
 
         # Wait if needed for large API calls
@@ -431,11 +404,8 @@ TITLE|AUTHOR
         concise_summary = ""
         medium_summary = ""
         relevance_now = ""
-        author_country = ""
-        similar_books = []
-        other_books_by_author = []
 
-        # About the Book (150-200 words)
+        # About the Book (75-100 words)
         about_match = re.search(r'### ABOUT THE BOOK.*?\n(.*?)(?=### CONCISE SUMMARY|###|$)', result, re.DOTALL | re.IGNORECASE)
         if about_match:
             about_text = about_match.group(1).strip()
@@ -453,51 +423,11 @@ TITLE|AUTHOR
             medium_summary = medium_match.group(1).strip()
             medium_summary = re.sub(r'^\[.*?\]', '', medium_summary).strip()
 
-        # Relevance Now (100-150 words)
-        relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)(?=### AUTHOR COUNTRY|###|$)', result, re.DOTALL | re.IGNORECASE)
+        # Relevance Now (75-100 words)
+        relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)(?=###|$)', result, re.DOTALL | re.IGNORECASE)
         if relevance_match:
             relevance_now = relevance_match.group(1).strip()
             relevance_now = re.sub(r'^\[.*?\]', '', relevance_now).strip()
-
-        # Author Country (just country name)
-        country_match = re.search(r'### AUTHOR COUNTRY.*?\n(.*?)(?=###|$)', result, re.DOTALL | re.IGNORECASE)
-        if country_match:
-            author_country = country_match.group(1).strip()
-            author_country = re.sub(r'^\[.*?\]', '', author_country).strip()
-            # Clean up - take first line only and remove any extra text
-            author_country = author_country.split('\n')[0].strip()
-            # Remove common prefixes
-            author_country = re.sub(r'^(Country:\s*|The author is from\s*)', '', author_country, flags=re.IGNORECASE).strip()
-
-        # Similar Books (5 books in TITLE|AUTHOR format)
-        similar_match = re.search(r'### SIMILAR BOOKS.*?\n(.*?)(?=### OTHER BOOKS|###|$)', result, re.DOTALL | re.IGNORECASE)
-        if similar_match:
-            similar_text = similar_match.group(1).strip()
-            # Parse each line as TITLE|AUTHOR
-            for line in similar_text.split('\n'):
-                line = line.strip()
-                if '|' in line and not line.startswith('['):
-                    parts = line.split('|')
-                    if len(parts) >= 2:
-                        similar_books.append({
-                            'title': parts[0].strip(),
-                            'author': parts[1].strip()
-                        })
-
-        # Other Books by Author (max 10 books, just titles)
-        other_books_match = re.search(r'### OTHER BOOKS BY AUTHOR.*?\n(.*?)(?=###|$)', result, re.DOTALL | re.IGNORECASE)
-        if other_books_match:
-            other_books_text = other_books_match.group(1).strip()
-            # Parse each line as a book title
-            for line in other_books_text.split('\n'):
-                line = line.strip()
-                # Skip empty lines and template text
-                if line and not line.startswith('['):
-                    # Remove leading numbers or bullets
-                    line = re.sub(r'^\d+[\.\)]\s*', '', line)
-                    line = re.sub(r'^[-•*]\s*', '', line)
-                    if line:
-                        other_books_by_author.append(line)
 
         # Calculate word counts
         about_words = len(about_text.split()) if about_text else 0
@@ -511,19 +441,13 @@ TITLE|AUTHOR
         print(f"     Concise: {concise_words:,} words")
         print(f"     Medium: {medium_words:,} words")
         print(f"     Relevance: {relevance_words:,} words")
-        print(f"     Author Country: {author_country}")
-        print(f"     Similar Books: {len(similar_books)}")
-        print(f"     Other Books: {len(other_books_by_author)}")
 
         # Return all parsed data as a dictionary
         return {
             'about_text': about_text,
             'concise_summary': concise_summary,
             'medium_summary': medium_summary,
-            'relevance_now': relevance_now,
-            'author_country': author_country,
-            'similar_books': similar_books[:5],  # Limit to 5
-            'other_books_by_author': other_books_by_author[:10]  # Limit to 10
+            'relevance_now': relevance_now
         }
 
     def read_book(self, file_path: Path) -> str:
@@ -2339,10 +2263,36 @@ TITLE|AUTHOR
             r'^\s*I\.\s+',  # Roman numeral with period: "I. Title"
         ]
 
-        # Find the line where Chapter 1 starts
+        # Find the line where Chapter 1 starts (skipping TOC entries)
         first_chapter_line = None
+        in_toc_search = False
         for i, line in enumerate(all_lines):
             line_stripped = line.strip()
+
+            # Detect start of TOC
+            if re.match(r'^\s*(CONTENTS?|TABLE OF CONTENTS|LIST OF CHAPTERS)\s*$', line_stripped, re.IGNORECASE):
+                in_toc_search = True
+                continue
+
+            # Detect end of TOC (substantive non-chapter-listing content)
+            if in_toc_search:
+                # Check if this looks like a TOC entry
+                is_toc_entry = (
+                    re.search(r'\d+\s*$', line_stripped) or  # Ends with page number
+                    re.match(r'^(PAGE|CHAPTER|BOOK|PART|VOLUME|ACT|SCENE|STAVE|EPILOGUE|PREFACE|AUTHOR|DEDICATION|INTRODUCTION|PROLOGUE)\s*', line_stripped, re.IGNORECASE) or
+                    re.match(r'^[IVXLCDM]+\.?\s+', line_stripped) or  # Roman numeral listing
+                    re.match(r'^\d+\.?\s+', line_stripped) or  # Arabic numeral listing
+                    len(line_stripped) < 3 or  # Very short lines in TOC
+                    any(re.match(pattern, line_stripped) for pattern in first_chapter_patterns)  # Chapter patterns in TOC
+                )
+
+                if not is_toc_entry and line_stripped:  # Non-empty substantial line
+                    in_toc_search = False
+                    # Don't check this line - it's after TOC but might not be Chapter 1
+                else:
+                    continue  # Skip TOC entries
+
+            # Now check for first chapter (outside TOC)
             if any(re.match(pattern, line_stripped) for pattern in first_chapter_patterns):
                 first_chapter_line = i
                 print(f"Found first chapter at line {i}: '{line_stripped}'")
@@ -2363,6 +2313,7 @@ TITLE|AUTHOR
 
             in_toc = False
             in_illustration = False
+            in_preface_content = False  # Once we hit a preface header, keep all remaining content
 
             for i, line in enumerate(preface_pool):
                 line_stripped = line.strip()
@@ -2385,7 +2336,7 @@ TITLE|AUTHOR
                     # or a TOC-related line (like "PAGE", "CHAPTER", section headers, etc.)
                     is_toc_entry = (
                         re.search(r'\d+\s*$', line_stripped) or  # Ends with page number
-                        re.match(r'^(PAGE|CHAPTER|BOOK|PART|VOLUME|ACT|SCENE|STAVE)\s*$', line_stripped, re.IGNORECASE) or
+                        re.match(r'^(PAGE|CHAPTER|BOOK|PART|VOLUME|ACT|SCENE|STAVE|EPILOGUE|PREFACE|AUTHOR|DEDICATION|INTRODUCTION|PROLOGUE)\s*', line_stripped, re.IGNORECASE) or
                         re.match(r'^[IVXLCDM]+\.?\s+', line_stripped) or  # Roman numeral listing
                         re.match(r'^\d+\.?\s+', line_stripped) or  # Arabic numeral listing
                         len(line_stripped) < 3  # Very short lines in TOC
@@ -2409,22 +2360,30 @@ TITLE|AUTHOR
                         in_illustration = False
                     continue
 
-                # Skip title page elements (all caps, centered, short lines)
-                # But keep preface/dedication/introduction headers
-                is_preface_header = re.match(r'^\s*(PREFACE|DEDICATION|INTRODUCTION|TO\s+)', line_stripped, re.IGNORECASE)
-                if not is_preface_header:
-                    # Skip common frontmatter patterns
-                    if (
-                        re.match(r'^(THE\s+)?\w+(\s+\w+){0,3}$', line_stripped) and line_stripped.isupper() and len(line_stripped) < 50 or
-                        re.match(r'^BY\s*$', line_stripped, re.IGNORECASE) or
-                        re.match(r'^Illustrated\.?$', line_stripped) or
-                        re.match(r'^(BOSTON|LONDON|NEW YORK|CHICAGO|PHILADELPHIA):', line_stripped) or
-                        re.match(r'^COPYRIGHT', line_stripped, re.IGNORECASE) or
-                        re.match(r'^All rights reserved', line_stripped, re.IGNORECASE) or
-                        re.match(r'^\d{4}\.?$', line_stripped) or  # Just a year
-                        re.match(r'^[A-Z\s,\.&]+$', line_stripped) and len(line_stripped) < 60 and i < 100  # Publisher info (only in first 100 lines)
-                    ):
-                        continue
+                # Check if this is a preface/dedication/introduction header
+                # Once we hit one of these, keep ALL remaining content (stop filtering)
+                is_preface_header = re.match(r'^\s*(AUTHOR[\'\']S\s+PREFACE|TRANSLATOR[\'\']S\s+PREFACE|PREFACE|DEDICATION|INTRODUCTION|PROLOGUE|TO\s+)', line_stripped, re.IGNORECASE)
+                if is_preface_header:
+                    in_preface_content = True
+
+                # If we're in preface content, keep everything
+                if in_preface_content:
+                    filtered_preface_lines.append(line)
+                    filtered_line_indices.add(i)
+                    continue
+
+                # Otherwise, skip title page elements (all caps, centered, short lines)
+                if (
+                    re.match(r'^(THE\s+)?\w+(\s+\w+){0,3}$', line_stripped) and line_stripped.isupper() and len(line_stripped) < 50 or
+                    re.match(r'^BY\s*$', line_stripped, re.IGNORECASE) or
+                    re.match(r'^Illustrated\.?$', line_stripped) or
+                    re.match(r'^(BOSTON|LONDON|NEW YORK|CHICAGO|PHILADELPHIA):', line_stripped) or
+                    re.match(r'^COPYRIGHT', line_stripped, re.IGNORECASE) or
+                    re.match(r'^All rights reserved', line_stripped, re.IGNORECASE) or
+                    re.match(r'^\d{4}\.?$', line_stripped) or  # Just a year
+                    re.match(r'^[A-Z\s,\.&]+$', line_stripped) and len(line_stripped) < 60 and i < 100  # Publisher info (only in first 100 lines)
+                ):
+                    continue
 
                 # Keep this line
                 filtered_preface_lines.append(line)
@@ -2728,6 +2687,22 @@ TITLE|AUTHOR
                             if not has_caps_word:
                                 continue
 
+                    # Skip PREFACE/INTRODUCTION/AUTHOR'S PREFACE/EPILOGUE patterns that appear before first_chapter_line
+                    # These are typically in TOC or frontmatter and should go into Chapter 0 (Preface), not be treated as separate chapters
+                    frontmatter_patterns = [
+                        r'^(INTRODUCTION)$', r'^(Introduction)$',
+                        r'^(PREFACE)(?:\s+.*)?$', r'^(Preface)(?:\s+.*)?$',
+                        r"^TRANSLATOR'S PREFACE$", r"^Translator's Preface$",
+                        r"^AUTHOR'S PREFACE$", r"^Author's Preface$",
+                        r'^(EPILOGUE)$', r'^(Epilogue)$',  # EPILOGUE in TOC or frontmatter
+                    ]
+                    is_frontmatter_pattern = any(re.match(p, line_stripped) for p in frontmatter_patterns)
+                    if is_frontmatter_pattern and first_chapter_line is not None and i < first_chapter_line:
+                        # This PREFACE/INTRODUCTION/EPILOGUE is before the first numbered chapter
+                        # It should be part of Chapter 0 (if preface-like) or skipped (if TOC entry)
+                        # Don't treat it as a separate chapter
+                        continue
+
                     is_chapter = True
                     # Convert Roman numerals to numbers or use number directly
                     chapter_marker = match.group(1)
@@ -2949,9 +2924,15 @@ TITLE|AUTHOR
                             # All TOC entries are empty - skip TOC validation entirely
                             pass
                         else:
-                            # Chapter marker not in TOC and TOC has content - skip this false positive
-                            is_chapter = False
-                            continue
+                            # Chapter marker not in TOC and TOC has content
+                            # EXCEPTION: Allow special chapter markers (EPILOGUE, PREFACE, INTRODUCTION)
+                            # These may appear in TOC but not get captured by TOC parser
+                            special_markers = ['EPILOGUE', 'PREFACE', 'INTRODUCTION', 'Epilogue', 'Preface', 'Introduction']
+                            if chapter_marker.upper() not in [m.upper() for m in special_markers]:
+                                # Not a special marker - skip this false positive
+                                is_chapter = False
+                                continue
+                            # Special marker - allow it through even though not in TOC
 
                     # Record potential chapter
                     potential_chapters.append({
@@ -3125,8 +3106,13 @@ TITLE|AUTHOR
                     # Summary generation will skip chapters that are too short
                     chapters.append((current_chapter[0], current_chapter[1], content))
 
+                # Normalize chapter title for consistent capitalization
+                normalized_title = self.normalize_chapter_title(chapter_title)
+                # Fix any title-cased Roman numerals (e.g., "Part Ii" -> "Part II")
+                normalized_title = fix_roman_numerals_in_text(normalized_title)
+
                 # Start new chapter
-                current_chapter = (chapter_num, chapter_title)
+                current_chapter = (chapter_num, normalized_title)
                 current_text = []
 
                 # Clear the BOOK marker flag now that we've processed the first chapter
@@ -4061,6 +4047,13 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
             print(f"  Split into {len(batches)} batch(es) to respect token limits")
 
+            # Add 1-minute delay before starting chapter summaries to avoid rate limits
+            # This prevents back-to-back large API calls (book summary -> chapter summaries)
+            if not dry_run and not regenerate_chapters:
+                print(f"\n⏱️  Waiting 60 seconds before starting chapter summaries to avoid rate limits...")
+                time.sleep(60)
+                print(f"✓ Delay complete, starting chapter summary generation\n")
+
             # Generate bulk summaries for each batch and save immediately
             previous_batch_last_chapter = None  # Track last chapter from previous batch for context
 
@@ -4334,19 +4327,6 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                             about_text=summary_data.get('about_text'),
                             relevance_now=summary_data.get('relevance_now')
                         )
-
-                        # Save author metadata (country, other_books)
-                        author_id = self.db.update_author_info(
-                            author,
-                            country=summary_data.get('author_country'),
-                            other_books=summary_data.get('other_books_by_author')
-                        )
-
-                        # Link book to author
-                        self.db.update_book_author_id(book_id, author_id)
-
-                        # Save similar books
-                        self.db.save_similar_books(book_id, summary_data.get('similar_books', []))
             else:
                 summary_data = self.generate_combined_summaries(text, title, author, dry_run)
                 concise = summary_data['concise_summary']
@@ -4362,19 +4342,6 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                         about_text=summary_data.get('about_text'),
                         relevance_now=summary_data.get('relevance_now')
                     )
-
-                    # Save author metadata (country, other_books)
-                    author_id = self.db.update_author_info(
-                        author,
-                        country=summary_data.get('author_country'),
-                        other_books=summary_data.get('other_books_by_author')
-                    )
-
-                    # Link book to author
-                    self.db.update_book_author_id(book_id, author_id)
-
-                    # Save similar books
-                    self.db.save_similar_books(book_id, summary_data.get('similar_books', []))
 
             results['summaries']['concise'] = {
                 'text': concise,
