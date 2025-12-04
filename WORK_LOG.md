@@ -6,6 +6,66 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ## 2025-12-04
 
+### Code Coverage Analysis and Documentation - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-04
+**Completed:** 2025-12-04
+
+**Objective:** Analyze code coverage for `generate_summaries.py`, add tests to improve coverage, and document the findings.
+
+**Key Discovery:** Coverage Measurement Correction
+- **Initial Report:** 8.5% coverage (INCORRECT)
+  - Used: `--cov=scripts.generate_summaries`
+  - Issue: Tests import `generate_summaries` after adding `scripts/` to `sys.path`
+- **Corrected Measurement:** 61% coverage (CORRECT)
+  - Used: `--cov=generate_summaries`
+  - This is the accurate baseline
+
+**Work Completed:**
+
+1. **Created `tests/test_utility_functions.py`** (30 new tests, all passing)
+   - `normalize_book_title()` - 11 tests
+   - `fix_roman_numerals_in_text()` - 8 tests
+   - `word_to_int()` - 4 tests
+   - `get_gutenberg_cover_url()` - 3 tests
+   - `clean_page_numbers_from_title()` - 4 tests
+   - **Impact:** Achieved 95%+ coverage for these utility functions
+
+2. **Updated `tests/COVERAGE_SUMMARY.md`**
+   - Documented actual coverage: 61% (1,431 / 2,361 lines)
+   - Identified well-covered areas (>80%):
+     - Utility functions: 95%+
+     - Chapter detection: 85%+
+     - Database operations: 90%+
+   - Identified areas needing improvement (<50%):
+     - LLM summary generation: ~40-50%
+     - Cover image processing: ~40-50%
+     - Main integration workflow: ~40%
+   - Explained why remaining 39% is harder to test (external APIs, error paths, integration)
+   - Provided recommendations for reaching 70%, 80%, and 90% coverage
+
+**Final Test Status:**
+- **Total:** 242 tests passing (3 deselected)
+- **Coverage:** 61% for `generate_summaries.py`
+
+**Files Modified:**
+- `tests/test_utility_functions.py` (created)
+- `tests/COVERAGE_SUMMARY.md` (updated with accurate analysis)
+
+**Key Learnings:**
+1. Always use `--cov=generate_summaries` not `--cov=scripts.generate_summaries` for this project
+2. Current 61% coverage is solid given the codebase complexity
+3. Core parsing logic (85%+) and utilities (95%+) are well-tested
+4. Remaining gaps are primarily external API integration and error handling
+
+**Recommendations for Future Work:**
+- Add LLM API mocking tests (+5-10% coverage)
+- Add HTTP mocking for cover images (+3-5% coverage)
+- Integration tests for `process_book()` (+2-5% coverage)
+- Target: 70-75% coverage is realistic and valuable
+
+---
+
 ### Comprehensive Test Suite Addition - COMPLETED
 **Status:** ✓ Completed
 **Started:** 2025-12-04
