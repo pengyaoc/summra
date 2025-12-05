@@ -183,6 +183,8 @@ class Database:
                 name TEXT UNIQUE NOT NULL,
                 country TEXT,
                 bio TEXT,
+                short_bio TEXT,
+                long_bio TEXT,
                 other_books TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -211,21 +213,55 @@ class Database:
             )
         ''')
 
+        # Add short_bio and long_bio columns if they don't exist (migration for existing databases)
+        try:
+            cursor.execute("ALTER TABLE authors ADD COLUMN short_bio TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE authors ADD COLUMN long_bio TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         conn.commit()
         conn.close()
 
     def add_book(self, title: str, author: str, filename: str, full_text: str,
-                 gutenberg_id: int = None, cover_image_url: str = None) -> int:
-        """Add a new book to the database"""
+                 gutenberg_id: int = None, cover_image_url: str = None, author_id: int = None) -> int:
+        """Add a new book to the database
+
+        Args:
+            title: Book title
+            author: Author name (stored for backward compatibility)
+            filename: Original filename
+            full_text: Full book text
+            gutenberg_id: Project Gutenberg ID (optional)
+            cover_image_url: Path to cover image (optional)
+            author_id: Foreign key to authors table (optional, will auto-lookup if not provided)
+
+        Returns:
+            book_id: The ID of the newly created book
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
         word_count = len(full_text.split())
 
+        # Auto-lookup author_id if not provided
+        if author_id is None and author:
+            author_record = self.get_author_by_name(author)
+            if author_record:
+                author_id = author_record['id']
+
         cursor.execute('''
-            INSERT INTO books (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url))
+            INSERT INTO books (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url, author_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url, author_id))
 
         book_id = cursor.lastrowid
         conn.commit()
@@ -260,7 +296,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT b.*, a.country as author_country, a.other_books as author_other_books
+            SELECT b.*, a.country as author_country, a.other_books as author_other_books, a.short_bio as author_bio
             FROM books b
             LEFT JOIN authors a ON b.author_id = a.id
             WHERE b.id = ?
@@ -291,7 +327,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT b.*, a.country as author_country, a.other_books as author_other_books
+            SELECT b.*, a.country as author_country, a.other_books as author_other_books, a.short_bio as author_bio
             FROM books b
             LEFT JOIN authors a ON b.author_id = a.id
             WHERE b.slug = ?
@@ -1020,6 +1056,17 @@ class Database:
             return dict(row)
         return None
 
+    def get_all_authors(self) -> List[Dict]:
+        """Get all authors"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT id, name FROM authors ORDER BY name')
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
     def update_author(self, author_id: int, country: str = None, bio: str = None):
         """Update author information"""
         conn = self.get_connection()
@@ -1287,10 +1334,18 @@ class Database:
 
             if other_books:
                 # Merge with existing books
-                existing_books = author['other_books'].split(',') if author['other_books'] else []
+                # Handle both old comma-separated format and new JSON format
+                if author['other_books']:
+                    try:
+                        existing_books = json.loads(author['other_books'])
+                    except (json.JSONDecodeError, TypeError):
+                        # Fallback for old comma-separated format
+                        existing_books = [b.strip() for b in author['other_books'].split(',') if b.strip()]
+                else:
+                    existing_books = []
                 all_books = list(set(existing_books + other_books))  # Remove duplicates
                 updates.append("other_books = ?")
-                params.append(','.join(all_books[:10]))  # Limit to 10
+                params.append(json.dumps(all_books[:10]))  # Store as JSON array, limit to 10
 
             if updates:
                 params.append(author_id)
@@ -1298,10 +1353,10 @@ class Database:
                 cursor.execute(query, params)
         else:
             # Create new author
-            other_books_str = ','.join(other_books[:10]) if other_books else None
+            other_books_json = json.dumps(other_books[:10]) if other_books else None
             cursor.execute(
                 "INSERT INTO authors (name, country, other_books) VALUES (?, ?, ?)",
-                (author_name, country, other_books_str)
+                (author_name, country, other_books_json)
             )
             author_id = cursor.lastrowid
 

@@ -600,6 +600,18 @@ body {
     }
 }
 
+/* Author link styling - make it obvious and clickable */
+.author-link {
+    color: #2563eb;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.author-link:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
 .book-detail-info h2 {
     font-size: 2rem;
     color: var(--primary-color);
@@ -638,11 +650,32 @@ body {
     margin-bottom: 0;
 }
 
+.about-heading-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
 .about-heading {
     font-size: 1.25rem;
     color: var(--primary-color);
     font-weight: 600;
-    margin: 0 0 12px 0;
+    margin: 0;
+}
+
+.learn-more-btn {
+    color: #3498db;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+}
+
+.learn-more-btn:hover {
+    color: #2980b9;
+    text-decoration: underline;
 }
 
 .about-text {
@@ -650,6 +683,33 @@ body {
     line-height: 1.7;
     color: #333;
     margin: 0;
+}
+
+.about-text p {
+    margin: 0 0 1em 0;
+}
+
+.about-text p:last-child {
+    margin-bottom: 0;
+}
+
+.about-text strong {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.about-text em {
+    font-style: italic;
+}
+
+.about-text a {
+    color: var(--primary-color);
+    text-decoration: none;
+    border-bottom: 1px solid var(--primary-color);
+}
+
+.about-text a:hover {
+    opacity: 0.8;
 }
 
 /* Author Info */
@@ -2155,7 +2215,7 @@ body {
     }
 
     .carousel-scroll {
-        padding: 0.5rem 0.5rem;  /* Reduce padding on mobile: 8px */
+        padding: 0.25rem 0.5rem 0.5rem 0.5rem;  /* Reduce top padding on mobile: 4px top, 8px bottom/sides */
     }
 
     .categories-container {
@@ -2834,5 +2894,135 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     .lightbox-image {
         max-width: 95vw;
         max-height: 95vh;
+    }
+}
+
+/* ===== Author Page Styles ===== */
+
+#author-detail-section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+.author-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.author-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.author-country {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
+
+.author-bio-section,
+.author-books-section,
+.author-other-books-section,
+.author-long-bio-section {
+    margin-bottom: 3rem;
+}
+
+.author-bio-section h2,
+.author-books-section h2,
+.author-other-books-section h2,
+.author-long-bio-section h2 {
+    font-size: 1.75rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.author-books-section h2 .count {
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+    font-weight: normal;
+}
+
+.author-short-bio,
+.author-long-bio {
+    line-height: 1.8;
+    color: var(--text-color);
+}
+
+.author-short-bio p,
+.author-long-bio p {
+    margin-bottom: 1rem;
+}
+
+/* Books carousel on author page */
+.books-carousel {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 2rem;
+    margin-top: 1.5rem;
+}
+
+/* Other books grid (non-platform books) */
+.other-books-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    margin-top: 1.5rem;
+}
+
+.other-books-column ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.other-books-column li {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.other-books-column li:before {
+    content: "📚";
+    position: absolute;
+    left: 0;
+    top: 0.75rem;
+}
+
+.other-books-column li:last-child {
+    border-bottom: none;
+}
+
+/* Author link styling */
+.author-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.author-link:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .author-header h1 {
+        font-size: 2rem;
+    }
+
+    .other-books-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .books-carousel {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 1rem;
     }
 }

@@ -40,7 +40,15 @@
       "WebFetch(domain:www.gutenberg.org)",
       "Bash(tee:*)",
       "Bash(/Users/pengyao/Documents/dev/summra/ERD.md)",
-      "Bash(/Users/pengyao/Documents/dev/summra/PRD.md)"
+      "Bash(/Users/pengyao/Documents/dev/summra/PRD.md)",
+      "Bash(/Users/pengyao/.pyenv/versions/3.11.9/bin/python -m pytest:*)",
+      "Bash(python3.11 -m pip install:*)",
+      "Bash(python3.11 -m pytest:*)",
+      "Bash(python3.11:*)",
+      "Bash(sort:*)",
+      "Bash(BUG_FIXES.md)",
+      "Bash(../summra/venv/bin/python3:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

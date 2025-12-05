@@ -279,7 +279,7 @@ CREATE TABLE authors (
     name TEXT UNIQUE NOT NULL,
     country TEXT,
     bio TEXT,
-    other_books TEXT,  -- Comma-separated list of other works (max 10, added 2025-12-02)
+    other_books TEXT,  -- JSON array of other notable works (max 10, format changed from comma-separated to JSON 2025-12-04)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
