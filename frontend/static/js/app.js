@@ -94,18 +94,23 @@ class SummraApp {
         // /categories/{id} - Category detail
         // /categories - All categories view
         // /books - All books grid view
+        // /authors/{name} - Author detail
         const bookMatch = path.match(/^\/books\/([^\/]+)$/);
         const mediumMatch = path.match(/^\/books\/([^\/]+)\/summary$/);
         const chapterMatch = path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/);
         const categoryMatch = path.match(/^\/categories\/(\d+)$/);
         const categoriesMatch = path === '/categories';
         const allBooksMatch = path === '/books';
+        const authorMatch = path.match(/^\/authors\/(.+)$/);
 
         if (!this.booksLoaded) {
             await this.waitForBooks();
         }
 
-        if (chapterMatch) {
+        if (authorMatch) {
+            const authorName = decodeURIComponent(authorMatch[1]);
+            await this.showAuthorDetail(authorName, true);
+        } else if (chapterMatch) {
             const bookSlug = chapterMatch[1];
             const chapterNum = parseInt(chapterMatch[2]);
             const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
@@ -152,6 +157,96 @@ class SummraApp {
             .replace(/\s+/g, '-')
             .replace(/--+/g, '-')
             .trim();
+    }
+
+    normalizeBookTitle(title) {
+        /**
+         * Normalize book title for comparison:
+         * - Convert to lowercase
+         * - Remove punctuation and special characters
+         * - Remove common articles (a, an, the)
+         * - Collapse whitespace
+         */
+        return title
+            .toLowerCase()
+            .replace(/[^\w\s]/g, '') // Remove punctuation
+            .replace(/\b(a|an|the)\b/g, '') // Remove articles
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim();
+    }
+
+    fuzzyMatchTitles(title1, title2) {
+        /**
+         * Fuzzy match two normalized book titles
+         * Returns true if titles are similar enough to be considered the same book
+         */
+        // Exact match after normalization
+        if (title1 === title2) {
+            return true;
+        }
+
+        // Check if one title contains the other (handles "The Count of Monte Cristo" vs "Count of Monte Cristo")
+        if (title1.includes(title2) || title2.includes(title1)) {
+            return true;
+        }
+
+        // Calculate similarity ratio (simple character overlap)
+        const longer = title1.length > title2.length ? title1 : title2;
+        const shorter = title1.length > title2.length ? title2 : title1;
+
+        // If the shorter title is contained in the longer one with very minor differences
+        const threshold = 0.85; // 85% similarity
+        const similarity = this.calculateStringSimilarity(title1, title2);
+
+        return similarity >= threshold;
+    }
+
+    calculateStringSimilarity(str1, str2) {
+        /**
+         * Calculate similarity between two strings using Levenshtein distance
+         * Returns a value between 0 and 1 (1 = identical)
+         */
+        const longer = str1.length > str2.length ? str1 : str2;
+        const shorter = str1.length > str2.length ? str2 : str1;
+
+        if (longer.length === 0) {
+            return 1.0;
+        }
+
+        const editDistance = this.levenshteinDistance(str1, str2);
+        return (longer.length - editDistance) / longer.length;
+    }
+
+    levenshteinDistance(str1, str2) {
+        /**
+         * Calculate Levenshtein distance between two strings
+         * (minimum number of single-character edits needed to change one string into the other)
+         */
+        const matrix = [];
+
+        for (let i = 0; i <= str2.length; i++) {
+            matrix[i] = [i];
+        }
+
+        for (let j = 0; j <= str1.length; j++) {
+            matrix[0][j] = j;
+        }
+
+        for (let i = 1; i <= str2.length; i++) {
+            for (let j = 1; j <= str1.length; j++) {
+                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1, // substitution
+                        matrix[i][j - 1] + 1,     // insertion
+                        matrix[i - 1][j] + 1      // deletion
+                    );
+                }
+            }
+        }
+
+        return matrix[str2.length][str1.length];
     }
 
     /**
@@ -666,7 +761,10 @@ class SummraApp {
         const bookAuthor = document.getElementById('book-author');
 
         if (bookTitle) bookTitle.textContent = book.title;
-        if (bookAuthor) bookAuthor.textContent = `by ${book.author}`;
+        if (bookAuthor) {
+            const authorSlug = this.slugify(book.author);
+            bookAuthor.innerHTML = `by <a href="/authors/${authorSlug}" class="author-link">${this.escapeHtml(book.author)}</a>`;
+        }
 
         // Fetch full book data to get metadata (about_text, relevance_now, author info)
         this.loadBookMetadata(book.id);
@@ -760,11 +858,13 @@ class SummraApp {
         const summarySection = document.getElementById('summary-section');
         const categoryDetailSection = document.getElementById('category-detail-section');
         const allCategoriesSection = document.getElementById('all-categories-section');
+        const authorDetailSection = document.getElementById('author-detail-section');
 
         if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
         if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
         if (categoryDetailSection) categoryDetailSection.classList.add('hidden');
         if (allCategoriesSection) allCategoriesSection.classList.add('hidden');
+        if (authorDetailSection) authorDetailSection.classList.add('hidden');
         if (summarySection) summarySection.classList.remove('hidden');
 
         // Restore scroll position or scroll to top
@@ -780,23 +880,37 @@ class SummraApp {
         const aboutSection = document.getElementById('about-section');
         const aboutText = document.getElementById('about-text');
         const relevanceText = document.getElementById('relevance-text');
-        const authorNameDisplay = document.getElementById('author-name-display');
-        const authorCountryInline = document.getElementById('author-country-inline');
         const authorBioText = document.getElementById('author-bio-text');
-        const authorBooksGrid = document.getElementById('author-books-grid');
-        const authorBooksSection = document.getElementById('author-books-section');
+        const bookAuthor = document.getElementById('book-author');
+        const authorLearnMoreBtn = document.getElementById('author-learn-more-btn');
 
         // Check if we have any data to display (backward compatibility)
         const hasAbout = book.about_text && book.about_text.trim();
         const hasRelevance = book.relevance_now && book.relevance_now.trim();
         const hasCountry = book.author_country && book.author_country.trim();
+        const hasBio = book.author_bio && book.author_bio.trim();
 
         // Debug logging
         console.log('updateAboutSection called for:', book.title);
-        console.log('Has metadata:', { hasAbout, hasRelevance, hasCountry });
+        console.log('Has metadata:', { hasAbout, hasRelevance, hasCountry, hasBio });
 
-        // Only show section if we have at least some data
-        if (!hasAbout && !hasRelevance) {
+        // Update book author with country information
+        const authorName = book.author || '';
+        const authorSlug = this.slugify(authorName);
+
+        if (bookAuthor) {
+            const countryText = hasCountry ? ` (${book.author_country})` : '';
+            bookAuthor.innerHTML = `by <a href="/authors/${authorSlug}" class="author-link">${this.escapeHtml(authorName)}</a>${countryText}`;
+        }
+
+        // Update author "Learn more" button
+        if (authorLearnMoreBtn && authorName) {
+            authorLearnMoreBtn.href = `/authors/${authorSlug}`;
+            authorLearnMoreBtn.classList.remove('hidden');
+        }
+
+        // Only show section if we have at least some data (book about/relevance OR author bio)
+        if (!hasAbout && !hasRelevance && !hasBio) {
             if (aboutSection) aboutSection.classList.add('hidden');
             return;
         }
@@ -806,121 +920,33 @@ class SummraApp {
 
         // Populate about text
         if (aboutText) {
-            aboutText.textContent = hasAbout ? book.about_text : '';
+            aboutText.innerHTML = hasAbout ? this.renderMarkdown(book.about_text) : '';
             aboutText.parentElement.style.display = hasAbout ? 'block' : 'none';
         }
 
         // Populate relevance text
         if (relevanceText) {
-            relevanceText.textContent = hasRelevance ? book.relevance_now : '';
+            relevanceText.innerHTML = hasRelevance ? this.renderMarkdown(book.relevance_now) : '';
             relevanceText.parentElement.style.display = hasRelevance ? 'block' : 'none';
         }
 
-        // Populate author name
-        if (authorNameDisplay) {
-            authorNameDisplay.textContent = book.author || '';
-        }
-
-        // Populate author country
-        if (authorCountryInline && hasCountry) {
-            authorCountryInline.textContent = book.author_country;
-        } else if (authorCountryInline) {
-            authorCountryInline.textContent = '';
-        }
-
-        // Populate author bio with placeholder
+        // Populate author bio
         if (authorBioText) {
-            // TODO: Replace with actual bio from backend
-            const placeholderBio = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium totam rem aperiam.';
-            authorBioText.textContent = placeholderBio;
-        }
-
-        // Load books by same author
-        this.loadAuthorBooks(book.author, book.id);
-    }
-
-    async loadAuthorBooks(authorName, currentBookId) {
-        const authorBooksCarousel = document.getElementById('author-books-carousel');
-        const authorBooksSection = document.getElementById('author-books-section');
-
-        if (!authorBooksCarousel || !authorBooksSection) return;
-
-        try {
-            const response = await fetch(`${this.apiBase}/books/by-author/${encodeURIComponent(authorName)}?exclude=${currentBookId}`);
-            const data = await response.json();
-
-            if (data.success && data.books && data.books.length > 0) {
-                authorBooksSection.classList.remove('hidden');
-
-                // Create carousel container
-                const carousel = document.createElement('div');
-                carousel.className = 'carousel-container';
-
-                // Add navigation buttons
-                const leftBtn = document.createElement('button');
-                leftBtn.className = 'carousel-nav-btn left';
-                leftBtn.innerHTML = '‹';
-                leftBtn.disabled = true;  // Start disabled (at beginning)
-
-                const rightBtn = document.createElement('button');
-                rightBtn.className = 'carousel-nav-btn right';
-                rightBtn.innerHTML = '›';
-                rightBtn.disabled = false;  // Start enabled by default
-
-                // Create scroll container
-                const scrollContainer = document.createElement('div');
-                scrollContainer.className = 'related-books-scroll';
-
-                data.books.forEach(book => {
-                    const bookCard = document.createElement('div');
-                    bookCard.className = 'related-book-card';
-
-                    const coverImageHtml = book.cover_image_url
-                        ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'related-book-cover')
-                        : '';
-
-                    bookCard.innerHTML = `
-                        ${coverImageHtml}
-                        <h4 class="related-book-title">${this.escapeHtml(book.title)}</h4>
-                        <p class="related-book-author">${this.escapeHtml(book.author)}</p>
-                    `;
-
-                    bookCard.addEventListener('click', () => this.selectBook(book));
-                    scrollContainer.appendChild(bookCard);
-                });
-
-                // Carousel navigation logic
-                const scrollAmount = 220; // Width of one card + gap
-
-                leftBtn.addEventListener('click', () => {
-                    scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
-                });
-
-                rightBtn.addEventListener('click', () => {
-                    scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
-                });
-
-                // Update button states on scroll
-                scrollContainer.addEventListener('scroll', () => {
-                    const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
-                    leftBtn.disabled = scrollContainer.scrollLeft === 0;
-                    rightBtn.disabled = scrollContainer.scrollLeft >= maxScroll - 1;
-                });
-
-                // Assemble carousel
-                carousel.appendChild(leftBtn);
-                carousel.appendChild(scrollContainer);
-                carousel.appendChild(rightBtn);
-
-                // Clear and add to page
-                authorBooksCarousel.innerHTML = '';
-                authorBooksCarousel.appendChild(carousel);
+            const hasBio = book.author_bio && book.author_bio.trim();
+            if (hasBio) {
+                authorBioText.innerHTML = this.renderMarkdown(book.author_bio);
+                authorBioText.style.display = 'block';
+                authorBioText.parentElement.style.display = 'block';
             } else {
-                authorBooksSection.classList.add('hidden');
+                authorBioText.innerHTML = '';
+                authorBioText.style.display = 'none';
+                // Keep the parent visible if we have an author (for the "Learn more" button)
+                if (authorName) {
+                    authorBioText.parentElement.style.display = 'block';
+                } else {
+                    authorBioText.parentElement.style.display = 'none';
+                }
             }
-        } catch (error) {
-            console.error('Error loading author books:', error);
-            authorBooksSection.classList.add('hidden');
         }
     }
 
@@ -1298,6 +1324,8 @@ class SummraApp {
         // Hide other sections
         document.getElementById('summary-section').classList.add('hidden');
         document.getElementById('chapter-detail-section').classList.add('hidden');
+        const authorDetailSection = document.getElementById('author-detail-section');
+        if (authorDetailSection) authorDetailSection.classList.add('hidden');
         document.getElementById('medium-detail-section').classList.remove('hidden');
 
         // Update header
@@ -1393,6 +1421,8 @@ class SummraApp {
         // Hide other sections
         document.getElementById('summary-section').classList.add('hidden');
         document.getElementById('medium-detail-section').classList.add('hidden');
+        const authorDetailSection = document.getElementById('author-detail-section');
+        if (authorDetailSection) authorDetailSection.classList.add('hidden');
         document.getElementById('chapter-detail-section').classList.remove('hidden');
 
         // Fetch individual chapter data on demand (optimized - only fetches one chapter)
@@ -1502,10 +1532,13 @@ class SummraApp {
                 }
             };
 
-            // Make both the header and toggle button clickable
+            // Make entire header clickable (including chevron area)
             summaryHeader.style.cursor = 'pointer';
             summaryHeader.onclick = toggleSummary;
-            toggleBtn.onclick = toggleSummary;
+
+            // Remove separate onclick from button to prevent event conflicts
+            // The button will be toggled via the header click
+            toggleBtn.style.pointerEvents = 'none';
 
             // Setup summary TTS button - only show if audio is available
             const summaryTtsBtn = document.getElementById('chapter-summary-tts-button');
@@ -1798,7 +1831,7 @@ class SummraApp {
 
         // Hide all other sections
         const sections = ['summary-section', 'medium-detail-section', 'chapter-detail-section',
-                         'category-detail-section', 'all-categories-section'];
+                         'category-detail-section', 'all-categories-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
             if (section) section.classList.add('hidden');
@@ -1837,7 +1870,7 @@ class SummraApp {
 
         // Hide all sections except category detail
         const sections = ['categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section'];
+                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
             if (section) section.classList.add('hidden');
@@ -1926,7 +1959,7 @@ class SummraApp {
 
         // Hide all sections except all categories
         const sections = ['categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section', 'category-detail-section'];
+                         'medium-detail-section', 'chapter-detail-section', 'category-detail-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
             if (section) section.classList.add('hidden');
@@ -2017,7 +2050,7 @@ class SummraApp {
 
         // Reuse category detail section for all books grid
         const sections = ['categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section'];
+                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
             if (section) section.classList.add('hidden');
@@ -2049,6 +2082,143 @@ class SummraApp {
 
         // Update page title
         this.updatePageTitle('Browse Classic Books - Free Summaries | Summra');
+    }
+
+    async showAuthorDetail(authorName, restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'author';
+        this.setCurrentPage(`author-${authorName}`);
+
+        // Hide all other sections
+        const sections = ['categories-section', 'summary-section',
+                         'medium-detail-section', 'chapter-detail-section',
+                         'all-categories-section', 'category-detail-section'];
+        sections.forEach(id => {
+            const section = document.getElementById(id);
+            if (section) section.classList.add('hidden');
+        });
+
+        // Show/create author detail section
+        let authorSection = document.getElementById('author-detail-section');
+        if (!authorSection) {
+            authorSection = this.createAuthorDetailSection();
+            document.querySelector('.main-content').appendChild(authorSection);
+        }
+        authorSection.classList.remove('hidden');
+
+        // Fetch author data
+        try {
+            const authorSlug = this.slugify(authorName);
+            const [authorResponse, booksResponse] = await Promise.all([
+                fetch(`/api/authors/${authorSlug}`),
+                fetch(`/api/authors/${authorSlug}/books`)
+            ]);
+
+            if (!authorResponse.ok) {
+                throw new Error('Author not found');
+            }
+
+            const authorData = await authorResponse.json();
+            const booksData = await booksResponse.json();
+
+            // Render author page
+            this.renderAuthorPage(authorData.author, booksData.books || []);
+
+            // Update breadcrumbs
+            this.updateBreadcrumbs('author', authorData.author);
+
+            // Update page title
+            this.updatePageTitle(`${authorName} - Author | Summra`);
+
+            if (restoreScroll) {
+                this.restoreScrollPosition(`author-${authorName}`);
+            } else {
+                window.scrollTo(0, 0);
+            }
+        } catch (error) {
+            console.error('Error loading author:', error);
+            authorSection.innerHTML = `
+                <div class="error-message">
+                    <h2>Author not found</h2>
+                    <p>The author "${this.escapeHtml(authorName)}" could not be found.</p>
+                    <button onclick="window.history.back()">Go Back</button>
+                </div>
+            `;
+        }
+    }
+
+    createAuthorDetailSection() {
+        const section = document.createElement('div');
+        section.id = 'author-detail-section';
+        section.className = 'content-section';
+        return section;
+    }
+
+    renderAuthorPage(author, books) {
+        const section = document.getElementById('author-detail-section');
+
+        // Filter out books that are already on Summra
+        const allOtherBooks = author.other_books || [];
+        const booksOnSummra = books.map(b => this.normalizeBookTitle(b.title));
+
+        const otherBooks = allOtherBooks.filter(bookTitle => {
+            const normalizedTitle = this.normalizeBookTitle(bookTitle);
+            // Check if this book is already on Summra using fuzzy matching
+            return !booksOnSummra.some(summraTitle =>
+                this.fuzzyMatchTitles(normalizedTitle, summraTitle)
+            );
+        });
+
+        // Split other_books into chunks of 2 for two-column layout
+        const otherBooksColumns = [];
+        for (let i = 0; i < otherBooks.length; i += Math.ceil(otherBooks.length / 2)) {
+            otherBooksColumns.push(otherBooks.slice(i, i + Math.ceil(otherBooks.length / 2)));
+        }
+
+        section.innerHTML = `
+            <div class="author-header">
+                <h1>${this.escapeHtml(author.name)}</h1>
+                ${author.country ? `<p class="author-country">${this.escapeHtml(author.country)}</p>` : ''}
+            </div>
+
+            ${author.long_bio ? `
+                <div class="author-bio-section">
+                    <h2>About the Author</h2>
+                    <div class="author-long-bio">${this.renderMarkdown(author.long_bio)}</div>
+                </div>
+            ` : ''}
+
+            ${books.length > 0 ? `
+                <div class="author-books-section">
+                    <h2>Books on Summra <span class="count">(${books.length})</span></h2>
+                    <div id="author-books-carousel" class="books-carousel"></div>
+                </div>
+            ` : ''}
+
+            ${otherBooks.length > 0 ? `
+                <div class="author-other-books-section">
+                    <h2>Other Notable Works</h2>
+                    <div class="other-books-grid">
+                        ${otherBooksColumns.map((column, idx) => `
+                            <div class="other-books-column">
+                                <ul>
+                                    ${column.map(book => `<li>${this.escapeHtml(book)}</li>`).join('')}
+                                </ul>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        `;
+
+        // Render books carousel if we have books
+        if (books.length > 0) {
+            const carousel = section.querySelector('#author-books-carousel');
+            books.forEach(book => {
+                const bookCard = this.createBookCard(book);
+                carousel.appendChild(bookCard);
+            });
+        }
     }
 
     createBookCard(book) {

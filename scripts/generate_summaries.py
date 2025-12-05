@@ -11,6 +11,12 @@ using Google's Gemini API:
 Chapter summaries are generated using bulk processing, where consecutive chapters
 are processed in a single API call for improved efficiency and context.
 
+Book Metadata Extraction:
+- Title and author are extracted from the text file itself (supports multiple formats)
+- For Project Gutenberg books: cover images can be automatically downloaded
+- For non-Gutenberg books: metadata is extracted from simple "Title\n\nby Author" format
+- You can also manually specify title/author via command-line arguments
+
 Usage:
     # Generate all summaries for a book
     python generate_summaries.py <book_file.txt> [--title "Book Title"] [--author "Author Name"]
@@ -154,6 +160,1343 @@ import models
 import categorization
 
 
+# ============================================================================
+# CONSTANTS - Configuration values extracted for maintainability
+# ============================================================================
+
+class SummaryConstants:
+    """Word count targets for summary generation"""
+    CONCISE_TARGET_WORDS = 500
+    MEDIUM_MIN_WORDS = 2000
+    MEDIUM_MAX_WORDS = 3000
+    ABOUT_MIN_WORDS = 75
+    ABOUT_MAX_WORDS = 100
+    RELEVANCE_MIN_WORDS = 75
+    RELEVANCE_MAX_WORDS = 100
+    MIN_WORDS_FOR_CHAPTER_SUMMARY = 500
+    MIN_CHAPTER_SUMMARY_OUTPUT_WORDS = 200
+
+
+class APIConstants:
+    """Gemini API rate limiting and call size constants"""
+    # API limits
+    MAX_CHARS_PER_CALL = 750000  # ~187.5K tokens (free tier: 250K/min)
+    CHARS_PER_TOKEN = 4  # Rough estimation
+    MAX_TOKENS_PER_CALL = MAX_CHARS_PER_CALL // CHARS_PER_TOKEN  # ~187.5K tokens
+
+    # Large call handling
+    LARGE_CALL_THRESHOLD_TOKENS = 100000
+    LARGE_CALL_WAIT_SECONDS = 60
+
+    # Rate limiting windows
+    RATE_LIMIT_WINDOW_SECONDS = 60
+
+    # Retry configuration
+    MAX_RETRIES = 2
+    DEFAULT_RETRY_WAIT_SECONDS = 10
+    RATE_LIMIT_RETRY_WAIT_SECONDS = 60
+
+    # Batch processing
+    MAX_BATCH_CHARS = 400000  # ~100K tokens for batch input
+    MAX_CHAPTERS_PER_BATCH = 10
+    MAX_MEDIUM_SUMMARY_CONTEXT_CHARS = 20000
+    MAX_PREVIOUS_CHAPTER_CONTEXT_CHARS = 100000
+
+
+class ContentThresholds:
+    """Content size validation thresholds"""
+    MIN_PREFACE_WORDS = 100
+    MIN_PREFACE_CHARS = 100
+    MIN_PREFACE_CONTENT_FOR_CREATION = 300
+    MIN_SENTENCE_COUNT_FOR_PREFACE = 3
+
+    # V1 parser thresholds (original detect_chapters)
+    MIN_CHAPTER_CHARS_V1 = 100  # Minimum chapter content for v1 parser
+
+    # V2 parser thresholds (detect_chapters_v2)
+    MIN_CHAPTER_CHARS_V2 = 20  # Lower threshold for v2 content inference
+
+    # Shared thresholds
+    MIN_CHAPTER_FOR_TOC_CHARS = 500  # For distinguishing TOC from body in v2
+    MIN_AVG_CHAPTER_CHARS = 500
+
+    # Coverage validation
+    MIN_COVERAGE_PERCENT = 90
+    MAX_COVERAGE_PERCENT = 110
+
+    # Title validation
+    MIN_TITLE_LENGTH = 5
+    MAX_TITLE_LENGTH = 60
+    MAX_CHAPTER_TITLE_LENGTH = 150
+
+
+class ChapterDetectionConstants:
+    """Chapter detection and validation thresholds"""
+    MIN_CHAPTER_NUMBER = 1
+    MAX_CHAPTER_NUMBER = 200  # Maximum expected chapter number
+
+    # Content size thresholds for validation
+    MIN_ACCUMULATED_CONTENT_FOR_TOC_END = 1000
+    MIN_LOOKAHEAD_CONTENT_FOR_CHAPTER = 500
+
+    # TOC detection
+    MIN_PARAGRAPH_LENGTH = 40
+    MIN_PARAGRAPH_LINES_FOR_CHAPTER = 3
+    MIN_BLANK_LINES_BEFORE_STANDALONE_NUMBER = 2
+
+    # Lookahead limits for validation
+    LOOKAHEAD_CHAPTER_TITLE_LINES = 5
+    LOOKAHEAD_CONTENT_VALIDATION_LINES = 5
+    LOOKAHEAD_TOC_DETECTION_LINES = 15
+
+    # Book marker context
+    BOOK_MARKER_CONTEXT_RANGE = 3
+
+
+class DisplayConstants:
+    """Output formatting constants"""
+    SEPARATOR_WIDTH = 60
+    CHAPTER_BATCH_SEPARATOR_WIDTH = 80  # For batch processing separators
+    MAX_PROMPT_PREVIEW_CHARS = 10000
+    MAX_ERROR_MESSAGE_CHARS = 100
+
+
+# ============================================================================
+# TOC DETECTION & CONTENT PARSING - Architectural Separation
+# ============================================================================
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+
+@dataclass
+class TOCStructure:
+    """Table of contents structure - metadata only, no content
+
+    This class represents the detected structure of a book's table of contents,
+    including chapter numbers, titles, and structural information. It does NOT
+    contain the actual chapter text - that's extracted separately in Phase 2.
+    """
+    # Core TOC data
+    chapters: List[Tuple[int, str]] = field(default_factory=list)  # [(chapter_num, chapter_title), ...]
+
+    # TOC metadata
+    has_toc: bool = False  # True if explicit TOC section found
+    toc_start_line: int = 0  # Line number where TOC starts (0 if no TOC)
+    toc_end_line: int = 0  # Line number where TOC ends
+
+    # Structure information
+    structure_type: str = "single"  # "single" or "two-level" (BOOK/PART/VOLUME)
+    sections: List[Dict] = field(default_factory=list)  # For two-level: [{"type": "BOOK", "num": 1, ...}, ...]
+
+    # Special chapters
+    has_preface: bool = False  # Content before Chapter 1
+    preface_marker: str = ""  # e.g., "PREFACE", "PROLOGUE", "INTRODUCTION"
+    has_epilogue: bool = False  # Chapter after last numbered chapter
+    epilogue_title: str = ""  # e.g., "EPILOGUE", "CONCLUSION", "AFTERWORD"
+
+    @classmethod
+    def from_two_level(cls, toc_structure: List[Dict]) -> 'TOCStructure':
+        """Create TOCStructure from two-level structure (BOOK/PART → Chapters)
+
+        Args:
+            toc_structure: List of sections like [{"type": "BOOK", "chapters": [(1, "Title"), ...]}, ...]
+
+        Returns:
+            TOCStructure with flattened chapter list
+        """
+        instance = cls()
+        instance.structure_type = "two-level"
+        instance.sections = toc_structure
+
+        # Flatten to sequential chapter numbering
+        sequential_num = 1
+        for section in toc_structure:
+            for chapter in section.get('chapters', []):
+                # Handle both dictionary format {'number': ..., 'numeral': ..., 'title': ...}
+                # and legacy tuple format (number, title)
+                if isinstance(chapter, dict):
+                    chapter_title = chapter.get('title', '')
+                else:
+                    _, chapter_title = chapter  # Backward compatibility with tuple format
+                instance.chapters.append((sequential_num, chapter_title))
+                sequential_num += 1
+
+        return instance
+
+
+class TOCDetector:
+    """Detect and parse table of contents
+
+    This class implements Phase 1 of the TOC/Content separation architecture:
+    detecting the TOC structure and metadata WITHOUT extracting actual content.
+
+    Two detection paths:
+    - Path 1a: Explicit TOC section found (preferred) - parse from TOC
+    - Path 1b: No TOC section (fallback) - infer by scanning for chapter markers
+    """
+
+    def __init__(self):
+        """Initialize TOC detector"""
+        pass
+
+    def detect(self, text: str) -> TOCStructure:
+        """Main entry point for TOC detection
+
+        Args:
+            text: Full book text
+
+        Returns:
+            TOCStructure containing detected chapter metadata
+        """
+        lines = text.split('\n')
+
+        # Step 1: Try to find explicit TOC section
+        toc_start, toc_end = self._find_toc_boundaries(lines)
+
+        if toc_start is not None:
+            # Path 1a: Explicit TOC found - parse it
+            return self._parse_explicit_toc(lines, toc_start, toc_end)
+        else:
+            # Path 1b: No TOC - infer from content
+            return self._infer_toc_from_content(lines)
+
+    def _find_toc_boundaries(self, lines: List[str]) -> Tuple[Optional[int], Optional[int]]:
+        """Find start and end line numbers of TOC section
+
+        Args:
+            lines: Book text split into lines
+
+        Returns:
+            (start_line, end_line) or (None, None) if no TOC found
+        """
+        toc_start = None
+        toc_patterns = [
+            r'^\s*CONTENTS\s*$',
+            r'^\s*TABLE OF CONTENTS\s*$',
+            r'^\s*Table of Contents\s*$',
+            r'^\s*Contents\s*$',
+        ]
+
+        # Find TOC start
+        for i, line in enumerate(lines[:500]):  # Search first 500 lines only
+            for pattern in toc_patterns:
+                if re.match(pattern, line):
+                    toc_start = i
+                    break
+            if toc_start is not None:
+                break
+
+        if toc_start is None:
+            return None, None
+
+        # Find TOC end - look for first substantial content after TOC
+        # TOC ends when:
+        # 1. We see a chapter marker followed by >500 chars (actual chapter start), OR
+        # 2. We accumulate >1000 chars of non-chapter content (body text), OR
+        # 3. We see 3+ consecutive blank lines (section break)
+        toc_end = toc_start + 1
+        accumulated_content = 0
+        blank_line_count = 0
+
+        for i in range(toc_start + 1, min(len(lines), toc_start + 200)):
+            line = lines[i].strip()
+
+            # Track consecutive blank lines
+            if not line:
+                blank_line_count += 1
+                # 3+ blank lines = section break = TOC end
+                if blank_line_count >= 3:
+                    toc_end = i
+                    break
+                continue
+            else:
+                blank_line_count = 0
+
+            # Check if this looks like a chapter entry
+            # Must be at line start and have CHAPTER keyword or be a simple number/roman on its own
+            # Also match uppercase-only lines (title-only TOC entries)
+            is_chapter_like = (re.match(r'^\s*(CHAPTER|Chapter)\s+([IVX]+|[0-9]+)', line) or
+                              re.match(r'^\s*([IVX]+|[0-9]+)([\.\s]|$)', line) or  # Period/space optional
+                              (len(line) < 80 and line.isupper() and not line.replace('.', '').replace(' ', '').isdigit()))
+
+            if is_chapter_like:
+                # Check if substantial content follows IMMEDIATELY (real chapter vs TOC entry)
+                # TOC entries have blank lines or other entries after them
+                # Real chapters have content starting within 2-3 lines
+                content_after = 0
+                blank_count = 0
+                found_immediate_content = False
+
+                for j in range(i + 1, min(len(lines), i + 11)):  # Check next 10 lines for multiline titles
+                    next_line = lines[j].strip()
+                    if not next_line:
+                        blank_count += 1
+                        continue
+
+                    # If we see another chapter-like line, this is TOC
+                    # Include uppercase-only check for title-only TOCs (Jekyll and Hyde case)
+                    next_is_chapter = (re.match(r'^\s*(CHAPTER|Chapter)\s+([IVX]+|[0-9]+)', next_line) or
+                                      re.match(r'^\s*([IVX]+|[0-9]+)([\.\s]|$)', next_line) or  # Period/space optional
+                                      (len(next_line) < 80 and next_line.isupper() and not next_line.replace('.', '').replace(' ', '').isdigit()))
+                    if next_is_chapter:
+                        break  # Another chapter entry = TOC
+
+                    # If we see substantial text (non-chapter), check if it's real content
+                    content_after += len(next_line)
+                    if content_after > 100:  # Immediate substantial content = real chapter
+                        found_immediate_content = True
+                        break
+
+                if found_immediate_content:
+                    # This is a real chapter! TOC ends here
+                    toc_end = i
+                    return toc_start, toc_end
+
+                # Still looks like TOC entry, continue
+                accumulated_content = 0  # Reset counter
+                toc_end = i + 1
+                continue
+
+            # Accumulate non-chapter content
+            accumulated_content += len(line)
+
+            # If we've accumulated enough content, TOC is over
+            if accumulated_content > ChapterDetectionConstants.MIN_ACCUMULATED_CONTENT_FOR_TOC_END:
+                break
+
+        return toc_start, toc_end
+
+    def _parse_explicit_toc(self, lines: List[str], start: int, end: int) -> TOCStructure:
+        """Parse chapter information from explicit TOC section
+
+        Args:
+            lines: Book text split into lines
+            start: Line number where TOC starts
+            end: Line number where TOC ends
+
+        Returns:
+            TOCStructure with detected chapters and metadata
+        """
+        toc = TOCStructure()
+        toc.has_toc = True
+        toc.toc_start_line = start
+        toc.toc_end_line = end
+
+        chapters = []
+        title_only_entries = []  # Track title-only entries (no chapter numbers)
+
+        # Parse each line in TOC section
+        for i in range(start, end):
+            line = lines[i].strip()
+
+            if not line:
+                continue
+
+            # Skip the "Contents" header itself
+            if re.match(r'^\s*(CONTENTS|TABLE OF CONTENTS|Contents)\s*$', line, re.IGNORECASE):
+                continue
+
+            # Try to extract chapter number and title
+            chapter_info = self._extract_chapter_from_toc_line(line)
+            if chapter_info:
+                chapter_num, chapter_title = chapter_info
+                chapters.append((chapter_num, chapter_title))
+            else:
+                # Check if this could be a title-only entry (Jekyll and Hyde case)
+                # Heuristic: Mostly uppercase, reasonable length, not a number
+                if (len(line) < 80 and
+                    line.isupper() and  # All uppercase
+                    not line.replace('.', '').replace(' ', '').isdigit()):  # Not just numbers
+                    title_only_entries.append(line)
+
+        # Detect structure type (single vs two-level)
+        toc.structure_type = self._detect_structure_type(lines, start, end)
+
+        # Detect special chapters
+        special = self._detect_special_chapters(lines)
+        toc.has_preface = special['has_preface']
+        toc.preface_marker = special['preface_marker']
+        toc.has_epilogue = special['has_epilogue']
+        toc.epilogue_title = special['epilogue_title']
+
+        # Handle title-only TOC entries (Jekyll and Hyde case)
+        if not chapters and title_only_entries:
+            print(f"Found {len(title_only_entries)} title-only TOC entries, converting to numbered chapters")
+            # Assign sequential chapter numbers to title-only entries
+            for i, title in enumerate(title_only_entries, start=1):
+                chapters.append((i, title))
+
+        toc.chapters = chapters
+
+        # Fallback: If TOC marker found but no chapters extracted at all,
+        # infer chapters from content
+        if not chapters:
+            print("TOC found but no chapters extracted, falling back to content inference")
+            inferred_toc = self._infer_toc_from_content(lines)
+            toc.chapters = inferred_toc.chapters
+            # Keep toc.has_toc=True and toc boundaries from explicit TOC
+
+        return toc
+
+    def _infer_toc_from_content(self, lines: List[str]) -> TOCStructure:
+        """Infer TOC structure by scanning for chapter markers in book body
+
+        This is the fallback when no explicit TOC section exists.
+
+        Args:
+            lines: Book text split into lines
+
+        Returns:
+            TOCStructure with inferred chapter metadata
+        """
+        toc = TOCStructure()
+        toc.has_toc = False
+
+        chapters = []
+
+        # Scan entire book for chapter markers
+        chapter_markers = self._find_all_chapter_markers(lines)
+
+        # Validate markers (ensure they're actual chapters, not TOC references)
+        # Use MIN_CHAPTER_CHARS (100) instead of MIN_CHAPTER_FOR_TOC_CHARS (500) since
+        # we're scanning the whole book and there's no explicit TOC to filter out
+        valid_markers = self._validate_chapter_markers(
+            chapter_markers, lines,
+            min_chars=ContentThresholds.MIN_CHAPTER_CHARS_V2
+        )
+
+        # Build chapter list
+        for marker in valid_markers:
+            chapter_num = marker['chapter_num']
+            chapter_title = marker.get('inline_title', f"Chapter {chapter_num}")
+            # Normalize title (handle Roman numerals, title case, etc.)
+            # Note: _infer_toc_from_content is a method of TOCDetector, but normalize_chapter_title
+            # is a method of SummaryGenerator. We need to create an instance or move the method.
+            # For now, we'll import it as a standalone function would be cleaner, but let's
+            # just call a local normalization here for Roman numerals
+            chapter_title = self._normalize_inferred_title(chapter_title)
+            chapters.append((chapter_num, chapter_title))
+
+        # Detect special chapters
+        special = self._detect_special_chapters(lines)
+        toc.has_preface = special['has_preface']
+        toc.preface_marker = special['preface_marker']
+        toc.has_epilogue = special['has_epilogue']
+        toc.epilogue_title = special['epilogue_title']
+
+        toc.chapters = chapters
+
+        return toc
+
+    def _normalize_inferred_title(self, title: str) -> str:
+        """Normalize chapter title extracted from content inference
+
+        Handles:
+        - Roman numeral capitalization (Ii -> II, Iii -> III, etc.)
+        - Basic title case
+
+        Args:
+            title: Raw chapter title
+
+        Returns:
+            Normalized title
+        """
+        if not title or not title.strip():
+            return title
+
+        # Roman numeral pattern
+        roman_pattern = re.compile(r'^[IVXLCDM]+$', re.IGNORECASE)
+
+        # Split into words and process each
+        words = title.split()
+        result = []
+
+        for word in words:
+            # If it's a Roman numeral, uppercase it
+            if roman_pattern.match(word):
+                result.append(word.upper())
+            else:
+                # Otherwise keep as-is (we'll let normalize_chapter_title handle full title case later)
+                result.append(word)
+
+        return ' '.join(result)
+
+    def _extract_chapter_from_toc_line(self, line: str) -> Optional[Tuple[int, str]]:
+        """Extract chapter number and title from a TOC line
+
+        Args:
+            line: Single line from TOC section
+
+        Returns:
+            (chapter_num, chapter_title) or None if not a chapter entry
+        """
+        # Pattern: "Chapter I. The Beginning ... 15"
+        # Pattern: "Chapter I" (no title)
+        # Pattern: "I. The Beginning ... 15"
+        # Pattern: "1. The Beginning ... 15"
+
+        # Try various patterns
+        patterns = [
+            # Special case: PRELIMINARY CHAPTER (treat as chapter 0)
+            (r'^\s*PRELIMINARY\s+CHAPTER(?:[—\-\.\s]+(.+?))?(?:\s+\d+\s*)?$', True, 0),
+            # With "CHAPTER" keyword and optional title
+            (r'^\s*CHAPTER\s+([IVX]+|[0-9]+)(?:[\.\s]+(.+?))?(?:\s+\d+\s*)?$', True, None),
+            (r'^\s*Chapter\s+([IVX]+|[0-9]+)(?:[\.\s]+(.+?))?(?:\s+\d+\s*)?$', True, None),
+            # Standalone number with title
+            (r'^\s*([IVX]+)[\.\s]+(.+?)(?:\s+\d+\s*)?$', False, None),
+            (r'^\s*([0-9]+)[\.\s]+(.+?)(?:\s+\d+\s*)?$', False, None),
+        ]
+
+        for pattern_info in patterns:
+            pattern = pattern_info[0]
+            has_chapter_keyword = pattern_info[1]
+            forced_num = pattern_info[2] if len(pattern_info) > 2 else None
+
+            match = re.match(pattern, line, re.IGNORECASE)
+            if match:
+                # For PRELIMINARY CHAPTER, use forced chapter number 0
+                if forced_num is not None:
+                    chapter_num = forced_num
+                    # Title is in group 1 for PRELIMINARY CHAPTER
+                    title = match.group(1) if match.lastindex >= 1 and match.group(1) else ""
+                    title = title.strip()
+                else:
+                    num_str = match.group(1)
+                    # Title might be None if pattern had optional title group
+                    title = match.group(2) if match.lastindex >= 2 and match.group(2) else ""
+                    title = title.strip()
+                    # Convert roman/word to int
+                    chapter_num = self._convert_to_int(num_str)
+
+                # Remove page numbers from title (trailing numbers)
+                if title:
+                    title = re.sub(r'\s+\d+\s*$', '', title).strip()
+
+                if chapter_num is not None:
+                    # If no title, use generic "Chapter X" (or "Preface" for chapter 0)
+                    if not title:
+                        title = "Preface" if chapter_num == 0 else f"Chapter {chapter_num}"
+                    return chapter_num, title
+
+        return None
+
+    def _convert_to_int(self, num_str: str) -> Optional[int]:
+        """Convert roman numeral or digit string to integer
+
+        Args:
+            num_str: String representation of number
+
+        Returns:
+            Integer chapter number or None
+        """
+        # Try direct conversion
+        if num_str.isdigit():
+            return int(num_str)
+
+        # Try roman numeral conversion
+        roman_values = {
+            'I': 1, 'V': 5, 'X': 10, 'L': 50,
+            'C': 100, 'D': 500, 'M': 1000
+        }
+
+        num_str = num_str.upper()
+        total = 0
+        prev_value = 0
+
+        for char in reversed(num_str):
+            if char not in roman_values:
+                return None
+
+            value = roman_values[char]
+            if value < prev_value:
+                total -= value
+            else:
+                total += value
+            prev_value = value
+
+        return total if total > 0 else None
+
+    def _find_all_chapter_markers(self, lines: List[str]) -> List[Dict]:
+        """Find all lines that look like chapter markers
+
+        Args:
+            lines: Book text split into lines
+
+        Returns:
+            List of potential chapter markers with metadata
+        """
+        markers = []
+
+        # Pattern variations for chapter markers
+        patterns = [
+            (r'^\s*PRELIMINARY\s+CHAPTER\s*$', 'preliminary', 0),  # Special case for preliminary chapter
+            (r'^\s*CHAPTER\s+([IVX]+)\s*$', 'roman_standalone', None),
+            (r'^\s*CHAPTER\s+([0-9]+)\s*$', 'digit_standalone', None),
+            (r'^\s*CHAPTER\s+([IVX]+)[\.\s:]+(.+)$', 'roman_inline', None),  # Added : for titles
+            (r'^\s*CHAPTER\s+([0-9]+)[\.\s:]+(.+)$', 'digit_inline', None),  # Added : for titles
+            (r'^\s*([IVX]+)\s*$', 'roman_bare', None),
+            (r'^\s*([0-9]+)\s*$', 'digit_bare', None),
+        ]
+
+        for line_num, line in enumerate(lines):
+            for pattern_info in patterns:
+                pattern = pattern_info[0]
+                marker_type = pattern_info[1]
+                forced_num = pattern_info[2] if len(pattern_info) > 2 else None
+
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    # Handle PRELIMINARY CHAPTER as chapter 0
+                    if forced_num is not None:
+                        chapter_num = forced_num
+                    else:
+                        num_str = match.group(1)
+                        chapter_num = self._convert_to_int(num_str)
+
+                    if chapter_num is not None and (chapter_num == 0 or (ChapterDetectionConstants.MIN_CHAPTER_NUMBER <= chapter_num <= ChapterDetectionConstants.MAX_CHAPTER_NUMBER)):
+                        marker_info = {
+                            'line_num': line_num,
+                            'marker_type': marker_type,
+                            'chapter_num': chapter_num,
+                            'line': line
+                        }
+
+                        # Extract inline title if present
+                        if 'inline' in marker_type and match.lastindex >= 2:
+                            marker_info['inline_title'] = match.group(2).strip()
+
+                        markers.append(marker_info)
+                        break  # Don't match multiple patterns for same line
+
+        return markers
+
+    def _validate_chapter_markers(self, markers: List[Dict], lines: List[str], min_chars: int = None) -> List[Dict]:
+        """Filter out false positives (TOC entries, embedded text)
+
+        Args:
+            markers: List of potential chapter markers
+            lines: Book text split into lines
+            min_chars: Minimum character threshold (default: MIN_CHAPTER_FOR_TOC_CHARS)
+
+        Returns:
+            Filtered list of valid chapter markers
+        """
+        valid_markers = []
+
+        for marker in markers:
+            line_num = marker['line_num']
+
+            # Check if substantial content follows
+            has_content = self._has_substantial_content_after(lines, line_num, min_chars)
+
+            # Check if not embedded in paragraph
+            is_isolated = self._is_isolated_marker(lines, line_num)
+
+            if has_content and is_isolated:
+                valid_markers.append(marker)
+
+        # Remove duplicates (same chapter number appearing multiple times)
+        # Keep the LAST occurrence of each chapter (assumes real chapters come after TOC)
+        seen_nums = {}
+        for marker in valid_markers:
+            chapter_num = marker['chapter_num']
+            # Always keep the later occurrence (overwrites earlier)
+            seen_nums[chapter_num] = marker
+
+        # Return markers sorted by line number
+        unique_markers = sorted(seen_nums.values(), key=lambda m: m['line_num'])
+
+        return unique_markers
+
+    def _has_substantial_content_after(self, lines: List[str], line_num: int, min_chars: int = None) -> bool:
+        """Check if substantial content follows this line
+
+        Args:
+            lines: Book text split into lines
+            line_num: Line number to check after
+            min_chars: Minimum character threshold (default: MIN_CHAPTER_FOR_TOC_CHARS)
+
+        Returns:
+            True if substantial content follows
+        """
+        if min_chars is None:
+            min_chars = ContentThresholds.MIN_CHAPTER_FOR_TOC_CHARS
+
+        content_chars = 0
+
+        # Look ahead until we find another chapter marker OR reach end of file
+        # This prevents TOC entries from passing validation by "seeing" other TOC entries
+        for i in range(line_num + 1, len(lines)):
+            line = lines[i].strip()
+
+            # Stop if we hit another chapter marker
+            if self._looks_like_chapter_marker(line):
+                break
+
+            content_chars += len(line)
+
+            if content_chars > min_chars:
+                return True
+
+        return False
+
+    def _looks_like_chapter_marker(self, line: str) -> bool:
+        """Check if a line looks like a chapter marker
+
+        Args:
+            line: Line to check
+
+        Returns:
+            True if line looks like a chapter marker
+        """
+        # Simple patterns to detect chapter markers
+        chapter_patterns = [
+            r'^\s*CHAPTER\s+[IVX0-9]+',
+            r'^\s*Chapter\s+[IVX0-9]+',
+        ]
+
+        for pattern in chapter_patterns:
+            if re.match(pattern, line, re.IGNORECASE):
+                return True
+
+        return False
+
+    def _is_isolated_marker(self, lines: List[str], line_num: int) -> bool:
+        """Check if marker is isolated (not embedded in paragraph)
+
+        Args:
+            lines: Book text split into lines
+            line_num: Line number to check
+
+        Returns:
+            True if marker appears isolated
+        """
+        # Check if preceded by blank lines
+        if line_num > 0:
+            prev_line = lines[line_num - 1].strip()
+            if prev_line:  # Not preceded by blank line
+                return False
+
+        return True
+
+    def _detect_structure_type(self, lines: List[str], toc_start: int, toc_end: int) -> str:
+        """Determine if single-level or two-level structure
+
+        Args:
+            lines: Book text split into lines
+            toc_start: TOC start line
+            toc_end: TOC end line
+
+        Returns:
+            "single" or "two-level"
+        """
+        # Look for BOOK/PART/VOLUME markers in TOC
+        two_level_patterns = [
+            r'\b(BOOK|PART|VOLUME)\s+[IVX0-9]+\b',
+        ]
+
+        for i in range(toc_start, toc_end):
+            line = lines[i]
+            for pattern in two_level_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    return "two-level"
+
+        return "single"
+
+    def _detect_special_chapters(self, lines: List[str]) -> Dict:
+        """Detect preface, epilogue, and other special chapters
+
+        Args:
+            lines: Book text split into lines
+
+        Returns:
+            Dict with special chapter metadata
+        """
+        result = {
+            'has_preface': False,
+            'preface_marker': '',
+            'has_epilogue': False,
+            'epilogue_title': ''
+        }
+
+        # Preface patterns (search first 200 lines)
+        # Allow optional period after marker (e.g., "PRELUDE.")
+        preface_patterns = [
+            r'^\s*(PREFACE|PROLOGUE|INTRODUCTION|FOREWORD|PRELUDE)\.?\s*$',
+        ]
+
+        for i, line in enumerate(lines[:200]):
+            for pattern in preface_patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    result['has_preface'] = True
+                    result['preface_marker'] = match.group(1)
+                    break
+            if result['has_preface']:
+                break
+
+        # Epilogue patterns (search last 500 lines)
+        epilogue_patterns = [
+            r'^\s*(EPILOGUE|CONCLUSION|AFTERWORD|POSTSCRIPT)\s*$',
+        ]
+
+        for i, line in enumerate(lines[-500:]):
+            for pattern in epilogue_patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    result['has_epilogue'] = True
+                    result['epilogue_title'] = match.group(1)
+                    break
+            if result['has_epilogue']:
+                break
+
+        return result
+
+
+class ContentParser:
+    """Parse chapter content using TOC structure
+
+    This class implements Phase 2 of the TOC/Content separation architecture:
+    extracting actual chapter text content using the TOC structure as a guide.
+    """
+
+    def __init__(self, text_normalizer=None):
+        """Initialize content parser
+
+        Args:
+            text_normalizer: Optional function to normalize chapter text.
+                           If None, will use built-in normalization.
+        """
+        self.chapter_marker_finder = ChapterMarkerFinder()
+        self.text_normalizer = text_normalizer
+
+    def parse(self, text: str, toc: TOCStructure) -> List[Tuple[int, str, str]]:
+        """Main entry point for content parsing
+
+        Args:
+            text: Full book text
+            toc: TOCStructure from Phase 1 (TOC detection)
+
+        Returns:
+            List of (chapter_num, chapter_title, chapter_text) tuples
+        """
+        lines = text.split('\n')
+
+        # Step 1: Split book into major sections
+        sections = self._split_into_sections(lines, toc)
+
+        # Step 2: Extract each section
+        chapters = []
+
+        if sections['preface']:
+            preface_start, preface_end = sections['preface']
+            preface_chapter = self._extract_preface(lines, preface_start, preface_end, toc)
+            if preface_chapter:
+                chapters.append(preface_chapter)
+
+        # Extract numbered chapters
+        body_start, body_end = sections['body']
+        body_chapters = self._extract_chapters(lines, body_start, body_end, toc)
+        chapters.extend(body_chapters)
+
+        if sections['epilogue']:
+            epilogue_start, epilogue_end = sections['epilogue']
+            epilogue_chapter = self._extract_epilogue(lines, epilogue_start, epilogue_end, toc)
+            if epilogue_chapter:
+                chapters.append(epilogue_chapter)
+
+        return chapters
+
+    def _split_into_sections(self, lines: List[str], toc: TOCStructure) -> Dict:
+        """Split book into: title/author, preface, TOC, body, epilogue
+
+        Args:
+            lines: Book text split into lines
+            toc: TOCStructure with metadata
+
+        Returns:
+            Dict mapping section names to (start_line, end_line) tuples
+        """
+        sections = {
+            'title_author': None,
+            'toc': None,
+            'preface': None,
+            'body': None,
+            'epilogue': None
+        }
+
+        # TOC section
+        if toc.has_toc:
+            sections['toc'] = (toc.toc_start_line, toc.toc_end_line)
+
+        # Find Chapter 1 start (search after TOC)
+        if toc.chapters:
+            first_chapter_num, first_chapter_title = toc.chapters[0]
+            search_start = toc.toc_end_line if toc.has_toc else 0
+            # Always skip validation: TOC provides structural ground truth,
+            # or chapters already validated during content inference
+            chapter_1_start = self.chapter_marker_finder.find(
+                lines, first_chapter_num, first_chapter_title,
+                search_start=search_start,
+                skip_validation=True  # TOC provides structural validation
+            )
+        else:
+            chapter_1_start = None
+
+        # Preface section (anything between TOC and Chapter 1)
+        # Per requirements: "anything before Chapter 1 or Chapter I or Book 1 etc
+        # are grouped together into a single Preface chapter"
+        if chapter_1_start:
+            # Find where actual preface content starts
+            # If there's a TOC, scan backward from chapter_1_start to find non-blank content
+            # that's not part of TOC entries
+            if toc.has_toc:
+                # Start from the line after TOC start (skip "CONTENTS" header)
+                preface_start = toc.toc_start_line + 1
+                # Find the last TOC entry line by scanning for chapter-like patterns
+                last_toc_entry = preface_start
+                for i in range(toc.toc_start_line + 1, min(chapter_1_start, len(lines))):
+                    line = lines[i].strip()
+                    if not line:
+                        continue
+                    # Check if this is a TOC entry (chapter-like pattern)
+                    is_toc_entry = (re.match(r'^\s*(CHAPTER|Chapter)\s+([IVX]+|[0-9]+)', line) or
+                                   re.match(r'^\s*([IVX]+|[0-9]+)[\.\s]', line) or
+                                   (len(line) < 80 and line.isupper() and
+                                    not line.replace('.', '').replace(' ', '').isdigit()) or
+                                   re.match(r'^\s*(CONTENTS|TABLE OF CONTENTS)\s*$', line, re.IGNORECASE))
+                    if is_toc_entry:
+                        last_toc_entry = i
+                # Preface starts after the last TOC entry
+                preface_start = last_toc_entry + 1
+            else:
+                preface_start = 0
+
+            # Only create preface if there's substantial content OR TOC explicitly lists a preface
+            if chapter_1_start > preface_start:
+                preface_content = '\n'.join(lines[preface_start:chapter_1_start]).strip()
+                # Create preface if:
+                # 1. TOC explicitly lists a preface (toc.has_preface), OR
+                # 2. Content is substantial (>300 chars)
+                should_create = (toc.has_preface or
+                                len(preface_content) > ContentThresholds.MIN_PREFACE_CONTENT_FOR_CREATION)
+                if should_create:
+                    sections['preface'] = (preface_start, chapter_1_start)
+
+        # Body section (Chapter 1 to last chapter)
+        epilogue_marker_line = None
+        if chapter_1_start is not None:
+            # Find last chapter end
+            last_chapter_end = len(lines)
+
+            # If epilogue exists, body ends where epilogue starts
+            if toc.has_epilogue:
+                # Find epilogue marker
+                for i in range(len(lines) - 1, chapter_1_start, -1):
+                    line = lines[i].strip()
+                    if re.match(rf'^\s*{re.escape(toc.epilogue_title)}\s*$', line, re.IGNORECASE):
+                        last_chapter_end = i
+                        epilogue_marker_line = i
+                        break
+
+            sections['body'] = (chapter_1_start, last_chapter_end)
+        else:
+            # No Chapter 1 found - use entire content after TOC as body
+            body_start = toc.toc_end_line if toc.has_toc else 0
+            sections['body'] = (body_start, len(lines))
+
+        # Epilogue section
+        if toc.has_epilogue and epilogue_marker_line is not None:
+            sections['epilogue'] = (epilogue_marker_line, len(lines))
+
+        return sections
+
+    def _extract_preface(self, lines: List[str], start: int, end: int, toc: TOCStructure) -> Optional[Tuple[int, str, str]]:
+        """Extract preface content (Chapter 0)
+
+        Args:
+            lines: Book text split into lines
+            start: Preface start line
+            end: Preface end line
+            toc: TOCStructure with metadata
+
+        Returns:
+            (0, "Preface", text) or None if no valid preface
+        """
+        # Extract text
+        preface_lines = lines[start:end]
+        text = '\n'.join(preface_lines)
+
+        # Normalize text (remove excessive whitespace)
+        text = self._normalize_chapter_text(text)
+
+        # Validate preface length
+        # Only enforce threshold if TOC doesn't explicitly list a preface
+        # If TOC has a preface entry, trust that even short content is valid
+        if not toc.has_preface and len(text) < ContentThresholds.MIN_PREFACE_CONTENT_FOR_CREATION:
+            return None
+
+        # Use preface marker as title
+        title = toc.preface_marker if toc.preface_marker else "Preface"
+
+        return (0, title, text)
+
+    def _extract_chapters(self, lines: List[str], start: int, end: int, toc: TOCStructure) -> List[Tuple[int, str, str]]:
+        """Extract all numbered chapter content
+
+        Args:
+            lines: Book text split into lines
+            start: Body section start line
+            end: Body section end line
+            toc: TOCStructure with chapter metadata
+
+        Returns:
+            List of (chapter_num, chapter_title, chapter_text) tuples
+        """
+        chapters = []
+
+        for i, (chapter_num, chapter_title) in enumerate(toc.chapters):
+            # Find chapter start
+            # Skip validation since we have a TOC and we're searching in body section
+            chapter_start = self.chapter_marker_finder.find(
+                lines, chapter_num, chapter_title,
+                search_start=start,
+                search_end=end,
+                skip_validation=True
+            )
+
+            if chapter_start is None:
+                print(f"Warning: Could not find Chapter {chapter_num} ({chapter_title})")
+                continue
+
+            # Find chapter end (start of next chapter, or end of body)
+            if i + 1 < len(toc.chapters):
+                next_num, next_title = toc.chapters[i + 1]
+                chapter_end = self.chapter_marker_finder.find(
+                    lines, next_num, next_title,
+                    search_start=chapter_start + 1,
+                    search_end=end,
+                    skip_validation=True
+                )
+                if chapter_end is None:
+                    chapter_end = end
+            else:
+                chapter_end = end
+
+            # Extract content
+            chapter_text = self._extract_content_between(lines, chapter_start, chapter_end)
+            chapter_text = self._normalize_chapter_text(chapter_text)
+
+            # Validate chapter length (warn but don't skip - some books have intentionally short chapters)
+            if len(chapter_text) < ContentThresholds.MIN_CHAPTER_CHARS_V2:
+                print(f"Warning: Chapter {chapter_num} too short ({len(chapter_text)} chars)")
+
+            chapters.append((chapter_num, chapter_title, chapter_text))
+
+        return chapters
+
+    def _extract_epilogue(self, lines: List[str], start: int, end: int, toc: TOCStructure) -> Optional[Tuple[int, str, str]]:
+        """Extract epilogue content
+
+        Args:
+            lines: Book text split into lines
+            start: Epilogue start line
+            end: Epilogue end line
+            toc: TOCStructure with metadata
+
+        Returns:
+            (epilogue_num, title, text) or None if no valid epilogue
+        """
+        # Assign chapter number (next after last numbered chapter)
+        if toc.chapters:
+            epilogue_num = max(num for num, _ in toc.chapters) + 1
+        else:
+            epilogue_num = 1
+
+        # Extract text
+        epilogue_lines = lines[start:end]
+        text = '\n'.join(epilogue_lines)
+        text = self._normalize_chapter_text(text)
+
+        # Validate epilogue length
+        if len(text) < ContentThresholds.MIN_CHAPTER_CHARS_V2:
+            return None
+
+        title = toc.epilogue_title if toc.epilogue_title else "Epilogue"
+
+        return (epilogue_num, title, text)
+
+    def _extract_content_between(self, lines: List[str], start_line: int, end_line: int) -> str:
+        """Extract text content between line numbers
+
+        Args:
+            lines: Book text split into lines
+            start_line: Start line (chapter marker line)
+            end_line: End line (exclusive)
+
+        Returns:
+            Extracted text content
+        """
+        # Skip the chapter marker line itself
+        content_lines = lines[start_line + 1:end_line]
+
+        # Join into text
+        return '\n'.join(content_lines)
+
+    def _normalize_chapter_text(self, text: str) -> str:
+        """Normalize chapter text
+
+        Uses injected text_normalizer if available, otherwise uses built-in normalization.
+
+        Args:
+            text: Raw chapter text
+
+        Returns:
+            Normalized text
+        """
+        # Use injected normalizer if available
+        if self.text_normalizer:
+            return self.text_normalizer(text)
+
+        # Otherwise use built-in normalization
+        # Remove excessive whitespace
+        lines = text.split('\n')
+        normalized_lines = []
+
+        for line in lines:
+            # Strip trailing whitespace
+            line = line.rstrip()
+            normalized_lines.append(line)
+
+        # Join lines
+        text = '\n'.join(normalized_lines)
+
+        # Remove excessive blank lines (>2 consecutive)
+        while '\n\n\n' in text:
+            text = text.replace('\n\n\n', '\n\n')
+
+        return text.strip()
+
+
+class ChapterMarkerFinder:
+    """Find chapter markers in text
+
+    Helper class for ContentParser to locate exact line numbers
+    for chapter markers given chapter number and title.
+    """
+
+    def find(self, lines: List[str], chapter_num: int, chapter_title: str,
+             search_start: int = 0, search_end: Optional[int] = None,
+             skip_validation: bool = False) -> Optional[int]:
+        """Find line number for chapter marker
+
+        Args:
+            lines: Book text split into lines
+            chapter_num: Chapter number to find
+            chapter_title: Chapter title to find
+            search_start: Line to start searching from
+            search_end: Line to stop searching at (None = end of file)
+            skip_validation: If True, skip content validation (use when we already
+                           know we're past TOC and looking for real chapters)
+
+        Returns:
+            Line number of chapter marker, or None if not found
+        """
+        search_end = search_end or len(lines)
+
+        # Build all possible patterns for this chapter
+        patterns = self._build_patterns(chapter_num, chapter_title)
+
+        # Search in range
+        for line_num in range(search_start, search_end):
+            line = lines[line_num]
+
+            for pattern in patterns:
+                if re.match(pattern, line, re.IGNORECASE):
+                    # Check if this is a multiline title format
+                    # If we matched just a number and have a title, verify title appears nearby
+                    is_multiline = self._check_multiline_title(lines, line_num, chapter_num, chapter_title)
+
+                    # Validate this is actual chapter marker, not TOC entry
+                    # (skip validation if we're confident we're in body section)
+                    if skip_validation or self._validate_chapter_marker(lines, line_num):
+                        return line_num
+
+        return None
+
+    def _check_multiline_title(self, lines: List[str], line_num: int,
+                               chapter_num: int, chapter_title: str) -> bool:
+        """Check if this is a multiline title format (number on one line, title on another)
+
+        Args:
+            lines: Book text split into lines
+            line_num: Line number where chapter number was found
+            chapter_num: Expected chapter number
+            chapter_title: Expected chapter title
+
+        Returns:
+            True if multiline format detected, False otherwise
+        """
+        if not chapter_title:
+            return True  # No title to check
+
+        line = lines[line_num].strip()
+
+        # Check if this line is JUST a number (standalone number pattern)
+        roman = self._int_to_roman(chapter_num)
+        is_standalone = (
+            re.match(rf'^{roman}\.?$', line, re.IGNORECASE) or
+            re.match(rf'^{chapter_num}\.?$', line)
+        )
+
+        if not is_standalone:
+            return True  # Not a standalone number, so not multiline format
+
+        # This is a standalone number - check if title appears in next few lines
+        # Look ahead up to 5 lines for the title
+        for offset in range(1, min(6, len(lines) - line_num)):
+            next_line = lines[line_num + offset].strip()
+
+            # Skip blank lines
+            if not next_line:
+                continue
+
+            # Check if this line matches the title (case-insensitive)
+            if re.match(rf'^{re.escape(chapter_title)}$', next_line, re.IGNORECASE):
+                return True  # Found title on a separate line
+
+            # If we hit non-blank content that's not the title, stop looking
+            # (but don't fail - title might be optional or different)
+            break
+
+        return True  # Allow it anyway (title match is not strict requirement)
+
+    def _build_patterns(self, chapter_num: int, chapter_title: str) -> List[str]:
+        """Build all possible chapter marker patterns
+
+        Args:
+            chapter_num: Chapter number
+            chapter_title: Chapter title
+
+        Returns:
+            List of regex patterns to try
+        """
+        patterns = []
+
+        # Convert number to roman numeral
+        roman = self._int_to_roman(chapter_num)
+
+        # Pattern variations:
+        # "CHAPTER I", "CHAPTER 1"
+        patterns.append(rf'^\s*CHAPTER\s+{roman}\s*$')
+        patterns.append(rf'^\s*CHAPTER\s+{chapter_num}\s*$')
+        patterns.append(rf'^\s*Chapter\s+{roman}\s*$')
+        patterns.append(rf'^\s*Chapter\s+{chapter_num}\s*$')
+
+        # "CHAPTER I. Title", "CHAPTER 1. Title", "CHAPTER I: Title"
+        if chapter_title:
+            escaped_title = re.escape(chapter_title)
+            patterns.append(rf'^\s*CHAPTER\s+{roman}[\.\s:]+{escaped_title}')
+            patterns.append(rf'^\s*CHAPTER\s+{chapter_num}[\.\s:]+{escaped_title}')
+            patterns.append(rf'^\s*Chapter\s+{roman}[\.\s:]+{escaped_title}')
+            patterns.append(rf'^\s*Chapter\s+{chapter_num}[\.\s:]+{escaped_title}')
+
+            # Title-only markers (Jekyll and Hyde case): "STORY OF THE DOOR"
+            # Match exact title without chapter number
+            patterns.append(rf'^\s*{escaped_title}\s*$')
+
+        # Standalone numbers: "I", "I.", "1", "1."
+        patterns.append(rf'^\s*{roman}\.?\s*$')
+        patterns.append(rf'^\s*{chapter_num}\.?\s*$')
+
+        # Bracketed: "[I]", "[1]"
+        patterns.append(rf'^\s*\[{roman}\]\s*$')
+        patterns.append(rf'^\s*\[{chapter_num}\]\s*$')
+
+        return patterns
+
+    def _int_to_roman(self, num: int) -> str:
+        """Convert integer to roman numeral
+
+        Args:
+            num: Integer to convert
+
+        Returns:
+            Roman numeral string
+        """
+        val = [
+            1000, 900, 500, 400,
+            100, 90, 50, 40,
+            10, 9, 5, 4,
+            1
+        ]
+        syms = [
+            "M", "CM", "D", "CD",
+            "C", "XC", "L", "XL",
+            "X", "IX", "V", "IV",
+            "I"
+        ]
+        roman_num = ''
+        i = 0
+        while num > 0:
+            for _ in range(num // val[i]):
+                roman_num += syms[i]
+                num -= val[i]
+            i += 1
+        return roman_num
+
+    def _validate_chapter_marker(self, lines: List[str], line_num: int) -> bool:
+        """Validate this is actual chapter marker, not TOC entry
+
+        Args:
+            lines: Book text split into lines
+            line_num: Line number to validate
+
+        Returns:
+            True if valid chapter marker
+        """
+        # Check if followed by substantial content
+        content_chars = 0
+
+        # Look ahead until we find another chapter marker OR reach end of file
+        # This prevents TOC entries from passing validation by "seeing" other TOC entries
+        for i in range(line_num + 1, len(lines)):
+            line = lines[i].strip()
+
+            # Stop if we hit another chapter marker
+            if self._looks_like_chapter_marker(line):
+                break
+
+            content_chars += len(line)
+
+            if content_chars > ContentThresholds.MIN_CHAPTER_FOR_TOC_CHARS:
+                return True
+
+        return False
+
+    def _looks_like_chapter_marker(self, line: str) -> bool:
+        """Check if a line looks like a chapter marker
+
+        Args:
+            line: Line to check
+
+        Returns:
+            True if line looks like a chapter marker
+        """
+        # Simple patterns to detect chapter markers
+        chapter_patterns = [
+            r'^\s*CHAPTER\s+[IVX0-9]+',
+            r'^\s*Chapter\s+[IVX0-9]+',
+        ]
+
+        for pattern in chapter_patterns:
+            if re.match(pattern, line, re.IGNORECASE):
+                return True
+
+        return False
+
+
 class RateLimiter:
     """Rate limiter for API calls"""
 
@@ -168,14 +1511,15 @@ class RateLimiter:
         current_time = time.time()
 
         # Remove requests older than 1 minute
-        self.request_times = [t for t in self.request_times if current_time - t < 60]
+        window = APIConstants.RATE_LIMIT_WINDOW_SECONDS
+        self.request_times = [t for t in self.request_times if current_time - t < window]
         self.token_counts = [
-            (t, count) for t, count in self.token_counts if current_time - t < 60
+            (t, count) for t, count in self.token_counts if current_time - t < window
         ]
 
         # Check request limit
         if len(self.request_times) >= self.max_requests:
-            sleep_time = 60 - (current_time - self.request_times[0]) + 1
+            sleep_time = window - (current_time - self.request_times[0]) + 1
             print(f"Rate limit: Waiting {sleep_time:.1f}s for request quota...")
             time.sleep(sleep_time)
             self.request_times = []
@@ -184,7 +1528,7 @@ class RateLimiter:
         total_tokens = sum(count for _, count in self.token_counts)
         if total_tokens + estimated_tokens > self.max_tokens:
             if self.token_counts:
-                sleep_time = 60 - (current_time - self.token_counts[0][0]) + 1
+                sleep_time = window - (current_time - self.token_counts[0][0]) + 1
                 print(f"Rate limit: Waiting {sleep_time:.1f}s for token quota...")
                 time.sleep(sleep_time)
             self.token_counts = []
@@ -198,13 +1542,11 @@ class RateLimiter:
 class SummaryGenerator:
     """Generate book summaries using Gemini API"""
 
-    # Maximum characters per API call (750K chars ~= 187.5K tokens, fits free tier 250K/min)
-    MAX_CHARS_PER_CALL = 750000
-    MAX_TOKENS_PER_CALL = MAX_CHARS_PER_CALL // 4  # ~187.5K tokens
-
-    # Threshold for "large" calls that trigger rate limiting (100K tokens)
-    LARGE_CALL_THRESHOLD = 100000
-    LARGE_CALL_WAIT_SECONDS = 60  # Wait 1 minute between large calls
+    # Use constants from APIConstants class
+    MAX_CHARS_PER_CALL = APIConstants.MAX_CHARS_PER_CALL
+    MAX_TOKENS_PER_CALL = APIConstants.MAX_TOKENS_PER_CALL
+    LARGE_CALL_THRESHOLD = APIConstants.LARGE_CALL_THRESHOLD_TOKENS
+    LARGE_CALL_WAIT_SECONDS = APIConstants.LARGE_CALL_WAIT_SECONDS
 
     def __init__(self, api_key: str):
         # Initialize Gemini client with API key
@@ -294,23 +1636,23 @@ class SummaryGenerator:
 
         prompt = f"""Analyze "{title}" by {author} and provide the following information. Follow the format exactly with each section clearly marked:
 
-### ABOUT THE BOOK (75-100 words)
-[Generate a short, engaging summary for the "About the Book" section - 75-100 words]
+### ABOUT THE BOOK ({SummaryConstants.ABOUT_MIN_WORDS}-{SummaryConstants.ABOUT_MAX_WORDS} words)
+[Generate a short, engaging summary for the "About the Book" section - {SummaryConstants.ABOUT_MIN_WORDS}-{SummaryConstants.ABOUT_MAX_WORDS} words]
 
 This should be concise but compelling, suitable for a book overview page. **ABSOLUTELY NO SPOILERS** - do not reveal plot twists, endings, character fates, or major reveals. Focus only on the premise, themes, and setting.
 
-### CONCISE SUMMARY (500 words)
-[Generate a concise 500-word summary here]
+### CONCISE SUMMARY ({SummaryConstants.CONCISE_TARGET_WORDS} words)
+[Generate a concise {SummaryConstants.CONCISE_TARGET_WORDS}-word summary here]
 
 Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers (no plot twists, endings, or major reveals). For non-fiction, cover main arguments and key takeaways. Write in an engaging, accessible style.
 
-### MEDIUM SUMMARY (2000-3000 words)
-[Generate a comprehensive 2000-3000 word summary here]
+### MEDIUM SUMMARY ({SummaryConstants.MEDIUM_MIN_WORDS}-{SummaryConstants.MEDIUM_MAX_WORDS} words)
+[Generate a comprehensive {SummaryConstants.MEDIUM_MIN_WORDS}-{SummaryConstants.MEDIUM_MAX_WORDS} word summary here]
 
 Cover all major plot points, themes, and character developments in chronological order. Discuss the author's writing style and analyze major themes. Spoilers are acceptable. For non-fiction, cover all main arguments, evidence, and conclusions.
 
-### RELEVANCE NOW (75-100 words)
-[Explain why this book is relevant to modern audiences - 75-100 words]
+### RELEVANCE NOW ({SummaryConstants.RELEVANCE_MIN_WORDS}-{SummaryConstants.RELEVANCE_MAX_WORDS} words)
+[Explain why this book is relevant to modern audiences - {SummaryConstants.RELEVANCE_MIN_WORDS}-{SummaryConstants.RELEVANCE_MAX_WORDS} words]
 
 Focus on contemporary themes, timeless insights, or how it speaks to current issues.
 
@@ -320,14 +1662,14 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         if dry_run:
             print(f"\n[DRY RUN] Would generate combined summaries using {model_name}")
             print(f"[DRY RUN] Prompt ({len(prompt)} chars):")
-            print("-" * 60)
-            print(prompt[:10000] + f"\n... [truncated, {len(prompt) - 10000} chars omitted]" if len(prompt) > 10000 else prompt)
-            print("-" * 60)
+            print("-" * DisplayConstants.SEPARATOR_WIDTH)
+            print(prompt[:DisplayConstants.MAX_PROMPT_PREVIEW_CHARS] + f"\n... [truncated, {len(prompt) - DisplayConstants.MAX_PROMPT_PREVIEW_CHARS} chars omitted]" if len(prompt) > DisplayConstants.MAX_PROMPT_PREVIEW_CHARS else prompt)
+            print("-" * DisplayConstants.SEPARATOR_WIDTH)
             return {
-                'about_text': '[DRY RUN] About the Book (75-100 words): This would contain a concise, engaging summary suitable for the book overview page with absolutely no spoilers.',
-                'concise_summary': '[DRY RUN] Concise summary (500 words): This would contain the spoiler-free summary with main themes and central conflict.',
-                'medium_summary': '[DRY RUN] Medium summary (2000-3000 words): This would contain the comprehensive analysis with all major plot points and themes.',
-                'relevance_now': '[DRY RUN] Relevance Now (75-100 words): This would explain why the book is relevant to modern audiences.'
+                'about_text': f'[DRY RUN] About the Book ({SummaryConstants.ABOUT_MIN_WORDS}-{SummaryConstants.ABOUT_MAX_WORDS} words): This would contain a concise, engaging summary suitable for the book overview page with absolutely no spoilers.',
+                'concise_summary': f'[DRY RUN] Concise summary ({SummaryConstants.CONCISE_TARGET_WORDS} words): This would contain the spoiler-free summary with main themes and central conflict.',
+                'medium_summary': f'[DRY RUN] Medium summary ({SummaryConstants.MEDIUM_MIN_WORDS}-{SummaryConstants.MEDIUM_MAX_WORDS} words): This would contain the comprehensive analysis with all major plot points and themes.',
+                'relevance_now': f'[DRY RUN] Relevance Now ({SummaryConstants.RELEVANCE_MIN_WORDS}-{SummaryConstants.RELEVANCE_MAX_WORDS} words): This would explain why the book is relevant to modern audiences.'
             }
 
         # Wait if needed for large API calls
@@ -340,7 +1682,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
         # Make API call with retry logic for retriable errors
-        max_retries = 2
+        max_retries = APIConstants.MAX_RETRIES
         retry_count = 0
         result = None
 
@@ -374,7 +1716,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                                'RESOURCE_EXHAUSTED' in error_message)
 
                 # Extract retry delay from error message if present
-                wait_time = 10  # Default
+                wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
                 if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
                     retry_match = re.search(r'Please retry in ([\d.]+)([ms])', error_message)
                     if retry_match:
@@ -383,7 +1725,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         wait_time = int(delay_value / 1000) + 1 if delay_unit == 'ms' else int(delay_value) + 1
                         print(f"  → Suggested retry delay: {delay_value}{delay_unit}")
                     else:
-                        wait_time = 60  # Default to 1 minute for rate limits
+                        wait_time = APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
 
                 if is_retriable and retry_count < max_retries:
                     retry_count += 1
@@ -462,7 +1804,12 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
 
     def extract_metadata(self, text: str, filename: str) -> Tuple[str, str]:
         """
-        Extract title and author from book text (common in Project Gutenberg books)
+        Extract title and author from book text
+        Supports multiple formats:
+        1. Simple format (title on first line, "by Author" on line 3)
+        2. Project Gutenberg format ("Title:" and "Author:" labels)
+        3. Fallback to filename if not found
+
         Returns (title, author)
         """
         lines = text.split('\n')[:50]  # Check first 50 lines
@@ -470,12 +1817,27 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         title = None
         author = None
 
-        for line in lines:
-            line = line.strip()
-            if line.startswith('Title:'):
-                title = line.replace('Title:', '').strip()
-            elif line.startswith('Author:'):
-                author = line.replace('Author:', '').strip()
+        # First try simple format: title on line 1, "by Author" on line 3
+        if len(lines) >= 3:
+            # Check if line 3 starts with "by" (common pattern)
+            line_3 = lines[2].strip()
+            if line_3.lower().startswith('by '):
+                potential_title = lines[0].strip()
+                potential_author = line_3[3:].strip()  # Remove "by " prefix
+
+                # Validate: title and author should be non-empty and reasonable length
+                if potential_title and potential_author and len(potential_title) > 0 and len(potential_author) > 0:
+                    title = potential_title
+                    author = potential_author
+
+        # If simple format didn't work, try Project Gutenberg format
+        if not title or not author:
+            for line in lines:
+                line = line.strip()
+                if line.startswith('Title:'):
+                    title = line.replace('Title:', '').strip()
+                elif line.startswith('Author:'):
+                    author = line.replace('Author:', '').strip()
 
         # Fallback to filename if not found
         if not title:
@@ -694,10 +2056,13 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
 
     def extract_gutenberg_content(self, text: str) -> str:
         """
-        Extract the actual book content from Project Gutenberg ebooks.
-        Removes headers, footers, and license information.
+        Extract the actual book content, removing Gutenberg headers/footers if present.
+
+        For Project Gutenberg books: Removes headers, footers, and license information.
         Preserves prefaces, introductions, and translator's notes that appear
         after the title/author but before the main content.
+
+        For non-Gutenberg books: Returns the text unchanged.
         """
         # Look for standard Project Gutenberg markers
         start_markers = [
@@ -780,6 +2145,10 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         capitalize_next = True  # Always capitalize first word
         result = []
 
+        # Roman numeral detection pattern (case-insensitive)
+        # Matches I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII, etc.
+        roman_pattern = re.compile(r'^[IVXLCDM]+$', re.IGNORECASE)
+
         # Split on whitespace while preserving spaces
         words = title.split()
 
@@ -798,6 +2167,13 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 capitalize_next = True
                 continue
 
+            # Check if this word is a Roman numeral (case-insensitive)
+            # If so, always uppercase it entirely
+            if roman_pattern.match(word):
+                result.append(word.upper())
+                capitalize_next = False
+                continue
+
             if starts_with_quote:
                 # Word starts with quote - capitalize first letter after quote
                 # e.g., "it -> "It
@@ -805,8 +2181,10 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # Get the quote character and rest of word
                     quote_char = word[0]
                     rest = word[1:]
-                    # Capitalize using the same logic as normal words
-                    if capitalize_next:
+                    # Check if rest is a Roman numeral
+                    if roman_pattern.match(rest):
+                        result.append(quote_char + rest.upper())
+                    elif capitalize_next:
                         result.append(quote_char + rest.capitalize())
                     else:
                         # First letter after quote should be capitalized
@@ -1057,9 +2435,9 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 # If it's a chapter marker, look ahead to see if it's followed by substantial content
                 # Real chapters have paragraph text following them, TOC entries don't
                 if is_chapter_marker:
-                    # Look ahead 5 lines for substantial content (> 50 chars, looks like paragraph text)
+                    # Look ahead LOOKAHEAD_CONTENT_VALIDATION_LINES for substantial content (> 50 chars, looks like paragraph text)
                     has_content_following = False
-                    for lookahead_idx in range(scan_idx + 1, min(scan_idx + 6, len(lines))):
+                    for lookahead_idx in range(scan_idx + 1, min(scan_idx + ChapterDetectionConstants.LOOKAHEAD_CONTENT_VALIDATION_LINES + 1, len(lines))):
                         lookahead_line = lines[lookahead_idx].strip()
                         # Check if this looks like paragraph content (not another chapter marker, not blank)
                         if (lookahead_line and
@@ -1710,7 +3088,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                             if (not re.match(chapter_pattern, next_line) and
                                 not re.match(standalone_roman_pattern, next_line) and
                                 not re.match(section_pattern, next_line, re.IGNORECASE) and
-                                len(next_line) > 3 and len(next_line) < 150 and
+                                len(next_line) > 3 and len(next_line) < ContentThresholds.MAX_CHAPTER_TITLE_LENGTH and
                                 (next_line[0].isupper() or next_line[0] in '"\'\u201c\u201d\u2018\u2019')):
                                 chapter_title = next_line
                                 break
@@ -1898,8 +3276,8 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
 
             preface_words = len(preface_text.split())
 
-            # Only include if substantial (>100 words)
-            if preface_words > 100:
+            # Only include if substantial (>MIN_PREFACE_WORDS)
+            if preface_words > ContentThresholds.MIN_PREFACE_WORDS:
                 # Try to extract the actual preface marker from the text as title
                 # Look for patterns like "PRELUDE", "TRANSLATOR'S PREFACE", "INTRODUCTION", etc.
                 preface_marker_patterns = [
@@ -2006,7 +3384,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 chapter_text = '\n'.join(chapter_lines)
                 chapter_text = self.normalize_chapter_text(chapter_text)
 
-                if len(chapter_text) > 100:
+                if len(chapter_text) > ContentThresholds.MIN_CHAPTER_CHARS_V1:
                     normalized_title = self.normalize_chapter_title(section_title) if section_title else ""
                     chapters.append((sequential_chapter_num, normalized_title, chapter_text))
                     for i in range(implicit_chapter_start, section_end_line):
@@ -2134,8 +3512,8 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 # Normalize the chapter text
                 chapter_text = self.normalize_chapter_text(chapter_text)
 
-                # Only add if substantial content (> 100 chars)
-                if len(chapter_text) > 100:
+                # Only add if substantial content (> MIN_CHAPTER_CHARS)
+                if len(chapter_text) > ContentThresholds.MIN_CHAPTER_CHARS_V1:
                     # Use sequential numbering (1, 2, 3, ...) across all sections
 
                     # Check if chapter title looks like a sentence (not a proper title)
@@ -2195,7 +3573,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 chapter_text = '\n'.join(chapter_lines)
                 chapter_text = self.normalize_chapter_text(chapter_text)
 
-                if len(chapter_text) > 100:
+                if len(chapter_text) > ContentThresholds.MIN_CHAPTER_CHARS_V1:
                     # Use section title as chapter title
                     normalized_title = self.normalize_chapter_title(section_title) if section_title else ""
                     chapters.append((sequential_chapter_num, normalized_title, chapter_text))
@@ -2207,6 +3585,84 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             # Update search start position for next section
             # Start searching after this section to avoid finding it again
             search_start_line = section_start_line + 1
+
+        return chapters, consumed_line_indices
+
+    def detect_chapters_v2(self, text: str, toc_structure: List[Dict] = None) -> Tuple[List[Tuple[int, str, str]], set]:
+        """
+        NEW IMPLEMENTATION: Detect chapters using TOCDetector + ContentParser architecture
+
+        This is a clean, maintainable implementation that separates TOC detection
+        from content parsing. Once validated, this will replace detect_chapters().
+
+        Args:
+            text: Full book text
+            toc_structure: Optional two-level structure (BOOK/PART → Chapters)
+
+        Returns:
+            (chapters, consumed_line_indices) tuple:
+            - chapters: List of (chapter_num, chapter_title, chapter_text)
+            - consumed_line_indices: Set of line indices included in chapters
+        """
+        print("Using detect_chapters_v2 (new architecture)")
+
+        # Phase 1: Detect TOC structure
+        if toc_structure:
+            # Two-level structure provided - convert to TOCStructure
+            print(f"Using provided two-level structure ({len(toc_structure)} sections)")
+            toc = TOCStructure.from_two_level(toc_structure)
+
+            # Still run TOC detection to get preface_marker and other metadata
+            # even when two-level structure is provided
+            toc_detector = TOCDetector()
+            toc_metadata = toc_detector.detect(text)
+            toc.preface_marker = toc_metadata.preface_marker
+            toc.has_preface = toc_metadata.has_preface
+            toc.has_epilogue = toc_metadata.has_epilogue
+            toc.epilogue_title = toc_metadata.epilogue_title
+        else:
+            # Detect TOC from content
+            toc_detector = TOCDetector()
+            toc = toc_detector.detect(text)
+
+            if toc.has_toc:
+                print(f"Found TOC with {len(toc.chapters)} chapters")
+                print(f"TOC ends at line {toc.toc_end_line}")
+            else:
+                print(f"No TOC found, inferred {len(toc.chapters)} chapters from content")
+
+        # Phase 2: Parse content using TOC
+        # Pass self.normalize_chapter_text as the text normalizer
+        content_parser = ContentParser(text_normalizer=self.normalize_chapter_text)
+        chapters = content_parser.parse(text, toc)
+
+        print(f"Extracted {len(chapters)} chapters total")
+
+        # Build consumed_line_indices (track which lines were included)
+        # For now, we'll compute this based on chapter boundaries
+        consumed_line_indices = set()
+        lines = text.split('\n')
+
+        for chapter_num, chapter_title, chapter_text in chapters:
+            # Find this chapter's text in the original lines
+            # This is a simplified approach - we mark all lines from the chapter
+            chapter_lines = chapter_text.split('\n')
+
+            # Search for the chapter text in the original
+            for i in range(len(lines) - len(chapter_lines) + 1):
+                # Check if we have a match
+                match = True
+                for j, chapter_line in enumerate(chapter_lines[:10]):  # Check first 10 lines
+                    if lines[i + j].strip() != chapter_line.strip():
+                        match = False
+                        break
+
+                if match:
+                    # Mark these lines as consumed
+                    for j in range(len(chapter_lines)):
+                        if i + j < len(lines):
+                            consumed_line_indices.add(i + j)
+                    break
 
         return chapters, consumed_line_indices
 
@@ -2259,7 +3715,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             r'^\s*PART\s+(I|ONE|1)\b',
             r'^\s*STAVE\s+(I|ONE|1)\b',
             r'^\s*SCENE\s+(I|ONE|1)\b',
-            r'^\s*\[\s*1\s*\]',  # Bracket format: "[1]"
+            r'^\s*\[\s*1\s*\]\s*$',  # Bracket format: "[1]" - must be standalone on line (not a footnote marker)
             r'^\s*I\.\s+',  # Roman numeral with period: "I. Title"
         ]
 
@@ -2725,7 +4181,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         # Check context:
                         # 1. Must be past TOC section (if TOC exists)
                         # 2. Must be preceded by at least 2 blank lines (chapter break context)
-                        # 3. Number should be reasonable (1-200 range)
+                        # 3. Number should be reasonable (MIN_CHAPTER_NUMBER-MAX_CHAPTER_NUMBER range)
 
                         # Check if past TOC
                         past_toc = (toc_end_line == 0) or (i >= toc_end_line)
@@ -2733,7 +4189,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         # Check if preceded by at least 2 consecutive blank lines immediately before
                         # This ensures we're at a chapter break, not mid-paragraph
                         preceded_by_blanks = False
-                        if i >= 2:  # Need at least 2 lines before to check
+                        if i >= ChapterDetectionConstants.MIN_BLANK_LINES_BEFORE_STANDALONE_NUMBER:  # Need at least 2 lines before to check
                             # Check that the 2 lines immediately before are both blank
                             line_before_1 = lines[i - 1].strip() if i - 1 >= 0 else None
                             line_before_2 = lines[i - 2].strip() if i - 2 >= 0 else None
@@ -2742,7 +4198,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         # Check if number is in reasonable range
                         try:
                             num_value = int(chapter_marker)
-                            reasonable_number = 1 <= num_value <= 200
+                            reasonable_number = ChapterDetectionConstants.MIN_CHAPTER_NUMBER <= num_value <= ChapterDetectionConstants.MAX_CHAPTER_NUMBER
                         except ValueError:
                             reasonable_number = False
 
@@ -2777,7 +4233,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                             # Convert Roman numeral to integer (remove period and any title part)
                             roman_part = chapter_marker.rstrip('.').split()[0] if ' ' in chapter_marker else chapter_marker.rstrip('.')
                             rom_value = self.roman_to_int(roman_part)
-                            reasonable_roman = 1 <= rom_value <= 200
+                            reasonable_roman = ChapterDetectionConstants.MIN_CHAPTER_NUMBER <= rom_value <= ChapterDetectionConstants.MAX_CHAPTER_NUMBER
                         except (ValueError, AttributeError):
                             reasonable_roman = False
 
@@ -2871,7 +4327,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                                 looks_like_title = (
                                     is_continuation and
                                     len(next_line) > 3 and
-                                    len(next_line) <= 150 and  # Titles can be long (max 150 chars)
+                                    len(next_line) <= ContentThresholds.MAX_CHAPTER_TITLE_LENGTH and  # Titles can be long (max chars)
                                     not next_line.endswith('—') and  # Em-dash indicates continuation
                                     not next_line.endswith('-') and  # Regular dash indicates continuation
                                     not is_part_of_paragraph  # Not part of a multi-line paragraph
@@ -3061,17 +4517,17 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         break
                     lookahead_content_size += len(lookahead_line)
 
-                has_substantial_content_ahead = lookahead_content_size > 500
+                has_substantial_content_ahead = lookahead_content_size > ChapterDetectionConstants.MIN_LOOKAHEAD_CONTENT_FOR_CHAPTER
 
                 # Also check: if the next few lines are also chapter markers, we're in TOC
                 # Extended window (15 lines) to catch TOC entries near the end of the TOC
                 # EXCEPTION: Never skip PREFACE/INTRODUCTION as TOC - they should always be saved as Chapter 0
                 # EXCEPTION: Never skip chapters immediately after BOOK/VOLUME/ACT markers
                 # EXCEPTION: Never skip if there's no inline title (actual chapter format)
-                # EXCEPTION: Never skip if there's substantial content ahead (> 500 chars)
+                # EXCEPTION: Never skip if there's substantial content ahead (> MIN_LOOKAHEAD_CONTENT_FOR_CHAPTER chars)
                 is_likely_toc = False
                 is_preface_intro = chapter_num == 0  # Chapter 0 is PREFACE/INTRODUCTION
-                if accumulated_content_size < 1000 and not is_preface_intro and not recently_saw_book_marker and not has_substantial_content_ahead:
+                if accumulated_content_size < ChapterDetectionConstants.MIN_ACCUMULATED_CONTENT_FOR_TOC_END and not is_preface_intro and not recently_saw_book_marker and not has_substantial_content_ahead:
                     # If this line has an inline title AND no substantial content follows, it's a TOC entry
                     # BUT only if we're still within the TOC section (haven't passed toc_end_line)
                     if has_inline_title and toc and (toc_end_line == 0 or i < toc_end_line):
@@ -3127,18 +4583,20 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # Create Chapter 0 if:
                     # 1. First chapter is NOT Chapter 1 (e.g., Introduction, Prologue), OR
                     # 2. First chapter IS Chapter 1 BUT there's substantial preface content:
-                    #    - Either > 300 chars (like Frankenstein with Letters), OR
-                    #    - Contains 3+ sentences (indicates narrative content, not just metadata)
+                    #    - Either > MIN_PREFACE_CONTENT_FOR_CREATION chars (like Frankenstein with Letters), OR
+                    #    - Contains MIN_SENTENCE_COUNT_FOR_PREFACE+ sentences (indicates narrative content, not just metadata)
                     #      Count sentences by looking for ". " or ".\n" or ".End"
                     sentence_count = preface_content.count('. ') + preface_content.count('.\n') + preface_content.count('.—') + (1 if preface_content.endswith('.') else 0)
-                    has_narrative_content = sentence_count >= 3
-                    should_create_preface = (chapter_num != 1) or (len(preface_content) > 300) or has_narrative_content
+                    has_narrative_content = sentence_count >= ContentThresholds.MIN_SENTENCE_COUNT_FOR_PREFACE
+                    should_create_preface = (chapter_num != 1) or (len(preface_content) > ContentThresholds.MIN_PREFACE_CONTENT_FOR_CREATION) or has_narrative_content
 
                     if should_create_preface:
-                        # Only save if substantial content (minimum threshold: 100 chars)
-                        if len(preface_content) > 100:
-                            chapters.append((0, "Preface", preface_content))
-                            print(f"Created Chapter 0 (Preface) with {len(preface_content)} characters")
+                        # Only save if substantial content (minimum threshold: MIN_PREFACE_CHARS)
+                        if len(preface_content) > ContentThresholds.MIN_PREFACE_CHARS:
+                            # V1 parser always uses "Preface" title (v2 uses TOC preface markers)
+                            preface_title = "Preface"
+                            chapters.append((0, preface_title, preface_content))
+                            print(f"Created Chapter 0 ({preface_title}) with {len(preface_content)} characters")
                         else:
                             print(f"Preface content too small ({len(preface_content)} chars), skipping Chapter 0")
                     else:
@@ -3292,14 +4750,14 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 print(f"Filtered out {len(chapters) - len(filtered_chapters)} TOC entries, keeping {len(filtered_chapters)} actual chapters")
                 chapters = filtered_chapters
 
-            # Final sanity check: if ALL remaining chapters are tiny (< 500 chars average),
+            # Final sanity check: if ALL remaining chapters are tiny (< MIN_AVG_CHAPTER_CHARS average),
             # likely the entire detection failed and we should treat as single text
             # UNLESS we successfully detected and skipped a TOC (indicated by toc_end_line > 0)
-            # and have multiple chapters (3+) - in that case, trust the detection even if chapters are short
+            # and have multiple chapters (MIN_PARAGRAPH_LINES_FOR_CHAPTER+) - in that case, trust the detection even if chapters are short
             if chapters:
                 avg_length = sum(len(ch[2]) for ch in chapters) / len(chapters)
-                has_toc_and_multiple_chapters = (toc_end_line > 0 and len(chapters) >= 3)
-                if avg_length < 500 and not has_toc_and_multiple_chapters:
+                has_toc_and_multiple_chapters = (toc_end_line > 0 and len(chapters) >= ChapterDetectionConstants.MIN_PARAGRAPH_LINES_FOR_CHAPTER)
+                if avg_length < ContentThresholds.MIN_AVG_CHAPTER_CHARS and not has_toc_and_multiple_chapters:
                     print("Warning: Detected potential table of contents. Treating book as single text.")
                     chapters = [(1, "Full Text", text)]
 
@@ -3571,9 +5029,9 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
         if dry_run:
             print(f"\n[DRY RUN] Would generate concise summary using {model_name}")
             print(f"[DRY RUN] Prompt ({len(prompt)} chars):")
-            print("-" * 60)
+            print("-" * DisplayConstants.SEPARATOR_WIDTH)
             print(prompt[:10000] + f"\n... [truncated, {len(prompt) - 10000} chars omitted]" if len(prompt) > 10000 else prompt)
-            print("-" * 60)
+            print("-" * DisplayConstants.SEPARATOR_WIDTH)
             return "[DRY RUN] Summary would be generated here"
 
         # Wait if needed for large API calls
@@ -3587,7 +5045,7 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
         # Make API call with retry logic for retriable errors
-        max_retries = 2  # Allow more retries for rate limits
+        max_retries = APIConstants.MAX_RETRIES  # Allow retries for rate limits
         retry_count = 0
         result = None
 
@@ -3608,7 +5066,7 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
                                'RESOURCE_EXHAUSTED' in error_message)
 
                 # Extract retry delay from error message if present
-                wait_time = 10  # Default
+                wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
                 if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
                     # Try to extract retry delay from error message
                     import re
@@ -3616,7 +5074,7 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
                     if retry_match:
                         wait_time = int(float(retry_match.group(1))) + 1
                     else:
-                        wait_time = 60  # Default to 1 minute for rate limits
+                        wait_time = APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
 
                 if is_retriable and retry_count < max_retries:
                     retry_count += 1
@@ -3652,9 +5110,9 @@ Cover all major plot points, themes, and character developments in chronological
         if dry_run:
             print(f"\n[DRY RUN] Would generate medium summary using {model_name}")
             print(f"[DRY RUN] Prompt ({len(prompt)} chars):")
-            print("-" * 60)
+            print("-" * DisplayConstants.SEPARATOR_WIDTH)
             print(prompt[:10000] + f"\n... [truncated, {len(prompt) - 10000} chars omitted]" if len(prompt) > 10000 else prompt)
-            print("-" * 60)
+            print("-" * DisplayConstants.SEPARATOR_WIDTH)
             return "[DRY RUN] Summary would be generated here"
 
         # Wait if needed for large API calls
@@ -3668,7 +5126,7 @@ Cover all major plot points, themes, and character developments in chronological
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
         # Make API call with retry logic for retriable errors
-        max_retries = 2  # Allow more retries for rate limits
+        max_retries = APIConstants.MAX_RETRIES  # Allow retries for rate limits
         retry_count = 0
         result = None
 
@@ -3689,7 +5147,7 @@ Cover all major plot points, themes, and character developments in chronological
                                'RESOURCE_EXHAUSTED' in error_message)
 
                 # Extract retry delay from error message if present
-                wait_time = 10  # Default
+                wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
                 if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
                     # Try to extract retry delay from error message
                     import re
@@ -3697,7 +5155,7 @@ Cover all major plot points, themes, and character developments in chronological
                     if retry_match:
                         wait_time = int(float(retry_match.group(1))) + 1
                     else:
-                        wait_time = 60  # Default to 1 minute for rate limits
+                        wait_time = APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
 
                 if is_retriable and retry_count < max_retries:
                     retry_count += 1
@@ -3800,9 +5258,9 @@ Cover all major plot points, themes, and character developments in chronological
             total_words += chapter_word_count
 
             # Calculate dynamic target: min(chapter_words / 4, max_words)
-            # Ensure a minimum of 200 words for very short chapters
+            # Ensure a minimum of MIN_CHAPTER_SUMMARY_OUTPUT_WORDS for very short chapters
             target_words = min(chapter_word_count // 4, max_words)
-            target_words = max(target_words, 200)
+            target_words = max(target_words, SummaryConstants.MIN_CHAPTER_SUMMARY_OUTPUT_WORDS)
             chapter_targets[chapter_num] = target_words
             total_target_words += target_words
 
@@ -3815,7 +5273,7 @@ Cover all major plot points, themes, and character developments in chronological
         context_sections = []
 
         if medium_summary:
-            context_sections.append(f"""## CONTEXT: Overall Book Summary (for reference)\n\n{medium_summary[:20000]}""")
+            context_sections.append(f"""## CONTEXT: Overall Book Summary (for reference)\n\n{medium_summary[:APIConstants.MAX_MEDIUM_SUMMARY_CONTEXT_CHARS]}""")
 
         if previous_chapter_text:
             # Get the chapter number immediately before the first chapter in the batch
@@ -3824,7 +5282,7 @@ Cover all major plot points, themes, and character developments in chronological
 
             context_sections.append(f"""## CONTEXT: Previous Chapter {prev_chapter_num} Content (for narrative continuity)
 
-{previous_chapter_text[:100000]}""")
+{previous_chapter_text[:APIConstants.MAX_PREVIOUS_CHAPTER_CONTEXT_CHARS]}""")
 
         context = "\n\n".join(context_sections) + "\n\n" if context_sections else ""
 
@@ -3858,9 +5316,9 @@ Cover important events, dialogues, and developments. Analyze character developme
 
 {context}## CHAPTERS TO SUMMARIZE:
 
-{"=" * 80}
+{"=" * DisplayConstants.CHAPTER_BATCH_SEPARATOR_WIDTH}
 {chr(10).join(chapters_text)}
-{"=" * 80}
+{"=" * DisplayConstants.CHAPTER_BATCH_SEPARATOR_WIDTH}
 
 Now provide summaries for all {len(chapters_batch)} chapters above, following the exact format and word count targets specified. Remember to use sequential numbers (1, 2, 3...) in the ### CHAPTER markers."""
 
@@ -3880,7 +5338,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         print(f"  → Input: {total_words:,} words (~{len(prompt):,} chars)")
 
         # Make API call with retry logic for retriable errors
-        max_retries = 1
+        max_retries = APIConstants.MAX_RETRIES
         retry_count = 0
         response_text = None
 
@@ -3930,15 +5388,15 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                 elif '503' in error_message:
                     print(f"  → Error type: Service unavailable (503)")
                 else:
-                    print(f"  → Error: {error_message[:100]}")
+                    print(f"  → Error: {error_message[:DisplayConstants.MAX_ERROR_MESSAGE_CHARS]}")
 
                 # Check if this is a retriable error (503 or other server errors)
                 is_retriable = '503' in error_message or 'overloaded' in error_message.lower() or 'UNAVAILABLE' in error_message
 
                 if is_retriable and retry_count < max_retries:
                     retry_count += 1
-                    wait_time = 10  # Wait 10 seconds before retry
-                    print(f"  ⚠️  API error (retriable): {error_message[:100]}")
+                    wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
+                    print(f"  ⚠️  API error (retriable): {error_message[:DisplayConstants.MAX_ERROR_MESSAGE_CHARS]}")
                     print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
                     time.sleep(wait_time)
                 else:
@@ -4057,7 +5515,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             chapters_to_process = chapters
 
         # Filter chapters by word count - separate long and short chapters
-        MIN_WORDS_FOR_SUMMARY = 500
+        MIN_WORDS_FOR_SUMMARY = SummaryConstants.MIN_WORDS_FOR_CHAPTER_SUMMARY
         chapters_needing_summary = []
         short_chapters = []
 
@@ -4075,12 +5533,12 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
             # Split chapters into batches to avoid token limits
             # Max input: 250K tokens/min, but need to leave room for:
-            # - Context (medium summary ~20K chars, previous chapter ~100K chars)
+            # - Context (medium summary ~MAX_MEDIUM_SUMMARY_CONTEXT_CHARS, previous chapter ~MAX_PREVIOUS_CHAPTER_CONTEXT_CHARS)
             # - Output tokens (~25% of input for summaries)
             # - Safety margin for rate limiting
-            # Conservative batch size: 400K chars (~100K tokens input + ~25K output + context)
-            MAX_BATCH_CHARS = 400000
-            MAX_CHAPTERS_PER_BATCH = 10  # Limit chapters per batch to improve quality and reduce parsing errors
+            # Conservative batch size: MAX_BATCH_CHARS (~100K tokens input + ~25K output + context)
+            MAX_BATCH_CHARS = APIConstants.MAX_BATCH_CHARS
+            MAX_CHAPTERS_PER_BATCH = APIConstants.MAX_CHAPTERS_PER_BATCH  # Limit chapters per batch to improve quality and reduce parsing errors
 
             batches = []
             current_batch = []
@@ -4108,8 +5566,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             # Add 1-minute delay before starting chapter summaries to avoid rate limits
             # This prevents back-to-back large API calls (book summary -> chapter summaries)
             if not dry_run and not regenerate_chapters:
-                print(f"\n⏱️  Waiting 60 seconds before starting chapter summaries to avoid rate limits...")
-                time.sleep(60)
+                print(f"\n⏱️  Waiting {APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS} seconds before starting chapter summaries to avoid rate limits...")
+                time.sleep(APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS)
                 print(f"✓ Delay complete, starting chapter summary generation\n")
 
             # Generate bulk summaries for each batch and save immediately
@@ -4274,42 +5732,43 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         print(f"Title: {title}")
         print(f"Author: {author}\n")
 
-        # Extract Gutenberg ID from header (before content extraction removes it)
+        # Try to extract Gutenberg ID for cover download (optional - only used for cover images)
+        # Note: Title and author are now extracted from the text file itself, not from Gutenberg API
         gutenberg_id = self.extract_gutenberg_id(text)
         cover_image_path = None
 
         if gutenberg_id:
-            print(f"Found Gutenberg ID: {gutenberg_id}")
-            # Download and save cover image locally
+            print(f"Found Gutenberg ID: {gutenberg_id} (will attempt cover download)")
+            # Download and save cover image locally from Project Gutenberg
             cover_image_path = self.download_gutenberg_cover(gutenberg_id, dry_run)
             if cover_image_path:
                 print(f"Cover image: {cover_image_path}\n")
             else:
                 print(f"No cover image found for Gutenberg ID {gutenberg_id}\n")
         else:
-            print("No Gutenberg ID found in text\n")
+            print("No Gutenberg ID found (cover download skipped)\n")
 
-        # Extract Project Gutenberg content (removes headers/footers)
+        # Clean up Gutenberg headers/footers if present (gracefully handles non-Gutenberg books)
         text = self.extract_gutenberg_content(text)
         print(f"Extracted content: {len(text)} characters, ~{len(text.split())} words\n")
 
         if dry_run:
-            print("\n" + "=" * 60)
+            print("\n" + "=" * DisplayConstants.SEPARATOR_WIDTH)
             print("DRY RUN MODE - No API calls will be made")
-            print("=" * 60 + "\n")
+            print("=" * DisplayConstants.SEPARATOR_WIDTH + "\n")
         elif partial_run:
-            print("\n" + "=" * 60)
+            print("\n" + "=" * DisplayConstants.SEPARATOR_WIDTH)
             print("PARTIAL RUN MODE - Making up to 4 API calls for testing")
             print("Will generate: Combined (Concise + Medium) + First 3 Chapters")
             print("Note: Reusing existing summaries from DB when available")
             print("API outputs will be displayed to stdout")
-            print("=" * 60 + "\n")
+            print("=" * DisplayConstants.SEPARATOR_WIDTH + "\n")
         elif regenerate_chapters:
-            print("\n" + "=" * 60)
+            print("\n" + "=" * DisplayConstants.SEPARATOR_WIDTH)
             print(f"REGENERATE CHAPTERS MODE - Regenerating {len(regenerate_chapters)} chapter(s)")
             print(f"Chapters to regenerate: {regenerate_chapters}")
             print("Will skip concise/medium/comprehensive overall summaries")
-            print("=" * 60 + "\n")
+            print("=" * DisplayConstants.SEPARATOR_WIDTH + "\n")
 
         # Check if book already exists (skip database operations in dry-run mode)
         if dry_run:
@@ -4329,8 +5788,18 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                 book_id = existing_book['id']
             else:
                 # Add book to database with local cover image path
+                # Note: add_book will automatically lookup and link author_id if author exists in authors table
                 book_id = self.db.add_book(title, author, file_path.name, text, gutenberg_id, cover_image_path)
-                print(f"Book added to database (ID: {book_id})\n")
+                print(f"Book added to database (ID: {book_id})")
+
+                # Verify author was linked
+                author_record = self.db.get_author_by_name(author)
+                if author_record:
+                    print(f"✓ Author linked: {author} (author_id: {author_record['id']})")
+                else:
+                    print(f"⚠ Author '{author}' not found in authors table - book created without author_id link")
+                    print(f"  Run: python scripts/populate_author_bios.py to add author metadata\n")
+                print()
 
                 # Process cover image: rename to book_id and create WebP version
                 if gutenberg_id and cover_image_path:
@@ -4548,9 +6017,9 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         print(f"  Parsed chapters: {total_parsed_chars:,} chars")
         print(f"  Coverage: {coverage_percent:.1f}%")
 
-        if coverage_percent < 90:
+        if coverage_percent < ContentThresholds.MIN_COVERAGE_PERCENT:
             print(f"  ⚠️  WARNING: Only {coverage_percent:.1f}% of content captured - may be losing content!")
-        elif coverage_percent > 110:
+        elif coverage_percent > ContentThresholds.MAX_COVERAGE_PERCENT:
             print(f"  ⚠️  WARNING: Parsed content is {coverage_percent:.1f}% - may have duplicates!")
         else:
             print(f"  ✓ Good coverage - parsing looks correct")
@@ -4656,7 +6125,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             f.write(f"- Dedications and preface poems\n")
             f.write(f"- List of illustrations\n\n")
             f.write(f"If coverage is >95%, the parsing is likely correct.\n")
-            f.write(f"If coverage is <90%, review the chapter detection carefully.\n\n")
+            f.write(f"If coverage is <{ContentThresholds.MIN_COVERAGE_PERCENT}%, review the chapter detection carefully.\n\n")
             f.write(f"{'='*60}\n")
             f.write(f"ACTUAL REMOVED CONTENT:\n")
             f.write(f"{'='*60}\n\n")

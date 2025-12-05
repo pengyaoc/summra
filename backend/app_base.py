@@ -8,6 +8,7 @@ from pathlib import Path
 import os
 import sys
 import logging
+import json
 
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -38,6 +39,38 @@ db = models.Database()
 
 
 # Helper Functions
+
+def author_name_to_slug(name):
+    """Convert author name to lowercase-hyphen slug format.
+
+    Examples:
+        "H. G. Wells" -> "h-g-wells"
+        "Jack London" -> "jack-london"
+        "Charles Dickens" -> "charles-dickens"
+    """
+    import re
+    # Remove special characters, convert to lowercase, replace spaces with hyphens
+    slug = name.lower()
+    slug = re.sub(r'[^a-z0-9\s-]', '', slug)  # Remove non-alphanumeric except spaces and hyphens
+    slug = re.sub(r'\s+', '-', slug)  # Replace spaces with hyphens
+    slug = re.sub(r'-+', '-', slug)  # Replace multiple hyphens with single hyphen
+    slug = slug.strip('-')  # Remove leading/trailing hyphens
+    return slug
+
+
+def slug_to_author_name(slug):
+    """Convert lowercase-hyphen slug back to author name for database lookup.
+
+    This searches the database for an author whose slugified name matches the slug.
+    Returns the actual author name from the database or None if not found.
+    """
+    # Get all authors and find match
+    authors = db.get_all_authors()
+    for author in authors:
+        if author_name_to_slug(author['name']) == slug:
+            return author['name']
+    return None
+
 
 def build_breadcrumbs(page_type, **kwargs):
     """
@@ -116,6 +149,17 @@ def build_breadcrumbs(page_type, **kwargs):
                     'url': f"/books/{book['slug']}/chapters/{chapter['chapter_number']}",
                     'position': 4
                 })
+
+    elif page_type == 'author':
+        author = kwargs.get('author')
+        if author:
+            author_name = author.get('name', 'Unknown Author')
+            author_slug = author_name_to_slug(author_name)
+            breadcrumbs.append({
+                'name': author_name,
+                'url': f"/authors/{author_slug}",
+                'position': 2
+            })
 
     return breadcrumbs
 
@@ -995,6 +1039,181 @@ def serve_cover(filename):
     """Serve cover images"""
     covers_dir = os.path.join(app.static_folder, 'covers')
     return send_from_directory(covers_dir, filename)
+
+
+# Author routes
+@app.route('/authors/<path:author_slug>')
+def author_page(author_slug):
+    """Server-side rendering for author pages (SEO)"""
+    # Convert slug back to author name
+    author_name = slug_to_author_name(author_slug)
+
+    if not author_name:
+        # Author not found
+        return render_template('index.html'), 404
+
+    author = db.get_author_by_name(author_name)
+
+    if not author:
+        # Return 404 but still render the SPA shell
+        return render_template('index.html'), 404
+
+    # Get books by this author
+    books = db.get_books_by_author_id(author['id'], limit=100) if author.get('id') else []
+
+    # Prepare meta tags
+    meta_title = f"{author_name} - Author Profile | Summra"
+    meta_description = f"Explore books and summaries by {author_name}."
+    if author.get('short_bio'):
+        meta_description = author['short_bio'][:160]
+
+    canonical_url = f"https://summra.com/authors/{author_slug}"
+
+    # Schema.org structured data for Person (Author)
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": author_name,
+        "jobTitle": "Author"
+    }
+
+    if author.get('country'):
+        structured_data["nationality"] = author['country']
+
+    if author.get('short_bio'):
+        structured_data["description"] = author['short_bio']
+
+    # Build breadcrumbs
+    breadcrumbs = build_breadcrumbs('author', author=author)
+    breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
+
+    # Combine structured data
+    combined_structured_data = [structured_data, breadcrumb_schema]
+
+    # Pass initial data
+    initial_data = {
+        'type': 'author',
+        'author': {
+            'name': author_name
+        },
+        'breadcrumbs': breadcrumbs
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        meta_keywords=f"{author_name}, author, books, summaries",
+        canonical_url=canonical_url,
+        og_type='profile',
+        structured_data=combined_structured_data,
+        initial_data=initial_data
+    )
+
+
+@app.route('/api/authors/<path:author_slug>', methods=['GET'])
+def get_author(author_slug):
+    """Get author details by slug"""
+    try:
+        # Convert slug back to author name
+        author_name = slug_to_author_name(author_slug)
+
+        if not author_name:
+            return jsonify({
+                'success': False,
+                'error': 'Author not found'
+            }), 404
+
+        author = db.get_author_by_name(author_name)
+        if not author:
+            return jsonify({
+                'success': False,
+                'error': 'Author not found'
+            }), 404
+
+        # Parse other_books field (comma-separated string)
+        other_books = []
+        if author.get('other_books'):
+            try:
+                # Try to parse as JSON array first
+                other_books = json.loads(author['other_books'])
+            except (json.JSONDecodeError, TypeError):
+                # Fallback for old comma-separated format
+                other_books = [book.strip() for book in author['other_books'].split(',') if book.strip()]
+
+        author_data = {
+            'id': author['id'],
+            'name': author['name'],
+            'short_bio': author.get('short_bio', ''),
+            'long_bio': author.get('long_bio', ''),
+            'country': author.get('country', ''),
+            'other_books': other_books
+        }
+
+        return jsonify({
+            'success': True,
+            'author': author_data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching author {author_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/authors/<path:author_slug>/books', methods=['GET'])
+def get_author_books(author_slug):
+    """Get all books by an author"""
+    try:
+        # Convert slug back to author name
+        author_name = slug_to_author_name(author_slug)
+
+        if not author_name:
+            return jsonify({
+                'success': False,
+                'error': 'Author not found'
+            }), 404
+
+        author = db.get_author_by_name(author_name)
+        if not author:
+            return jsonify({
+                'success': False,
+                'error': 'Author not found'
+            }), 404
+
+        # Get all books by this author
+        books = db.get_books_by_author_id(author['id'], limit=100) if author.get('id') else []
+
+        # Format book data
+        books_data = []
+        for book in books:
+            book_info = {
+                'id': book['id'],
+                'title': book['title'],
+                'author': book['author'],
+                'slug': book.get('slug', ''),
+                'cover_image_url': book.get('cover_image_url', ''),
+                'word_count': book.get('word_count', 0)
+            }
+
+            # Convert cover image path to URL
+            if book_info['cover_image_url'] and not book_info['cover_image_url'].startswith('http'):
+                book_info['cover_image_url'] = f"/static/{book_info['cover_image_url']}"
+
+            books_data.append(book_info)
+
+        return jsonify({
+            'success': True,
+            'books': books_data,
+            'count': len(books_data)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching books for author {author_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # Error handlers

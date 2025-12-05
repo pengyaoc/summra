@@ -65,3 +65,5 @@ tmp/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.json
+tests/fixtures/
