@@ -13,6 +13,9 @@ except ImportError:
     import config
     from app_base import app, logger, ensure_directories
 
+# Ensure production mode (IS_DEVELOPMENT = False is already set in app_base)
+app.config['IS_DEVELOPMENT'] = False
+
 
 @app.route('/api/tts/generate', methods=['POST'])
 def generate_tts():
@@ -72,6 +75,17 @@ def stop_tts():
 def health_check():
     """Health check endpoint for production monitoring"""
     return jsonify({'status': 'healthy'}), 200
+
+
+# ===== ADMIN ENDPOINTS (Disabled in Production) =====
+
+@app.route('/api/admin/chapters/<int:book_id>/<int:chapter_number>', methods=['PUT'])
+def update_chapter_admin(book_id, chapter_number):
+    """Admin endpoint - disabled in production"""
+    return jsonify({
+        'success': False,
+        'error': 'Admin endpoints are not available in production'
+    }), 403
 
 
 if __name__ == '__main__':

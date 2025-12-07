@@ -913,7 +913,10 @@ class SummraApp {
             bookCoverContainer.classList.add('hidden');
         }
 
-        // Hide categories section when viewing a book
+        // Hide hero and categories section when viewing a book
+        const heroSection = document.getElementById('hero-section');
+        if (heroSection) heroSection.classList.add('hidden');
+
         const categoriesSection = document.getElementById('categories-section');
         if (categoriesSection) categoriesSection.classList.add('hidden');
 
@@ -1521,6 +1524,10 @@ class SummraApp {
         this.setCurrentPage(pageKey);
 
         // Hide other sections
+        const heroSection = document.getElementById('hero-section');
+        if (heroSection) heroSection.classList.add('hidden');
+        const categoriesSection = document.getElementById('categories-section');
+        if (categoriesSection) categoriesSection.classList.add('hidden');
         document.getElementById('summary-section').classList.add('hidden');
         document.getElementById('chapter-detail-section').classList.add('hidden');
         const authorDetailSection = document.getElementById('author-detail-section');
@@ -1624,6 +1631,10 @@ class SummraApp {
         this.setCurrentPage(pageKey);
 
         // Hide other sections
+        const heroSection = document.getElementById('hero-section');
+        if (heroSection) heroSection.classList.add('hidden');
+        const categoriesSection = document.getElementById('categories-section');
+        if (categoriesSection) categoriesSection.classList.add('hidden');
         document.getElementById('summary-section').classList.add('hidden');
         document.getElementById('medium-detail-section').classList.add('hidden');
         const authorDetailSection = document.getElementById('author-detail-section');
@@ -1662,10 +1673,14 @@ class SummraApp {
         document.getElementById('chapter-detail-title').textContent = `${chapterNum}. ${chapterTitle}`;
         document.getElementById('chapter-detail-subtitle').textContent = book.title;
 
-        // Show admin edit button if available
+        // Show admin edit button only in development mode
         const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
         if (adminEditBtn) {
-            adminEditBtn.classList.remove('hidden');
+            if (window.__IS_DEVELOPMENT__) {
+                adminEditBtn.classList.remove('hidden');
+            } else {
+                adminEditBtn.classList.add('hidden');
+            }
         }
 
         // Display illustration if available
@@ -2157,7 +2172,10 @@ class SummraApp {
             if (section) section.classList.add('hidden');
         });
 
-        // Show only categories section on home
+        // Show hero and categories section on home
+        const heroSection = document.getElementById('hero-section');
+        if (heroSection) heroSection.classList.remove('hidden');
+
         const categoriesSection = document.getElementById('categories-section');
         if (categoriesSection) categoriesSection.classList.remove('hidden');
 
@@ -2189,7 +2207,7 @@ class SummraApp {
         this.setCurrentPage(pageKey);
 
         // Hide all sections except category detail
-        const sections = ['categories-section', 'summary-section',
+        const sections = ['hero-section', 'categories-section', 'summary-section',
                          'medium-detail-section', 'chapter-detail-section', 'all-categories-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
@@ -2278,7 +2296,7 @@ class SummraApp {
         this.setCurrentPage('all-categories');
 
         // Hide all sections except all categories
-        const sections = ['categories-section', 'summary-section',
+        const sections = ['hero-section', 'categories-section', 'summary-section',
                          'medium-detail-section', 'chapter-detail-section', 'category-detail-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
@@ -2369,7 +2387,7 @@ class SummraApp {
         this.currentCategory = null;
 
         // Reuse category detail section for all books grid
-        const sections = ['categories-section', 'summary-section',
+        const sections = ['hero-section', 'categories-section', 'summary-section',
                          'medium-detail-section', 'chapter-detail-section', 'all-categories-section', 'author-detail-section'];
         sections.forEach(id => {
             const section = document.getElementById(id);
@@ -2410,7 +2428,7 @@ class SummraApp {
         this.setCurrentPage(`author-${authorName}`);
 
         // Hide all other sections
-        const sections = ['categories-section', 'summary-section',
+        const sections = ['hero-section', 'categories-section', 'summary-section',
                          'medium-detail-section', 'chapter-detail-section',
                          'all-categories-section', 'category-detail-section'];
         sections.forEach(id => {
@@ -3198,6 +3216,11 @@ class SummraApp {
          * Setup admin features for chapter editing (development only).
          * The edit button will show when viewing a chapter.
          */
+        // Skip admin features in production mode
+        if (!window.__IS_DEVELOPMENT__) {
+            return;
+        }
+
         const editBtn = document.getElementById('admin-edit-chapter-btn');
         const modal = document.getElementById('admin-edit-modal');
         const closeBtn = document.getElementById('admin-modal-close');
@@ -3295,4 +3318,26 @@ class SummraApp {
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     new SummraApp();
+
+    // Handle hero banner CTAs with data-route attribute
+    const heroCtas = document.querySelectorAll('[data-route]');
+    heroCtas.forEach(cta => {
+        cta.addEventListener('click', (e) => {
+            e.preventDefault();
+            const route = cta.dataset.route;
+
+            // Special handling for "Read" CTA
+            if (cta.id === 'hero-read-cta') {
+                // Check screen width to determine which view mode to set
+                const isMobile = window.innerWidth < 1024;
+                const viewMode = isMobile ? 'modern' : 'side-by-side';
+
+                // Set the view mode preference before navigation
+                localStorage.setItem('reading_chapterViewMode', viewMode);
+            }
+
+            // Navigate to the route using proper URL (not hash-based)
+            window.location.href = `/${route}`;
+        });
+    });
 });

@@ -4,6 +4,75 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ---
 
+## 2025-12-07
+
+### Fix Admin Edit Button Appearing in Production - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-07
+**Completed:** 2025-12-07
+
+**Problem:** The admin "Edit Chapter" button was appearing in both app.py (development) and app_prod.py (production) because there was no environment detection mechanism. Both apps shared the same HTML template and JavaScript without any way to distinguish between environments.
+
+**Root Cause:**
+- The edit button exists in the HTML template (frontend/templates/index.html:315)
+- JavaScript unconditionally shows the button when viewing a chapter (frontend/static/js/app.js:1671)
+- No environment flag was passed to the frontend to distinguish dev from prod
+- The admin endpoint exists only in app.py (backend/app.py:267-316), but the button appeared everywhere
+
+**Solution Implemented:**
+
+1. **Backend - Environment Flag (backend/app_base.py:40-49):**
+   - Added `app.config['IS_DEVELOPMENT'] = False` as default
+   - Created context processor `inject_environment()` to make flag available in all templates
+   - This provides `is_development` variable to Jinja2 templates
+
+2. **Backend - Development Mode (backend/app.py:16-17):**
+   - Set `app.config['IS_DEVELOPMENT'] = True` in app.py
+
+3. **Backend - Production Mode (backend/app_prod.py:16-17):**
+   - Explicitly set `app.config['IS_DEVELOPMENT'] = False` in app_prod.py
+
+4. **Frontend - Template (frontend/templates/index.html:41-44):**
+   - Added `window.__IS_DEVELOPMENT__` global variable
+   - Uses Jinja2 template to inject boolean: `{{ 'true' if is_development else 'false' }}`
+
+5. **Frontend - JavaScript Guard (frontend/static/js/app.js:3211-3214):**
+   - Updated `setupAdminFeatures()` to return early if `!window.__IS_DEVELOPMENT__`
+   - Prevents any admin event listeners from being attached in production
+
+6. **Frontend - Conditional Display (frontend/static/js/app.js:1668-1676):**
+   - Updated `showChapterDetail()` to check `window.__IS_DEVELOPMENT__`
+   - Only shows edit button in development mode
+   - Explicitly hides it in production mode
+
+**API Protection Added:**
+7. **Backend - API Guard in Dev (backend/app.py:273-278):**
+   - Added environment check at start of admin endpoint
+   - Returns 403 Forbidden if `IS_DEVELOPMENT` is False
+   - Prevents accidental admin access if flag misconfigured
+
+8. **Backend - API Blocker in Prod (backend/app_prod.py:82-88):**
+   - Registered same admin endpoint route
+   - Always returns 403 Forbidden with clear error message
+   - Prevents discovery of endpoint existence via 404 responses
+
+**Testing:**
+- Development (app.py):
+  - ✓ Button appears on chapter pages
+  - ✓ Admin API endpoint accepts requests (200 OK)
+- Production (app_prod.py):
+  - ✓ Button hidden on all pages
+  - ✓ Admin API endpoint blocks requests (403 Forbidden)
+
+**Files Modified:**
+- backend/app_base.py (environment detection)
+- backend/app.py (set dev flag + API guard)
+- backend/app_prod.py (set prod flag + API blocker)
+- frontend/templates/index.html (inject flag to JS)
+- frontend/static/js/app.js (conditional button display)
+
+---
+
 ## 2025-12-06
 
 ### Reading Guide Feature with Characters and Timeline Tabs - COMPLETED (REVISED)
