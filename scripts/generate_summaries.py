@@ -3516,27 +3516,9 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 if len(chapter_text) > ContentThresholds.MIN_CHAPTER_CHARS_V1:
                     # Use sequential numbering (1, 2, 3, ...) across all sections
 
-                    # Check if chapter title looks like a sentence (not a proper title)
-                    # If so, use a default chapter name based on the chapter numeral
-                    if chapter_title:
-                        # Title looks like a sentence if:
-                        # 1. Starts with a quote mark
-                        # 2. Starts with lowercase (except for special cases like "iPhone")
-                        # 3. Is very long (> 50 chars, likely a sentence)
-                        # 4. Contains sentence-ending punctuation in the middle
-                        looks_like_sentence = (
-                            chapter_title.strip().startswith('"') or
-                            chapter_title.strip().startswith("'") or
-                            (chapter_title and chapter_title[0].islower()) or
-                            len(chapter_title) > 50 or
-                            '.' in chapter_title[:-1] or  # Period not at the end
-                            '!' in chapter_title[:-1] or
-                            '?' in chapter_title[:-1]
-                        )
-
-                        if looks_like_sentence:
-                            # Use "Part {numeral}" as default for numbered chapters
-                            chapter_title = f"Part {chapter_numeral}"
+                    # NOTE: Skip "looks like a sentence" validation here because chapter_title
+                    # comes from TOC (chapter_info['title']), which is already a reliable source.
+                    # We should trust the TOC and not second-guess it.
 
                     # If no title at all, use "Chapter {number}" as default
                     if not chapter_title or not chapter_title.strip():
@@ -5355,8 +5337,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                 try:
                     import json
                     from pathlib import Path
-                    logs_dir = Path(__file__).parent.parent / "logs"
-                    logs_dir.mkdir(exist_ok=True)
+                    logs_dir = Path(__file__).parent.parent / "data" / "log" / "gemini_logs"
+                    logs_dir.mkdir(parents=True, exist_ok=True)
                     log_filename = f"gemini_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}_ch{chapter_numbers[0]}-{chapter_numbers[-1]}.json"
                     log_path = logs_dir / log_filename
 

@@ -733,6 +733,77 @@ body {
     font-style: italic;
 }
 
+/* Reading Guide Section (Standalone) - Matches Summary Tabs */
+.reading-guide-section {
+    margin-bottom: 48px;
+}
+
+.reading-guide-tabs-header {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 24px;
+}
+
+.reading-guide-tab {
+    background: transparent;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    position: relative;
+    bottom: -2px;
+}
+
+.reading-guide-tab:hover {
+    color: var(--primary-color);
+}
+
+.reading-guide-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+    font-weight: 600;
+}
+
+.reading-guide-tab-content {
+    display: none;
+}
+
+.reading-guide-tab-content.active {
+    display: block;
+}
+
+.reading-guide-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #333;
+    margin: 0;
+}
+
+.reading-guide-text p {
+    margin: 0 0 1em 0;
+}
+
+.reading-guide-text p:last-child {
+    margin-bottom: 0;
+}
+
+.guide-image {
+    width: 100%;
+    height: auto;
+    cursor: pointer;
+    transition: opacity 0.3s ease-in;
+    display: block;
+}
+
+.guide-image:hover {
+    opacity: 0.9;
+}
+
 .author-bio-text {
     font-size: 0.95rem;
     line-height: 1.7;
@@ -2769,8 +2840,10 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 
-/* Font Family Application - includes summary text */
+/* Font Family Application - includes summary text, modern English, and side-by-side */
 .chapter-detail-section[data-font="georgia"] .chapter-fulltext,
+.chapter-detail-section[data-font="georgia"] .chapter-modern-english,
+.chapter-detail-section[data-font="georgia"] .side-by-side-cell,
 .chapter-detail-section[data-font="georgia"] .chapter-summary-text,
 .chapter-detail-section[data-font="georgia"] .summary-text,
 .medium-detail-section[data-font="georgia"] .summary-text {
@@ -2778,6 +2851,8 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 .chapter-detail-section[data-font="system"] .chapter-fulltext,
+.chapter-detail-section[data-font="system"] .chapter-modern-english,
+.chapter-detail-section[data-font="system"] .side-by-side-cell,
 .chapter-detail-section[data-font="system"] .chapter-summary-text,
 .chapter-detail-section[data-font="system"] .summary-text,
 .medium-detail-section[data-font="system"] .summary-text {
@@ -2785,6 +2860,8 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 .chapter-detail-section[data-font="opensans"] .chapter-fulltext,
+.chapter-detail-section[data-font="opensans"] .chapter-modern-english,
+.chapter-detail-section[data-font="opensans"] .side-by-side-cell,
 .chapter-detail-section[data-font="opensans"] .chapter-summary-text,
 .chapter-detail-section[data-font="opensans"] .summary-text,
 .medium-detail-section[data-font="opensans"] .summary-text {
@@ -3026,3 +3103,376 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
         gap: 1rem;
     }
 }
+
+/* ===========================
+   Modern English Side-by-Side View
+   =========================== */
+
+/* View Mode Toggle */
+.view-mode-toggle {
+    display: inline-flex;
+    gap: 0.5rem;
+    background: var(--bg-light);
+    padding: 0.25rem;
+    border-radius: 8px;
+    margin-right: 1rem;
+}
+
+.view-mode-btn {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.view-mode-btn:hover {
+    background: var(--bg-color);
+}
+
+.view-mode-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Header Controls Flexbox */
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Modern English Text (single view) */
+.chapter-modern-english {
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: var(--text-color);
+    margin-top: 16px;
+}
+
+.chapter-modern-english p {
+    margin-bottom: 1em;
+}
+
+/* Side-by-Side Container */
+.chapter-side-by-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Side-by-Side Headers */
+.side-by-side-headers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.side-by-side-header {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-light);
+    text-align: left;
+}
+
+.side-by-side-header:first-child {
+    padding-right: 1rem;
+}
+
+.side-by-side-header:last-child {
+    padding-left: 1rem;
+}
+
+.side-by-side-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+    margin-bottom: 0;
+}
+
+.side-by-side-cell {
+    min-width: 0; /* Prevent overflow */
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: var(--text-color);
+}
+
+.side-by-side-cell p {
+    margin-bottom: 1.5em;
+}
+
+/* Add visual separation with subtle background for original text */
+.side-by-side-cell.original {
+    padding-right: 1rem;
+    border-right: 1px solid #e0e0e0;
+}
+
+.side-by-side-cell.modern {
+    padding-left: 1rem;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 1024px) {
+    .side-by-side-headers {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .side-by-side-header:first-child {
+        padding-right: 0;
+        padding-bottom: 0.5rem;
+    }
+
+    .side-by-side-header:last-child {
+        padding-left: 0;
+        padding-top: 0.5rem;
+    }
+
+    .side-by-side-row {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .side-by-side-cell.original {
+        border-right: none;
+        border-bottom: 2px solid #e0e0e0;
+        padding-right: 0;
+        padding-bottom: 1rem;
+    }
+
+    .side-by-side-cell.modern {
+        padding-left: 0;
+        padding-top: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .view-mode-toggle {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    .view-mode-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    .header-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .side-by-side-cell p {
+        font-size: 1rem;
+    }
+}
+
+/* ===========================
+   Admin Features (Development Only)
+   =========================== */
+
+/* Admin Edit Button */
+.admin-edit-btn {
+    background: #ff9800;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-edit-btn:hover {
+    background: #f57c00;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+}
+
+/* Update chapter header to flex layout */
+.chapter-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+}
+
+/* Admin Modal */
+.admin-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.admin-modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.admin-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f5f5f5;
+}
+
+.admin-modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+
+.admin-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 2rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.admin-modal-close:hover {
+    color: #333;
+}
+
+.admin-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.admin-form-group {
+    margin-bottom: 20px;
+}
+
+.admin-form-group:last-child {
+    margin-bottom: 0;
+}
+
+.admin-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--primary-color);
+    font-size: 0.95rem;
+}
+
+.admin-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: 'Courier New', monospace;
+    line-height: 1.6;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+.admin-textarea:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.admin-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid #e0e0e0;
+    background: #f5f5f5;
+}
+
+.admin-btn-primary,
+.admin-btn-secondary {
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.admin-btn-primary {
+    background: #4caf50;
+    color: white;
+}
+
+.admin-btn-primary:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.admin-btn-secondary {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.admin-btn-secondary:hover {
+    background: #d5d5d5;
+}
+
+@media (max-width: 768px) {
+    .admin-modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    .admin-modal-header,
+    .admin-modal-body,
+    .admin-modal-footer {
+        padding: 16px;
+    }
+
+    .admin-textarea {
+        font-size: 0.9rem;
+    }
+}
+

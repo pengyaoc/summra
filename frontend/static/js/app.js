@@ -44,6 +44,7 @@ class SummraApp {
         this.configureMarked();
         this.setupReadingSettings();
         this.setupLightbox();
+        this.setupAdminFeatures();
         this.loadReadingPreferences();
     }
 
@@ -115,6 +116,11 @@ class SummraApp {
             const chapterNum = parseInt(chapterMatch[2]);
             const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
             if (book) {
+                // Set current book and load chapters if not already loaded
+                this.currentBook = book;
+                if (this.chapters.length === 0 || this.chapters[0]?.book_id !== book.id) {
+                    await this.loadChapters();
+                }
                 await this.showChapterDetail(book, chapterNum, true);
             }
         } else if (mediumMatch) {
@@ -485,6 +491,66 @@ class SummraApp {
             .join('');
     }
 
+    formatSideBySideText(originalText, modernText) {
+        if (!originalText || !modernText) return '';
+
+        // Split both texts into paragraphs
+        const originalParagraphs = originalText.split(/\n/).filter(p => p.trim().length > 0);
+        const modernParagraphs = modernText.split(/\n/).filter(p => p.trim().length > 0);
+
+        // Use the longer array length to ensure we don't miss any paragraphs
+        const maxLength = Math.max(originalParagraphs.length, modernParagraphs.length);
+
+        // Add headers
+        let html = `
+            <div class="side-by-side-headers">
+                <div class="side-by-side-header">Original</div>
+                <div class="side-by-side-header">Modern English</div>
+            </div>
+        `;
+
+        // Create paired rows - each row contains one original paragraph and one modern paragraph
+        for (let i = 0; i < maxLength; i++) {
+            // Get paragraph or empty string if index exceeds array length
+            const originalPara = originalParagraphs[i] || '';
+            const modernPara = modernParagraphs[i] || '';
+
+            // Format original paragraph
+            let originalFormatted = '';
+            if (originalPara) {
+                let escaped = this.escapeHtml(originalPara.trim());
+                escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+                originalFormatted = escaped;
+            } else {
+                originalFormatted = '&nbsp;';
+            }
+
+            // Format modern paragraph
+            let modernFormatted = '';
+            if (modernPara) {
+                let escaped = this.escapeHtml(modernPara.trim());
+                escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+                modernFormatted = escaped;
+            } else {
+                modernFormatted = '&nbsp;';
+            }
+
+            // Create a row with two columns (original and modern)
+            html += `
+                <div class="side-by-side-row">
+                    <div class="side-by-side-cell original">
+                        <p>${originalFormatted}</p>
+                    </div>
+                    <div class="side-by-side-cell modern">
+                        <p>${modernFormatted}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        return html;
+    }
+
     setupEventListeners() {
         // Note: Back buttons have been replaced with breadcrumb navigation
         // Breadcrumbs are updated via updateBreadcrumbs() in each view method
@@ -500,6 +566,29 @@ class SummraApp {
 
         // Setup summary tab switching
         this.setupSummaryTabs();
+
+        // Setup reading guide tab switching
+        this.setupGuideTabs();
+    }
+
+    setupGuideTabs() {
+        const readingGuideTabs = document.querySelectorAll('.reading-guide-tab');
+        readingGuideTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetTab = e.target.dataset.readingTab;
+
+                // Remove active class from all reading guide tabs and contents
+                document.querySelectorAll('.reading-guide-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.reading-guide-tab-content').forEach(c => c.classList.remove('active'));
+
+                // Add active class to clicked tab and corresponding content
+                e.target.classList.add('active');
+                const targetContent = document.getElementById(`reading-tab-${targetTab}`);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                }
+            });
+        });
     }
 
     setupSummaryTabs() {
@@ -867,6 +956,12 @@ class SummraApp {
         if (authorDetailSection) authorDetailSection.classList.add('hidden');
         if (summarySection) summarySection.classList.remove('hidden');
 
+        // Hide admin edit button (only shown on chapter pages)
+        const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
+        if (adminEditBtn) {
+            adminEditBtn.classList.add('hidden');
+        }
+
         // Restore scroll position or scroll to top
         if (restoreScroll) {
             this.restoreScrollPosition(pageKey);
@@ -886,13 +981,15 @@ class SummraApp {
 
         // Check if we have any data to display (backward compatibility)
         const hasAbout = book.about_text && book.about_text.trim();
-        const hasRelevance = book.relevance_now && book.relevance_now.trim();
         const hasCountry = book.author_country && book.author_country.trim();
         const hasBio = book.author_bio && book.author_bio.trim();
+        const hasCharacterGuide = book.character_guide_url && book.character_guide_url.trim();
+        const hasTimeline = book.timeline_url && book.timeline_url.trim();
+        const hasThemes = book.themes_url && book.themes_url.trim();
 
         // Debug logging
         console.log('updateAboutSection called for:', book.title);
-        console.log('Has metadata:', { hasAbout, hasRelevance, hasCountry, hasBio });
+        console.log('Has metadata:', { hasAbout, hasCountry, hasBio, hasCharacterGuide, hasTimeline, hasThemes });
 
         // Update book author with country information
         const authorName = book.author || '';
@@ -909,8 +1006,8 @@ class SummraApp {
             authorLearnMoreBtn.classList.remove('hidden');
         }
 
-        // Only show section if we have at least some data (book about/relevance OR author bio)
-        if (!hasAbout && !hasRelevance && !hasBio) {
+        // Only show section if we have at least some data
+        if (!hasAbout && !hasBio && !hasCharacterGuide && !hasTimeline && !hasThemes) {
             if (aboutSection) aboutSection.classList.add('hidden');
             return;
         }
@@ -924,11 +1021,8 @@ class SummraApp {
             aboutText.parentElement.style.display = hasAbout ? 'block' : 'none';
         }
 
-        // Populate relevance text
-        if (relevanceText) {
-            relevanceText.innerHTML = hasRelevance ? this.renderMarkdown(book.relevance_now) : '';
-            relevanceText.parentElement.style.display = hasRelevance ? 'block' : 'none';
-        }
+        // Update Reading Guide section
+        this.updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes);
 
         // Populate author bio
         if (authorBioText) {
@@ -947,6 +1041,111 @@ class SummraApp {
                     authorBioText.parentElement.style.display = 'none';
                 }
             }
+        }
+    }
+
+    updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes) {
+        const readingGuideSection = document.getElementById('reading-guide-section');
+        const characterGuideImage = document.getElementById('character-guide-image');
+        const timelineGuideImage = document.getElementById('timeline-guide-image');
+        const themesGuideImage = document.getElementById('themes-guide-image');
+
+        // Show Reading Guide section if we have any guide content
+        if (hasCharacterGuide || hasTimeline || hasThemes) {
+            readingGuideSection.classList.remove('hidden');
+
+            // Set up character guide image
+            if (hasCharacterGuide && characterGuideImage) {
+                characterGuideImage.src = book.character_guide_url;
+                characterGuideImage.onclick = () => {
+                    if (this.openLightbox) {
+                        // Remove extension from URL for lightbox
+                        const baseUrl = book.character_guide_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+                        this.openLightbox(baseUrl, 'Character Guide');
+                    }
+                };
+            }
+
+            // Set up timeline image
+            if (hasTimeline && timelineGuideImage) {
+                timelineGuideImage.src = book.timeline_url;
+                timelineGuideImage.onclick = () => {
+                    if (this.openLightbox) {
+                        // Remove extension from URL for lightbox
+                        const baseUrl = book.timeline_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+                        this.openLightbox(baseUrl, 'Timeline');
+                    }
+                };
+            }
+
+            // Set up themes image
+            if (hasThemes && themesGuideImage) {
+                themesGuideImage.src = book.themes_url;
+                themesGuideImage.onclick = () => {
+                    if (this.openLightbox) {
+                        // Remove extension from URL for lightbox
+                        const baseUrl = book.themes_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+                        this.openLightbox(baseUrl, 'Themes');
+                    }
+                };
+            }
+
+            // Show/hide tabs based on what's available
+            const themesTab = document.querySelector('.reading-guide-tab[data-reading-tab="themes"]');
+            const characterTab = document.querySelector('.reading-guide-tab[data-reading-tab="characters"]');
+            const timelineTab = document.querySelector('.reading-guide-tab[data-reading-tab="timeline"]');
+
+            const themesContent = document.getElementById('reading-tab-themes');
+            const characterContent = document.getElementById('reading-tab-characters');
+            const timelineContent = document.getElementById('reading-tab-timeline');
+
+            // Reset all tabs first
+            document.querySelectorAll('.reading-guide-tab').forEach(tab => {
+                tab.classList.remove('active');
+                tab.style.display = 'none';
+            });
+            document.querySelectorAll('.reading-guide-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Determine which tab should be active first
+            let firstActiveTab = null;
+            let firstActiveContent = null;
+
+            // Show Themes tab if available
+            if (hasThemes && themesTab && themesContent) {
+                themesTab.style.display = '';
+                if (!firstActiveTab) {
+                    firstActiveTab = themesTab;
+                    firstActiveContent = themesContent;
+                }
+            }
+
+            // Show Characters tab if available
+            if (hasCharacterGuide && characterTab && characterContent) {
+                characterTab.style.display = '';
+                if (!firstActiveTab) {
+                    firstActiveTab = characterTab;
+                    firstActiveContent = characterContent;
+                }
+            }
+
+            // Show Timeline tab if available
+            if (hasTimeline && timelineTab && timelineContent) {
+                timelineTab.style.display = '';
+                if (!firstActiveTab) {
+                    firstActiveTab = timelineTab;
+                    firstActiveContent = timelineContent;
+                }
+            }
+
+            // Activate the first available tab
+            if (firstActiveTab && firstActiveContent) {
+                firstActiveTab.classList.add('active');
+                firstActiveContent.classList.add('active');
+            }
+        } else {
+            readingGuideSection.classList.add('hidden');
         }
     }
 
@@ -1328,6 +1527,12 @@ class SummraApp {
         if (authorDetailSection) authorDetailSection.classList.add('hidden');
         document.getElementById('medium-detail-section').classList.remove('hidden');
 
+        // Hide admin edit button (only shown on chapter pages)
+        const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
+        if (adminEditBtn) {
+            adminEditBtn.classList.add('hidden');
+        }
+
         // Update header
         document.getElementById('medium-detail-title').textContent = book.title;
         document.getElementById('medium-detail-subtitle').textContent = `by ${book.author}`;
@@ -1457,6 +1662,12 @@ class SummraApp {
         document.getElementById('chapter-detail-title').textContent = `${chapterNum}. ${chapterTitle}`;
         document.getElementById('chapter-detail-subtitle').textContent = book.title;
 
+        // Show admin edit button if available
+        const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
+        if (adminEditBtn) {
+            adminEditBtn.classList.remove('hidden');
+        }
+
         // Display illustration if available
         const illustrationContainer = document.getElementById('chapter-illustration-container');
         const illustrationImg = document.getElementById('chapter-illustration');
@@ -1558,6 +1769,115 @@ class SummraApp {
             fullTextEl.innerHTML = this.formatChapterText(chapter.chapter_text);
         } else {
             fullTextEl.innerHTML = '<p class="error">Full text not available for this chapter</p>';
+        }
+
+        // Handle modern English view mode toggle
+        const viewModeToggle = document.getElementById('view-mode-toggle');
+        const modernEnglishEl = document.getElementById('chapter-modern-english');
+        const sideBySideEl = document.getElementById('chapter-side-by-side');
+
+        if (chapter.modern_english_text) {
+            // Modern English is available - show view mode toggle
+            viewModeToggle.classList.remove('hidden');
+
+            // Populate modern English container
+            modernEnglishEl.innerHTML = this.formatChapterText(chapter.modern_english_text);
+
+            // Populate side-by-side container with aligned paragraph rows
+            const sideBySideFormatted = this.formatSideBySideText(
+                chapter.chapter_text,
+                chapter.modern_english_text
+            );
+            sideBySideEl.innerHTML = sideBySideFormatted;
+
+            // Function to check if screen is too narrow for side-by-side view
+            const isScreenTooNarrow = () => window.innerWidth < 1024;
+
+            // Load saved view mode preference or default to original
+            const savedViewMode = localStorage.getItem('reading_chapterViewMode') || 'original';
+
+            // Apply saved view mode (unless it's side-by-side on narrow screen)
+            let viewModeToApply = savedViewMode;
+            if (savedViewMode === 'side-by-side' && isScreenTooNarrow()) {
+                viewModeToApply = 'original';
+            }
+
+            // Set initial view based on saved preference
+            fullTextEl.classList.toggle('hidden', viewModeToApply !== 'original');
+            modernEnglishEl.classList.toggle('hidden', viewModeToApply !== 'modern');
+            sideBySideEl.classList.toggle('hidden', viewModeToApply !== 'side-by-side');
+
+            // Setup view mode toggle event listeners
+            const viewModeBtns = document.querySelectorAll('.view-mode-btn');
+
+            // Set active button based on applied view mode
+            viewModeBtns.forEach(btn => {
+                if (btn.dataset.mode === viewModeToApply) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Function to update side-by-side button visibility based on screen width
+            const updateSideBySideButtonVisibility = () => {
+                const sideBySideBtn = document.querySelector('.view-mode-btn[data-mode="side-by-side"]');
+                if (sideBySideBtn) {
+                    if (isScreenTooNarrow()) {
+                        sideBySideBtn.style.display = 'none';
+
+                        // If currently viewing side-by-side, switch to original view
+                        if (!sideBySideEl.classList.contains('hidden')) {
+                            const originalBtn = document.querySelector('.view-mode-btn[data-mode="original"]');
+                            if (originalBtn) {
+                                viewModeBtns.forEach(b => b.classList.remove('active'));
+                                originalBtn.classList.add('active');
+                                fullTextEl.classList.remove('hidden');
+                                modernEnglishEl.classList.add('hidden');
+                                sideBySideEl.classList.add('hidden');
+                            }
+                        }
+                    } else {
+                        sideBySideBtn.style.display = '';
+                    }
+                }
+            };
+
+            // Initial check
+            updateSideBySideButtonVisibility();
+
+            // Update on resize
+            window.addEventListener('resize', updateSideBySideButtonVisibility);
+
+            viewModeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.dataset.mode;
+
+                    // Check if trying to view side-by-side on narrow screen
+                    if (mode === 'side-by-side' && isScreenTooNarrow()) {
+                        alert('Side-by-side view requires a wider screen. Please expand your browser window or use a larger device.');
+                        return;
+                    }
+
+                    // Update active button
+                    viewModeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // Show/hide appropriate containers
+                    fullTextEl.classList.toggle('hidden', mode !== 'original');
+                    modernEnglishEl.classList.toggle('hidden', mode !== 'modern');
+                    sideBySideEl.classList.toggle('hidden', mode !== 'side-by-side');
+
+                    // Save view mode preference
+                    this.saveReadingPreference('chapterViewMode', mode);
+                });
+            });
+        } else {
+            // No modern English - hide toggle and show only original text
+            viewModeToggle.classList.add('hidden');
+            fullTextEl.classList.remove('hidden');
+            modernEnglishEl.classList.add('hidden');
+            sideBySideEl.classList.add('hidden');
         }
 
         // Setup fulltext TTS button - only show if audio is available
@@ -2444,10 +2764,18 @@ class SummraApp {
 
         if (chapterSection) {
             const fulltext = chapterSection.querySelector('.chapter-fulltext');
+            const modernEnglish = chapterSection.querySelector('.chapter-modern-english');
+            const sideBySideCells = chapterSection.querySelectorAll('.side-by-side-cell');
             const summaryText = chapterSection.querySelector('.chapter-summary-text');
             const summaryContentText = chapterSection.querySelector('#chapter-summary-content .summary-text');
 
             if (fulltext) fulltext.style.fontSize = `${size}px`;
+            if (modernEnglish) modernEnglish.style.fontSize = `${size}px`;
+            if (sideBySideCells.length > 0) {
+                sideBySideCells.forEach(cell => {
+                    cell.style.fontSize = `${size}px`;
+                });
+            }
             if (summaryText) summaryText.style.fontSize = `${size}px`;
             if (summaryContentText) summaryContentText.style.fontSize = `${size}px`;
         }
@@ -2541,18 +2869,29 @@ class SummraApp {
 
     setupNextChapterButton(currentChapterNum) {
         const nextChapterBtn = document.getElementById('next-chapter-btn');
-        if (!nextChapterBtn) return;
+        if (!nextChapterBtn) {
+            console.warn('Next chapter button element not found');
+            return;
+        }
 
         // Find the next chapter
         const nextChapter = this.chapters.find(ch => ch.chapter_number === currentChapterNum + 1);
+
+        console.log(`[Next Chapter Button] Current chapter: ${currentChapterNum}`);
+        console.log(`[Next Chapter Button] Total chapters loaded: ${this.chapters.length}`);
+        console.log(`[Next Chapter Button] Next chapter found:`, nextChapter ? nextChapter.chapter_number : 'none');
+        console.log(`[Next Chapter Button] Button element classes before:`, nextChapterBtn.className);
 
         if (nextChapter) {
             nextChapterBtn.classList.remove('hidden');
             nextChapterBtn.onclick = () => {
                 this.showChapterDetailPage(nextChapter.chapter_number);
             };
+            console.log(`[Next Chapter Button] Button element classes after (should be visible):`, nextChapterBtn.className);
+            console.log(`[Next Chapter Button] Button computed display:`, window.getComputedStyle(nextChapterBtn).display);
         } else {
             nextChapterBtn.classList.add('hidden');
+            console.log(`[Next Chapter Button] Button hidden (no next chapter)`);
         }
     }
 
@@ -2852,6 +3191,104 @@ class SummraApp {
 
         // Store reference to openLightbox function for use when loading chapters
         this.openLightbox = openLightbox;
+    }
+
+    setupAdminFeatures() {
+        /**
+         * Setup admin features for chapter editing (development only).
+         * The edit button will show when viewing a chapter.
+         */
+        const editBtn = document.getElementById('admin-edit-chapter-btn');
+        const modal = document.getElementById('admin-edit-modal');
+        const closeBtn = document.getElementById('admin-modal-close');
+        const cancelBtn = document.getElementById('admin-cancel-btn');
+        const saveBtn = document.getElementById('admin-save-btn');
+        const chapterTextarea = document.getElementById('admin-chapter-text');
+        const modernEnglishTextarea = document.getElementById('admin-modern-english');
+
+        if (!editBtn || !modal) {
+            return; // Admin features not available
+        }
+
+        // Show edit button only on chapter pages (will be toggled in showChapterDetail)
+        // Open modal when edit button clicked
+        editBtn.addEventListener('click', () => {
+            // Populate modal with current chapter data
+            if (this.currentChapter !== null && this.chapters.length > 0) {
+                const chapter = this.chapters.find(c => c.chapter_number === this.currentChapter);
+                if (chapter) {
+                    chapterTextarea.value = chapter.chapter_text || '';
+                    modernEnglishTextarea.value = chapter.modern_english_text || '';
+                    modal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+        });
+
+        // Close modal handlers
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        };
+
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+
+        // Click outside modal to close
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Save changes
+        saveBtn.addEventListener('click', async () => {
+            if (this.currentBook && this.currentChapter !== null) {
+                const chapterText = chapterTextarea.value;
+                const modernEnglish = modernEnglishTextarea.value;
+
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+
+                try {
+                    const response = await fetch(`/api/admin/chapters/${this.currentBook.id}/${this.currentChapter}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            chapter_text: chapterText,
+                            modern_english_text: modernEnglish
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Update local chapter data
+                        const chapterIndex = this.chapters.findIndex(c => c.chapter_number === this.currentChapter);
+                        if (chapterIndex >= 0) {
+                            this.chapters[chapterIndex].chapter_text = chapterText;
+                            this.chapters[chapterIndex].modern_english_text = modernEnglish;
+                        }
+
+                        // Refresh the chapter display
+                        await this.showChapterDetail(this.currentBook, this.currentChapter, false);
+
+                        alert('Chapter updated successfully!');
+                        closeModal();
+                    } else {
+                        alert(`Error: ${data.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error saving chapter:', error);
+                    alert('Failed to save chapter. Please try again.');
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Changes';
+                }
+            }
+        });
     }
 }
 

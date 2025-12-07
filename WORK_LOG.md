@@ -4,6 +4,240 @@ This file tracks all development tasks, both completed and in progress. It serve
 
 ---
 
+## 2025-12-06
+
+### Reading Guide Feature with Characters and Timeline Tabs - COMPLETED (REVISED)
+**Status:** ✓ Completed
+**Started:** 2025-12-06 20:00
+**Completed:** 2025-12-06 21:15
+**Revised:** 2025-12-06 21:00 - Made Reading Guide a standalone tabbed section
+
+**Objective:** Create a standalone "Reading Guide" section (separate from About section) with tabbed interface for "Why Read This Now", Characters, and Timeline.
+
+**Implementation:**
+
+1. **Database Schema Updates:**
+   - Added `character_guide_url` column to `books` table (stores path to character guide image)
+   - Added `timeline_url` column to `books` table (stores path to timeline image)
+   - Columns are nullable - only shown if images exist
+   - Modified: `backend/models.py:239-253`
+
+2. **Frontend HTML Structure:**
+   - Created standalone tabbed section (outside About section box)
+   - No heading - shows tabs directly like Summary section
+   - Positioned between About section and Summary section
+   - Tabbed interface with 3 tabs: "Why Read This Now", "Characters", "Timeline"
+   - Each tab hidden if content not available
+   - Modified: `frontend/templates/index.html:107-130`
+
+3. **CSS Styling:**
+   - Standalone section with white background and subtle shadow
+   - No heading or wrapper - tabs start immediately (like Summary section)
+   - Full-width tab buttons (flex: 1) for equal distribution
+   - Tab buttons show hover highlight and bottom border when active
+   - Content area with padding for clean presentation
+   - Guide images with hover zoom effect and enhanced shadow
+   - Modified: `frontend/static/css/style.css:736-819`
+
+4. **JavaScript Functionality:**
+   - Updated `updateReadingGuide()` to manage all 3 tabs dynamically
+   - Shows only tabs with available content (hides others)
+   - Auto-selects first available tab (Why Read → Characters → Timeline)
+   - Updated `setupGuideTabs()` for new tab structure with `data-reading-tab` attributes
+   - Images support lightbox viewing when clicked
+   - Modified: `frontend/static/js/app.js:1047-1143, 574-592`
+
+5. **Helper Script Created:**
+   - `scripts/add_guide_images.py` - CLI tool to process and add guide images
+   - Accepts absolute file paths, moves to originals, then processes
+   - Features:
+     - Accepts absolute paths to source image files
+     - Moves files to `data/guides_originals/` with proper naming
+     - Converts to JPG if needed (handles PNG, etc.)
+     - Creates optimized WebP version using cwebp
+     - Saves processed images to `frontend/static/guides/`
+     - Updates database with URLs
+     - Includes dry-run mode for testing
+   - Usage examples:
+     ```bash
+     # Provide absolute paths to your image files
+     python scripts/add_guide_images.py 1 --character /Users/you/Downloads/pride_chars.jpg
+     python scripts/add_guide_images.py 1 --timeline ~/Documents/pride_timeline.png
+     python scripts/add_guide_images.py 1 --character /path/to/char.jpg --timeline /path/to/time.png
+     python scripts/add_guide_images.py 1 --character /path/to/char.jpg --dry-run
+     ```
+
+6. **Directory Structure:**
+   - Source: `/data/guides_originals/` (for original high-res images)
+   - Output: `/frontend/static/guides/` (for processed web-optimized images)
+   - Naming convention:
+     - Source: `{book_id}_characters.{ext}`, `{book_id}_timeline.{ext}`
+     - Output: `{book_id}_characters.jpg/webp`, `{book_id}_timeline.jpg/webp`
+
+**Features:**
+- Standalone section positioned between About and Summary sections
+- Reading Guide section only appears if book has ANY guide content (relevance/characters/timeline)
+- Tab interface with 3 tabs, each shown only if content available
+- Equal-width tab buttons for professional appearance
+- Graceful degradation - works with any combination of guide content (1, 2, or 3 tabs)
+- Images integrate with existing lightbox functionality for full-screen viewing
+- Follows DRY principle by reusing existing lightbox and markdown rendering code
+
+**User Experience:**
+- Clear visual separation from About section (own standalone box)
+- "Why Read This Now" gets equal prominence as a tab (not hidden as subtext)
+- Tab interface provides clean, organized access to all reading guide content
+- Clickable images allow detailed examination of characters and timeline
+- Only shows tabs that are available for each book
+- Professional tabbed interface matches existing summary tabs design
+
+**Next Steps:**
+To add guide images to a book:
+1. Create or obtain character guide and/or timeline images (any format: JPG, PNG, WebP, etc.)
+2. Run processing script with absolute paths to your images:
+   ```bash
+   python scripts/add_guide_images.py 1 --character /path/to/image.jpg --timeline /path/to/timeline.png
+   ```
+3. Script will automatically:
+   - Move images to `data/guides_originals/` (renamed to `{book_id}_characters.ext`, `{book_id}_timeline.ext`)
+   - Convert to JPG if needed
+   - Create optimized WebP versions
+   - Save to `frontend/static/guides/`
+   - Update database with URLs
+4. Images will appear in Reading Guide section on book detail page
+
+---
+
+## 2025-12-06
+
+### Fix Chapter Title Detection for TOC-Based Extraction - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-06 19:15
+**Completed:** 2025-12-06 19:30
+
+**Problem:**
+When processing books with two-level structure (sections and chapters), chapter titles extracted from the Table of Contents were being incorrectly replaced with generic "Part {numeral}" names if they were longer than 50 characters.
+
+Example from "A Room with a View":
+- Chapter 18: "Lying to Mr. Beebe, Mrs. Honeychurch, Freddy, and The Servants" (62 chars) was being replaced with "Part XVIII"
+- Chapter 19: "Lying to Mr. Emerson" was also affected
+
+**Root Cause:**
+The code at `scripts/generate_summaries.py:3519-3539` applied a "looks like a sentence" validation that replaced long chapter titles (>50 chars) with generic names, even when the title came from a reliable source (the TOC).
+
+**Solution:**
+Removed the "looks like a sentence" validation for chapter titles in the two-level structure code path (`scripts/generate_summaries.py:3519-3539`), since these titles are already validated and extracted from the TOC. The TOC is a reliable source and should be trusted without second-guessing.
+
+**Changes:**
+- Modified `scripts/generate_summaries.py:3515-3525` to skip sentence validation for TOC-sourced titles
+- Added comment explaining that TOC titles should be trusted
+
+**Verification:**
+Tested with "A Room with a View" dry run - both chapters now show correct titles:
+- Chapter 18: "Lying to Mr. Beebe, Mrs. Honeychurch, Freddy, and The Servants" ✓
+- Chapter 19: "Lying to Mr. Emerson" ✓
+
+---
+
+## 2025-12-06
+
+### Modern English (No-Fear) Translation Script with Bulk Batching - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-06 10:30
+**Completed:** 2025-12-06 11:15
+
+**Objective:** Create a script to generate modern English translations of classic literature chapters while preserving exact structure and meaning, with efficient bulk batch processing.
+
+**Implementation:**
+
+1. **Script Created:** `scripts/generate_modern_english.py`
+   - Reads chapter text from database (`chapters.chapter_text`)
+   - Uses Gemini API to generate modern English translations
+   - **Bulk batch processing**: Process up to 5 chapters per API call
+   - Preserves exact sentence and paragraph structure
+   - Modernizes vocabulary and simplifies complex syntax
+   - Maintains author's intended meaning and tone
+
+2. **Key Features:**
+   - **Bulk Batch Processing** (similar to `generate_summaries.py`):
+     - Process multiple chapters in a single API call (up to 5 chapters)
+     - Sequential index mapping (1, 2, 3...) for reliable parsing
+     - Automatic batch splitting with configurable batch size
+     - 3-second delay between batches
+   - Single chapter mode: `--book-id 1 --chapter 5`
+   - Multiple chapters: `--book-id 1 --chapters "1,2,3"`
+   - All chapters: `--book-id 1 --all-chapters --batch-size 3`
+   - Dry run mode: `--dry-run` (preview prompts without API calls)
+   - Saves output to `output/modern_english/` directory
+   - Validation checks for paragraph count consistency
+
+3. **Comprehensive Prompt Design:**
+   - **Bulk Translation Prompt**: Handles multiple chapters in one API call
+   - Clear rules for preserving structure (no adding/removing sentences or paragraphs)
+   - Guidelines for modernizing archaic language
+   - Instructions to maintain meaning, tone, and literary quality
+   - Simplification of complex Victorian/classical syntax
+   - Example transformations to demonstrate expected output
+   - Temperature set to 0.3 for consistent translations
+   - Structured output format with `### CHAPTER N` markers
+
+4. **Quality Controls:**
+   - Paragraph count validation for each chapter (warns if structure changed)
+   - Preview file saving for review
+   - Detailed logging of input/output metrics per chapter
+   - Error handling with clear messages
+   - Missing chapter detection and warnings
+
+5. **Efficiency Improvements:**
+   - Reduced API calls by 3-5x through bulk processing
+   - Cost savings: ~70% reduction (e.g., 50 chapters: 10 API calls vs 50)
+   - Faster processing: Parallel chapter translation in each batch
+
+**Usage Examples:**
+```bash
+# Single chapter
+python scripts/generate_modern_english.py --book-id 1 --chapter 5
+
+# Multiple chapters with batch processing (3 chapters per API call)
+python scripts/generate_modern_english.py --book-id 1 --chapters "1,2,3,4,5,6" --batch-size 3
+
+# All chapters with batch size 5 (recommended for best efficiency)
+python scripts/generate_modern_english.py --book-id 1 --all-chapters --batch-size 5
+
+# Dry run (preview only)
+python scripts/generate_modern_english.py --book-id 1 --chapters "1,2,3" --dry-run --batch-size 3
+```
+
+**Technical Details:**
+- `MAX_CHAPTERS_PER_BATCH = 5` (matches summary generation threshold)
+- `MAX_OUTPUT_TOKENS = 16384` (supports longer outputs)
+- Response parsing with regex: `### CHAPTER N ... ### END CHAPTER N`
+- Sequential index to chapter number mapping for reliable parsing
+
+**Completed Enhancements:**
+- ✅ Database storage: Added `modern_english_text` column to `chapters` table
+- ✅ Database method: `update_chapter_modern_english()` for saving translations
+- ✅ Word count limits: `MAX_BATCH_CHARS = 400000` (~100K tokens)
+- ✅ Smart batching: Respects both chapter count (10) and character limits
+- ✅ API endpoint: `/api/books/<book_id>/chapters/<chapter_number>` returns `modern_english_text`
+- ✅ Script flags: `--save-to-db` (default: True) and `--no-save-to-db`
+- ✅ Updated batch size: Default changed from 3 to 5 for efficiency
+- ✅ MAX_CHAPTERS_PER_BATCH increased from 5 to 10 (matches generate_summaries.py)
+
+**Future Enhancements:**
+- Frontend side-by-side comparison view (requires UI component development in frontend/static/js/app.js)
+- Quality scoring metrics
+- User feedback mechanism
+
+**Frontend Integration Note:**
+The backend is fully ready to support side-by-side views. The `modern_english_text` field is automatically available in the `/api/books/<book_id>/chapters/<chapter_number>` endpoint. To implement the frontend:
+1. Modify the chapter detail component in `frontend/static/js/app.js`
+2. Add a toggle button for "Original" vs "Modern English" vs "Side-by-Side"
+3. Style with CSS grid for side-by-side layout
+4. Add smooth transitions between view modes
+
+---
+
 ## 2025-12-04
 
 ### Decouple Book Processing from Project Gutenberg - COMPLETED

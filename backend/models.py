@@ -162,6 +162,14 @@ class Database:
             # Column already exists
             pass
 
+        # Add modern_english_text column to chapters table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE chapters ADD COLUMN modern_english_text TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Audio files table (for TTS)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS audio_files (
@@ -223,6 +231,30 @@ class Database:
 
         try:
             cursor.execute("ALTER TABLE authors ADD COLUMN long_bio TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
+        # Add character_guide_url column to books table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN character_guide_url TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
+        # Add timeline_url column to books table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN timeline_url TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
+        # Add themes_url column to books table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN themes_url TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             # Column already exists
@@ -407,7 +439,8 @@ class Database:
 
     def add_chapter(self, book_id: int, chapter_number: int,
                     chapter_title: str, summary: str, chapter_text: str = None,
-                    section_id: int = None, illustration_url: str = None) -> int:
+                    section_id: int = None, illustration_url: str = None,
+                    modern_english_text: str = None) -> int:
         """Add or update a chapter summary"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -416,9 +449,9 @@ class Database:
 
         cursor.execute('''
             INSERT OR REPLACE INTO chapters
-            (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url))
+            (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url, modern_english_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url, modern_english_text))
 
         chapter_id = cursor.lastrowid
         conn.commit()
@@ -473,6 +506,84 @@ class Database:
         conn.close()
 
         return dict(row) if row else None
+
+    def update_chapter_modern_english(self, book_id: int, chapter_number: int, modern_english_text: str):
+        """Update modern English text for a chapter
+
+        Args:
+            book_id: Database ID of the book
+            chapter_number: Chapter number
+            modern_english_text: Modern English translation text
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE chapters
+            SET modern_english_text = ?
+            WHERE book_id = ? AND chapter_number = ?
+        ''', (modern_english_text, book_id, chapter_number))
+
+        conn.commit()
+        conn.close()
+
+    def update_chapter_text(self, book_id: int, chapter_number: int, chapter_text: str):
+        """Update full text for a chapter
+
+        Args:
+            book_id: Database ID of the book
+            chapter_number: Chapter number
+            chapter_text: Full chapter text
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE chapters
+            SET chapter_text = ?
+            WHERE book_id = ? AND chapter_number = ?
+        ''', (chapter_text, book_id, chapter_number))
+
+        conn.commit()
+        conn.close()
+
+    def update_chapter_both_texts(self, book_id: int, chapter_number: int, chapter_text: str = None, modern_english_text: str = None):
+        """Update both chapter text and modern English text
+
+        Args:
+            book_id: Database ID of the book
+            chapter_number: Chapter number
+            chapter_text: Full chapter text (optional)
+            modern_english_text: Modern English translation text (optional)
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        updates = []
+        params = []
+
+        if chapter_text is not None:
+            updates.append("chapter_text = ?")
+            params.append(chapter_text)
+
+        if modern_english_text is not None:
+            updates.append("modern_english_text = ?")
+            params.append(modern_english_text)
+
+        if not updates:
+            conn.close()
+            return
+
+        params.extend([book_id, chapter_number])
+        query = f'''
+            UPDATE chapters
+            SET {", ".join(updates)}
+            WHERE book_id = ? AND chapter_number = ?
+        '''
+
+        cursor.execute(query, params)
+        conn.commit()
+        conn.close()
 
     def add_audio_file(self, summary_id: Optional[int], chapter_id: Optional[int],
                       audio_path: str, duration: float) -> int:

@@ -23,29 +23,29 @@ Processing Modes:
    - For covers: All covers generated asynchronously
 
 Usage:
-    # Generate with default model (gemini-3-pro-image-preview, 2K) - synchronous
+    # Generate cover only (default behavior) with default model (gemini-3-pro-image-preview, 2K)
     python scripts/generate_gemini_illustrations.py --book-id 53
 
-    # Use async mode for 50% cost savings
+    # Generate cover with async mode for 50% cost savings
     python scripts/generate_gemini_illustrations.py --book-id 53 --async-mode
 
     # Use faster flash model with async mode
     python scripts/generate_gemini_illustrations.py --book-id 53 --model gemini-2.5-flash-image --async-mode
 
-    # Generate cover only
-    python scripts/generate_gemini_illustrations.py --book-id 53 --cover-only
-
     # Generate covers for multiple books with async mode
-    python scripts/generate_gemini_illustrations.py --book-ids 53,54,55 --cover-only --async-mode
+    python scripts/generate_gemini_illustrations.py --book-ids 53,54,55 --async-mode
 
-    # Generate chapter illustrations only (sync mode)
+    # Generate cover AND chapter illustrations (sync mode)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --with-chapters
+
+    # Generate cover AND chapter illustrations (async mode)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --with-chapters --async-mode
+
+    # Generate chapter illustrations only (skip cover)
     python scripts/generate_gemini_illustrations.py --book-id 53 --chapters-only
 
-    # Generate chapter illustrations only (async mode)
-    python scripts/generate_gemini_illustrations.py --book-id 53 --chapters-only --async-mode
-
     # Generate specific chapters with async mode (uses existing Chapter 1 if available)
-    python scripts/generate_gemini_illustrations.py --book-id 53 --chapter-range 2-50 --async-mode
+    python scripts/generate_gemini_illustrations.py --book-id 53 --chapters-only --chapter-range 2-50 --async-mode
 
     # Batch process all books missing illustrations (async mode)
     python scripts/generate_gemini_illustrations.py --batch-all --async-mode
@@ -98,7 +98,7 @@ except ImportError:
 # - "gemini-3-pro-image-preview": High quality, supports explicit image sizing (1K/2K/4K)
 # - "gemini-2.5-flash-image": Faster, lower cost, no explicit sizing (aspect ratio only)
 DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview"
-COVER_IMAGE_SIZE = "4K"  # Book covers use 4K for highest quality (only for gemini-3-pro-image-preview)
+COVER_IMAGE_SIZE = "2K"  # Book covers use 2K (same as chapters, only for gemini-3-pro-image-preview)
 IMAGE_SIZE = "2K"  # Chapter illustrations use 2K (only for gemini-3-pro-image-preview)
 ASPECT_RATIO = "2:3"  # Book cover aspect ratio (portrait)
 
@@ -170,7 +170,7 @@ Your process:
 Guidelines:
 - Prioritize storytelling accuracy: symbolism, color, and imagery should represent the narrative truth of the book.
 - Avoid generic visuals or irrelevant symbolism.
-- Use rich colors and detailed artwork appropriate for the genre and time period.
+- Use appropriate artwork and color scheme for the genre and time period.
 - Professional, publishable quality suitable for a book cover.
 
 Book Summary:
@@ -197,7 +197,7 @@ Generate ONE high-quality, professional book cover."""
             # Build image config based on model capabilities
             image_config_params = {"aspect_ratio": ASPECT_RATIO}
             # Only gemini-3-pro-image-preview supports explicit image_size
-            # Use 4K for book covers
+            # Use 2K for book covers (same as chapters)
             if "gemini-3-pro-image" in self.model:
                 image_config_params["image_size"] = COVER_IMAGE_SIZE
                 print(f"  📐 Using {COVER_IMAGE_SIZE} resolution for cover")
@@ -794,8 +794,10 @@ def generate_book_cover(db: Database, generator: GeminiImageGenerator,
 
     if save_image(cover_data, cover_path):
         print(f"  ℹ️  Original cover saved to {cover_path}")
-        print(f"  ℹ️  Run reduce_illustration_resolution.py to create optimized versions")
-        # Note: Database will be updated after optimization script runs
+
+        # Auto-optimize cover to create web-optimized versions
+        auto_optimize_covers([book_id], dry_run=dry_run)
+
         return True
 
     return False
@@ -848,6 +850,102 @@ def auto_optimize_illustrations(book_id: int, chapter_numbers: list = None, dry_
 
         if result.returncode == 0:
             print(f"\n✅ Optimization completed successfully!")
+            return True
+        else:
+            print(f"\n⚠️  Optimization script returned exit code {result.returncode}")
+            return False
+
+    except Exception as e:
+        print(f"\n❌ Error running optimization script: {e}")
+        return False
+
+
+def auto_optimize_covers(book_ids: list, dry_run: bool = False) -> bool:
+    """Automatically run the optimization script after generating covers
+
+    Args:
+        book_ids: List of book IDs to optimize covers for
+        dry_run: If True, don't actually run optimization
+
+    Returns:
+        True if optimization succeeded, False otherwise
+    """
+    if dry_run:
+        print(f"\n[DRY RUN] Would run cover optimization for books {book_ids}")
+        return True
+
+    books_str = f" for {len(book_ids)} books" if len(book_ids) > 1 else f" for book {book_ids[0]}"
+    print(f"\n{'='*80}")
+    print(f"🔄 Auto-optimizing covers{books_str}...")
+    print(f"{'='*80}\n")
+
+    try:
+        # First, copy PNGs from data/cover_originals to frontend/static/covers
+        # The optimization script expects source files to be in frontend/static/covers
+        import shutil
+        cover_originals_dir = project_root / "data" / "cover_originals"
+        frontend_covers_dir = config.COVERS_DIR
+
+        print(f"📋 Preparing covers for optimization...")
+        for book_id in book_ids:
+            source_png = cover_originals_dir / f"{book_id}.png"
+            dest_png = frontend_covers_dir / f"{book_id}.png"
+
+            if source_png.exists():
+                if dest_png.exists():
+                    # Remove existing PNG in frontend to avoid conflicts
+                    dest_png.unlink()
+                shutil.copy2(source_png, dest_png)
+                print(f"  ✓ Prepared cover for book {book_id}")
+            else:
+                print(f"  ⚠️  No cover found at {source_png}")
+
+        # Run the optimization script
+        optimize_script = project_root / "scripts" / "reduce_illustration_resolution.py"
+
+        # Build command for covers optimization
+        cmd = [sys.executable, str(optimize_script), "--covers", "--update-db"]
+
+        # If single book, use --book-id; if multiple, process each separately
+        if len(book_ids) == 1:
+            cmd.extend(["--book-id", str(book_ids[0])])
+        else:
+            # For multiple books, we'll run the command for each book
+            # (Note: could be optimized to process all at once if script supports it)
+            all_success = True
+            for book_id in book_ids:
+                single_cmd = [sys.executable, str(optimize_script), "--covers", "--book-id", str(book_id), "--update-db"]
+                result = subprocess.run(single_cmd, capture_output=True, text=True, check=False)
+
+                if result.stdout:
+                    print(result.stdout)
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr)
+
+                if result.returncode != 0:
+                    all_success = False
+                    print(f"\n⚠️  Optimization failed for book {book_id}")
+
+            if all_success:
+                print(f"\n✅ All cover optimizations completed successfully!")
+            return all_success
+
+        # Single book case
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+
+        # Print the output
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+
+        if result.returncode == 0:
+            print(f"\n✅ Cover optimization completed successfully!")
             return True
         else:
             print(f"\n⚠️  Optimization script returned exit code {result.returncode}")
@@ -1532,7 +1630,7 @@ Your process:
 Guidelines:
 - Prioritize storytelling accuracy: symbolism, color, and imagery should represent the narrative truth of the book.
 - Avoid generic visuals or irrelevant symbolism.
-- Use rich colors and detailed artwork appropriate for the genre and time period.
+- Use appropriate artwork and color scheme for the genre and time period.
 - Professional, publishable quality suitable for a book cover.
 
 Book Summary:
@@ -1554,7 +1652,7 @@ Generate ONE high-quality, professional book cover."""
         }
 
         # Add image config for aspect ratio and size
-        # Use 4K for book covers
+        # Use 2K for book covers (same as chapters)
         image_config = {"aspect_ratio": ASPECT_RATIO}
         if "gemini-3-pro-image" in generator.model:
             image_config["image_size"] = COVER_IMAGE_SIZE
@@ -1662,11 +1760,14 @@ Generate ONE high-quality, professional book cover."""
     print(f"\n{'='*80}")
     if all_success:
         print(f"✅ All {len(generated_covers)} covers generated successfully!")
-        print(f"  ℹ️  Run reduce_illustration_resolution.py to create optimized versions")
     else:
         print(f"⚠️  Some covers failed - check output above")
         print(f"  Generated {len(generated_covers)}/{len(batch_requests)} covers")
     print(f"{'='*80}")
+
+    # Auto-optimize all generated covers
+    if generated_covers:
+        auto_optimize_covers(generated_covers, dry_run=dry_run)
 
     return all_success
 
@@ -1677,8 +1778,8 @@ def main():
     )
     parser.add_argument('--book-id', type=int, help='Process specific book by ID')
     parser.add_argument('--book-ids', type=str, help='Process multiple books by comma-separated IDs (e.g., "53,54,55")')
-    parser.add_argument('--cover-only', action='store_true', help='Generate cover only')
-    parser.add_argument('--chapters-only', action='store_true', help='Generate chapter illustrations only')
+    parser.add_argument('--with-chapters', action='store_true', help='Generate chapter illustrations in addition to covers (default: covers only)')
+    parser.add_argument('--chapters-only', action='store_true', help='Generate chapter illustrations only (skip covers)')
     parser.add_argument('--chapter-range', type=str, help='Chapter range to generate (e.g., "1-10")')
     parser.add_argument('--batch-all', action='store_true', help='Process all books missing illustrations')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be generated without actually generating')
@@ -1768,8 +1869,8 @@ def main():
     if args.chapter_range and not args.book_id:
         parser.error("--chapter-range requires --book-id")
 
-    if args.book_ids and not args.cover_only:
-        parser.error("--book-ids can only be used with --cover-only")
+    if args.book_ids and args.with_chapters:
+        parser.error("--book-ids can only be used for covers (remove --with-chapters flag)")
 
     # Parse chapter range
     chapter_range = None
@@ -1803,7 +1904,7 @@ def main():
         if not args.chapters_only:
             success = generate_book_cover(db, generator, args.book_id, args.dry_run) and success
 
-        if not args.cover_only:
+        if args.with_chapters:
             if args.async_mode:
                 # Use async batch API for chapter illustrations
                 success = generate_chapter_illustrations_batch(
@@ -1852,7 +1953,7 @@ def main():
         print("🔍 Finding books that need illustrations...")
 
         books_for_covers = [] if args.chapters_only else find_books_without_covers(db)
-        books_for_chapters = [] if args.cover_only else find_books_without_chapter_illustrations(db)
+        books_for_chapters = [] if not args.with_chapters else find_books_without_chapter_illustrations(db)
 
         print(f"\n📊 Summary:")
         print(f"   Books needing covers: {len(books_for_covers)}")
