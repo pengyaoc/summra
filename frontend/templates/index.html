@@ -38,6 +38,11 @@
     {% endif %}
 </head>
 <body>
+    <!-- Environment configuration -->
+    <script>
+        window.__IS_DEVELOPMENT__ = {{ 'true' if is_development else 'false' }};
+    </script>
+
     {% if initial_data %}
     <!-- Initial data for SEO and faster client-side rendering -->
     <script>
@@ -62,6 +67,55 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Hero Sections (Apple-style) -->
+            <div id="hero-section">
+                <!-- Main Hero Banner -->
+                <section class="hero-banner hero-main">
+                    <div class="hero-banner-content">
+                        <h1 class="hero-banner-title">Classic Literature, Made Easy</h1>
+                        <p class="hero-banner-subtitle">Everything you need to discover, learn, and read the classics</p>
+                        <p class="hero-banner-tagline">Completely free, forever</p>
+                        <div class="hero-banner-ctas">
+                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="categories">Explore Categories</a>
+                            <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Discover Banner -->
+                <section class="hero-banner hero-discover">
+                    <div class="hero-banner-content">
+                        <h2 class="hero-banner-heading">Discover</h2>
+                        <p class="hero-banner-description">Find your next classic in minutes with quick summaries and audio narration</p>
+                        <div class="hero-banner-ctas">
+                            <a href="javascript:void(0)" class="hero-cta-link" data-route="categories">Explore Categories →</a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Learn Banner -->
+                <section class="hero-banner hero-learn">
+                    <div class="hero-banner-content">
+                        <h2 class="hero-banner-heading">Learn</h2>
+                        <p class="hero-banner-description">Deep dive into classics with comprehensive summaries and visual guides</p>
+                        <div class="hero-banner-ctas">
+                            <a href="javascript:void(0)" class="hero-cta-link" data-route="books/great-expectations">See Example: Great Expectations →</a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Read Banner -->
+                <section class="hero-banner hero-read">
+                    <div class="hero-banner-content">
+                        <h2 class="hero-banner-heading">Read</h2>
+                        <p class="hero-banner-description">Enjoy a premium reading experience with modern English side-by-side</p>
+                        <div class="hero-banner-ctas">
+                            <a href="javascript:void(0)" class="hero-cta-link" id="hero-read-cta" data-route="books/jane-eyre/chapters/1">Try Reading: Jane Eyre Chapter 1 →</a>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
             <!-- Category Carousels Section -->
             <section class="categories-section hidden" id="categories-section">
                 <div class="categories-container" id="categories-container">

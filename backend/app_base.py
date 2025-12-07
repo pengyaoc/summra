@@ -37,6 +37,17 @@ CORS(app)
 # Initialize database
 db = models.Database()
 
+# Set environment flag (will be overridden by app.py or app_prod.py)
+app.config['IS_DEVELOPMENT'] = False
+
+# Add context processor to make environment available in templates
+@app.context_processor
+def inject_environment():
+    """Make environment flag available to all templates"""
+    return {
+        'is_development': app.config.get('IS_DEVELOPMENT', False)
+    }
+
 
 # Helper Functions
 

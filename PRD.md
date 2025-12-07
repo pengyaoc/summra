@@ -156,7 +156,48 @@ Users can browse a curated collection of classic books with cover images and met
 
 **Specifications:**
 
-**Home Page Layout (Redesigned 2025-11-28):**
+**Home Page Layout (Redesigned 2025-11-28, Updated 2025-12-06):**
+- **Hero Section (Added 2025-12-06):**
+  - Full-width gradient background (purple to violet: #667eea to #764ba2)
+  - Large headline: "Classic Literature, Made Easy"
+  - Subtitle: "Everything you need to discover, learn, and read the classics — completely free"
+  - **Three Vertically Stacked Section Cards:**
+
+    **1. Discover** 🔍 (Focus: Quick Preview & Audio)
+    - Find your next classic in minutes with quick summaries and audio narration
+    - Features:
+      - Quick summaries to preview any book
+      - Audio narration for on-the-go listening
+      - Browse by genre, era, and author
+    - CTA: "Explore Categories →" (navigates to #/categories)
+
+    **2. Learn** 📚 (Focus: Deep Understanding)
+    - Deep dive into classics with comprehensive summaries and visual guides
+    - Features:
+      - Comprehensive summaries with deep analysis
+      - Visual guides for themes, characters & timeline
+      - Chapter-by-chapter breakdowns
+    - CTA: "See Example: Great Expectations →" (navigates to Great Expectations book page)
+
+    **3. Read** 📖 (Focus: Premium Reading Experience)
+    - Enjoy a premium Kindle-like reading experience with modern features
+    - Features:
+      - Plain English translations side-by-side with original
+      - Customizable fonts, sizes & color themes
+      - Distraction-free reading mode
+    - CTA: "Try Reading: Jane Eyre Chapter 1 →" (navigates to Jane Eyre Chapter 1)
+      - Desktop: Opens in side-by-side view (original + modern English)
+      - Mobile: Opens in modern English view (screen too narrow for side-by-side)
+
+  - **Design Elements:**
+    - Vertical stack layout (not horizontal grid)
+    - Large icon (3rem) on left, content on right
+    - Glass-morphism cards with backdrop blur and subtle border
+    - Checkmark bullet points (✓) for feature lists
+    - Individual CTA buttons for each section (aligned with content)
+    - Hover effects: cards slide right with background brightening
+  - Responsive design: smaller fonts and tighter spacing on mobile
+  - Only visible on home page (hidden on book detail and other pages)
 - **White Background:** Clean, minimal design inspired by Amazon
 - **Category Carousels:** Horizontal scrolling rows organized by category
   - **Top 10 Categories:** Displayed first, sorted by book count (most popular first)

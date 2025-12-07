@@ -13,6 +13,9 @@ except ImportError:
     import config
     from app_base import app, logger, ensure_directories
 
+# Set development mode flag
+app.config['IS_DEVELOPMENT'] = True
+
 # Track active TTS generations and their chunk files for cleanup
 # Format: {audio_id: [chunk_file_paths]}
 active_tts_generations = {}
@@ -266,7 +269,14 @@ def stop_tts():
 
 @app.route('/api/admin/chapters/<int:book_id>/<int:chapter_number>', methods=['PUT'])
 def update_chapter_admin(book_id, chapter_number):
-    """Admin endpoint to update chapter text and modern English text"""
+    """Admin endpoint to update chapter text and modern English text (development only)"""
+    # Verify we're in development mode
+    if not app.config.get('IS_DEVELOPMENT', False):
+        return jsonify({
+            'success': False,
+            'error': 'Admin endpoints are only available in development mode'
+        }), 403
+
     try:
         from .models import Database
     except ImportError:

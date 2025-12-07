@@ -2052,6 +2052,161 @@ body {
     }
 }
 
+/* ===== Hero Banners (Apple-style) ===== */
+#hero-section {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+}
+
+.hero-banner {
+    width: 100%;
+    min-height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4rem 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Main Hero */
+.hero-main {
+    background: linear-gradient(135deg, #1d1d1f 0%, #2d2d2f 100%);
+    color: white;
+    min-height: 600px;
+}
+
+/* Discover Hero */
+.hero-discover {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    min-height: 480px;
+}
+
+/* Learn Hero */
+.hero-learn {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    min-height: 480px;
+}
+
+/* Read Hero */
+.hero-read {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    min-height: 480px;
+}
+
+.hero-banner-content {
+    max-width: 980px;
+    margin: 0 auto;
+    z-index: 1;
+}
+
+.hero-banner-title {
+    font-family: 'New York', Baskerville, 'Baskerville Old Face', 'Hoefler Text', Garamond, 'Times New Roman', serif;
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+}
+
+.hero-banner-subtitle {
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1.4;
+    margin-bottom: 0.25rem;
+    opacity: 0.95;
+}
+
+.hero-banner-tagline {
+    font-size: 1.25rem;
+    font-weight: 400;
+    margin-bottom: 2rem;
+    opacity: 0.85;
+}
+
+.hero-banner-heading {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+}
+
+.hero-banner-description {
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1.4;
+    margin-bottom: 1.5rem;
+    opacity: 0.95;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.hero-banner-ctas {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+}
+
+.hero-cta-primary {
+    background: #0071e3;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 980px;
+    font-size: 1.0625rem;
+    font-weight: 400;
+    text-decoration: none;
+    transition: background 0.2s ease;
+    display: inline-block;
+}
+
+.hero-cta-primary:hover {
+    background: #0077ed;
+}
+
+.hero-cta-secondary {
+    background: transparent;
+    color: #2997ff;
+    padding: 0.75rem 1.5rem;
+    border-radius: 980px;
+    font-size: 1.0625rem;
+    font-weight: 400;
+    text-decoration: none;
+    transition: background 0.2s ease;
+    display: inline-block;
+    border: 2px solid #2997ff;
+}
+
+.hero-cta-secondary:hover {
+    background: rgba(41, 151, 255, 0.1);
+}
+
+.hero-cta-link {
+    color: white;
+    font-size: 1.125rem;
+    font-weight: 400;
+    text-decoration: none;
+    transition: opacity 0.2s ease;
+    display: inline-block;
+}
+
+.hero-cta-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
 /* ===== Category Carousels ===== */
 .categories-section {
     margin-bottom: 1rem;
@@ -2218,6 +2373,58 @@ body {
 
 /* Responsive carousel styling */
 @media (max-width: 768px) {
+    /* Hero Banners Responsive */
+    .hero-banner {
+        min-height: 400px;
+        padding: 3rem 1.5rem;
+    }
+
+    .hero-main {
+        min-height: 500px;
+    }
+
+    .hero-discover,
+    .hero-learn,
+    .hero-read {
+        min-height: 380px;
+    }
+
+    .hero-banner-title {
+        font-size: 2.5rem;
+    }
+
+    .hero-banner-subtitle {
+        font-size: 1.25rem;
+    }
+
+    .hero-banner-tagline {
+        font-size: 1.1rem;
+    }
+
+    .hero-banner-heading {
+        font-size: 2.25rem;
+    }
+
+    .hero-banner-description {
+        font-size: 1.25rem;
+    }
+
+    .hero-banner-ctas {
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+    }
+
+    .hero-cta-primary,
+    .hero-cta-secondary {
+        padding: 0.625rem 1.25rem;
+        font-size: 1rem;
+    }
+
+    .hero-cta-link {
+        font-size: 1rem;
+    }
+
     .category-title {
         font-size: 1.25rem;
     }

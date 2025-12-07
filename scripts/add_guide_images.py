@@ -32,56 +32,67 @@ from models import Database
 import config
 
 
-def process_guide_image(original_path: Path, output_dir: Path, output_name: str) -> tuple:
+def process_guide_image(original_path: Path, output_dir: Path, output_name: str, max_width: int = 1200) -> tuple:
     """
-    Process a guide image: convert to JPG if needed, create WebP version.
+    Process a guide image: resize, convert to JPG if needed, create WebP version.
 
     Args:
         original_path: Path to original image file
         output_dir: Directory to save processed images
         output_name: Base name for output files (without extension)
+        max_width: Maximum width in pixels (default: 1200)
 
     Returns:
         Tuple of (jpg_path, webp_path) or (None, None) on failure
     """
+    from PIL import Image
+
     jpg_path = output_dir / f"{output_name}.jpg"
     webp_path = output_dir / f"{output_name}.webp"
 
-    # If original is not JPG, convert it
-    if original_path.suffix.lower() not in ['.jpg', '.jpeg']:
-        print(f"  Converting {original_path.suffix} to JPG...")
-        try:
-            # Use PIL to convert to JPG
-            from PIL import Image
-            img = Image.open(original_path)
-            # Convert to RGB if necessary (e.g., for PNG with transparency)
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
-                img = background
-            img.save(jpg_path, 'JPEG', quality=95)
-            print(f"  ✓ Saved JPG: {jpg_path.name}")
-        except Exception as e:
-            print(f"  ✗ Error converting to JPG: {e}")
-            return None, None
-    else:
-        # Just copy the JPG
-        print(f"  Copying JPG...")
-        shutil.copy2(original_path, jpg_path)
-        print(f"  ✓ Saved JPG: {jpg_path.name}")
+    try:
+        # Load and resize image
+        img = Image.open(original_path)
+        original_size = img.size
 
-    # Create optimized WebP version using cwebp
+        # Resize if width exceeds max_width
+        if img.width > max_width:
+            aspect_ratio = img.height / img.width
+            new_width = max_width
+            new_height = int(new_width * aspect_ratio)
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            print(f"  Resized: {original_size} -> {img.size}")
+        else:
+            print(f"  Size: {img.size} (no resize needed)")
+
+        # Convert to RGB if necessary (e.g., for PNG with transparency)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+
+        # Save as JPG with aggressive compression
+        img.save(jpg_path, 'JPEG', quality=75, optimize=True)
+        jpg_size_mb = jpg_path.stat().st_size / (1024 * 1024)
+        print(f"  ✓ Saved JPG: {jpg_path.name} ({jpg_size_mb:.2f} MB)")
+
+    except Exception as e:
+        print(f"  ✗ Error processing image: {e}")
+        return None, None
+
+    # Create optimized WebP version using cwebp with aggressive compression
     print(f"  Creating optimized WebP version...")
     try:
         result = subprocess.run(
-            ['cwebp', '-q', '85', str(jpg_path), '-o', str(webp_path)],
+            ['cwebp', '-q', '70', str(jpg_path), '-o', str(webp_path)],
             capture_output=True,
             text=True,
             check=True
         )
-        print(f"  ✓ Saved WebP: {webp_path.name}")
+        webp_size_mb = webp_path.stat().st_size / (1024 * 1024)
+        print(f"  ✓ Saved WebP: {webp_path.name} ({webp_size_mb:.2f} MB)")
     except subprocess.CalledProcessError as e:
         print(f"  ✗ Error creating WebP: {e}")
         print(f"  stdout: {e.stdout}")
