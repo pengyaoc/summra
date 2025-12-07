@@ -93,12 +93,6 @@
                         <p class="about-text" id="about-text"></p>
                     </div>
 
-                    <!-- Why Read This Now -->
-                    <div class="about-single-column">
-                        <h3 class="about-heading">Why Read This Now?</h3>
-                        <p class="about-text" id="relevance-text"></p>
-                    </div>
-
                     <!-- About the Author -->
                     <div class="about-single-column">
                         <div class="about-heading-row">
@@ -106,6 +100,32 @@
                             <a href="#" class="learn-more-btn hidden" id="author-learn-more-btn">Learn more →</a>
                         </div>
                         <p class="author-bio-text" id="author-bio-text"></p>
+                    </div>
+                </div>
+
+                <!-- Reading Guide Section (Standalone) -->
+                <div class="reading-guide-section hidden" id="reading-guide-section">
+                    <div class="reading-guide-tabs-header">
+                        <button class="reading-guide-tab active" data-reading-tab="themes">Themes</button>
+                        <button class="reading-guide-tab" data-reading-tab="characters">Characters</button>
+                        <button class="reading-guide-tab" data-reading-tab="timeline">Timeline</button>
+                    </div>
+
+                    <div class="reading-guide-tabs-content">
+                        <!-- Themes Tab -->
+                        <div class="reading-guide-tab-content active" id="reading-tab-themes">
+                            <img id="themes-guide-image" class="guide-image" alt="Themes" />
+                        </div>
+
+                        <!-- Characters Tab -->
+                        <div class="reading-guide-tab-content" id="reading-tab-characters">
+                            <img id="character-guide-image" class="guide-image" alt="Character Guide" />
+                        </div>
+
+                        <!-- Timeline Tab -->
+                        <div class="reading-guide-tab-content" id="reading-tab-timeline">
+                            <img id="timeline-guide-image" class="guide-image" alt="Timeline" />
+                        </div>
                     </div>
                 </div>
 
@@ -221,8 +241,11 @@
                 </div>
 
                 <div class="chapter-detail-header">
-                    <h2 id="chapter-detail-title"></h2>
-                    <p class="chapter-detail-subtitle" id="chapter-detail-subtitle"></p>
+                    <div>
+                        <h2 id="chapter-detail-title"></h2>
+                        <p class="chapter-detail-subtitle" id="chapter-detail-subtitle"></p>
+                    </div>
+                    <button class="admin-edit-btn hidden" id="admin-edit-chapter-btn" title="Edit Chapter (Admin)">✏️ Edit</button>
                 </div>
 
                 <div class="chapter-detail-content" id="chapter-detail-content">
@@ -253,9 +276,24 @@
                     <div class="chapter-fulltext-section" id="chapter-fulltext-section">
                         <div class="section-header">
                             <h4>📖 Full Text</h4>
-                            <button class="tts-button-inline" id="chapter-fulltext-tts-button">🔊 Listen</button>
+                            <div class="header-controls">
+                                <!-- View Mode Toggle (only shown if modern English available) -->
+                                <div class="view-mode-toggle hidden" id="view-mode-toggle">
+                                    <button class="view-mode-btn active" data-mode="original">Original</button>
+                                    <button class="view-mode-btn" data-mode="modern">Modern English</button>
+                                    <button class="view-mode-btn" data-mode="side-by-side">Side-by-Side</button>
+                                </div>
+                                <button class="tts-button-inline" id="chapter-fulltext-tts-button">🔊 Listen</button>
+                            </div>
                         </div>
+                        <!-- Original Text (default view) -->
                         <div class="chapter-fulltext" id="chapter-fulltext"></div>
+                        <!-- Modern English Text (hidden by default) -->
+                        <div class="chapter-modern-english hidden" id="chapter-modern-english"></div>
+                        <!-- Side-by-Side Container (hidden by default) -->
+                        <div class="chapter-side-by-side hidden" id="chapter-side-by-side">
+                            <!-- Rows will be dynamically inserted here by JavaScript -->
+                        </div>
                     </div>
 
                     <!-- Next Chapter Button -->
@@ -394,6 +432,30 @@
             <source id="lightbox-jpg" type="image/jpeg" />
             <img class="lightbox-image" id="lightbox-image" alt="" />
         </picture>
+    </div>
+
+    <!-- Admin Chapter Edit Modal -->
+    <div class="admin-modal hidden" id="admin-edit-modal">
+        <div class="admin-modal-content">
+            <div class="admin-modal-header">
+                <h2>Edit Chapter</h2>
+                <button class="admin-modal-close" id="admin-modal-close">×</button>
+            </div>
+            <div class="admin-modal-body">
+                <div class="admin-form-group">
+                    <label for="admin-chapter-text">Original Text:</label>
+                    <textarea id="admin-chapter-text" class="admin-textarea" rows="15"></textarea>
+                </div>
+                <div class="admin-form-group">
+                    <label for="admin-modern-english">Modern English:</label>
+                    <textarea id="admin-modern-english" class="admin-textarea" rows="15"></textarea>
+                </div>
+            </div>
+            <div class="admin-modal-footer">
+                <button class="admin-btn-secondary" id="admin-cancel-btn">Cancel</button>
+                <button class="admin-btn-primary" id="admin-save-btn">Save Changes</button>
+            </div>
+        </div>
     </div>
 
     <!-- Markdown parser -->
