@@ -48,7 +48,9 @@
       "Bash(sort:*)",
       "Bash(BUG_FIXES.md)",
       "Bash(../summra/venv/bin/python3:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "WebFetch(domain:medium.com)",
+      "Bash(unset:*)"
     ],
     "deny": [],
     "ask": []

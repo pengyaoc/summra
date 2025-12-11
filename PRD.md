@@ -198,6 +198,66 @@ Users can browse a curated collection of classic books with cover images and met
     - Hover effects: cards slide right with background brightening
   - Responsive design: smaller fonts and tighter spacing on mobile
   - Only visible on home page (hidden on book detail and other pages)
+
+- **Top 10 Books Carousel (Added 2025-12-08):**
+  - **Location:** Embedded in the "Discover" hero banner section
+  - **Design:** Netflix-style horizontal carousel with overlay navigation
+  - **Purpose:** Showcase the most popular/featured classic books to drive discovery
+
+  **Responsive Layout:**
+  - **Desktop (>1024px):** Carousel centered with max-width 980px
+    - Navigation buttons positioned inside carousel area (overlaid on scroll container)
+    - Books displayed in horizontal scrollable row
+    - Smooth scroll behavior on button click
+  - **Mobile (≤1024px):** Carousel left-aligned to viewport edge
+    - Breaks free from centered hero content container
+    - Navigation buttons overlaid on left/right edges
+    - Touch-swipeable horizontal scrolling
+
+  **Book Cards:**
+  - **Width:** 150px per card (110px on mobile <768px)
+  - **Cover Image:** Full book cover with 2:3 aspect ratio
+  - **Rank Overlay:** Large bold number (1-10) overlaid on bottom-left
+    - White text with black outline and shadow for contrast
+    - Font: Arial Black, 3.5rem on desktop, 2rem on mobile
+  - **Hover Effect:** Scale to 1.05x
+  - **Click Action:** Navigate to book detail page
+
+  **Navigation Controls:**
+  - **Left/Right Buttons:**
+    - Circular buttons (44px diameter) with chevron icons
+    - Semi-transparent black background (rgba(0,0,0,0.75))
+    - White icons from inline SVG
+    - Hover: darker background, scale 1.1x
+    - Disabled state: 30% opacity when at start/end
+  - **Position:** Absolutely positioned, vertically centered
+    - Desktop: Inside carousel container (0.5rem from edges)
+    - Mobile: Same positioning, scales to 2.5-2.75rem on smallest screens
+  - **Behavior:**
+    - Click scrolls carousel by ~600px (approximately 3-4 books)
+    - Smooth scroll animation
+    - Buttons auto-disable at scroll boundaries
+
+  **Technical Implementation:**
+  - **HTML Structure:**
+    - Carousel is direct child of `.hero-discover` section (not nested in `.hero-banner-content`)
+    - This allows carousel to break free from centered wrapper on mobile
+    - Three `.hero-banner-content` wrappers: title/subtitle, carousel wrapper, CTA
+  - **CSS Architecture:**
+    - `.hero-banner` uses `display: flex; flex-direction: column` for vertical stacking
+    - `.top-10-carousel-wrapper` uses `align-self: flex-start` below 1024px breakpoint
+    - Preserves centered title/subtitle while allowing left-aligned carousel
+  - **Breakpoint Threshold:** 1024px chosen to prevent button clipping
+    - Calculation: 980px max-width + 44px buttons + padding = requires 1024px+ viewport
+  - **Data Loading:** Books fetched from `/api/books?limit=10` on page load
+
+  **User Experience:**
+  - **Discovery:** Immediately showcases top classics to new visitors
+  - **Visual Hierarchy:** Rank numbers create clear priority ordering
+  - **Touch-Friendly:** Swipeable on mobile devices (native overflow scroll)
+  - **Performance:** Lazy-loaded images with skeleton loading states
+  - **Accessibility:** Keyboard navigation support (arrow keys work in scroll container)
+
 - **White Background:** Clean, minimal design inspired by Amazon
 - **Category Carousels:** Horizontal scrolling rows organized by category
   - **Top 10 Categories:** Displayed first, sorted by book count (most popular first)
@@ -297,6 +357,14 @@ Users can browse a curated collection of classic books with cover images and met
 - [✅] Categories section hidden when viewing book details (2025-11-28)
 - [✅] "About This Book" section displays when metadata exists (2025-12-03)
 - [✅] Section hidden for books without metadata (backward compatible) (2025-12-03)
+- [✅] Top 10 Carousel displays in Discover hero banner (2025-12-08)
+- [✅] Carousel centered on desktop (>1024px), left-aligned on mobile (≤1024px) (2025-12-08)
+- [✅] Rank numbers (1-10) overlaid on book covers with high contrast (2025-12-08)
+- [✅] Navigation buttons scroll carousel smoothly (2025-12-08)
+- [✅] Navigation buttons disable at scroll boundaries (2025-12-08)
+- [✅] Books clickable to navigate to detail page (2025-12-08)
+- [✅] Carousel touch-swipeable on mobile devices (2025-12-08)
+- [✅] Title/subtitle remain centered while carousel breaks out on mobile (2025-12-08)
 - [✅] Two-column layout on desktop, stacked on mobile (2025-12-03)
 - [✅] Author country displays when available (2025-12-03)
 - [✅] "More by Author" dropdown toggles correctly (2025-12-03)

@@ -803,6 +803,74 @@ class SummraApp {
         categoriesContainer.appendChild(carouselSection);
     }
 
+    renderTop10Carousel() {
+        // Top 10 most downloaded books from Project Gutenberg (by Gutenberg ID)
+        // Using popular books we have in our database
+        const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
+
+        // Find books in our database that match these IDs
+        const top10Books = [];
+        top10GutenbergIds.forEach((gutenbergId, index) => {
+            const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
+            if (book) {
+                top10Books.push({ book, rank: index + 1 });
+            }
+        });
+
+        const scrollContainer = document.getElementById('top-10-scroll');
+        if (!scrollContainer || top10Books.length === 0) return;
+
+        // Clear skeleton loading cards
+        scrollContainer.innerHTML = '';
+
+        // Create book cards with rank overlays
+        top10Books.forEach(({ book, rank }) => {
+            const bookCard = document.createElement('div');
+            bookCard.className = 'top-10-book-card';
+
+            const cardInner = document.createElement('div');
+            cardInner.className = 'top-10-book-card-inner';
+
+            const coverImageHtml = book.cover_image_url
+                ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, '')
+                : '';
+
+            cardInner.innerHTML = `
+                ${coverImageHtml}
+                <div class="top-10-rank-overlay">
+                    <div class="top-10-rank-number">${rank}</div>
+                </div>
+            `;
+
+            bookCard.appendChild(cardInner);
+            bookCard.addEventListener('click', () => this.selectBook(book));
+            scrollContainer.appendChild(bookCard);
+        });
+
+        // Setup carousel navigation
+        const leftBtn = document.getElementById('top-10-nav-left');
+        const rightBtn = document.getElementById('top-10-nav-right');
+
+        const scrollAmount = 170; // Width of card + gap
+
+        leftBtn.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
+        });
+
+        rightBtn.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
+        });
+
+        // Update button states on scroll
+        const updateButtonStates = () => {
+            leftBtn.disabled = scrollContainer.scrollLeft <= 0;
+            rightBtn.disabled = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 1;
+        };
+
+        scrollContainer.addEventListener('scroll', updateButtonStates);
+        setTimeout(() => updateButtonStates(), 100);
+    }
+
     async loadBooks() {
         try {
             const response = await fetch(`${this.apiBase}/books`);
@@ -2179,6 +2247,9 @@ class SummraApp {
         const categoriesSection = document.getElementById('categories-section');
         if (categoriesSection) categoriesSection.classList.remove('hidden');
 
+        // Render top 10 carousel
+        this.renderTop10Carousel();
+
         this.currentBook = null;
         this.currentCategory = null;
         this.currentSummaryType = null;
@@ -3315,9 +3386,149 @@ class SummraApp {
     }
 }
 
+// Hero Search Functionality
+class HeroSearch {
+    constructor() {
+        this.searchInput = document.getElementById('hero-search-input');
+        this.searchResults = document.getElementById('hero-search-results');
+        this.debounceTimer = null;
+        this.allBooks = [];
+
+        if (this.searchInput && this.searchResults) {
+            this.init();
+        }
+    }
+
+    init() {
+        // Fetch all books for search
+        this.fetchBooks();
+
+        // Add input event listener with debouncing
+        this.searchInput.addEventListener('input', (e) => {
+            clearTimeout(this.debounceTimer);
+            const query = e.target.value.trim();
+
+            if (query.length === 0) {
+                this.hideResults();
+                return;
+            }
+
+            this.debounceTimer = setTimeout(() => {
+                this.performSearch(query);
+            }, 300);
+        });
+
+        // Hide results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!this.searchInput.contains(e.target) && !this.searchResults.contains(e.target)) {
+                this.hideResults();
+            }
+        });
+
+        // Handle Enter key to navigate to first result
+        this.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const firstResult = this.searchResults.querySelector('.hero-search-result-item');
+                if (firstResult) {
+                    firstResult.click();
+                }
+            }
+        });
+    }
+
+    async fetchBooks() {
+        try {
+            const response = await fetch('/api/books');
+            const data = await response.json();
+            this.allBooks = data.books || [];
+        } catch (error) {
+            console.error('Error fetching books for search:', error);
+        }
+    }
+
+    slugify(text) {
+        return text
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/--+/g, '-')
+            .trim();
+    }
+
+    performSearch(query) {
+        const lowercaseQuery = query.toLowerCase();
+
+        // Search in both title and author
+        const results = this.allBooks.filter(book => {
+            const titleMatch = book.title.toLowerCase().includes(lowercaseQuery);
+            const authorMatch = book.author.toLowerCase().includes(lowercaseQuery);
+            return titleMatch || authorMatch;
+        });
+
+        // Limit to top 8 results
+        const limitedResults = results.slice(0, 8);
+
+        this.displayResults(limitedResults, query);
+    }
+
+    displayResults(results, query) {
+        if (results.length === 0) {
+            this.searchResults.innerHTML = `
+                <div class="hero-search-no-results">
+                    No books found for "${query}"
+                </div>
+            `;
+            this.showResults();
+            return;
+        }
+
+        const resultsHtml = results.map(book => {
+            const bookSlug = this.slugify(book.title);
+            return `
+                <div class="hero-search-result-item" data-slug="${bookSlug}">
+                    <img src="/static/covers/${book.cover_image}"
+                         alt="${book.title}"
+                         class="hero-search-result-cover"
+                         onerror="this.style.display='none'">
+                    <div class="hero-search-result-info">
+                        <h4 class="hero-search-result-title">${this.highlightMatch(book.title, query)}</h4>
+                        <p class="hero-search-result-author">${this.highlightMatch(book.author, query)}</p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        this.searchResults.innerHTML = resultsHtml;
+
+        // Add click handlers to results
+        this.searchResults.querySelectorAll('.hero-search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const slug = item.dataset.slug;
+                window.location.href = `/books/${slug}`;
+            });
+        });
+
+        this.showResults();
+    }
+
+    highlightMatch(text, query) {
+        const regex = new RegExp(`(${query})`, 'gi');
+        return text.replace(regex, '<strong>$1</strong>');
+    }
+
+    showResults() {
+        this.searchResults.classList.remove('hidden');
+    }
+
+    hideResults() {
+        this.searchResults.classList.add('hidden');
+    }
+}
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     new SummraApp();
+    new HeroSearch();
 
     // Handle hero banner CTAs with data-route attribute
     const heroCtas = document.querySelectorAll('[data-route]');

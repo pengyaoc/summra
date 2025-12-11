@@ -11,11 +11,17 @@ Usage:
         python scripts/resize_image.py --bulk file1.png file2.png file3.png
         python scripts/resize_image.py --bulk *.png
         python scripts/resize_image.py --bulk --target 0.5 *.png  # Target 0.5MB
+
+    Hero image mode (reduce height by 1/3, convert to JPG/WebP):
+        python scripts/resize_image.py --hero-img input.png [output_dir] [max_width]
+        python scripts/resize_image.py --hero-img data/img/library_view.png frontend/static/images 1920
 """
 
 import sys
 import os
 import glob
+import subprocess
+from pathlib import Path
 from PIL import Image
 
 
@@ -200,6 +206,135 @@ def process_bulk(file_list, target_mb=1.0, output_dir=None):
     return results
 
 
+def process_hero_image(input_path, output_dir=None, max_width=1920):
+    """
+    Process hero background image by reducing height by 1/3 and converting to JPG/WebP.
+
+    Args:
+        input_path: Path to input image
+        output_dir: Output directory (default: same as input directory)
+        max_width: Maximum width in pixels (default: 1920)
+
+    Returns:
+        dict: Result info with success status
+    """
+    try:
+        input_path = Path(input_path)
+
+        # Determine output directory and base name
+        if output_dir:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            output_dir = input_path.parent
+
+        # Use base name from input file (without extension)
+        output_base = input_path.stem
+
+        print(f"\n{'='*80}")
+        print(f"PROCESSING HERO IMAGE")
+        print(f"{'='*80}")
+        print(f"Input: {input_path}")
+        print(f"Output directory: {output_dir}")
+        print(f"{'='*80}\n")
+
+        # Load image
+        img = Image.open(input_path)
+        original_width, original_height = img.size
+        original_file_size_mb = input_path.stat().st_size / (1024 * 1024)
+
+        print(f"Original dimensions: {original_width}x{original_height}")
+        print(f"Original file size: {original_file_size_mb:.2f} MB\n")
+
+        # Calculate new dimensions - maintain original aspect ratio
+        original_aspect_ratio = original_width / original_height
+
+        # Respect max_width while maintaining aspect ratio
+        if original_width > max_width:
+            new_width = max_width
+            new_height = int(new_width / original_aspect_ratio)
+        else:
+            new_width = original_width
+            new_height = original_height
+
+        print(f"Step 1: Calculating dimensions with original aspect ratio")
+        print(f"  New dimensions: {new_width}x{new_height}")
+        print(f"  Original aspect ratio: {original_aspect_ratio:.2f}")
+        print(f"  New aspect ratio: {new_width/new_height:.2f}\n")
+
+        # Resize image
+        print(f"Step 2: Resizing image...")
+        resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        print(f"  ✓ Resized to {new_width}x{new_height}\n")
+
+        # Convert to RGB if necessary (for JPG)
+        if resized_img.mode in ('RGBA', 'LA', 'P'):
+            print(f"Step 3: Converting {resized_img.mode} to RGB...")
+            background = Image.new('RGB', resized_img.size, (255, 255, 255))
+            if resized_img.mode == 'P':
+                resized_img = resized_img.convert('RGBA')
+            background.paste(
+                resized_img,
+                mask=resized_img.split()[-1] if resized_img.mode in ('RGBA', 'LA') else None
+            )
+            resized_img = background
+            print(f"  ✓ Converted to RGB\n")
+        else:
+            print(f"Step 3: Image already in RGB mode\n")
+
+        # Save JPG
+        jpg_path = output_dir / f"{output_base}.jpg"
+        print(f"Step 4: Saving JPG...")
+        resized_img.save(jpg_path, 'JPEG', quality=80, optimize=True)
+        jpg_size_mb = jpg_path.stat().st_size / (1024 * 1024)
+        print(f"  ✓ Saved: {jpg_path}")
+        print(f"  Size: {jpg_size_mb:.2f} MB\n")
+
+        # Create WebP
+        webp_path = output_dir / f"{output_base}.webp"
+        print(f"Step 5: Creating WebP...")
+        try:
+            result = subprocess.run(
+                ['cwebp', '-q', '70', str(jpg_path), '-o', str(webp_path)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            webp_size_mb = webp_path.stat().st_size / (1024 * 1024)
+            print(f"  ✓ Saved: {webp_path}")
+            print(f"  Size: {webp_size_mb:.2f} MB\n")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"  ⚠️  WebP creation failed: {e}")
+            print(f"  JPG still saved successfully\n")
+            webp_path = None
+
+        # Summary
+        print(f"{'='*80}")
+        print(f"✅ PROCESSING COMPLETE")
+        print(f"{'='*80}")
+        print(f"Original: {original_width}x{original_height} ({original_file_size_mb:.2f} MB)")
+        print(f"Processed: {new_width}x{new_height}")
+        print(f"Output files:")
+        print(f"  - {jpg_path} ({jpg_size_mb:.2f} MB)")
+        if webp_path and webp_path.exists():
+            print(f"  - {webp_path} ({webp_size_mb:.2f} MB)")
+        print(f"{'='*80}\n")
+
+        return {
+            'success': True,
+            'original_dimensions': f"{original_width}x{original_height}",
+            'processed_dimensions': f"{new_width}x{new_height}",
+            'jpg_path': str(jpg_path),
+            'webp_path': str(webp_path) if webp_path and webp_path.exists() else None
+        }
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage:")
@@ -207,6 +342,8 @@ def main():
         print("    python scripts/resize_image.py input.png [output.png] [target_mb]")
         print("  Bulk mode:")
         print("    python scripts/resize_image.py --bulk [--target MB] [--output-dir DIR] file1.png file2.png ...")
+        print("  Hero image mode:")
+        print("    python scripts/resize_image.py --hero-img input.png [output_dir] [max_width]")
         print("\nExamples:")
         print("  python scripts/resize_image.py input.png output.png")
         print("  python scripts/resize_image.py input.png output.png 0.5  # Target 0.5MB")
@@ -214,7 +351,26 @@ def main():
         print("  python scripts/resize_image.py --bulk *.png")
         print("  python scripts/resize_image.py --bulk --target 0.5 file1.png file2.png")
         print("  python scripts/resize_image.py --bulk --output-dir resized/ *.png")
+        print("  python scripts/resize_image.py --hero-img data/img/library_view.png frontend/static/images")
         sys.exit(1)
+
+    # Check for hero image mode
+    if sys.argv[1] == '--hero-img':
+        if len(sys.argv) < 3:
+            print("Error: --hero-img requires an input file")
+            print("Usage: python scripts/resize_image.py --hero-img input.png [output_dir] [max_width]")
+            sys.exit(1)
+
+        input_path = sys.argv[2]
+        output_dir = sys.argv[3] if len(sys.argv) > 3 else None
+        max_width = int(sys.argv[4]) if len(sys.argv) > 4 else 1920
+
+        if not os.path.exists(input_path):
+            print(f"Error: Input file '{input_path}' not found")
+            sys.exit(1)
+
+        result = process_hero_image(input_path, output_dir, max_width)
+        sys.exit(0 if result['success'] else 1)
 
     # Check for bulk mode
     if sys.argv[1] == '--bulk':
