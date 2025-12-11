@@ -27,7 +27,12 @@
     <meta name="twitter:description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries.') }}">
     <meta name="twitter:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
 
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icon.png') }}">
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/icon-16.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icon-180.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
     {% if structured_data %}
@@ -55,7 +60,10 @@
         <header class="header">
             <div class="header-content">
                 <a href="/" class="header-link" id="header-home-link">
-                    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
+                    <picture>
+                        <source srcset="{{ url_for('static', filename='images/icon.webp') }}" type="image/webp">
+                        <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
+                    </picture>
                     <h1 class="logo">Summra</h1>
                 </a>
                 <div class="header-nav-buttons">
@@ -72,12 +80,19 @@
                 <!-- Main Hero Banner -->
                 <section class="hero-banner hero-main">
                     <div class="hero-banner-content">
-                        <h1 class="hero-banner-title">Classic Literature, Made Easy</h1>
-                        <p class="hero-banner-subtitle">Everything you need to discover, learn, and read the classics</p>
-                        <p class="hero-banner-tagline">Completely free, forever</p>
-                        <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="categories">Explore Categories</a>
-                            <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
+                        <h1 class="hero-banner-title">Classic Literature, Made&nbsp;Easy</h1>
+                        <p class="hero-banner-subtitle">Reading companion that makes you enjoy reading.</p>
+                        <div class="hero-search-container">
+                            <div class="hero-search-wrapper">
+                                <input type="text"
+                                       class="hero-search-input"
+                                       id="hero-search-input"
+                                       placeholder="Search for a book or author..."
+                                       autocomplete="off">
+                                <div class="hero-search-results hidden" id="hero-search-results">
+                                    <!-- Typeahead results will be populated here -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -85,10 +100,42 @@
                 <!-- Discover Banner -->
                 <section class="hero-banner hero-discover">
                     <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Discover</h2>
-                        <p class="hero-banner-description">Find your next classic in minutes with quick summaries and audio narration</p>
+                        <h2 class="hero-banner-heading">Discover Classics the&nbsp;Modern&nbsp;Way</h2>
+                    </div>
+
+                    <!-- Top 10 Books Carousel (direct child of section, breaks out on mobile) -->
+                    <div class="top-10-carousel-wrapper">
+                        <div class="carousel-container top-10-carousel">
+                            <button class="carousel-nav-btn left" id="top-10-nav-left">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M15 18l-6-6 6-6"></path>
+                                </svg>
+                            </button>
+                            <div class="carousel-scroll" id="top-10-scroll">
+                                <!-- Loading skeleton cards (will be replaced when books load) -->
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                            </div>
+                            <button class="carousel-nav-btn right" id="top-10-nav-right">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18l6-6-6-6"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="hero-banner-content">
                         <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-link" data-route="categories">Explore Categories →</a>
+                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="categories">Explore Categories</a>
+                            <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
                         </div>
                     </div>
                 </section>
@@ -96,32 +143,56 @@
                 <!-- Learn Banner -->
                 <section class="hero-banner hero-learn">
                     <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Learn</h2>
-                        <p class="hero-banner-description">Deep dive into classics with comprehensive summaries and visual guides</p>
-                        <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-link" data-route="books/great-expectations">See Example: Great Expectations →</a>
-                        </div>
-                    </div>
-                </section>
+                        <h2 class="hero-banner-heading">Literature, Beautifully&nbsp;Explained</h2>
 
-                <!-- Read Banner -->
-                <section class="hero-banner hero-read">
-                    <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Read</h2>
-                        <p class="hero-banner-description">Enjoy a premium reading experience with modern English side-by-side</p>
+                        <!-- 3-Column Features Grid -->
+                        <div class="learn-features-grid">
+                            <!-- Column 1: Beautiful Illustrations -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="{{ url_for('static', filename='images/infographic.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/infographic.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/infographic.jpg') }}" alt="Visual guides with color and interactivity" class="learn-feature-image">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">Beautiful Illustrations</h3>
+                                <p class="learn-feature-description">Make sense of complex plots and symbolism with beautifully illustrated character maps, timelines, and theme guides.</p>
+                            </div>
+
+                            <!-- Column 2: Audio Summary -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="{{ url_for('static', filename='images/summary.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/summary.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/summary.jpg') }}" alt="Comprehensive book summaries" class="learn-feature-image">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">Audio Summary</h3>
+                                <p class="learn-feature-description">Help you preview, understand, and enjoy classics at your own pace.</p>
+                            </div>
+
+                            <!-- Column 3: For Every Reader -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="{{ url_for('static', filename='images/chapter_view.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/chapter_view.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/chapter_view.jpg') }}" alt="Accessible reading experience" class="learn-feature-image">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">For Every Reader</h3>
+                                <p class="learn-feature-description">Kindle-like reading experience enhanced with chapter illustrations, summaries and plain-English version for English learners.</p>
+                            </div>
+                        </div>
+
                         <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-link" id="hero-read-cta" data-route="books/jane-eyre/chapters/1">Try Reading: Jane Eyre Chapter 1 →</a>
+                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="books/jane-eyre">See Example: Jane Eyre</a>
                         </div>
                     </div>
                 </section>
             </div>
-
-            <!-- Category Carousels Section -->
-            <section class="categories-section hidden" id="categories-section">
-                <div class="categories-container" id="categories-container">
-                    <!-- Categories will be dynamically loaded here -->
-                </div>
-            </section>
 
             <!-- Book Detail Section -->
             <section class="summary-section hidden" id="summary-section">

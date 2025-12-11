@@ -8446,3 +8446,154 @@ formatChapterText(text) {
 ```
 
 ---
+
+## Top 10 Carousel - Responsive Layout System
+
+### Overview (Added 2025-12-08)
+
+The Top 10 Books carousel on the homepage uses a Netflix-inspired responsive layout that adapts between centered and left-aligned modes based on viewport width.
+
+### HTML Structure
+
+**Location:** `frontend/templates/index.html:85-115`
+
+```html
+<section class="hero-banner hero-discover">
+    <!-- Title & Subtitle (always centered) -->
+    <div class="hero-banner-content">
+        <h2 class="hero-banner-heading">Discover Classics the Modern Way</h2>
+        <p class="hero-banner-description">Find your next classic...</p>
+    </div>
+
+    <!-- Carousel (direct child, can break out of centered layout) -->
+    <div class="top-10-carousel-wrapper">
+        <div class="carousel-container top-10-carousel">
+            <button class="carousel-nav-btn left">...</button>
+            <div class="carousel-scroll"><!-- Books rendered by JS --></div>
+            <button class="carousel-nav-btn right">...</button>
+        </div>
+    </div>
+
+    <!-- CTA (always centered) -->
+    <div class="hero-banner-content">
+        <div class="hero-banner-ctas">...</div>
+    </div>
+</section>
+```
+
+### Key Design Pattern
+
+**Direct Child Positioning:** The carousel is a direct child of `.hero-discover` (not nested in `.hero-banner-content`) to enable independent alignment while maintaining vertical stacking.
+
+**Parent Flexbox:** `.hero-banner` uses `flex-direction: column` to stack children vertically:
+```css
+.hero-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;  /* Centers children by default */
+}
+```
+
+### Responsive Behavior
+
+**Breakpoint: 1024px**
+
+**Desktop Mode (> 1024px):**
+```css
+.top-10-carousel-wrapper {
+    margin: 2rem auto 1.5rem;
+    max-width: 980px;
+    width: 100%;
+}
+```
+- Carousel centered with `margin: auto`
+- Max-width of 980px
+- Navigation buttons overlay carousel edges (absolute positioning)
+
+**Mobile Mode (≤ 1024px):**
+```css
+@media (max-width: 1024px) {
+    .top-10-carousel-wrapper {
+        margin: 1.5rem 0 1rem 0;
+        max-width: none;
+        width: 100%;
+        align-self: flex-start;  /* Override parent's center alignment */
+    }
+}
+```
+- `align-self: flex-start` overrides parent's `align-items: center`
+- No auto margins (left-aligned)
+- Full viewport width
+- Navigation buttons remain visible with overlay positioning
+
+### Breakpoint Calculation
+
+**Why 1024px?**
+
+The threshold accounts for:
+1. Carousel max-width: 980px
+2. Navigation button widths (overlaid): ~44-62px each
+3. Padding and safety margin: ~40-80px
+
+At viewports < 1024px, a centered 980px carousel would push overlay buttons partially off-screen. Switching to left-aligned mode ensures buttons remain fully visible.
+
+### Navigation Button Positioning
+
+**Overlay Approach:**
+```css
+.top-10-carousel .carousel-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.75);  /* Semi-transparent */
+    z-index: 10;
+}
+
+.top-10-carousel .carousel-nav-btn.left {
+    left: 0.5rem;  /* Small inset, overlays first book */
+}
+
+.top-10-carousel .carousel-nav-btn.right {
+    right: 0.5rem;
+}
+```
+
+**Mobile Adjustments:**
+- Buttons maintain minimum 44px tap target (iOS/Android standards)
+- Semi-transparent backgrounds ensure visibility over book covers
+- Small insets (0.25-0.5rem) prevent buttons from touching screen edges
+
+### Book Card Responsive Sizing
+
+Cards progressively shrink to fit viewport:
+
+```css
+/* Desktop */
+.top-10-book-card { width: 150px; }
+
+/* Breakpoints */
+@media (max-width: 768px) { width: 110px; }
+@media (max-width: 480px) { width: 95px; }
+@media (max-width: 390px) { width: 85px; }
+@media (max-width: 360px) { width: 75px; }
+@media (max-width: 320px) { width: 70px; }
+```
+
+Gaps between cards also reduce proportionally (1rem → 0.25rem).
+
+### Advantages of This Approach
+
+1. **Clean Separation:** Title/subtitle/CTA remain centered while carousel adapts independently
+2. **No JavaScript Required:** Pure CSS responsive behavior
+3. **Vertical Stacking:** Flexbox ensures proper layout order
+4. **Button Visibility:** Left-aligned mode guarantees navigation buttons stay on-screen
+5. **Netflix Pattern:** Matches industry-standard carousel UX
+
+### Files Modified
+
+- `frontend/templates/index.html:85-115` - HTML structure
+- `frontend/static/css/style.css:2065` - Flexbox column layout
+- `frontend/static/css/style.css:2173-2188` - Carousel responsive styles
+- `frontend/static/css/style.css:2265-2420` - Mobile breakpoints
+
+---
