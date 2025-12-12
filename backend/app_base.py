@@ -172,6 +172,19 @@ def build_breadcrumbs(page_type, **kwargs):
                 'position': 2
             })
 
+    elif page_type == 'blog':
+        breadcrumbs.append({'name': 'Blog', 'url': '/blog', 'position': 2})
+
+    elif page_type == 'blog-post':
+        blog_post = kwargs.get('blog_post')
+        breadcrumbs.append({'name': 'Blog', 'url': '/blog', 'position': 2})
+        if blog_post:
+            breadcrumbs.append({
+                'name': blog_post['title'],
+                'url': f"/blog/{blog_post['slug']}",
+                'position': 3
+            })
+
     return breadcrumbs
 
 
@@ -225,6 +238,13 @@ def index():
     """Serve the main page"""
     return render_template('index.html',
                          meta_title='Free Classic Book Summaries, Chapter Summaries & Full Text | Summra')
+
+
+@app.route('/discover')
+def discover():
+    """Serve the discover page with curated book collections"""
+    return render_template('index.html',
+                         meta_title='Discover Classic Books by Difficulty Level | Summra')
 
 
 @app.route('/robots.txt')
@@ -997,6 +1017,127 @@ def get_related_books(book_id):
         }), 500
 
 
+@app.route('/api/discover/carousels', methods=['GET'])
+def get_discover_carousels():
+    """Get curated book collections for the discover page"""
+    try:
+        all_books = db.get_all_books()
+
+        # Carousel 1: Easy to Read (A2-B1 level)
+        easy_to_read = []
+        for book in all_books:
+            cefr_level = book.get('cefr_level')
+            if cefr_level and book.get('slug') and any(level in cefr_level for level in ['A2', 'B1']):
+                easy_to_read.append(book)
+
+        # Carousel 2: Books with Full Audio Summaries
+        # Only include books that have medium summaries (the "Full Summary") AND have audio files
+        books_with_audio = []
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT s.book_id
+            FROM summaries s
+            INNER JOIN audio_files af ON s.id = af.summary_id
+            WHERE s.summary_type = 'medium'
+        ''')
+        audio_book_ids = {row['book_id'] for row in cursor.fetchall()}
+        conn.close()
+
+        for book in all_books:
+            if book.get('id') in audio_book_ids and book.get('slug'):
+                books_with_audio.append(book)
+
+        # Carousel 3: Adventure Category (category_id = 34)
+        adventure_books = []
+        for book in all_books:
+            if book.get('slug') and book.get('categories'):
+                if any(cat.get('id') == 34 for cat in book['categories']):
+                    adventure_books.append(book)
+
+        # Carousel 4: Children's Literature (category_id = 51)
+        childrens_books = []
+        for book in all_books:
+            if book.get('slug') and book.get('categories'):
+                if any(cat.get('id') == 51 for cat in book['categories']):
+                    childrens_books.append(book)
+
+        # Carousel 5: Romance (category_id = 46)
+        romance_books = []
+        for book in all_books:
+            if book.get('slug') and book.get('categories'):
+                if any(cat.get('id') == 46 for cat in book['categories']):
+                    romance_books.append(book)
+
+        # Carousel 6: Books by Charles Dickens
+        dickens_books = []
+        for book in all_books:
+            if book.get('slug') and book.get('author') == 'Charles Dickens':
+                dickens_books.append(book)
+
+        # Build carousel data
+        carousels = []
+
+        if easy_to_read:
+            carousels.append({
+                'id': 'easy-to-read',
+                'title': 'Easy to Read',
+                'description': 'Perfect for beginners and intermediate learners (A2-B1 level)',
+                'books': easy_to_read
+            })
+
+        if books_with_audio:
+            carousels.append({
+                'id': 'with-audio',
+                'title': 'Books with Full Audio Summaries',
+                'description': 'Listen to comprehensive summaries of these classics',
+                'books': books_with_audio
+            })
+
+        if adventure_books:
+            carousels.append({
+                'id': 'adventure',
+                'title': 'Adventure',
+                'description': 'Thrilling tales of exploration and excitement',
+                'books': adventure_books
+            })
+
+        if childrens_books:
+            carousels.append({
+                'id': 'childrens',
+                'title': "Children's Literature",
+                'description': 'Timeless stories written for young readers',
+                'books': childrens_books
+            })
+
+        if romance_books:
+            carousels.append({
+                'id': 'romance',
+                'title': 'Romance',
+                'description': 'Classic love stories and romantic literature',
+                'books': romance_books
+            })
+
+        if dickens_books:
+            carousels.append({
+                'id': 'charles-dickens',
+                'title': 'Books by Charles Dickens',
+                'description': 'Works by the master of Victorian literature',
+                'books': dickens_books
+            })
+
+        return jsonify({
+            'success': True,
+            'carousels': carousels
+        })
+    except Exception as e:
+        logger.error(f"Error fetching discover carousels: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/books/by-author/<path:author_name>', methods=['GET'])
 def get_books_by_author(author_name):
     """Get all books by a specific author"""
@@ -1122,6 +1263,105 @@ def author_page(author_slug):
     )
 
 
+# Blog routes
+@app.route('/blog')
+def blog_index():
+    """Server-side rendering for blog index (SEO)"""
+    meta_title = "Blog - Classic Literature Guides | Summra"
+    meta_description = "Read our guides on classic literature, ESL learning, and book recommendations. Learn how to read classics as a non-native English speaker."
+    canonical_url = "https://summra.com/blog"
+
+    # Get all blog posts for SEO
+    posts = db.get_all_blog_posts()
+
+    # Schema.org structured data for Blog
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "Blog",
+        "name": "Summra Blog",
+        "description": "Classic literature guides and reading tips for ESL learners"
+    }
+
+    # Build breadcrumbs
+    breadcrumbs = build_breadcrumbs('blog')
+    breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
+
+    combined_structured_data = [structured_data, breadcrumb_schema]
+
+    initial_data = {
+        'type': 'blog',
+        'breadcrumbs': breadcrumbs
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        canonical_url=canonical_url,
+        og_type='website',
+        structured_data=combined_structured_data,
+        initial_data=initial_data
+    )
+
+
+@app.route('/blog/<slug>')
+def blog_post_page(slug):
+    """Server-side rendering for blog post pages (SEO)"""
+    post = db.get_blog_post_by_slug(slug)
+
+    if not post:
+        return render_template('index.html'), 404
+
+    # Prepare meta tags
+    meta_title = f"{post['title']} | Summra Blog"
+
+    # Extract first 160 chars for description
+    meta_description = post.get('excerpt', '')[:160] if post.get('excerpt') else post['title']
+
+    canonical_url = f"https://summra.com/blog/{slug}"
+
+    # Schema.org structured data for BlogPosting
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": post['title'],
+        "datePublished": post.get('published_date', post.get('created_at', '')),
+        "author": {
+            "@type": "Organization",
+            "name": post.get('author', 'Summra Team')
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Summra"
+        }
+    }
+
+    if post.get('excerpt'):
+        structured_data["description"] = post['excerpt']
+
+    # Build breadcrumbs
+    breadcrumbs = build_breadcrumbs('blog-post', blog_post=post)
+    breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
+
+    combined_structured_data = [structured_data, breadcrumb_schema]
+
+    initial_data = {
+        'type': 'blog-post',
+        'slug': slug,
+        'breadcrumbs': breadcrumbs
+    }
+
+    return render_template(
+        'index.html',
+        meta_title=meta_title,
+        meta_description=meta_description,
+        canonical_url=canonical_url,
+        og_type='article',
+        structured_data=combined_structured_data,
+        initial_data=initial_data
+    )
+
+
 @app.route('/api/authors/<path:author_slug>', methods=['GET'])
 def get_author(author_slug):
     """Get author details by slug"""
@@ -1221,6 +1461,48 @@ def get_author_books(author_slug):
         })
     except Exception as e:
         logger.error(f"Error fetching books for author {author_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# Blog routes
+@app.route('/api/blog', methods=['GET'])
+def get_all_blog_posts():
+    """Get all blog posts (title, slug, excerpt, date only)"""
+    try:
+        posts = db.get_all_blog_posts()
+        return jsonify({
+            'success': True,
+            'posts': posts,
+            'count': len(posts)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching blog posts: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/blog/<slug>', methods=['GET'])
+def get_blog_post(slug):
+    """Get full blog post by slug"""
+    try:
+        post = db.get_blog_post_by_slug(slug)
+        if post:
+            return jsonify({
+                'success': True,
+                'post': post
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Blog post not found'
+            }), 404
+    except Exception as e:
+        logger.error(f"Error fetching blog post {slug}: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

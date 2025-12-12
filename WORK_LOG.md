@@ -188,3 +188,240 @@ Multiple elements controlling the same visual property:
 6. **Semantic Wrapping:** Non-breaking spaces maintain meaningful phrase groupings
 
 ---
+
+## 2025-12-11
+
+### Blog Functionality Implementation - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-11
+**Completed:** 2025-12-11
+
+**Objective:** Implement complete blog functionality for Summra including database schema, import script, API endpoints, frontend components, and navigation integration.
+
+#### Changes Implemented:
+
+**1. Database Schema:**
+- Added `blog_posts` table to `/Users/pengyao/Documents/dev/summra/backend/models.py`
+- Fields: id, slug (unique), title, content (markdown), excerpt, author, published_date, updated_date, created_at
+- Methods: `add_blog_post()`, `get_all_blog_posts()`, `get_blog_post_by_slug()`
+- **Files:** `backend/models.py:263-276,1552-1602`
+
+**2. Blog Import Script:**
+- Created `/Users/pengyao/Documents/dev/summra/backend/import_blog_posts.py`
+- Reads markdown files from `data/blog/` directory
+- Extracts title from first H1, generates slug from filename
+- Extracts first 200 characters as excerpt
+- Successfully imported 7 blog posts
+- **Files:** `backend/import_blog_posts.py` (new file)
+
+**3. Flask API Routes:**
+- Added `/api/blog` endpoint - Returns list of all blog posts (title, slug, excerpt, date)
+- Added `/api/blog/<slug>` endpoint - Returns full blog post by slug
+- **Files:** `backend/app_base.py:1230-1269`
+
+**4. Frontend Components:**
+- Created `BlogIndex.js` component for blog listing page
+  - Grid layout (2-3 columns desktop, 1 mobile)
+  - Displays title, excerpt, date, "Read more" link
+  - Route: `/blog`
+- Created `BlogPost.js` component for individual post display
+  - Markdown rendering using marked.js
+  - Clean, readable styling
+  - Route: `/blog/<slug>`
+- **Files:** `frontend/static/js/components/BlogIndex.js`, `frontend/static/js/components/BlogPost.js` (new files)
+
+**5. Navigation Integration:**
+- Added "Blog" button to header navigation (between "Categories" and search)
+- Added blog routes to `app.js` router: `/blog` and `/blog/:slug`
+- Added blog methods: `showBlogIndex()`, `showBlogPost()`
+- Updated breadcrumb system to handle blog pages
+- **Files:** `frontend/templates/index.html:71,517-538,612-614`, `frontend/static/js/app.js:108-120,2666-2740,3186-3194,3253`
+
+**6. Styling:**
+- Added comprehensive blog styles to `style.css`
+- Blog grid with responsive layout
+- Blog card hover effects
+- Blog post typography and content styling
+- Mobile responsive adjustments
+- **Files:** `frontend/static/css/style.css:4335-4565`
+
+#### Technical Details:
+
+**Database:**
+- Blog posts stored in `data/database.db`
+- 7 posts imported successfully
+- Content stored as markdown for flexible rendering
+
+**Import Process:**
+```bash
+cd backend
+python3 import_blog_posts.py
+# Output: Import complete: 7/7 blog posts imported successfully
+```
+
+**Blog Posts Imported:**
+1. British vs American English Classics: Which Should You Read?
+2. 10 Shortest Classic Books You Can Read in One Sitting
+3. How to Read English Classics as a Non-Native Speaker (5-Step Method)
+4. Best Horror Classics (And What They're Actually About)
+5. Romance Classics for Modern Readers
+6. Graded Readers vs. Original Classics: Why Read the Real Thing
+7. 10 Classic Books for English Learners (By Difficulty Level)
+
+#### Files Modified:
+- `backend/models.py` - Added blog table and methods
+- `backend/app_base.py` - Added blog API routes
+- `frontend/templates/index.html` - Added blog sections and navigation
+- `frontend/static/js/app.js` - Added blog routing and handlers
+- `frontend/static/css/style.css` - Added blog styling
+
+#### Files Created:
+- `backend/import_blog_posts.py` - Blog import script
+- `frontend/static/js/components/BlogIndex.js` - Blog index component
+- `frontend/static/js/components/BlogPost.js` - Blog post component
+
+#### Testing:
+- Database verified: 7 blog posts successfully imported
+- All blog posts have proper slugs, titles, content, and excerpts
+- Routes configured: `/blog` and `/blog/<slug>`
+- Navigation button added to header
+- Breadcrumbs configured for blog pages
+
+---
+
+## 2025-12-11 (Continued)
+
+### Loading State Improvements and Discover Page Enhancements - COMPLETED
+**Status:** ✓ Completed
+**Started:** 2025-12-11
+**Completed:** 2025-12-11
+
+**Objective:** Fix chapter page bugs, eliminate page refresh flashes, improve loading UX with modern spinner design, and enhance the Discover page with a popular books carousel.
+
+#### Changes Implemented:
+
+**1. Chapter Page Structure Fix:**
+- **Problem:** Chapter page showing only title and edit button, no content (illustration, summary, full text)
+- **Root Cause:** `showChapterDetail()` was setting `chapterDetailContent.innerHTML`, destroying entire HTML structure
+- **Solution:**
+  - Modified to only update specific content areas (`chapter-fulltext`, `chapter-summary-text`)
+  - Preserved parent container structure with all child elements
+  - Updated error handling to only affect specific content area
+- **Files:** `frontend/static/js/app.js:1886-1902`
+
+**2. Eliminated Refresh Flash:**
+- **Problem:** Page content flashed (content → skeleton → content) when refreshing books/chapter pages
+- **Root Cause:** Loading functions showed skeletons even when content existed from SSR
+- **Solution:** Added `if (!element.textContent.trim())` checks before showing loading states
+- **Functions Updated:**
+  - `loadConciseSummary()` - line 1405
+  - `loadMediumSummary()` - line 1479
+  - `loadChapters()` - line 1520
+  - `loadRelatedBooks()` - line 1654
+  - `loadBookMetadata()` - line 1327
+  - `showChapterDetail()` - line 1886, 1895
+- **Files:** `frontend/static/js/app.js:1405-1413,1479-1487,1520-1528,1654-1661,1327-1365,1886-1902`
+
+**3. Modern Loading Spinner Design:**
+- **Created New CSS Components:**
+  - `.loading-container` - Centered flex container with padding
+  - `.loading-spinner` - 48px rotating circular spinner with border animation
+  - `.loading-text` - Subtle loading message below spinner
+  - Kept legacy `.skeleton` classes for backward compatibility
+- **Replaced Skeleton Loaders:**
+  - `loadConciseSummary()` - "Loading summary..."
+  - `loadMediumSummary()` - "Loading full summary..."
+  - `loadChapters()` - "Loading chapters..."
+  - `loadRelatedBooks()` - "Loading related books..."
+  - `loadBookMetadata()` - "Loading book information..." and "Loading reading guide..."
+  - Chapter detail loading - "Loading chapter text..." and "Loading summary..."
+- **Files:**
+  - CSS: `frontend/static/css/style.css:556-641`
+  - JavaScript: `frontend/static/js/app.js:1407-1412,1481-1486,1522-1527,1655-1660,1331-1364,1887-1901`
+
+**4. Reading Guide Loading Dismissal Fix:**
+- **Problem:** "Loading reading guide..." spinner didn't dismiss after images loaded
+- **Root Cause:** `updateReadingGuide()` only removed `.skeleton` elements, not `.loading-container`
+- **Solution:** Updated to remove both `.loading-container` (new spinner) and `.skeleton` (legacy)
+- **Files:** `frontend/static/js/app.js:1298-1310`
+
+**5. Discover Page Popular Carousel:**
+- **Added Popular Carousel:**
+  - Created `renderTop10AsStandardCarousel()` method
+  - Displays top 10 books using standard carousel UI (same as difficulty carousels)
+  - Uses regular book cards (cover, title, author) without rank overlays
+  - Title: "Popular"
+  - No "View All" link
+- **Updated Discover Page:**
+  - Added `ensureBooksLoaded()` before rendering (needed for popular carousel)
+  - Popular carousel displays first, followed by difficulty-based carousels
+- **Updated Category Carousel Logic:**
+  - Added check to exclude "View All" link for `category.id === 'popular'`
+  - Maintains existing logic for discover page and "All Books" carousel
+- **Files:**
+  - `frontend/static/js/app.js:955-980,2871-2872,2895-2901,800-805`
+
+#### Technical Details:
+
+**Loading State Strategy:**
+- Single centered spinner instead of multiple skeleton boxes
+- Contextual loading messages for user awareness
+- Only show when content actually empty (prevents flash)
+- Consistent design across all loading scenarios
+
+**Chapter Page Safety:**
+- Never use `innerHTML` on parent containers with complex structure
+- Only modify leaf content nodes
+- Preserve event listeners and structural elements
+- Check `restoreScroll` flag to skip loading states on SSR restore
+
+**Discover Page Data Flow:**
+1. Ensure books loaded (`ensureBooksLoaded()`)
+2. Fetch difficulty carousel data from API
+3. Render popular carousel (top 10 books)
+4. Render difficulty carousels (Easy, Intermediate, Advanced)
+
+**Top 10 Books (by Gutenberg ID):**
+[84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345]
+
+#### Files Modified:
+
+**CSS:**
+- `frontend/static/css/style.css:556-641` - Loading spinner styles
+
+**JavaScript:**
+- `frontend/static/js/app.js` - Multiple sections:
+  - Lines 800-805: Category carousel "View All" logic
+  - Lines 955-980: New `renderTop10AsStandardCarousel()` method
+  - Lines 1298-1310: Reading guide loading dismissal
+  - Lines 1327-1365: Book metadata loading with spinner
+  - Lines 1405-1413: Concise summary loading with spinner
+  - Lines 1479-1487: Medium summary loading with spinner
+  - Lines 1520-1528: Chapters loading with spinner
+  - Lines 1654-1661: Related books loading with spinner
+  - Lines 1886-1902: Chapter detail loading with spinner
+  - Lines 2871-2872: Discover page books loading
+  - Lines 2895-2901: Discover page popular carousel rendering
+
+#### Testing Verified:
+
+1. ✓ Chapter page displays all content correctly (illustration, summary, full text)
+2. ✓ No flash when refreshing book pages or chapter pages
+3. ✓ Loading spinner displays with contextual messages
+4. ✓ Loading spinner dismissed after content loads
+5. ✓ Reading guide loading spinner properly dismissed
+6. ✓ Discover page shows popular carousel at top
+7. ✓ Popular carousel uses standard UI (no rank overlays)
+8. ✓ Popular carousel has no "View All" link
+9. ✓ Popular carousel displays top 10 books correctly
+
+#### Lessons Learned:
+
+1. **DOM Safety:** Never use `innerHTML` on containers with complex nested structure - target specific content nodes
+2. **SSR Compatibility:** Always check for existing content before showing loading states to prevent flash
+3. **Loading UX:** Single centered spinner with contextual message is cleaner than multiple skeleton boxes
+4. **Code Cleanup:** Remove loading indicators by selector (`.loading-container`, `.skeleton`) not hardcoded HTML
+5. **Data Dependencies:** Ensure data loaded before rendering components that depend on it (`ensureBooksLoaded()`)
+6. **Component Reusability:** Created both special (ranked) and standard versions of top 10 carousel for different contexts
+
+---

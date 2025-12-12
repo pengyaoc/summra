@@ -1,4 +1,16 @@
 // Summra Frontend JavaScript - Redesigned
+//
+// ARCHITECTURE: Centralized Section Management
+// ============================================
+// All page sections are managed through a single source of truth (this.ALL_SECTIONS).
+// To show a page, call this.showOnlySections('section-id') which automatically hides all others.
+//
+// Adding a new page:
+// 1. Add the section ID to this.ALL_SECTIONS array in constructor
+// 2. Create a show*() function that calls this.showOnlySections('your-section-id')
+// 3. Add routing logic to handleRoute()
+//
+// This prevents bugs where sections from one page leak into another page.
 
 class SummraApp {
     constructor() {
@@ -28,15 +40,31 @@ class SummraApp {
         this.carouselOrderCache = {}; // { carouselId: [shuffled books array] }
         // Track where user came from for context-aware breadcrumbs
         this.originCategory = null; // Store category when book is selected from category page
+        this.originDiscover = false; // Track if book is selected from Discover page
         // Track short summary expanded state
         this.conciseSummaryExpanded = false;
+
+        // Centralized list of ALL content sections (single source of truth)
+        // When adding a new page/section, add its ID here once
+        this.ALL_SECTIONS = [
+            'hero-section',
+            'summary-section',
+            'medium-detail-section',
+            'chapter-detail-section',
+            'category-detail-section',
+            'all-categories-section',
+            'author-detail-section',
+            'discover-section',
+            'blog-index-section',
+            'blog-post-section'
+        ];
+
         this.init();
     }
 
     async init() {
-        // Load books first, then categories (categories need books data for filtering)
-        await this.loadBooks();
-        await this.loadCategories();
+        // Don't load all books/categories upfront - use lazy loading instead
+        // Only load when needed by specific pages
 
         this.setupEventListeners();
         this.setupPersistentPlayer();
@@ -95,53 +123,70 @@ class SummraApp {
         // /categories/{id} - Category detail
         // /categories - All categories view
         // /books - All books grid view
+        // /discover - Discover page by difficulty
         // /authors/{name} - Author detail
+        // /blog - Blog index
+        // /blog/{slug} - Blog post
         const bookMatch = path.match(/^\/books\/([^\/]+)$/);
         const mediumMatch = path.match(/^\/books\/([^\/]+)\/summary$/);
         const chapterMatch = path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/);
         const categoryMatch = path.match(/^\/categories\/(\d+)$/);
         const categoriesMatch = path === '/categories';
         const allBooksMatch = path === '/books';
+        const discoverMatch = path === '/discover';
         const authorMatch = path.match(/^\/authors\/(.+)$/);
+        const blogMatch = path === '/blog';
+        const blogPostMatch = path.match(/^\/blog\/([^\/]+)$/);
 
-        if (!this.booksLoaded) {
-            await this.waitForBooks();
+        // Routes that don't need books data - proceed immediately
+        if (blogPostMatch) {
+            const slug = blogPostMatch[1];
+            await this.showBlogPost(slug, true);
+        } else if (blogMatch) {
+            await this.showBlogIndex(true);
+        } else if (discoverMatch) {
+            await this.showDiscoverPage(true);
         }
+        // Routes that need books data - load books first
+        else {
+            // Ensure books are loaded for book-related routes
+            await this.ensureBooksLoaded();
 
-        if (authorMatch) {
-            const authorName = decodeURIComponent(authorMatch[1]);
-            await this.showAuthorDetail(authorName, true);
-        } else if (chapterMatch) {
-            const bookSlug = chapterMatch[1];
-            const chapterNum = parseInt(chapterMatch[2]);
-            const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
-            if (book) {
-                // Set current book and load chapters if not already loaded
-                this.currentBook = book;
-                if (this.chapters.length === 0 || this.chapters[0]?.book_id !== book.id) {
-                    await this.loadChapters();
+            if (authorMatch) {
+                const authorName = decodeURIComponent(authorMatch[1]);
+                await this.showAuthorDetail(authorName, true);
+            } else if (chapterMatch) {
+                const bookSlug = chapterMatch[1];
+                const chapterNum = parseInt(chapterMatch[2]);
+                const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
+                if (book) {
+                    // Set current book and load chapters if not already loaded
+                    this.currentBook = book;
+                    if (this.chapters.length === 0 || this.chapters[0]?.book_id !== book.id) {
+                        await this.loadChapters();
+                    }
+                    await this.showChapterDetail(book, chapterNum, true);
                 }
-                await this.showChapterDetail(book, chapterNum, true);
+            } else if (mediumMatch) {
+                const bookSlug = mediumMatch[1];
+                const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
+                if (book) {
+                    await this.showMediumDetail(book, true);
+                }
+            } else if (bookMatch) {
+                const bookSlug = bookMatch[1];
+                const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
+                if (book) {
+                    await this.selectBook(book, true);
+                }
+            } else if (categoryMatch) {
+                const categoryId = parseInt(categoryMatch[1]);
+                await this.showCategoryDetail(categoryId, true);
+            } else if (categoriesMatch) {
+                await this.showAllCategories(true);
+            } else if (allBooksMatch) {
+                await this.showAllBooksGrid(true);
             }
-        } else if (mediumMatch) {
-            const bookSlug = mediumMatch[1];
-            const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
-            if (book) {
-                await this.showMediumDetail(book, true);
-            }
-        } else if (bookMatch) {
-            const bookSlug = bookMatch[1];
-            const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
-            if (book) {
-                await this.selectBook(book, true);
-            }
-        } else if (categoryMatch) {
-            const categoryId = parseInt(categoryMatch[1]);
-            await this.showCategoryDetail(categoryId, true);
-        } else if (categoriesMatch) {
-            await this.showAllCategories(true);
-        } else if (allBooksMatch) {
-            await this.showAllBooksGrid(true);
         }
     }
 
@@ -253,6 +298,33 @@ class SummraApp {
         }
 
         return matrix[str2.length][str1.length];
+    }
+
+    /**
+     * Hide all sections except the ones specified
+     * This is the SINGLE METHOD to control section visibility across the entire app
+     * @param {string|string[]} sectionsToShow - Section ID(s) to keep visible (all others will be hidden)
+     */
+    showOnlySections(sectionsToShow) {
+        // Convert single string to array for uniform processing
+        const showArray = Array.isArray(sectionsToShow) ? sectionsToShow : [sectionsToShow];
+
+        // Only modify sections if they're not already in the correct state
+        // This prevents flash when server-side rendered page is already showing correct section
+        this.ALL_SECTIONS.forEach(sectionId => {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                const shouldBeVisible = showArray.includes(sectionId);
+                const isCurrentlyVisible = !section.classList.contains('hidden');
+
+                // Only modify if state needs to change
+                if (shouldBeVisible && !isCurrentlyVisible) {
+                    section.classList.remove('hidden');
+                } else if (!shouldBeVisible && isCurrentlyVisible) {
+                    section.classList.add('hidden');
+                }
+            }
+        });
     }
 
     /**
@@ -664,6 +736,10 @@ class SummraApp {
 
     async displayCategories(categories) {
         const categoriesContainer = document.getElementById('categories-container');
+        if (!categoriesContainer) {
+            // Categories container not present on this page (e.g., home page)
+            return;
+        }
         categoriesContainer.innerHTML = '';
 
         // Use already-loaded books data to filter by category client-side
@@ -718,10 +794,15 @@ class SummraApp {
         const header = document.createElement('div');
         header.className = 'category-header';
 
-        // Add View All link (except for "All Books" carousel)
-        const viewAllLink = category.id !== 'all'
+        // Check if this is for the discover page (no View All links for discover carousels)
+        const isDiscoverPage = containerIdOverride === 'discover-carousels-container';
+
+        // Add View All link (except for "All Books" carousel, discover page, or popular carousel)
+        const viewAllLink = !isDiscoverPage && category.id !== 'all' && category.id !== 'popular'
             ? `<a href="/categories/${category.id}" class="view-all-link">View All →</a>`
-            : `<a href="/books" class="view-all-link">View All →</a>`;
+            : category.id === 'all' && !isDiscoverPage
+                ? `<a href="/books" class="view-all-link">View All →</a>`
+                : '';
 
         header.innerHTML = `
             <h2 class="category-title">${this.escapeHtml(category.name)}</h2>
@@ -871,7 +952,132 @@ class SummraApp {
         setTimeout(() => updateButtonStates(), 100);
     }
 
+    renderTop10AsStandardCarousel(containerId, title = 'Popular') {
+        // Top 10 most downloaded books from Project Gutenberg (by Gutenberg ID)
+        const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
+
+        // Find books in our database that match these IDs
+        const top10Books = [];
+        top10GutenbergIds.forEach((gutenbergId) => {
+            const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
+            if (book) {
+                top10Books.push(book);
+            }
+        });
+
+        if (top10Books.length === 0) return;
+
+        // Use the standard category carousel rendering
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // Render using the same method as other category carousels
+        this.renderCategoryCarousel(
+            { id: 'popular', name: title },
+            top10Books,
+            containerId
+        );
+    }
+
+    renderTop10CarouselInContainer(containerId, title = 'Most Popular Classics') {
+        // Top 10 most downloaded books from Project Gutenberg (by Gutenberg ID)
+        const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
+
+        // Find books in our database that match these IDs
+        const top10Books = [];
+        top10GutenbergIds.forEach((gutenbergId, index) => {
+            const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
+            if (book) {
+                top10Books.push({ book, rank: index + 1 });
+            }
+        });
+
+        const container = document.getElementById(containerId);
+        if (!container || top10Books.length === 0) return;
+
+        // Create carousel section with header
+        const carouselSection = document.createElement('div');
+        carouselSection.className = 'category-carousel';
+
+        const header = document.createElement('div');
+        header.className = 'category-header';
+        header.innerHTML = `<h2 class="category-title">${this.escapeHtml(title)}</h2>`;
+
+        const carouselContainer = document.createElement('div');
+        carouselContainer.className = 'carousel-container top-10-carousel';
+
+        // Add navigation buttons
+        const leftBtn = document.createElement('button');
+        leftBtn.className = 'carousel-nav-btn left';
+        leftBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"></path></svg>';
+        leftBtn.disabled = true;
+
+        const rightBtn = document.createElement('button');
+        rightBtn.className = 'carousel-nav-btn right';
+        rightBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"></path></svg>';
+
+        const scrollContainer = document.createElement('div');
+        scrollContainer.className = 'carousel-scroll';
+
+        // Create book cards with rank overlays
+        top10Books.forEach(({ book, rank }) => {
+            const bookCard = document.createElement('div');
+            bookCard.className = 'top-10-book-card';
+
+            const cardInner = document.createElement('div');
+            cardInner.className = 'top-10-book-card-inner';
+
+            const coverImageHtml = book.cover_image_url
+                ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, '')
+                : '';
+
+            cardInner.innerHTML = `
+                ${coverImageHtml}
+                <div class="top-10-rank-overlay">
+                    <div class="top-10-rank-number">${rank}</div>
+                </div>
+            `;
+
+            bookCard.appendChild(cardInner);
+            bookCard.addEventListener('click', () => this.selectBook(book));
+            scrollContainer.appendChild(bookCard);
+        });
+
+        // Setup carousel navigation
+        const scrollAmount = 170; // Width of card + gap
+
+        leftBtn.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: -scrollAmount * 3, behavior: 'smooth' });
+        });
+
+        rightBtn.addEventListener('click', () => {
+            scrollContainer.scrollBy({ left: scrollAmount * 3, behavior: 'smooth' });
+        });
+
+        // Update button states on scroll
+        const updateButtonStates = () => {
+            leftBtn.disabled = scrollContainer.scrollLeft <= 0;
+            rightBtn.disabled = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 1;
+        };
+
+        scrollContainer.addEventListener('scroll', updateButtonStates);
+        setTimeout(() => updateButtonStates(), 100);
+
+        // Assemble carousel
+        carouselContainer.appendChild(leftBtn);
+        carouselContainer.appendChild(scrollContainer);
+        carouselContainer.appendChild(rightBtn);
+        carouselSection.appendChild(header);
+        carouselSection.appendChild(carouselContainer);
+        container.appendChild(carouselSection);
+    }
+
     async loadBooks() {
+        // Skip if already loaded
+        if (this.booksLoaded) {
+            return;
+        }
+
         try {
             const response = await fetch(`${this.apiBase}/books`);
             const data = await response.json();
@@ -889,20 +1095,33 @@ class SummraApp {
         }
     }
 
+    async ensureBooksLoaded() {
+        if (!this.booksLoaded) {
+            await this.loadBooks();
+        }
+    }
+
     async selectBook(book, restoreScroll = false) {
-        // Track origin category for context-aware breadcrumbs BEFORE changing view
+        // Track origin for context-aware breadcrumbs BEFORE changing view
         // If we're currently viewing a category, store it as the origin
         if (this.currentView === 'category' && this.currentCategory) {
             this.originCategory = {
                 id: this.currentCategory.id,
                 name: this.currentCategory.name
             };
+            this.originDiscover = false;
         }
-        // If navigating from All Books or home, clear origin category
+        // If navigating from Discover page, set origin flag
+        else if (this.currentView === 'discover') {
+            this.originCategory = null;
+            this.originDiscover = true;
+        }
+        // If navigating from All Books or home, clear origin
         else if (this.currentView === 'all-books' || this.currentView === 'home') {
             this.originCategory = null;
+            this.originDiscover = false;
         }
-        // Otherwise, keep the existing originCategory (e.g., when navigating within book pages)
+        // Otherwise, keep the existing origin (e.g., when navigating within book pages)
 
         this.currentBook = book;
         this.currentView = 'book';
@@ -981,14 +1200,7 @@ class SummraApp {
             bookCoverContainer.classList.add('hidden');
         }
 
-        // Hide hero and categories section when viewing a book
-        const heroSection = document.getElementById('hero-section');
-        if (heroSection) heroSection.classList.add('hidden');
-
-        const categoriesSection = document.getElementById('categories-section');
-        if (categoriesSection) categoriesSection.classList.add('hidden');
-
-        // Show book detail section
+        // Show book detail section (handles all section visibility)
         this.showBookDetail(restoreScroll);
 
         // Load summaries, chapters, and related books
@@ -1013,19 +1225,8 @@ class SummraApp {
         const pageKey = `book_${this.currentBook?.id || ''}`;
         this.setCurrentPage(pageKey);
 
-        const mediumDetailSection = document.getElementById('medium-detail-section');
-        const chapterDetailSection = document.getElementById('chapter-detail-section');
-        const summarySection = document.getElementById('summary-section');
-        const categoryDetailSection = document.getElementById('category-detail-section');
-        const allCategoriesSection = document.getElementById('all-categories-section');
-        const authorDetailSection = document.getElementById('author-detail-section');
-
-        if (mediumDetailSection) mediumDetailSection.classList.add('hidden');
-        if (chapterDetailSection) chapterDetailSection.classList.add('hidden');
-        if (categoryDetailSection) categoryDetailSection.classList.add('hidden');
-        if (allCategoriesSection) allCategoriesSection.classList.add('hidden');
-        if (authorDetailSection) authorDetailSection.classList.add('hidden');
-        if (summarySection) summarySection.classList.remove('hidden');
+        // Show only summary section
+        this.showOnlySections('summary-section');
 
         // Hide admin edit button (only shown on chapter pages)
         const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
@@ -1121,6 +1322,20 @@ class SummraApp {
         const timelineGuideImage = document.getElementById('timeline-guide-image');
         const themesGuideImage = document.getElementById('themes-guide-image');
 
+        // Remove loading spinner and skeleton placeholders from all tab contents
+        const themesContent = document.getElementById('reading-tab-themes');
+        const charactersContent = document.getElementById('reading-tab-characters');
+        const timelineContent = document.getElementById('reading-tab-timeline');
+
+        [themesContent, charactersContent, timelineContent].forEach(content => {
+            if (content) {
+                const loadingContainer = content.querySelector('.loading-container');
+                if (loadingContainer) loadingContainer.remove();
+                const skeleton = content.querySelector('.skeleton');
+                if (skeleton) skeleton.remove();
+            }
+        });
+
         // Show Reading Guide section if we have any guide content
         if (hasCharacterGuide || hasTimeline || hasThemes) {
             readingGuideSection.classList.remove('hidden');
@@ -1128,6 +1343,7 @@ class SummraApp {
             // Set up character guide image
             if (hasCharacterGuide && characterGuideImage) {
                 characterGuideImage.src = book.character_guide_url;
+                characterGuideImage.style.display = '';
                 characterGuideImage.onclick = () => {
                     if (this.openLightbox) {
                         // Remove extension from URL for lightbox
@@ -1140,6 +1356,7 @@ class SummraApp {
             // Set up timeline image
             if (hasTimeline && timelineGuideImage) {
                 timelineGuideImage.src = book.timeline_url;
+                timelineGuideImage.style.display = '';
                 timelineGuideImage.onclick = () => {
                     if (this.openLightbox) {
                         // Remove extension from URL for lightbox
@@ -1152,6 +1369,7 @@ class SummraApp {
             // Set up themes image
             if (hasThemes && themesGuideImage) {
                 themesGuideImage.src = book.themes_url;
+                themesGuideImage.style.display = '';
                 themesGuideImage.onclick = () => {
                     if (this.openLightbox) {
                         // Remove extension from URL for lightbox
@@ -1221,6 +1439,53 @@ class SummraApp {
     }
 
     async loadBookMetadata(bookId) {
+        // Get elements
+        const aboutSection = document.getElementById('about-section');
+        const aboutText = document.getElementById('about-text');
+        const authorBioText = document.getElementById('author-bio-text');
+        const readingGuideSection = document.getElementById('reading-guide-section');
+
+        // Only show loading spinner if content is empty
+        const shouldShowLoading = aboutText && !aboutText.textContent.trim();
+
+        if (shouldShowLoading && aboutSection && aboutText && authorBioText) {
+            aboutSection.classList.remove('hidden');
+            aboutText.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading book information...</div>
+                </div>
+            `;
+            aboutText.parentElement.style.display = 'block';
+            authorBioText.innerHTML = '';
+            authorBioText.parentElement.style.display = 'none';
+        }
+
+        // Show loading spinner in Reading Guide section only if empty
+        if (shouldShowLoading && readingGuideSection) {
+            readingGuideSection.classList.remove('hidden');
+            const themesGuideImage = document.getElementById('themes-guide-image');
+            const characterGuideImage = document.getElementById('character-guide-image');
+            const timelineGuideImage = document.getElementById('timeline-guide-image');
+
+            if (themesGuideImage) themesGuideImage.style.display = 'none';
+            if (characterGuideImage) characterGuideImage.style.display = 'none';
+            if (timelineGuideImage) timelineGuideImage.style.display = 'none';
+
+            // Add loading spinner to the first tab content
+            const themesContent = document.getElementById('reading-tab-themes');
+
+            const loadingHtml = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading reading guide...</div>
+                </div>
+            `;
+            if (themesContent && !themesContent.querySelector('.loading-container')) {
+                themesContent.insertAdjacentHTML('afterbegin', loadingHtml);
+            }
+        }
+
         // Fetch full book data from API to get metadata fields
         try {
             const response = await fetch(`${this.apiBase}/books/${bookId}`);
@@ -1233,6 +1498,7 @@ class SummraApp {
         } catch (error) {
             console.error('Error loading book metadata:', error);
             // Silently fail - section will remain hidden
+            if (aboutSection) aboutSection.classList.add('hidden');
         }
     }
 
@@ -1252,7 +1518,16 @@ class SummraApp {
 
     async loadConciseSummary() {
         const conciseSummaryText = document.getElementById('concise-summary-text');
-        conciseSummaryText.innerHTML = '<div class="loading">Loading...</div>';
+
+        // Only show loading spinner if the content is empty
+        if (!conciseSummaryText.textContent.trim()) {
+            conciseSummaryText.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading summary...</div>
+                </div>
+            `;
+        }
 
         try {
             const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/summary/concise`);
@@ -1317,7 +1592,16 @@ class SummraApp {
 
     async loadMediumSummary() {
         const mediumPreviewText = document.getElementById('medium-preview-text');
-        mediumPreviewText.innerHTML = '<div class="loading">Loading...</div>';
+
+        // Only show loading spinner if the content is empty
+        if (!mediumPreviewText.textContent.trim()) {
+            mediumPreviewText.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading full summary...</div>
+                </div>
+            `;
+        }
 
         try {
             const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/summary/medium`);
@@ -1349,7 +1633,16 @@ class SummraApp {
 
     async loadChapters() {
         const chaptersList = document.getElementById('chapters-list');
-        chaptersList.innerHTML = '<div class="loading">Loading chapters...</div>';
+
+        // Only show loading spinner if the content is empty
+        if (!chaptersList.textContent.trim()) {
+            chaptersList.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading chapters...</div>
+                </div>
+            `;
+        }
 
         try {
             const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/chapters`);
@@ -1474,6 +1767,16 @@ class SummraApp {
 
         if (!relatedBooksSection || !relatedBooksCarousel) return;
 
+        // Only show loading spinner if the content is empty
+        if (!relatedBooksCarousel.textContent.trim()) {
+            relatedBooksCarousel.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading related books...</div>
+                </div>
+            `;
+        }
+
         try {
             const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/related`);
             const data = await response.json();
@@ -1591,16 +1894,8 @@ class SummraApp {
         const pageKey = `medium_${book.id}`;
         this.setCurrentPage(pageKey);
 
-        // Hide other sections
-        const heroSection = document.getElementById('hero-section');
-        if (heroSection) heroSection.classList.add('hidden');
-        const categoriesSection = document.getElementById('categories-section');
-        if (categoriesSection) categoriesSection.classList.add('hidden');
-        document.getElementById('summary-section').classList.add('hidden');
-        document.getElementById('chapter-detail-section').classList.add('hidden');
-        const authorDetailSection = document.getElementById('author-detail-section');
-        if (authorDetailSection) authorDetailSection.classList.add('hidden');
-        document.getElementById('medium-detail-section').classList.remove('hidden');
+        // Show only medium detail section
+        this.showOnlySections('medium-detail-section');
 
         // Hide admin edit button (only shown on chapter pages)
         const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
@@ -1698,22 +1993,35 @@ class SummraApp {
         const pageKey = `chapter_${book.id}_${chapterNum}`;
         this.setCurrentPage(pageKey);
 
-        // Hide other sections
-        const heroSection = document.getElementById('hero-section');
-        if (heroSection) heroSection.classList.add('hidden');
-        const categoriesSection = document.getElementById('categories-section');
-        if (categoriesSection) categoriesSection.classList.add('hidden');
-        document.getElementById('summary-section').classList.add('hidden');
-        document.getElementById('medium-detail-section').classList.add('hidden');
-        const authorDetailSection = document.getElementById('author-detail-section');
-        if (authorDetailSection) authorDetailSection.classList.add('hidden');
-        document.getElementById('chapter-detail-section').classList.remove('hidden');
+        // Show only chapter detail section
+        this.showOnlySections('chapter-detail-section');
 
         // Fetch individual chapter data on demand (optimized - only fetches one chapter)
         let chapter = this.chapters.find(c => c.chapter_number === chapterNum);
 
         // If chapter doesn't have full details (summary/text), fetch them
         if (!chapter || !chapter.summary) {
+            // Show loading state only when fetching new data
+            const chapterFulltext = document.getElementById('chapter-fulltext');
+            const chapterSummaryText = document.getElementById('chapter-summary-text');
+
+            if (chapterFulltext && !restoreScroll) {
+                chapterFulltext.innerHTML = `
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading chapter text...</div>
+                    </div>
+                `;
+            }
+
+            if (chapterSummaryText && !restoreScroll) {
+                chapterSummaryText.innerHTML = `
+                    <div class="loading-container" style="min-height: 150px; padding: 2rem;">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading summary...</div>
+                    </div>
+                `;
+            }
             try {
                 const response = await fetch(`${this.apiBase}/books/${book.id}/chapters/${chapterNum}`);
                 const data = await response.json();
@@ -1732,7 +2040,9 @@ class SummraApp {
             }
         }
         if (!chapter) {
-            document.getElementById('chapter-detail-content').innerHTML = '<p class="error">Chapter not found</p>';
+            if (chapterFulltext) {
+                chapterFulltext.innerHTML = '<p class="error">Chapter not found</p>';
+            }
             return;
         }
 
@@ -2227,25 +2537,26 @@ class SummraApp {
         return cleaned;
     }
 
-    showHomeSection() {
+    async showHomeSection() {
         this.saveScrollPosition();
         this.setCurrentPage('home');
         this.currentView = 'home';
 
-        // Hide all other sections
-        const sections = ['summary-section', 'medium-detail-section', 'chapter-detail-section',
-                         'category-detail-section', 'all-categories-section', 'author-detail-section'];
-        sections.forEach(id => {
-            const section = document.getElementById(id);
-            if (section) section.classList.add('hidden');
-        });
-
-        // Show hero and categories section on home
+        // Check if hero section has content (not just a placeholder)
         const heroSection = document.getElementById('hero-section');
-        if (heroSection) heroSection.classList.remove('hidden');
+        const isPlaceholder = heroSection && heroSection.classList.contains('hidden') && heroSection.children.length === 0;
 
-        const categoriesSection = document.getElementById('categories-section');
-        if (categoriesSection) categoriesSection.classList.remove('hidden');
+        // If hero section is just a placeholder (from blog/book pages), do a full page reload
+        if (isPlaceholder) {
+            window.location.href = '/';
+            return;
+        }
+
+        // Show only hero section (uses centralized section management)
+        this.showOnlySections('hero-section');
+
+        // Load books only when needed for home page
+        await this.ensureBooksLoaded();
 
         // Render top 10 carousel
         this.renderTop10Carousel();
@@ -2256,6 +2567,7 @@ class SummraApp {
         this.currentChapter = null;
         this.mediumSummaryContent = null;
         this.originCategory = null;
+        this.originDiscover = false;
 
         // Hide all breadcrumbs when on home page
         this.hideAllBreadcrumbs();
@@ -2277,16 +2589,8 @@ class SummraApp {
         const pageKey = `category_${categoryId}`;
         this.setCurrentPage(pageKey);
 
-        // Hide all sections except category detail
-        const sections = ['hero-section', 'categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section', 'author-detail-section'];
-        sections.forEach(id => {
-            const section = document.getElementById(id);
-            if (section) section.classList.add('hidden');
-        });
-
-        const categoryDetailSection = document.getElementById('category-detail-section');
-        categoryDetailSection.classList.remove('hidden');
+        // Show only category detail section
+        this.showOnlySections('category-detail-section');
 
         // Check cache first
         let categoryData = this.categoryCache[categoryId];
@@ -2333,7 +2637,13 @@ class SummraApp {
             // Store current category for breadcrumbs
             this.currentCategory = categoryData.category;
 
-            document.getElementById('category-detail-title').textContent = categoryData.category.name;
+            // Show and set the title for category pages
+            const titleElement = document.getElementById('category-detail-title');
+            if (titleElement) {
+                titleElement.style.display = '';
+                titleElement.textContent = categoryData.category.name;
+            }
+
             document.getElementById('category-detail-subtitle').textContent =
                 `${categoryData.books.length} book${categoryData.books.length !== 1 ? 's' : ''}`;
 
@@ -2366,16 +2676,11 @@ class SummraApp {
         this.currentView = 'all-categories';
         this.setCurrentPage('all-categories');
 
-        // Hide all sections except all categories
-        const sections = ['hero-section', 'categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section', 'category-detail-section', 'author-detail-section'];
-        sections.forEach(id => {
-            const section = document.getElementById(id);
-            if (section) section.classList.add('hidden');
-        });
+        // Show only all categories section
+        this.showOnlySections('all-categories-section');
 
-        const allCategoriesSection = document.getElementById('all-categories-section');
-        allCategoriesSection.classList.remove('hidden');
+        // Load books first (needed for filtering by category)
+        await this.ensureBooksLoaded();
 
         // Load all categories with books
         try {
@@ -2454,21 +2759,20 @@ class SummraApp {
         this.currentView = 'all-books';
         this.setCurrentPage('all-books');
 
-        // Clear category state since we're not viewing a category
+        // Clear category and discover state since we're not viewing those
         this.currentCategory = null;
+        this.originDiscover = false;
 
-        // Reuse category detail section for all books grid
-        const sections = ['hero-section', 'categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section', 'all-categories-section', 'author-detail-section'];
-        sections.forEach(id => {
-            const section = document.getElementById(id);
-            if (section) section.classList.add('hidden');
-        });
+        // Load books only when needed
+        await this.ensureBooksLoaded();
 
-        const categoryDetailSection = document.getElementById('category-detail-section');
-        categoryDetailSection.classList.remove('hidden');
+        // Show only category detail section (reused for all books grid)
+        this.showOnlySections('category-detail-section');
 
-        document.getElementById('category-detail-title').textContent = 'All Books';
+        // Hide the title for All Books page
+        const titleElement = document.getElementById('category-detail-title');
+        if (titleElement) titleElement.style.display = 'none';
+
         document.getElementById('category-detail-subtitle').textContent =
             `${this.allBooks.length} book${this.allBooks.length !== 1 ? 's' : ''}`;
 
@@ -2498,22 +2802,15 @@ class SummraApp {
         this.currentView = 'author';
         this.setCurrentPage(`author-${authorName}`);
 
-        // Hide all other sections
-        const sections = ['hero-section', 'categories-section', 'summary-section',
-                         'medium-detail-section', 'chapter-detail-section',
-                         'all-categories-section', 'category-detail-section'];
-        sections.forEach(id => {
-            const section = document.getElementById(id);
-            if (section) section.classList.add('hidden');
-        });
+        // Show only author detail section
+        this.showOnlySections('author-detail-section');
 
-        // Show/create author detail section
+        // Create author detail section if it doesn't exist
         let authorSection = document.getElementById('author-detail-section');
         if (!authorSection) {
             authorSection = this.createAuthorDetailSection();
             document.querySelector('.main-content').appendChild(authorSection);
         }
-        authorSection.classList.remove('hidden');
 
         // Fetch author data
         try {
@@ -2553,6 +2850,98 @@ class SummraApp {
                     <button onclick="window.history.back()">Go Back</button>
                 </div>
             `;
+        }
+    }
+
+    async showDiscoverPage(restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'discover';
+        this.setCurrentPage('discover');
+
+        // Show only discover section
+        this.showOnlySections('discover-section');
+
+        // Create discover section if it doesn't exist
+        let discoverSection = document.getElementById('discover-section');
+        if (!discoverSection) {
+            discoverSection = this.createDiscoverSection();
+            document.querySelector('.main-content').appendChild(discoverSection);
+        }
+
+        // Ensure books are loaded (needed for popular carousel)
+        await this.ensureBooksLoaded();
+
+        // Fetch carousel data
+        try {
+            const response = await fetch('/api/discover/carousels');
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error('Failed to fetch discover carousels');
+            }
+
+            // Render discover page
+            this.renderDiscoverPage(data);
+
+            // Update breadcrumbs
+            this.updateBreadcrumbs('discover');
+
+            // Update page title
+            this.updatePageTitle('Discover Classic Books | Summra');
+
+            if (restoreScroll) {
+                this.restoreScrollPosition('discover');
+            } else {
+                window.scrollTo(0, 0);
+            }
+        } catch (error) {
+            console.error('Error loading discover page:', error);
+            discoverSection.innerHTML = `
+                <div class="error-message">
+                    <h2>Error loading page</h2>
+                    <p>Could not load the discover page. Please try again later.</p>
+                    <button onclick="window.location.href='/'">Go Home</button>
+                </div>
+            `;
+        }
+    }
+
+    createDiscoverSection() {
+        const section = document.createElement('div');
+        section.id = 'discover-section';
+        section.className = 'content-section';
+        return section;
+    }
+
+    renderDiscoverPage(data) {
+        const section = document.getElementById('discover-section');
+
+        // Clear existing content
+        section.innerHTML = `
+            <nav class="breadcrumb-nav" id="breadcrumb-nav-discover" aria-label="Breadcrumb">
+                <ol class="breadcrumb-list" id="breadcrumb-list-discover">
+                    <!-- Breadcrumbs will be dynamically loaded here -->
+                </ol>
+            </nav>
+            <div id="discover-popular-carousel-wrapper"></div>
+            <div class="categories-container" id="discover-carousels-container"></div>
+        `;
+
+        // Render popular carousel at the top (same as home page top 10)
+        this.renderTop10AsStandardCarousel('discover-popular-carousel-wrapper', 'Popular');
+
+        // Render each carousel using the same method as categories page
+        if (data.carousels && data.carousels.length > 0) {
+            for (const carousel of data.carousels) {
+                this.renderCategoryCarousel(
+                    { id: carousel.id, name: carousel.title, description: carousel.description },
+                    carousel.books,
+                    'discover-carousels-container'
+                );
+            }
+        } else {
+            const container = document.getElementById('discover-carousels-container');
+            container.innerHTML = '<p class="no-content">No collections available at this time.</p>';
         }
     }
 
@@ -2648,6 +3037,60 @@ class SummraApp {
         `;
         bookCard.addEventListener('click', () => this.selectBook(book));
         return bookCard;
+    }
+
+    async showBlogIndex(restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'blog';
+        this.setCurrentPage('blog');
+
+        // Show only blog index section
+        this.showOnlySections('blog-index-section');
+
+        // Initialize and render blog index component
+        if (!this.blogIndex) {
+            this.blogIndex = new BlogIndex(this);
+        }
+        await this.blogIndex.render();
+
+        // Update breadcrumbs
+        this.updateBreadcrumbs('blog');
+
+        // Update page title
+        this.updatePageTitle('Blog - Classic Literature Guides | Summra');
+
+        if (restoreScroll) {
+            this.restoreScrollPosition('blog');
+        } else {
+            window.scrollTo(0, 0);
+        }
+    }
+
+    async showBlogPost(slug, restoreScroll = false) {
+        this.saveScrollPosition();
+        this.currentView = 'blog-post';
+        this.setCurrentPage(`blog-post-${slug}`);
+
+        // Show only blog post section
+        this.showOnlySections('blog-post-section');
+
+        // Initialize and render blog post component
+        if (!this.blogPost) {
+            this.blogPost = new BlogPost(this);
+        }
+        await this.blogPost.render(slug);
+
+        // Update breadcrumbs
+        this.updateBreadcrumbs('blog-post');
+
+        // Update page title (will be updated by BlogPost component with actual title)
+        this.updatePageTitle('Blog Post | Summra');
+
+        if (restoreScroll) {
+            this.restoreScrollPosition(`blog-post-${slug}`);
+        } else {
+            window.scrollTo(0, 0);
+        }
     }
 
     escapeHtml(text) {
@@ -3094,8 +3537,19 @@ class SummraApp {
         const categoryMatch = path.match(/^\/categories\/(\d+)$/);
         const categoriesMatch = path === '/categories';
         const allBooksMatch = path === '/books';
+        const discoverMatch = path === '/discover';
+        const blogMatch = path === '/blog';
+        const blogPostMatch = path.match(/^\/blog\/([^\/]+)$/);
 
-        if (categoriesMatch) {
+        if (discoverMatch) {
+            breadcrumbs.push({ name: 'Discover', url: '/discover', position: 2 });
+        } else if (blogPostMatch) {
+            breadcrumbs.push({ name: 'Blog', url: '/blog', position: 2 });
+            const postName = this.currentBlogPost?.title || 'Post';
+            breadcrumbs.push({ name: postName, url: path, position: 3 });
+        } else if (blogMatch) {
+            breadcrumbs.push({ name: 'Blog', url: '/blog', position: 2 });
+        } else if (categoriesMatch) {
             breadcrumbs.push({ name: 'Categories', url: '/categories', position: 2 });
         } else if (categoryMatch) {
             breadcrumbs.push({ name: 'Categories', url: '/categories', position: 2 });
@@ -3106,7 +3560,7 @@ class SummraApp {
         } else if (allBooksMatch) {
             breadcrumbs.push({ name: 'All Books', url: '/books', position: 2 });
         } else if (this.currentBook) {
-            // Use origin category if user came from a category page, otherwise use All Books
+            // Use origin category if user came from a category page
             if (this.originCategory) {
                 breadcrumbs.push({ name: 'Categories', url: '/categories', position: 2 });
                 breadcrumbs.push({
@@ -3119,7 +3573,18 @@ class SummraApp {
                     url: `/books/${this.slugify(this.currentBook.title)}`,
                     position: 4
                 });
-            } else {
+            }
+            // Use Discover if user came from Discover page
+            else if (this.originDiscover) {
+                breadcrumbs.push({ name: 'Discover', url: '/discover', position: 2 });
+                breadcrumbs.push({
+                    name: this.currentBook.title,
+                    url: `/books/${this.slugify(this.currentBook.title)}`,
+                    position: 3
+                });
+            }
+            // Otherwise use All Books
+            else {
                 breadcrumbs.push({ name: 'All Books', url: '/books', position: 2 });
                 breadcrumbs.push({
                     name: this.currentBook.title,
@@ -3153,7 +3618,7 @@ class SummraApp {
      * Hide all breadcrumb navigations
      */
     hideAllBreadcrumbs() {
-        const sections = ['book', 'medium', 'chapter', 'category', 'all-categories'];
+        const sections = ['book', 'medium', 'chapter', 'category', 'all-categories', 'blog', 'blog-post'];
         sections.forEach(section => {
             const breadcrumbNav = document.getElementById(`breadcrumb-nav-${section}`);
             if (breadcrumbNav) {

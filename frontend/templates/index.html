@@ -67,8 +67,10 @@
                     <h1 class="logo">Summra</h1>
                 </a>
                 <div class="header-nav-buttons">
+                    <a href="/discover" class="header-nav-btn" id="discover-nav-btn">Discover</a>
+                    <a href="/books" class="header-nav-btn" id="books-nav-btn">Books</a>
                     <a href="/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
-                    <a href="/books" class="header-nav-btn" id="all-books-nav-btn">All Books</a>
+                    <a href="/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
                 </div>
             </div>
         </header>
@@ -76,6 +78,7 @@
         <!-- Main Content -->
         <main class="main-content">
             <!-- Hero Sections (Apple-style) -->
+            {% if not initial_data or initial_data.type not in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author'] %}
             <div id="hero-section">
                 <!-- Main Hero Banner -->
                 <section class="hero-banner hero-main">
@@ -134,7 +137,7 @@
 
                     <div class="hero-banner-content">
                         <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="categories">Explore Categories</a>
+                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="discover">Explore Classics</a>
                             <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
                         </div>
                     </div>
@@ -193,9 +196,13 @@
                     </div>
                 </section>
             </div>
+            {% else %}
+            <!-- Hero section placeholder for client-side navigation -->
+            <div id="hero-section" class="hidden"></div>
+            {% endif %}
 
             <!-- Book Detail Section -->
-            <section class="summary-section hidden" id="summary-section">
+            <section class="summary-section {% if not initial_data or initial_data.type != 'book' %}hidden{% endif %}" id="summary-section">
                 <nav class="breadcrumb-nav" id="breadcrumb-nav-book" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list" id="breadcrumb-list-book">
                         <!-- Breadcrumbs will be dynamically loaded here -->
@@ -312,7 +319,7 @@
             </div>
 
             <!-- Medium Summary Detail Section -->
-            <section class="medium-detail-section hidden" id="medium-detail-section">
+            <section class="medium-detail-section {% if not initial_data or initial_data.type != 'book-summary' %}hidden{% endif %}" id="medium-detail-section">
                 <div class="back-button-container">
                     <nav class="breadcrumb-nav" id="breadcrumb-nav-medium" aria-label="Breadcrumb">
                         <ol class="breadcrumb-list" id="breadcrumb-list-medium">
@@ -355,7 +362,7 @@
             </div>
 
             <!-- Chapter Detail Section -->
-            <section class="chapter-detail-section hidden" id="chapter-detail-section">
+            <section class="chapter-detail-section {% if not initial_data or initial_data.type != 'chapter' %}hidden{% endif %}" id="chapter-detail-section">
                 <div class="back-button-container">
                     <nav class="breadcrumb-nav" id="breadcrumb-nav-chapter" aria-label="Breadcrumb">
                         <ol class="breadcrumb-list" id="breadcrumb-list-chapter">
@@ -487,7 +494,7 @@
             </div>
 
             <!-- Category Detail Section -->
-            <section class="category-detail-section hidden" id="category-detail-section">
+            <section class="category-detail-section {% if not initial_data or initial_data.type not in ['category', 'all-books'] %}hidden{% endif %}" id="category-detail-section">
                 <nav class="breadcrumb-nav" id="breadcrumb-nav-category" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list" id="breadcrumb-list-category">
                         <!-- Breadcrumbs will be dynamically loaded here -->
@@ -503,15 +510,36 @@
             </section>
 
             <!-- All Categories Section -->
-            <section class="all-categories-section hidden" id="all-categories-section">
+            <section class="all-categories-section {% if not initial_data or initial_data.type != 'all-categories' %}hidden{% endif %}" id="all-categories-section">
                 <nav class="breadcrumb-nav" id="breadcrumb-nav-all-categories" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list" id="breadcrumb-list-all-categories">
                         <!-- Breadcrumbs will be dynamically loaded here -->
                     </ol>
                 </nav>
 
-                <h2 class="section-title">All Categories</h2>
                 <div class="categories-container" id="all-categories-container"></div>
+            </section>
+
+            <!-- Blog Index Section -->
+            <section class="blog-index-section {% if not initial_data or initial_data.type != 'blog' %}hidden{% endif %}" id="blog-index-section">
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-blog" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-blog">
+                        <!-- Breadcrumbs will be dynamically loaded here -->
+                    </ol>
+                </nav>
+
+                <div id="blog-index-container"></div>
+            </section>
+
+            <!-- Blog Post Section -->
+            <section class="blog-post-section {% if not initial_data or initial_data.type != 'blog-post' %}hidden{% endif %}" id="blog-post-section">
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-blog-post" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-blog-post">
+                        <!-- Breadcrumbs will be dynamically loaded here -->
+                    </ol>
+                </nav>
+
+                <div id="blog-post-container"></div>
             </section>
         </main>
 
@@ -585,6 +613,11 @@
 
     <!-- Markdown parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+
+    <!-- Blog Components -->
+    <script src="{{ url_for('static', filename='js/components/BlogIndex.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}"></script>
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
