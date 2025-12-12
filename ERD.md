@@ -8597,3 +8597,297 @@ Gaps between cards also reduce proportionally (1rem → 0.25rem).
 - `frontend/static/css/style.css:2265-2420` - Mobile breakpoints
 
 ---
+
+## Frontend Loading State Architecture (Added 2025-12-11)
+
+### Overview
+
+The loading state system provides user feedback during async operations while preventing flash-on-refresh issues. It uses a modern centered spinner design with contextual messaging.
+
+### Core Components
+
+#### CSS Classes
+
+**`.loading-container`** - Centered flex container
+```css
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    min-height: 300px;
+}
+```
+
+**`.loading-spinner`** - Rotating circular spinner
+```css
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: var(--secondary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+```
+
+**`.loading-text`** - Contextual loading message
+```css
+.loading-text {
+    color: var(--text-light);
+    font-size: 0.9rem;
+    font-weight: 500;
+    opacity: 0.8;
+}
+```
+
+### Loading State Logic
+
+#### Smart Display Pattern
+
+Loading states only display when content is actually empty, preventing flash on page refresh:
+
+```javascript
+// Check if content exists before showing loader
+if (!element.textContent.trim()) {
+    element.innerHTML = `
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading...</div>
+        </div>
+    `;
+}
+```
+
+#### SSR Compatibility
+
+For server-side rendered pages, check `restoreScroll` flag to skip loading states:
+
+```javascript
+if (chapterFulltext && !restoreScroll) {
+    chapterFulltext.innerHTML = loadingHTML;
+}
+```
+
+### Implementation Locations
+
+**Book Summary Loading:**
+- `loadConciseSummary()` - "Loading summary..."
+- `loadMediumSummary()` - "Loading full summary..."
+- Location: `frontend/static/js/app.js:1405-1413, 1479-1487`
+
+**Chapter Loading:**
+- `loadChapters()` - "Loading chapters..."
+- Chapter detail - "Loading chapter text..." and "Loading summary..."
+- Location: `frontend/static/js/app.js:1520-1528, 1886-1902`
+
+**Metadata Loading:**
+- `loadBookMetadata()` - "Loading book information..." and "Loading reading guide..."
+- `loadRelatedBooks()` - "Loading related books..."
+- Location: `frontend/static/js/app.js:1327-1365, 1654-1661`
+
+### Loading Dismissal
+
+Remove loading states by selector (supports both new and legacy styles):
+
+```javascript
+// Remove both new spinner and legacy skeleton
+const loadingContainer = content.querySelector('.loading-container');
+if (loadingContainer) loadingContainer.remove();
+
+const skeleton = content.querySelector('.skeleton');
+if (skeleton) skeleton.remove();
+```
+
+**Critical for Reading Guide:** The `updateReadingGuide()` method must remove both `.loading-container` and `.skeleton` to properly dismiss loading states when images load.
+
+Location: `frontend/static/js/app.js:1303-1310`
+
+### Backward Compatibility
+
+Legacy skeleton classes retained for backward compatibility:
+- `.skeleton` - Base skeleton element
+- `.skeleton-text-wide` - Wide text placeholder
+- `.skeleton-text-short` - Short text placeholder
+- `.skeleton-box` - Box placeholder
+
+### Design Rationale
+
+**Why Centered Spinner vs. Skeleton:**
+1. **Cleaner Aesthetic:** Single spinner is less cluttered than multiple skeleton boxes
+2. **Contextual Awareness:** Loading text tells users exactly what's happening
+3. **Modern Pattern:** Matches contemporary web UX (Google, Facebook, Twitter)
+4. **Simpler Markup:** Easier to maintain and update
+5. **Better Performance:** Less DOM manipulation
+
+**Why Content Check:**
+1. **Prevents Flash:** No visible content → skeleton → content cycle on refresh
+2. **SSR Compatible:** Works with server-side rendered pages
+3. **Better UX:** Users don't see unnecessary loading states
+4. **Performance:** Skips DOM manipulation when not needed
+
+### Files Modified
+
+- `frontend/static/css/style.css:556-641` - Loading component styles
+- `frontend/static/js/app.js:1303-1310` - Loading dismissal
+- `frontend/static/js/app.js:1327-1365` - Book metadata loading
+- `frontend/static/js/app.js:1405-1413` - Concise summary loading
+- `frontend/static/js/app.js:1479-1487` - Medium summary loading
+- `frontend/static/js/app.js:1520-1528` - Chapters loading
+- `frontend/static/js/app.js:1654-1661` - Related books loading
+- `frontend/static/js/app.js:1886-1902` - Chapter detail loading
+
+---
+
+## Discover Page Architecture (Added 2025-12-11)
+
+### Overview
+
+The Discover page provides curated book discovery through difficulty-based carousels, with a popular books carousel added at the top for immediate access to widely-read classics.
+
+### Page Structure
+
+**Carousel Flow:**
+1. **Popular Carousel** - Top 10 most downloaded classics
+2. **Easy Carousel** - Books for beginning readers
+3. **Intermediate Carousel** - Moderate difficulty classics
+4. **Advanced Carousel** - Complex, challenging works
+
+### Popular Carousel Implementation
+
+#### Data Source
+
+Top 10 books based on Project Gutenberg download statistics:
+```javascript
+const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
+```
+
+**Book Lookup:**
+```javascript
+const top10Books = [];
+top10GutenbergIds.forEach((gutenbergId) => {
+    const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
+    if (book) {
+        top10Books.push(book);
+    }
+});
+```
+
+#### Rendering Method
+
+**`renderTop10AsStandardCarousel(containerId, title)`**
+
+Reuses existing carousel infrastructure for consistency:
+
+```javascript
+renderTop10AsStandardCarousel(containerId, title = 'Popular') {
+    // Find top 10 books in database
+    const top10Books = [];
+    top10GutenbergIds.forEach((gutenbergId) => {
+        const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
+        if (book) top10Books.push(book);
+    });
+
+    if (top10Books.length === 0) return;
+
+    // Render using standard category carousel (no rank overlays)
+    this.renderCategoryCarousel(
+        { id: 'popular', name: title },
+        top10Books,
+        containerId
+    );
+}
+```
+
+Location: `frontend/static/js/app.js:955-980`
+
+#### UI Consistency
+
+The popular carousel uses the **same UI as difficulty carousels:**
+- Regular book cards (cover, title, author)
+- Standard carousel navigation (left/right arrows)
+- No rank overlays (unlike home page version)
+- No "View All" link
+
+**Contrast with Home Page:**
+- Home page uses `renderTop10Carousel()` with rank overlays and special styling
+- Discover page uses `renderTop10AsStandardCarousel()` with standard styling
+- Different UX contexts require different presentations
+
+### Data Loading Flow
+
+**Critical Sequence:**
+```javascript
+async showDiscoverPage(restoreScroll = false) {
+    // ... setup code ...
+
+    // MUST load books before rendering popular carousel
+    await this.ensureBooksLoaded();
+
+    // Fetch difficulty carousel data
+    const response = await fetch('/api/discover/carousels');
+    const data = await response.json();
+
+    // Render page (popular carousel needs this.allBooks)
+    this.renderDiscoverPage(data);
+}
+```
+
+Location: `frontend/static/js/app.js:2856-2894`
+
+**Why `ensureBooksLoaded()` is Required:**
+1. Popular carousel looks up books by Gutenberg ID
+2. Requires `this.allBooks` array to be populated
+3. Without it, popular carousel would be empty
+4. Difficulty carousels receive books from API, don't need this
+
+### View All Link Logic
+
+Updated to exclude popular carousel:
+
+```javascript
+// Add View All link (except for "All Books" carousel, discover page, or popular carousel)
+const viewAllLink = !isDiscoverPage && category.id !== 'all' && category.id !== 'popular'
+    ? `<a href="/categories/${category.id}" class="view-all-link">View All →</a>`
+    : category.id === 'all' && !isDiscoverPage
+        ? `<a href="/books" class="view-all-link">View All →</a>`
+        : '';
+```
+
+Location: `frontend/static/js/app.js:800-805`
+
+**Exclusion Reasons:**
+- **Discover page carousels:** No category detail pages for difficulty levels
+- **All Books carousel:** "View All" would link to same page
+- **Popular carousel:** No dedicated page for popular books (top 10 is complete set)
+
+### Component Reusability
+
+**Shared Infrastructure:**
+- `renderCategoryCarousel()` renders all carousels (popular, difficulty, category)
+- Same book card HTML structure
+- Same navigation button logic
+- Same scroll behavior
+- Same responsive breakpoints
+
+**Benefits:**
+1. **Consistency:** All carousels look and behave identically
+2. **Maintainability:** One method to update, not multiple
+3. **Code Efficiency:** No duplicate carousel logic
+4. **Testing:** Test one method, covers all carousels
+
+### Files Modified
+
+- `frontend/static/js/app.js:800-805` - View All link logic
+- `frontend/static/js/app.js:955-980` - New popular carousel renderer
+- `frontend/static/js/app.js:2871-2872` - Ensure books loaded
+- `frontend/static/js/app.js:2895-2901` - Render popular carousel on page
+
+---

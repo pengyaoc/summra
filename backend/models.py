@@ -260,6 +260,21 @@ class Database:
             # Column already exists
             pass
 
+        # Blog posts table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS blog_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT UNIQUE NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                excerpt TEXT,
+                author TEXT DEFAULT 'Summra Team',
+                published_date DATE,
+                updated_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -390,7 +405,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at FROM books ORDER BY title')
+        cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at, slug, cefr_level FROM books ORDER BY title')
         rows = cursor.fetchall()
 
         books = [dict(row) for row in rows]
@@ -1533,3 +1548,55 @@ class Database:
         books = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return books
+
+    # Blog-related methods
+
+    def add_blog_post(self, slug: str, title: str, content: str, excerpt: str = None,
+                      author: str = 'Summra Team', published_date: str = None) -> int:
+        """Add a new blog post to the database"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT OR REPLACE INTO blog_posts (slug, title, content, excerpt, author, published_date, updated_date)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (slug, title, content, excerpt, author, published_date))
+
+        blog_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return blog_id
+
+    def get_all_blog_posts(self) -> List[Dict]:
+        """Get all blog posts (title, slug, excerpt, date only)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, slug, title, excerpt, author, published_date, created_at
+            FROM blog_posts
+            ORDER BY published_date DESC, created_at DESC
+        ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_blog_post_by_slug(self, slug: str) -> Optional[Dict]:
+        """Get full blog post by slug"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM blog_posts
+            WHERE slug = ?
+        ''', (slug,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None

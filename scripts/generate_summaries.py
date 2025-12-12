@@ -2032,25 +2032,42 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         return result
 
     def word_to_int(self, s: str) -> int:
-        """Convert spelled-out number to integer (e.g., 'ONE' -> 1, 'TWENTY-TWO' -> 22)"""
+        """Convert spelled-out number to integer (e.g., 'ONE' -> 1, 'FIRST' -> 1, 'TWENTY-TWO' -> 22)"""
+        # Map for cardinal and ordinal numbers
         word_map = {
-            'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5,
-            'SIX': 6, 'SEVEN': 7, 'EIGHT': 8, 'NINE': 9, 'TEN': 10,
-            'ELEVEN': 11, 'TWELVE': 12, 'THIRTEEN': 13, 'FOURTEEN': 14, 'FIFTEEN': 15,
-            'SIXTEEN': 16, 'SEVENTEEN': 17, 'EIGHTEEN': 18, 'NINETEEN': 19, 'TWENTY': 20,
-            'TWENTY-ONE': 21, 'TWENTY-TWO': 22, 'TWENTY-THREE': 23, 'TWENTY-FOUR': 24,
-            'TWENTY-FIVE': 25, 'TWENTY-SIX': 26, 'TWENTY-SEVEN': 27, 'TWENTY-EIGHT': 28,
-            'TWENTY-NINE': 29, 'THIRTY': 30, 'THIRTY-ONE': 31, 'THIRTY-TWO': 32,
-            'THIRTY-THREE': 33, 'THIRTY-FOUR': 34, 'THIRTY-FIVE': 35, 'THIRTY-SIX': 36,
-            'THIRTY-SEVEN': 37, 'THIRTY-EIGHT': 38, 'THIRTY-NINE': 39, 'FORTY': 40,
-            'FORTY-ONE': 41, 'FORTY-TWO': 42, 'FORTY-THREE': 43, 'FORTY-FOUR': 44,
-            'FORTY-FIVE': 45, 'FORTY-SIX': 46, 'FORTY-SEVEN': 47, 'FORTY-EIGHT': 48,
-            'FORTY-NINE': 49, 'FIFTY': 50, 'FIFTY-ONE': 51, 'FIFTY-TWO': 52,
-            'FIFTY-THREE': 53, 'FIFTY-FOUR': 54, 'FIFTY-FIVE': 55, 'FIFTY-SIX': 56,
-            'FIFTY-SEVEN': 57, 'FIFTY-EIGHT': 58, 'FIFTY-NINE': 59, 'SIXTY': 60,
-            'SIXTY-ONE': 61, 'SIXTY-TWO': 62, 'SIXTY-THREE': 63, 'SIXTY-FOUR': 64,
-            'SIXTY-FIVE': 65, 'SIXTY-SIX': 66, 'SIXTY-SEVEN': 67, 'SIXTY-EIGHT': 68,
-            'SIXTY-NINE': 69, 'SEVENTY': 70
+            'ONE': 1, 'FIRST': 1, 'TWO': 2, 'SECOND': 2, 'THREE': 3, 'THIRD': 3,
+            'FOUR': 4, 'FOURTH': 4, 'FIVE': 5, 'FIFTH': 5,
+            'SIX': 6, 'SIXTH': 6, 'SEVEN': 7, 'SEVENTH': 7, 'EIGHT': 8, 'EIGHTH': 8,
+            'NINE': 9, 'NINTH': 9, 'TEN': 10, 'TENTH': 10,
+            'ELEVEN': 11, 'ELEVENTH': 11, 'TWELVE': 12, 'TWELFTH': 12,
+            'THIRTEEN': 13, 'THIRTEENTH': 13, 'FOURTEEN': 14, 'FOURTEENTH': 14, 'FIFTEEN': 15, 'FIFTEENTH': 15,
+            'SIXTEEN': 16, 'SIXTEENTH': 16, 'SEVENTEEN': 17, 'SEVENTEENTH': 17,
+            'EIGHTEEN': 18, 'EIGHTEENTH': 18, 'NINETEEN': 19, 'NINETEENTH': 19, 'TWENTY': 20, 'TWENTIETH': 20,
+            'TWENTY-ONE': 21, 'TWENTY-FIRST': 21, 'TWENTY-TWO': 22, 'TWENTY-SECOND': 22,
+            'TWENTY-THREE': 23, 'TWENTY-THIRD': 23, 'TWENTY-FOUR': 24, 'TWENTY-FOURTH': 24,
+            'TWENTY-FIVE': 25, 'TWENTY-FIFTH': 25, 'TWENTY-SIX': 26, 'TWENTY-SIXTH': 26,
+            'TWENTY-SEVEN': 27, 'TWENTY-SEVENTH': 27, 'TWENTY-EIGHT': 28, 'TWENTY-EIGHTH': 28,
+            'TWENTY-NINE': 29, 'TWENTY-NINTH': 29, 'THIRTY': 30, 'THIRTIETH': 30,
+            'THIRTY-ONE': 31, 'THIRTY-FIRST': 31, 'THIRTY-TWO': 32, 'THIRTY-SECOND': 32,
+            'THIRTY-THREE': 33, 'THIRTY-THIRD': 33, 'THIRTY-FOUR': 34, 'THIRTY-FOURTH': 34,
+            'THIRTY-FIVE': 35, 'THIRTY-FIFTH': 35, 'THIRTY-SIX': 36, 'THIRTY-SIXTH': 36,
+            'THIRTY-SEVEN': 37, 'THIRTY-SEVENTH': 37, 'THIRTY-EIGHT': 38, 'THIRTY-EIGHTH': 38,
+            'THIRTY-NINE': 39, 'THIRTY-NINTH': 39, 'FORTY': 40, 'FORTIETH': 40,
+            'FORTY-ONE': 41, 'FORTY-FIRST': 41, 'FORTY-TWO': 42, 'FORTY-SECOND': 42,
+            'FORTY-THREE': 43, 'FORTY-THIRD': 43, 'FORTY-FOUR': 44, 'FORTY-FOURTH': 44,
+            'FORTY-FIVE': 45, 'FORTY-FIFTH': 45, 'FORTY-SIX': 46, 'FORTY-SIXTH': 46,
+            'FORTY-SEVEN': 47, 'FORTY-SEVENTH': 47, 'FORTY-EIGHT': 48, 'FORTY-EIGHTH': 48,
+            'FORTY-NINE': 49, 'FORTY-NINTH': 49, 'FIFTY': 50, 'FIFTIETH': 50,
+            'FIFTY-ONE': 51, 'FIFTY-FIRST': 51, 'FIFTY-TWO': 52, 'FIFTY-SECOND': 52,
+            'FIFTY-THREE': 53, 'FIFTY-THIRD': 53, 'FIFTY-FOUR': 54, 'FIFTY-FOURTH': 54,
+            'FIFTY-FIVE': 55, 'FIFTY-FIFTH': 55, 'FIFTY-SIX': 56, 'FIFTY-SIXTH': 56,
+            'FIFTY-SEVEN': 57, 'FIFTY-SEVENTH': 57, 'FIFTY-EIGHT': 58, 'FIFTY-EIGHTH': 58,
+            'FIFTY-NINE': 59, 'FIFTY-NINTH': 59, 'SIXTY': 60, 'SIXTIETH': 60,
+            'SIXTY-ONE': 61, 'SIXTY-FIRST': 61, 'SIXTY-TWO': 62, 'SIXTY-SECOND': 62,
+            'SIXTY-THREE': 63, 'SIXTY-THIRD': 63, 'SIXTY-FOUR': 64, 'SIXTY-FOURTH': 64,
+            'SIXTY-FIVE': 65, 'SIXTY-FIFTH': 65, 'SIXTY-SIX': 66, 'SIXTY-SIXTH': 66,
+            'SIXTY-SEVEN': 67, 'SIXTY-SEVENTH': 67, 'SIXTY-EIGHT': 68, 'SIXTY-EIGHTH': 68,
+            'SIXTY-NINE': 69, 'SIXTY-NINTH': 69, 'SEVENTY': 70, 'SEVENTIETH': 70
         }
         return word_map.get(s.upper(), 0)
 
@@ -2704,8 +2721,12 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         toc_structure = []
         current_section = None
 
-        # Patterns for section markers (PART/BOOK/ACT) - allow leading whitespace
-        section_pattern = r'(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\s*:?\s*(.+?))?\.?\s*$'
+        # Patterns for section markers (PART/BOOK/ACT/EPILOGUE/PROLOGUE) - allow leading whitespace
+        # Pattern 1: Numbered sections - "BOOK I", "BOOK I. Title", "BOOK I: Title", "BOOK I - Title"
+        section_pattern = r'(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\.?\s*[:—-]?\s*(.+?))?\s*$'
+
+        # Pattern 2: Unnumbered sections - "Epilogue", "Prologue", "Epilogue: Title"
+        unnumbered_section_pattern = r'(EPILOGUE|PROLOGUE)(?:\.?\s*[:—-]?\s*(.+?))?\s*$'
 
         # Also match decorative section markers like "— I —", "— II —", "— III —" (Ulysses)
         decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
@@ -2728,8 +2749,39 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             line_stripped = line.strip()
 
             # Start of TOC (case-insensitive)
+            # Also match "CONTENTS VOLUME I", "CONTENTS VOLUME II" etc.
             if re.match(r'^\s*Contents\.?\s*$', line_stripped, re.IGNORECASE):
                 in_toc = True
+                continue
+
+            # Check for "VOLUME I/II" or "CONTENTS VOLUME I/II" pattern (e.g., Don Quixote)
+            volume_toc_match = re.match(r'^\s*(?:CONTENTS\s+)?VOLUME\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|[IVXLCDM]+|[0-9]+)\.?\s*$', line_stripped, re.IGNORECASE)
+            if volume_toc_match:
+                in_toc = True
+                # Treat this as a VOLUME section marker
+                volume_numeral = volume_toc_match.group(1)
+
+                # Convert numeral to number
+                if volume_numeral.isdigit():
+                    volume_number = int(volume_numeral)
+                else:
+                    # Try spelled-out word first
+                    volume_number = self.word_to_int(volume_numeral)
+                    # If that didn't work, try Roman numeral
+                    if volume_number == 0:
+                        volume_number = self.roman_to_int(volume_numeral)
+
+                # Save previous section if exists
+                if current_section and len(current_section['chapters']) > 0:
+                    toc_structure.append(current_section)
+
+                current_section = {
+                    'type': 'VOLUME',
+                    'number': volume_number,
+                    'numeral': volume_numeral,
+                    'title': '',
+                    'chapters': []
+                }
                 continue
 
             if not in_toc:
@@ -2739,19 +2791,37 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             if not line_stripped:
                 continue
 
-            # Check for section marker (PART/BOOK/ACT or decorative "— I —" style)
+            # Check for section marker (PART/BOOK/ACT/EPILOGUE/PROLOGUE or decorative "— I —" style)
             section_match = re.match(section_pattern, line_stripped, re.IGNORECASE)
+            unnumbered_match = re.match(unnumbered_section_pattern, line_stripped, re.IGNORECASE)
             decorative_match = re.match(decorative_section_pattern, line_stripped)
 
-            if section_match or decorative_match:
+            if section_match or unnumbered_match or decorative_match:
                 if decorative_match:
                     # Decorative section marker like "— I —"
                     section_type = 'PART'  # Treat as PART
                     section_numeral = decorative_match.group(1)
+                    section_title = ""
+                elif unnumbered_match:
+                    # Unnumbered section like "Epilogue" or "Prologue"
+                    section_type = unnumbered_match.group(1).upper()
+                    # Assign special numerals: Prologue = 0, Epilogue = 999 (sorts after all numbered sections)
+                    if section_type == 'PROLOGUE':
+                        section_numeral = "0"
+                    else:  # EPILOGUE
+                        section_numeral = "999"
+                    section_title = unnumbered_match.group(2).strip() if unnumbered_match.group(2) else ""
                 else:
                     # Standard PART/BOOK/ACT marker
                     section_type = section_match.group(1).upper()
                     section_numeral = section_match.group(2)
+                    section_title = section_match.group(3).strip() if section_match.group(3) else ""
+
+                # If we've already detected VOLUME sections, and now we hit a BOOK/PART/ACT,
+                # it means the TOC has ended and we're in content (these section types don't mix)
+                if len(toc_structure) > 0 and toc_structure[0]['type'] == 'VOLUME' and section_type in ['BOOK', 'PART', 'ACT']:
+                    # TOC ended - we're now in the introduction/preface content
+                    break
 
                 # Convert numeral to number
                 if section_numeral.isdigit():
@@ -2764,27 +2834,23 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         section_number = self.roman_to_int(section_numeral)
 
                 # Check if this is a duplicate section (TOC ended, content started)
-                existing_numbers = [s['number'] for s in toc_structure]
-                if section_number in existing_numbers:
-                    # Duplicate detected - TOC has ended
-                    break
+                # Skip duplicate check for EPILOGUE/PROLOGUE since they use fixed numeral "1"
+                if section_type not in ['EPILOGUE', 'PROLOGUE']:
+                    existing_numbers = [s['number'] for s in toc_structure if s['type'] == section_type]
+                    if section_number in existing_numbers:
+                        # Duplicate detected - TOC has ended
+                        break
 
                 # Save previous section if exists
                 if current_section and len(current_section['chapters']) > 0:
                     toc_structure.append(current_section)
 
-                # Extract section title (only for standard PART/BOOK/ACT format)
-                if decorative_match:
-                    section_title = ""  # Decorative markers don't have titles
-                else:
-                    section_title = section_match.group(3).strip() if section_match.group(3) else ""
-
-                    # If title is empty, check next line for title (common format)
-                    if not section_title and i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        # If next line is not empty and doesn't look like a chapter marker, use it as title
-                        if next_line and not re.match(chapter_pattern, next_line) and not re.match(r'^[IVXLCDM]+\.', next_line):
-                            section_title = next_line
+                # For numbered sections, check next line for title if empty
+                if not section_title and section_type not in ['EPILOGUE', 'PROLOGUE'] and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    # If next line is not empty and doesn't look like a chapter marker, use it as title
+                    if next_line and not re.match(chapter_pattern, next_line) and not re.match(r'^[IVXLCDM]+\.', next_line):
+                        section_title = next_line
 
                 current_section = {
                     'type': section_type,
@@ -2915,7 +2981,10 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         # - "PART I. A VOYAGE TO LILLIPUT." (period + space + title)
         # - "PART ONE--The Old Buccaneer" (double-dash + title)
         # Capture group 3 is the title (after period or double-dash)
-        section_pattern = r'^\s*(PART|BOOK|ACT)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\.?\s*$|\.?\s+(.+?)\s*$|(?:--|\s+--)\s*(.+?)\s*$)'
+        section_pattern = r'^\s*(PART|BOOK|ACT|VOLUME)\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)(?:\.?\s*$|\.?\s+(.+?)\s*$|(?:--|\s+--)\s*(.+?)\s*$)'
+
+        # Reversed format for plays: "FIRST ACT", "SECOND ACT", etc.
+        reversed_section_pattern = r'^\s*(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH|THIRTEENTH|FOURTEENTH|FIFTEENTH|SIXTEENTH|SEVENTEENTH|EIGHTEENTH|NINETEENTH|TWENTIETH|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|THIRTEEN|FOURTEEN|FIFTEEN|SIXTEEN|SEVENTEEN|EIGHTEEN|NINETEEN|TWENTY|[0-9]+|[IVXLCDM]+)\s+(PART|BOOK|ACT|VOLUME)(?:\.?\s*$|\.?\s+(.+?)\s*$)'
 
         # Also match decorative section markers like "— I —", "— II —", "— III —" (Ulysses)
         decorative_section_pattern = r'^\s*—+\s*([IVXLCDM]+)\s*—+\s*$'
@@ -2943,15 +3012,26 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             if not line_stripped:
                 continue
 
-            # Check for section marker (standard or decorative)
+            # Check for section marker (standard, reversed, or decorative)
             section_match = re.match(section_pattern, line_stripped, re.IGNORECASE)
+            reversed_match = re.match(reversed_section_pattern, line_stripped, re.IGNORECASE)
             decorative_match = re.match(decorative_section_pattern, line_stripped)
 
-            if section_match or decorative_match:
+            if section_match or reversed_match or decorative_match:
                 if decorative_match:
                     # Decorative section marker like "— I —"
                     section_type = 'PART'  # Treat decorative markers as PART
                     section_numeral = decorative_match.group(1)
+                elif reversed_match:
+                    # Reversed format: "FIRST ACT", "SECOND ACT", etc.
+                    section_numeral = reversed_match.group(1)
+                    section_type = reversed_match.group(2).upper()
+
+                    # Check for false positive: if title exists and starts with lowercase, likely prose
+                    title_group_3 = reversed_match.group(3)
+                    if title_group_3 and title_group_3[0].islower():
+                        # This is likely prose, not a section marker - skip it
+                        continue
                 else:
                     # Standard PART/BOOK/ACT marker
                     section_type = section_match.group(1).upper()
@@ -2995,8 +3075,13 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 if decorative_match:
                     # Decorative markers don't have titles
                     section_title = ""
+                elif reversed_match:
+                    # Reversed format: "FIRST ACT" - check for title in group 3
+                    section_title = ""
+                    if reversed_match.group(3):
+                        section_title = reversed_match.group(3).strip()
                 else:
-                    # Try to get it from the match if it exists on the same line
+                    # Standard format: try to get it from the match if it exists on the same line
                     # Group 3: "PART I. A VOYAGE TO LILLIPUT." (period + space + title)
                     # Group 4: "PART ONE--The Old Buccaneer" (double-dash + title)
                     section_title = ""
@@ -3245,16 +3330,54 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         # For two-level structures, start searching after TOC (if detected) to avoid finding TOC entries
         # When toc_end_line is available, use it as the starting point to skip the TOC section
         # Otherwise start from the beginning and rely on duplicate detection
-        search_start_line = toc_end_line if toc_end_line > 0 else 0
+        # EXCEPTION: For VOLUME-based structures, the VOLUME markers are IN the TOC, so search from 0
+        is_volume_structure = len(toc_structure) > 0 and toc_structure[0]['type'] == 'VOLUME'
+        search_start_line = 0 if is_volume_structure else (toc_end_line if toc_end_line > 0 else 0)
 
         # Sequential chapter counter across all sections (1, 2, 3, ...)
         sequential_chapter_num = 1
 
         # Check for preface/introduction before the first section
         # Capture all content from beginning up to first chapter/section
-        # Find the first section start line
+        # Find the first section start line by searching for it in the body
         first_section = toc_structure[0] if toc_structure else None
-        first_section_line = first_section.get('line_index', len(lines)) if first_section else len(lines)
+        first_section_line = len(lines)  # Default to end of file if not found
+
+        if first_section:
+            # Search for the first section in the body (starting after TOC)
+            section_search_start = toc_end_line if toc_end_line > 0 else 0
+
+            # Special handling for VOLUME structures: search for first CHAPTER instead of VOLUME marker
+            # The VOLUME marker is just a heading, actual content starts at first chapter
+            if first_section['type'] == 'VOLUME' and len(first_section.get('chapters', [])) > 0:
+                # Search for "CHAPTER I." or "CHAPTER 1." pattern
+                first_chapter_pattern = r'^\s*CHAPTER\s+(I\.|1\.)\s*'
+                for i in range(section_search_start, len(lines)):
+                    if re.match(first_chapter_pattern, lines[i], re.IGNORECASE):
+                        first_section_line = i
+                        break
+            else:
+                # Build pattern to match section marker (with or without title)
+                # Matches: "BOOK I", "BOOK I.", "BOOK I. Title", "BOOK I: Title"
+                # Also matches reversed format: "FIRST ACT", etc.
+                if first_section['title']:
+                    # Match "TYPE NUMERAL" optionally followed by separator and title
+                    title_escaped = re.escape(first_section['title'])
+                    first_section_pattern = rf'^\s*{first_section["type"]}\s+{first_section["numeral"]}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                    reversed_section_pattern = rf'^\s*{first_section["numeral"]}\s+{first_section["type"]}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                else:
+                    # Match just "TYPE NUMERAL" (no title)
+                    first_section_pattern = rf'^\s*{first_section["type"]}\s+{first_section["numeral"]}\.?\s*$'
+                    reversed_section_pattern = rf'^\s*{first_section["numeral"]}\s+{first_section["type"]}\.?\s*$'
+
+                for i in range(section_search_start, len(lines)):
+                    if re.match(first_section_pattern, lines[i], re.IGNORECASE):
+                        first_section_line = i
+                        break
+                    # Also try reversed pattern
+                    elif re.match(reversed_section_pattern, lines[i], re.IGNORECASE):
+                        first_section_line = i
+                        break
 
         # Start after TOC to skip title page and table of contents
         # Uses existing TOC detection to find where actual content begins
@@ -3320,14 +3443,32 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 print(f"  Using {section_type} {section_numeral} from body scan at line {section_start_line}")
             else:
                 # Fallback: search for section marker
-                # Use title if available (for titled sections), otherwise use "TYPE NUMERAL" pattern
-                if section_title:
-                    section_pattern = r'^\s*' + re.escape(section_title) + r'\s*$'
+                # Build pattern to match section (with or without numeral)
+                if section_type in ['EPILOGUE', 'PROLOGUE']:
+                    # Unnumbered sections - match just the type (no numeral)
+                    if section_title:
+                        title_escaped = re.escape(section_title)
+                        section_pattern = rf'^\s*{section_type}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                    else:
+                        section_pattern = rf'^\s*{section_type}\.?\s*$'
+                    decorative_pattern = None  # No decorative pattern for epilogue/prologue
                 else:
-                    # Try standard pattern first (e.g., "PART I", "BOOK II")
-                    section_pattern = rf'^\s*{section_type}\s+{section_numeral}\.?\s*'
-                # Also try decorative pattern if section has no title (e.g., "— I —")
-                decorative_pattern = rf'^\s*—+\s*{section_numeral}\s*—+\s*$'
+                    # Numbered sections - "BOOK I", "BOOK I. Title", etc.
+                    # Also support reversed format for plays: "FIRST ACT", "SECOND ACT", etc.
+                    if section_title:
+                        # Match "TYPE NUMERAL" followed by optional separator and the title
+                        title_escaped = re.escape(section_title)
+                        section_pattern = rf'^\s*{section_type}\s+{section_numeral}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                        # Alternative: "NUMERAL TYPE" (for plays like "FIRST ACT")
+                        reversed_pattern = rf'^\s*{section_numeral}\s+{section_type}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                    else:
+                        # Match just "TYPE NUMERAL" (no title) with optional trailing period
+                        section_pattern = rf'^\s*{section_type}\s+{section_numeral}\.?\s*$'
+                        # Alternative: "NUMERAL TYPE" (for plays like "FIRST ACT")
+                        reversed_pattern = rf'^\s*{section_numeral}\s+{section_type}\.?\s*$'
+
+                    # Also try decorative pattern (e.g., "— I —")
+                    decorative_pattern = rf'^\s*—+\s*{section_numeral}\s*—+\s*$'
 
                 section_start_line = None
                 for i in range(search_start_line, len(lines)):
@@ -3335,8 +3476,13 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         section_start_line = i
                         print(f"  Found {section_type} {section_numeral} at line {i}")
                         break
-                    # If no title, also try decorative pattern
-                    elif not section_title and re.match(decorative_pattern, lines[i]):
+                    # Try reversed pattern (NUMERAL TYPE format, like "FIRST ACT")
+                    elif re.match(reversed_pattern, lines[i], re.IGNORECASE):
+                        section_start_line = i
+                        print(f"  Found {section_numeral} {section_type} at line {i}")
+                        break
+                    # If no title, also try decorative pattern (if available)
+                    elif not section_title and decorative_pattern and re.match(decorative_pattern, lines[i]):
                         section_start_line = i
                         print(f"  Found decorative {section_type} {section_numeral} at line {i}")
                         break
@@ -3345,6 +3491,18 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     print(f"  ⚠️  Warning: Could not find {section_type} {section_numeral} in document body")
                     continue
 
+            # For VOLUME structures: Use the actual chapter boundary from previous VOLUME (if any)
+            # to avoid searching duplicate chapters
+            if section_type == 'VOLUME':
+                current_section_idx_for_vol = toc_structure.index(section)
+                if current_section_idx_for_vol > 0:
+                    prev_section = toc_structure[current_section_idx_for_vol - 1]
+                    if prev_section['type'] == 'VOLUME' and 'actual_end_line' in prev_section:
+                        # Start searching from where previous VOLUME ended
+                        section_start_line = prev_section['actual_end_line']
+                        print(f"  Starting {section_type} {section_numeral} search from line {section_start_line} (after previous VOLUME)")
+                # Otherwise, keep section_start_line as the VOLUME marker position
+
             # Determine where this section ends (for chapter boundary detection)
             section_end_line = len(lines)
             current_section_idx = toc_structure.index(section)
@@ -3352,30 +3510,104 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 # Find the next section to determine where this section ends
                 next_section = toc_structure[current_section_idx + 1]
 
-                # Use title if available, otherwise use "TYPE NUMERAL" pattern
-                if next_section['title']:
-                    next_section_pattern = r'^\s*' + re.escape(next_section['title']) + r'\s*$'
+                # Build pattern to match next section (with or without numeral)
+                if next_section['type'] in ['EPILOGUE', 'PROLOGUE']:
+                    # Unnumbered section - match just the type
+                    if next_section['title']:
+                        next_title_escaped = re.escape(next_section['title'])
+                        next_section_pattern = rf'^\s*{next_section["type"]}\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
+                    else:
+                        next_section_pattern = rf'^\s*{next_section["type"]}\.?\s*$'
+                    next_decorative_pattern = None
                 else:
-                    next_section_pattern = rf'^\s*{next_section["type"]}\s+{next_section["numeral"]}\.?\s*'
-                next_decorative_pattern = rf'^\s*—+\s*{next_section["numeral"]}\s*—+\s*$'
+                    # Numbered section - "BOOK II", "BOOK II. Title", etc.
+                    # Also support reversed format for plays: "SECOND ACT", etc.
+                    if next_section['title']:
+                        next_title_escaped = re.escape(next_section['title'])
+                        next_section_pattern = rf'^\s*{next_section["type"]}\s+{next_section["numeral"]}\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
+                        next_reversed_pattern = rf'^\s*{next_section["numeral"]}\s+{next_section["type"]}\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
+                    else:
+                        next_section_pattern = rf'^\s*{next_section["type"]}\s+{next_section["numeral"]}\.?\s*$'
+                        next_reversed_pattern = rf'^\s*{next_section["numeral"]}\s+{next_section["type"]}\.?\s*$'
+                    next_decorative_pattern = rf'^\s*—+\s*{next_section["numeral"]}\s*—+\s*$'
 
                 for i in range(section_start_line + 1, len(lines)):
                     if re.match(next_section_pattern, lines[i], re.IGNORECASE):
                         section_end_line = i
                         break
-                    # Also try decorative pattern if next section has no title
-                    elif not next_section['title'] and re.match(next_decorative_pattern, lines[i]):
+                    # Try reversed pattern for next section
+                    elif re.match(next_reversed_pattern, lines[i], re.IGNORECASE):
                         section_end_line = i
                         break
+                    # Also try decorative pattern if next section has no title (and pattern exists)
+                    elif not next_section['title'] and next_decorative_pattern and re.match(next_decorative_pattern, lines[i]):
+                        section_end_line = i
+                        break
+
+            # Special handling for VOLUME sections: Use TOC chapter list to determine actual boundaries
+            # The TOC gives us the list of chapters, we search for where each one appears in the body
+            # Then we can determine the actual VOLUME boundaries from the chapter locations
+            if section_type == 'VOLUME' and len(section['chapters']) > 0:
+                print(f"  Using TOC chapter list for {section_type} {section_numeral} ({len(section['chapters'])} chapters from TOC)")
+                # For each chapter in TOC, search for it in the body using "CHAPTER <numeral>." pattern
+                # Search from section_start_line to END OF DOCUMENT (not section_end_line, which is wrong for VOLUME)
+                toc_chapters = section['chapters']
+                found_chapters = []
+
+                for toc_chapter in toc_chapters:
+                    chapter_numeral = toc_chapter['numeral']
+                    chapter_number = toc_chapter['number']
+
+                    # Search for "CHAPTER <numeral>." in the document body (from section start to end of doc)
+                    # Match even if title continues on same or next line (no $ anchor)
+                    chapter_pattern = rf'^\s*CHAPTER\s+{re.escape(chapter_numeral)}\.'
+
+                    for scan_line_idx in range(section_start_line, len(lines)):
+                        if re.match(chapter_pattern, lines[scan_line_idx], re.IGNORECASE):
+                            found_chapters.append({
+                                'number': chapter_number,
+                                'numeral': chapter_numeral,
+                                'title': toc_chapter.get('title', ''),
+                                'line': scan_line_idx
+                            })
+                            break
+
+                if found_chapters:
+                    print(f"  Found {len(found_chapters)}/{len(toc_chapters)} chapters from TOC in {section_type} {section_numeral} body")
+                    # Replace section['chapters'] with found chapters (with actual line positions)
+                    section['chapters'] = found_chapters
+
+                    # Now determine actual section_end_line from chapter positions:
+                    # For VOLUME I, end is where VOLUME II's first chapter starts
+                    # For last VOLUME, end is end of document
+                    if next_section and next_section['type'] == 'VOLUME' and len(next_section.get('chapters', [])) > 0:
+                        # Search for next volume's first chapter (CHAPTER I.)
+                        # This will be the boundary
+                        next_vol_first_chapter_pattern = r'^\s*CHAPTER\s+I\.'
+                        # Start searching from last chapter of current volume
+                        search_from = found_chapters[-1]['line'] + 100  # Start 100 lines after last chapter
+                        for scan_line_idx in range(search_from, len(lines)):
+                            if re.match(next_vol_first_chapter_pattern, lines[scan_line_idx], re.IGNORECASE):
+                                section_end_line = scan_line_idx
+                                print(f"  Adjusted {section_type} {section_numeral} end to line {scan_line_idx} (next VOLUME's CHAPTER I.)")
+                                # Save this boundary for next VOLUME to use
+                                section['actual_end_line'] = section_end_line
+                                break
+
+                    # Mark this section as VOLUME so we can skip the normal chapter detection
+                    section['_volume_chapters_already_found'] = True
+                else:
+                    print(f"  ⚠️  Warning: Could not find any TOC chapters in {section_type} {section_numeral} body")
 
             # Handle sections with no chapters: create an implicit chapter
             if len(section['chapters']) == 0:
                 # Create implicit chapter covering the entire section
-                # Find where content starts (skip section marker line)
+                # Find where content starts (skip section marker line and blank lines)
                 implicit_chapter_start = section_start_line
                 for i in range(section_start_line + 1, min(section_start_line + 10, section_end_line)):
-                    # Skip blank lines and section title, find first paragraph
-                    if lines[i].strip() and len(lines[i].strip()) > 40:
+                    # Skip blank lines and very short lines (likely just "SCENE" or similar markers)
+                    # But include lines >= 20 chars (like scene descriptions: "Morning-room at the Manor House.")
+                    if lines[i].strip() and len(lines[i].strip()) >= 20:
                         implicit_chapter_start = i
                         break
 
@@ -3393,6 +3625,33 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     sequential_chapter_num += 1
 
                 continue  # Skip chapter detection loop for this section
+
+            # For VOLUME sections where we've already found chapters using TOC, use those directly
+            if section.get('_volume_chapters_already_found', False):
+                # Chapters already have 'line' attribute with actual positions
+                # Calculate boundaries using the line positions
+                for idx, chapter_info in enumerate(section['chapters']):
+                    chapter_start_line = chapter_info['line']
+                    # End is the start of next chapter, or section end
+                    if idx + 1 < len(section['chapters']):
+                        chapter_end_line = section['chapters'][idx + 1]['line']
+                    else:
+                        chapter_end_line = section_end_line
+
+                    # Extract chapter content
+                    chapter_lines = lines[chapter_start_line:chapter_end_line]
+                    chapter_text = '\n'.join(chapter_lines)
+                    chapter_text = self.normalize_chapter_text(chapter_text)
+
+                    if len(chapter_text) > ContentThresholds.MIN_CHAPTER_CHARS_V1:
+                        normalized_title = self.normalize_chapter_title(chapter_info['title']) if chapter_info['title'] else ""
+                        chapters.append((sequential_chapter_num, normalized_title, chapter_text))
+                        print(f"    ✓ Chapter {sequential_chapter_num}: {normalized_title[:50]} ({len(chapter_text)} chars)")
+                        sequential_chapter_num += 1
+                    else:
+                        print(f"    ⚠️  Skipping Chapter {sequential_chapter_num} (too short: {len(chapter_text)} chars)")
+
+                continue  # Skip normal chapter detection loop
 
             # Track how many chapters we find in this section
             chapters_before_section = len(chapters)
@@ -4281,14 +4540,32 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                                     # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
                                     consumed_lines.add(i + next_line_idx_offset)
                             elif is_standalone_roman and not chapter_title:
-                                # Standalone Roman numeral pattern WITHOUT title on same line - next line is the title
-                                # Don't override chapter_title if it was already extracted (e.g., "I. TITLE" format)
+                                # Standalone Roman numeral pattern WITHOUT title on same line
+                                # Check if next line is actually a title or just content
                                 # (unless it's another Roman numeral chapter marker)
                                 if next_line and not re.match(r'^[IVXLCDM]+\.?\s*$', next_line) and len(next_line) > 0:
-                                    chapter_title = next_line
-                                    continuation_line_idx = i + next_line_idx_offset
-                                    # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
-                                    consumed_lines.add(i + next_line_idx_offset)
+                                    # Check if next line is part of a paragraph by looking at the line after it
+                                    is_part_of_paragraph = False
+                                    if i + next_line_idx_offset + 1 < len(lines):
+                                        line_after_next = lines[i + next_line_idx_offset + 1].strip()
+                                        # If the line after next has lowercase content or is long, it's part of a paragraph
+                                        if line_after_next and (any(c.islower() for c in line_after_next) or len(line_after_next) > 20):
+                                            is_part_of_paragraph = True
+
+                                    # Only use next line as title if it looks like a title, not content
+                                    looks_like_title = (
+                                        len(next_line) > 3 and
+                                        len(next_line) <= ContentThresholds.MAX_CHAPTER_TITLE_LENGTH and
+                                        not next_line.endswith('—') and
+                                        not next_line.endswith('-') and
+                                        not is_part_of_paragraph
+                                    )
+
+                                    if looks_like_title:
+                                        chapter_title = next_line
+                                        continuation_line_idx = i + next_line_idx_offset
+                                        # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                                        consumed_lines.add(i + next_line_idx_offset)
                             elif not chapter_title:
                                 # Title is empty - use next line as title ONLY if it looks like a title
                                 # Don't use it if it looks like content (long sentence, ends with dash/em-dash, or part of a paragraph)
@@ -4319,17 +4596,67 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                                     continuation_line_idx = i + next_line_idx_offset
                                     # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
                                     consumed_lines.add(i + next_line_idx_offset)
-                            elif is_continuation and (next_line[0].islower() or (len(next_line.split()) <= 3 and not next_line.endswith('.'))):
-                                # Title exists and next line is a valid continuation - append it
-                                # Only append if:
-                                # 1. Starts with lowercase (e.g., "of the") - likely part of title, OR
-                                # 2. Starts with uppercase AND is short (≤3 words) AND doesn't end with period
-                                #    (e.g., "Antonines" is 1 word, but "This is a sentence." is 4 words ending with period)
-                                # This avoids appending chapter content that starts with uppercase
-                                chapter_title = chapter_title + ' ' + next_line
-                                continuation_line_idx = i + next_line_idx_offset
-                                # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
-                                consumed_lines.add(i + next_line_idx_offset)
+                            elif is_continuation:
+                                # Title exists and next line is a valid continuation - check if we should append it
+
+                                # Check if this is an ALL-CAPS multi-line title (like Don Quixote)
+                                # ALL-CAPS titles continue until we hit a blank line
+                                is_all_caps_title = (
+                                    chapter_title and
+                                    all(c.isupper() or not c.isalpha() for c in chapter_title) and
+                                    all(c.isupper() or not c.isalpha() for c in next_line)
+                                )
+
+                                if is_all_caps_title:
+                                    # ALL-CAPS title - keep appending lines until we hit a blank line
+                                    # This handles multi-line ALL-CAPS titles like:
+                                    # "WHICH TREATS OF THE CHARACTER AND PURSUITS OF THE FAMOUS GENTLEMAN DON
+                                    #  QUIXOTE OF LA MANCHA"
+                                    current_offset = next_line_idx_offset
+                                    while next_line and is_continuation:
+                                        chapter_title = chapter_title + ' ' + next_line
+                                        consumed_lines.add(i + current_offset)
+                                        continuation_line_idx = i + current_offset
+
+                                        # Look for next line
+                                        next_line = None
+                                        for lookahead in range(current_offset + 1, min(current_offset + 4, len(lines) - i)):
+                                            candidate_line = lines[i + lookahead].strip()
+                                            if candidate_line:  # Found non-blank line
+                                                next_line = candidate_line
+                                                current_offset = lookahead
+                                                break
+                                            else:
+                                                # Hit a blank line - stop
+                                                break
+
+                                        if not next_line:
+                                            # No more lines or hit blank line
+                                            break
+
+                                        # Check if next line is still part of ALL-CAPS title
+                                        is_continuation = (
+                                            next_line and
+                                            all(c.isupper() or not c.isalpha() for c in next_line) and
+                                            not re.match(r'(CHAPTER|Chapter|SCENE|Scene|PREFACE|Preface|INTRODUCTION|Introduction|BOOK|VOLUME|ACT|PART)\s+', next_line) and
+                                            not re.match(r'^[IVXLCDM]+\.\s+', next_line) and
+                                            not re.match(r'^[0-9]+$', next_line) and
+                                            not next_line.startswith('[Illustration') and
+                                            len(next_line) < 100 and
+                                            len(next_line) > 1
+                                        )
+
+                                elif next_line[0].islower() or (len(next_line.split()) <= 3 and not next_line.endswith('.')):
+                                    # Mixed-case title continuation
+                                    # Only append if:
+                                    # 1. Starts with lowercase (e.g., "of the") - likely part of title, OR
+                                    # 2. Starts with uppercase AND is short (≤3 words) AND doesn't end with period
+                                    #    (e.g., "Antonines" is 1 word, but "This is a sentence." is 4 words ending with period)
+                                    # This avoids appending chapter content that starts with uppercase
+                                    chapter_title = chapter_title + ' ' + next_line
+                                    continuation_line_idx = i + next_line_idx_offset
+                                    # IMMEDIATELY consume this line to prevent it from being detected as a separate chapter
+                                    consumed_lines.add(i + next_line_idx_offset)
 
                     # Remove part markers from titles (e.g., "—Part I", ".—Part II", ". Part IV", etc.)
                     # Do this AFTER concatenation so we handle multi-line part markers
@@ -5656,9 +5983,9 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         Returns:
             toc_structure: List of sections with chapters, or None for single-level
         """
-        # Try story collection detection FIRST (for books like "The Eternal Moment")
-        # These have story titles as top-level with some stories having internal parts
-        toc_structure = self.extract_story_collection_toc(text)
+        # Try TOC-based detection FIRST (for books with explicit BOOK/PART/ACT markers)
+        # This is most reliable when a TOC is present
+        toc_structure = self.extract_two_level_toc(text)
 
         if toc_structure:
             return toc_structure
@@ -5669,15 +5996,16 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         if toc_structure:
             return toc_structure
 
-        # Fallback to TOC-based detection if body scan failed
-        toc_structure = self.extract_two_level_toc(text)
+        # Fallback to story collection detection (for books like "The Eternal Moment")
+        # These have story titles as top-level with some stories having internal parts
+        toc_structure = self.extract_story_collection_toc(text)
 
         # Validate TOC structure quality
         if toc_structure:
             toc_is_valid = True
             for section in toc_structure:
-                # Check for invalid section types (should be PART, BOOK, ACT, or STORY)
-                if section['type'] not in ['PART', 'BOOK', 'ACT', 'STORY']:
+                # Check for invalid section types (should be PART, BOOK, ACT, VOLUME, or STORY)
+                if section['type'] not in ['PART', 'BOOK', 'ACT', 'VOLUME', 'STORY']:
                     toc_is_valid = False
                     break
                 # Check for garbage in section titles

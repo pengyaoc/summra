@@ -50,7 +50,11 @@
       "Bash(../summra/venv/bin/python3:*)",
       "Bash(git log:*)",
       "WebFetch(domain:medium.com)",
-      "Bash(unset:*)"
+      "Bash(unset:*)",
+      "Bash(timeout 30 python:*)",
+      "Bash(/tmp/pg844_test.log)",
+      "Bash(timeout 180 python:*)",
+      "Bash(timeout 120 python scripts/generate_summaries.py:*)"
     ],
     "deny": [],
     "ask": []

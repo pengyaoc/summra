@@ -1550,7 +1550,96 @@ The "About This Book" section has been reorganized for better information flow:
 
 ---
 
-**Document Version:** 1.6
-**Last Updated:** 2025-12-03
+## Recent Feature Updates (2025-12-11)
+
+### Modern Loading States
+
+**Feature Description:**
+Replaced skeleton loading states with a modern centered spinner design for a cleaner, more polished loading experience across all async operations.
+
+**User Experience:**
+- **Centered Spinner:** Single 48px rotating circular spinner with smooth animation
+- **Contextual Messages:** Clear loading text indicates what's being loaded
+  - "Loading summary..."
+  - "Loading full summary..."
+  - "Loading chapters..."
+  - "Loading related books..."
+  - "Loading book information..."
+  - "Loading reading guide..."
+  - "Loading chapter text..."
+- **Smart Display:** Loading states only appear when content is actually empty (prevents flash on page refresh)
+- **Fast Dismissal:** Spinner removed immediately when content loads
+
+**Technical Implementation:**
+- `.loading-container`: Centered flex container with padding
+- `.loading-spinner`: Rotating border animation with CSS keyframes
+- `.loading-text`: Subtle text below spinner
+- Content check before displaying: `if (!element.textContent.trim())`
+- SSR-compatible: Skips loading state when restoring from server-rendered content
+
+**User Benefits:**
+- Cleaner, more modern aesthetic
+- Better understanding of what's loading
+- No jarring flash when refreshing pages
+- Consistent experience across all loading scenarios
+- Professional, polished feel
+
+**Acceptance Criteria:**
+- [✅] Loading spinner displays for all async content operations
+- [✅] Contextual message describes what's being loaded
+- [✅] No flash when refreshing pages with existing content
+- [✅] Spinner dismissed immediately when content loads
+- [✅] Reading guide images properly dismiss loading state
+
+### Discover Page Popular Carousel
+
+**Feature Description:**
+Added a "Popular" carousel at the top of the Discover page featuring the 10 most popular classic books from Project Gutenberg.
+
+**User Experience:**
+- **Prominent Placement:** First carousel on Discover page (before difficulty-based carousels)
+- **Title:** "Popular"
+- **Content:** Top 10 most downloaded books from Project Gutenberg
+  - Based on Gutenberg IDs: [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345]
+- **UI Consistency:** Uses standard carousel design (same as Easy/Intermediate/Advanced)
+  - Regular book cards with cover, title, and author
+  - Left/right navigation arrows
+  - No rank overlays (different from home page version)
+  - No "View All" link
+
+**Page Flow:**
+1. Popular carousel (top 10 books)
+2. Easy carousel (difficulty-based)
+3. Intermediate carousel (difficulty-based)
+4. Advanced carousel (difficulty-based)
+
+**User Stories:**
+- As a new visitor, I want to see the most popular classics first so I can start with widely-loved books
+- As a curious reader, I want quick access to popular books without searching
+- As a literature explorer, I want popular books presented alongside difficulty levels
+
+**Technical Implementation:**
+- New method: `renderTop10AsStandardCarousel()`
+- Reuses existing `renderCategoryCarousel()` for consistent UI
+- Books loaded via `ensureBooksLoaded()` before rendering
+- Popular carousel ID: 'popular' (excluded from "View All" link logic)
+
+**User Benefits:**
+- Immediate access to popular books on Discover page
+- Consistent UI with other carousels (no learning curve)
+- Better discovery of widely-read classics
+- Complements difficulty-based discovery
+
+**Acceptance Criteria:**
+- [✅] Popular carousel displays at top of Discover page
+- [✅] Contains top 10 books based on Gutenberg download statistics
+- [✅] Uses standard carousel UI (no rank overlays)
+- [✅] No "View All" link displayed
+- [✅] Books load before carousel renders (no empty carousel)
+
+---
+
+**Document Version:** 1.7
+**Last Updated:** 2025-12-11
 **Author:** Summra Team
 **Status:** Living Document
