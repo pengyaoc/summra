@@ -2099,12 +2099,12 @@ class SummraApp {
             illustrationContainer.classList.add('hidden');
         }
 
-        // Load summary (collapsed by default) - or hide if empty
+        // Load summary (collapsed by default) - hide if no summary available
         const summaryBox = document.getElementById('chapter-summary-box');
         const summaryText = document.getElementById('chapter-summary-text');
 
         if (!chapter.summary || chapter.summary.trim() === '') {
-            // No summary available - hide entire summary section
+            // No summary available - hide the summary box (short chapters below MIN_CHAPTER_WORDS)
             summaryBox.style.display = 'none';
         } else {
             // Summary available - show and populate

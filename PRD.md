@@ -1112,6 +1112,64 @@ Chapter illustrations use modern image formats (WebP/JPG) with automatic browser
 - **Touch Gestures:** Swipe down to close on mobile (iOS Photos-style)
 - **Fullscreen API:** Native browser fullscreen mode option
 
+### 11. Analytics and Tracking (Added 2025-12-12)
+
+**Feature Description:**
+Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement, traffic sources, and content performance.
+
+**User Stories:**
+- As a product owner, I want to understand which books are most popular so I can prioritize content
+- As a developer, I want to see traffic sources so I can optimize marketing efforts
+- As a team, I want engagement metrics so we can improve user experience
+
+**Specifications:**
+
+**Implementation:**
+- **Tracking ID:** G-6XGTPLPMG0
+- **Technology:** Google tag (gtag.js)
+- **Installation:** Added to `<head>` section of main template
+- **Placement:** Immediately after opening `<head>` tag (before other scripts)
+- **Coverage:** All pages (single-page application tracks initial page load)
+
+**Data Collected:**
+- Page views and navigation patterns
+- User demographics and interests
+- Traffic sources (organic, direct, referral, social)
+- User engagement metrics (time on site, pages per session)
+- Device and browser information
+- Geographic data (country, region, city)
+
+**Privacy Considerations:**
+- Anonymous data collection (no PII stored)
+- Standard Google Analytics privacy policy
+- No custom user identification
+- Cookie-based tracking (browser defaults)
+
+**Acceptance Criteria:**
+- [✅] GA4 tag installed in HTML template
+- [✅] Tracking ID configured correctly
+- [✅] Script loads asynchronously (no page blocking)
+- [✅] dataLayer initialized properly
+- [ ] Real-time data visible in GA4 dashboard (24-48h delay expected)
+- [ ] Pageviews tracked for initial page load
+- [ ] Device and browser data collected
+- [ ] Geographic data captured
+
+**Future Enhancements:**
+- **Custom Events:**
+  - Book detail page views
+  - Summary type selection (concise, medium, comprehensive)
+  - TTS audio playback
+  - Chapter navigation
+  - Search queries
+- **SPA Tracking:** Manual pageview tracking for client-side navigation
+- **Content Grouping:** Group by category (fiction, non-fiction, poetry)
+- **E-commerce Tracking:** Premium features conversion (if added)
+- **User Privacy:** Cookie consent banner (GDPR/CCPA compliance)
+
+**Files Modified:**
+- `frontend/templates/index.html:4-12` - Google Analytics script tag
+
 ## User Workflows
 
 ### Workflow 1: Browsing by Category (Added 2025-11-28)
@@ -1510,6 +1568,7 @@ Each book details page now includes an "About the Author" section with author in
 - **Visual Feedback:** Cursor changes to pointer when hovering over header
 - **Smart Clicking:** TTS button within header doesn't trigger expansion (isolated click target)
 - **Collapsed State:** Summary box starts collapsed to reduce page clutter
+- **Short Chapters:** Summary box hidden entirely for short chapters (below MIN_CHAPTER_WORDS threshold) to avoid confusing "processing" messages
 
 **Text Formatting:**
 - **Italic Emphasis:** Project Gutenberg's underscore emphasis (`_word_`) now renders as proper italic text
@@ -1639,7 +1698,80 @@ Added a "Popular" carousel at the top of the Discover page featuring the 10 most
 
 ---
 
-**Document Version:** 1.7
-**Last Updated:** 2025-12-11
+### 11. Blog Header Images
+
+**Feature Description:**
+Blog posts feature visually engaging header images automatically sourced from Unsplash API. Images display as thumbnails in the blog index grid and as full headers on individual blog post pages.
+
+**Added:** 2025-12-12
+
+**User Stories:**
+- As a reader browsing the blog, I want to see attractive thumbnails for each post so I can quickly identify topics of interest
+- As a reader viewing a blog post, I want a visually appealing header image so the reading experience feels polished and professional
+- As a blog administrator, I want header images to be automatically assigned so I don't have to manually source images
+
+**Image Source:**
+- **API:** Unsplash (https://unsplash.com/developers)
+- **Selection:** Keyword-based smart search queries
+- **Orientation:** Landscape (optimized for blog headers)
+- **Size:** Regular (1080px width) for quality and performance balance
+- **Rate Limit:** 1,000 requests/hour (Demo tier)
+
+**Specifications:**
+
+#### Blog Index (Thumbnail View)
+- **Display Location:** Blog grid cards on `/blog` page
+- **Image Size:** 200px height × full card width
+- **Image Treatment:** Cover (cropped to fill)
+- **Hover Effect:** 1.05x scale with smooth transition
+- **Loading:** Lazy loading (loading="lazy") for performance
+- **Fallback:** No image shown if header_image_url is null
+
+#### Blog Post (Full Header View)
+- **Display Location:** Top of blog post page (before title)
+- **Image Size:** 400px max height × full width
+- **Image Treatment:** Cover (cropped to fill)
+- **Border Radius:** 12px for visual consistency
+- **Loading:** Eager loading (loading="eager") for immediate display
+- **Margin:** 30px bottom spacing before title
+- **Fallback:** No image shown if header_image_url is null
+
+#### Image Assignment Script
+- **Script:** `scripts/assign_blog_header_images.py`
+- **Automated:** Run manually when new blog posts are added
+- **Search Strategy:** Keyword mapping for relevant results
+  - Example: "british" → "british library books vintage"
+  - Example: "horror" → "dark atmospheric gothic"
+  - Example: "romance" → "romantic vintage couple"
+- **Selection:** First result from Unsplash (ranked by relevance)
+- **Storage:** URL stored in `blog_posts.header_image_url` field
+
+**UI Requirements:**
+- Blog index grid displays thumbnail images above post titles
+- Blog post pages display full header images with proper aspect ratio
+- Images are responsive and scale appropriately on mobile devices
+- Images maintain visual quality across all screen sizes
+- Alt text includes blog post title for accessibility
+
+**Acceptance Criteria:**
+- [✅] Blog index shows thumbnail images for all posts with header_image_url
+- [✅] Blog post pages show full header images at top of content
+- [✅] Images load efficiently with appropriate lazy/eager loading
+- [✅] Image assignment script successfully assigns relevant images
+- [✅] Images maintain good quality without being too large (performance)
+- [✅] Responsive design: images scale properly on mobile, tablet, desktop
+- [✅] Graceful degradation: posts without images still display correctly
+
+**Future Enhancements:**
+- Interactive image selection tool (browse multiple Unsplash options)
+- Manual URL override capability for custom images
+- Photographer attribution display on frontend
+- Additional filters (color palette, likes, downloads)
+- Local image caching to reduce API calls
+
+---
+
+**Document Version:** 1.9
+**Last Updated:** 2025-12-12
 **Author:** Summra Team
 **Status:** Living Document

@@ -8,6 +8,13 @@ using Google's Gemini API:
 2. Medium (2000-3000 words)
 3. Comprehensive (chapter-by-chapter summaries using bulk processing)
 
+Processing Modes:
+1. Async Batch Mode (default): Uses Gemini Batch API for 50% cost savings
+   - All API calls submitted as one batch job
+   - Target completion: ~1-4 hours (can take up to 24 hours)
+   - Supports resumption if interrupted
+2. Sync Mode (--sync): Real-time API calls with immediate results
+
 Chapter summaries are generated using bulk processing, where consecutive chapters
 are processed in a single API call for improved efficiency and context.
 
@@ -18,11 +25,17 @@ Book Metadata Extraction:
 - You can also manually specify title/author via command-line arguments
 
 Usage:
-    # Generate all summaries for a book
-    python generate_summaries.py <book_file.txt> [--title "Book Title"] [--author "Author Name"]
+    # Generate all summaries for a book (async batch mode, 50% cost savings)
+    python generate_summaries.py <book_file.txt>
+
+    # Use synchronous mode for immediate results
+    python generate_summaries.py <book_file.txt> --sync
 
     # Preview chapter detection without making API calls
     python generate_summaries.py <book_file.txt> --dry-run
+
+    # Parse book and store to database without LLM calls
+    python generate_summaries.py <book_file.txt> --parse-only
 
     # Test mode: generate only concise + medium + first 3 chapters
     python generate_summaries.py <book_file.txt> --partial-run
@@ -30,8 +43,17 @@ Usage:
     # Regenerate specific consecutive chapters (comma-separated)
     python generate_summaries.py <book_file.txt> --regenerate-chapters "1,2,3"
 
+    # Regenerate only concise and medium overall summaries
+    python generate_summaries.py <book_file.txt> --regenerate-overall
+
     # Process all .txt files in a directory
     python generate_summaries.py --batch <directory>
+
+    # List pending batch jobs
+    python generate_summaries.py --list-jobs
+
+    # Resume an interrupted batch job
+    python generate_summaries.py --resume data/batch_jobs/book_99_1234567890.json
 
 Note: --regenerate-chapters requires consecutive chapter numbers (e.g., "1,2,3" works, "1,3,5" fails)
 """
@@ -259,6 +281,12 @@ class DisplayConstants:
     CHAPTER_BATCH_SEPARATOR_WIDTH = 80  # For batch processing separators
     MAX_PROMPT_PREVIEW_CHARS = 10000
     MAX_ERROR_MESSAGE_CHARS = 100
+
+
+# Batch API configuration
+BATCH_POLL_INTERVAL_SECONDS = 30  # How often to check batch job status
+BATCH_MAX_WAIT_HOURS = 24  # Maximum time to wait for batch completion
+BATCH_JOBS_DIR = Path(__file__).parent.parent / "data" / "batch_jobs"  # Directory to store batch job state
 
 
 # ============================================================================
@@ -1539,6 +1567,95 @@ class RateLimiter:
             self.token_counts.append((current_time, estimated_tokens))
 
 
+# ============================================================================
+# Batch Job State Management
+# ============================================================================
+
+def save_batch_job_state(book_id: int, job_name: str, book_title: str,
+                        request_metadata: List[Dict]) -> Path:
+    """Save batch job state to disk for later resumption
+
+    Args:
+        book_id: Book ID being processed
+        job_name: Gemini batch job name/ID
+        book_title: Title of the book
+        request_metadata: List of metadata for each request (type, chapter_num, etc.)
+
+    Returns:
+        Path to the saved state file
+    """
+    BATCH_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+
+    state = {
+        'book_id': book_id,
+        'book_title': book_title,
+        'job_name': job_name,
+        'request_metadata': request_metadata,
+        'status': 'pending',
+        'created_at': time.time(),
+        'updated_at': time.time()
+    }
+
+    state_file = BATCH_JOBS_DIR / f"book_{book_id}_{int(time.time())}.json"
+    with open(state_file, 'w') as f:
+        json.dump(state, f, indent=2)
+
+    print(f"  💾 Saved batch job state: {state_file}")
+    return state_file
+
+
+def load_batch_job_state(state_file: Path) -> Dict:
+    """Load batch job state from disk
+
+    Args:
+        state_file: Path to the state file
+
+    Returns:
+        Dictionary with job state
+    """
+    with open(state_file, 'r') as f:
+        return json.load(f)
+
+
+def update_batch_job_state(state_file: Path, status: str, **kwargs):
+    """Update batch job state file
+
+    Args:
+        state_file: Path to the state file
+        status: New status value
+        **kwargs: Additional fields to update
+    """
+    state = load_batch_job_state(state_file)
+    state['status'] = status
+    state['updated_at'] = time.time()
+    state.update(kwargs)
+
+    with open(state_file, 'w') as f:
+        json.dump(state, f, indent=2)
+
+
+def list_pending_batch_jobs() -> List[Dict]:
+    """List all pending batch jobs
+
+    Returns:
+        List of job state dictionaries
+    """
+    if not BATCH_JOBS_DIR.exists():
+        return []
+
+    pending_jobs = []
+    for state_file in BATCH_JOBS_DIR.glob("book_*.json"):
+        try:
+            state = load_batch_job_state(state_file)
+            if state.get('status') in ['pending', 'running']:
+                state['state_file'] = str(state_file)
+                pending_jobs.append(state)
+        except Exception as e:
+            print(f"  ⚠️  Error loading {state_file}: {e}")
+
+    return sorted(pending_jobs, key=lambda x: x.get('created_at', 0))
+
+
 class SummaryGenerator:
     """Generate book summaries using Gemini API"""
 
@@ -1557,6 +1674,121 @@ class SummaryGenerator:
             config.MAX_TOKENS_PER_MINUTE
         )
         self.last_large_call_time = None  # Track last large API call
+
+    def submit_batch_job(self, requests: List[Dict], model_name: str, display_name: str) -> str:
+        """
+        Submit a batch job to Gemini Batch API.
+
+        Args:
+            requests: List of request dictionaries with 'contents' key
+            model_name: Model to use (e.g., 'gemini-2.5-flash')
+            display_name: Display name for the batch job
+
+        Returns:
+            Batch job name for polling
+        """
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Submitting batch job: {display_name}")
+        print(f"  → {len(requests)} request(s) at 50% cost savings")
+
+        batch_job = self.client.batches.create(
+            model=model_name,
+            src=requests,
+            config={'display_name': display_name}
+        )
+
+        print(f"  ✓ Batch job submitted: {batch_job.name}")
+        print(f"  → Target completion: ~24 hours (usually much faster)")
+
+        return batch_job.name
+
+    def poll_batch_job(self, job_name: str, poll_interval_seconds: int = 30) -> Dict:
+        """
+        Poll a batch job until completion.
+
+        Args:
+            job_name: Batch job name from submit_batch_job()
+            poll_interval_seconds: How often to poll (default 30s)
+
+        Returns:
+            Completed batch job object
+        """
+        completed_states = {'JOB_STATE_SUCCEEDED', 'JOB_STATE_FAILED',
+                           'JOB_STATE_CANCELLED', 'JOB_STATE_EXPIRED'}
+
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Polling batch job: {job_name}")
+
+        batch_job = self.client.batches.get(name=job_name)
+        start_time = time.time()
+
+        while batch_job.state.name not in completed_states:
+            elapsed = time.time() - start_time
+            elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed))
+            print(f"  [{elapsed_str}] State: {batch_job.state.name} - waiting {poll_interval_seconds}s...")
+            time.sleep(poll_interval_seconds)
+            batch_job = self.client.batches.get(name=job_name)
+
+        total_time = time.time() - start_time
+        total_time_str = time.strftime('%H:%M:%S', time.gmtime(total_time))
+        print(f"  ✓ Job completed in {total_time_str}: {batch_job.state.name}")
+
+        return batch_job
+
+    def retrieve_batch_results(self, batch_job: Dict) -> List[Dict]:
+        """
+        Retrieve results from a completed batch job.
+
+        Args:
+            batch_job: Completed batch job object from poll_batch_job()
+
+        Returns:
+            List of responses (text or error for each request)
+        """
+        if batch_job.state.name != 'JOB_STATE_SUCCEEDED':
+            raise ValueError(f"Batch job failed: {batch_job.error if hasattr(batch_job, 'error') else 'Unknown error'}")
+
+        results = []
+
+        # Check for inline responses (for small batches)
+        if batch_job.dest and batch_job.dest.inlined_responses:
+            for inline_response in batch_job.dest.inlined_responses:
+                if inline_response.response:
+                    results.append({'text': inline_response.response.text})
+                elif inline_response.error:
+                    results.append({'error': str(inline_response.error)})
+
+        # Check for file-based results (for larger batches)
+        elif batch_job.dest and batch_job.dest.file_name:
+            result_file_name = batch_job.dest.file_name
+            file_content = self.client.files.download(file=result_file_name)
+
+            # Parse JSONL results
+            for line in file_content.decode('utf-8').strip().split('\n'):
+                result_json = json.loads(line)
+                if 'response' in result_json and result_json['response']:
+                    text = result_json['response'].get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                    results.append({'text': text})
+                elif 'error' in result_json:
+                    results.append({'error': str(result_json['error'])})
+
+        print(f"  ✓ Retrieved {len(results)} result(s)")
+        return results
+
+    def build_batch_request(self, prompt: str) -> Dict:
+        """
+        Build a batch API request object from a prompt string.
+
+        Args:
+            prompt: The prompt text
+
+        Returns:
+            Dictionary in Gemini Batch API request format
+        """
+        return {
+            'contents': [{
+                'parts': [{'text': prompt}],
+                'role': 'user'
+            }]
+        }
 
     def wait_if_needed_for_large_call(self, estimated_tokens: int):
         """
@@ -1620,19 +1852,83 @@ class SummaryGenerator:
 
         return cleaned
 
-    def generate_combined_summaries(self, text: str, title: str, author: str, dry_run: bool = False) -> Dict:
+    def parse_combined_summaries_response(self, response_text: str, title: str, author: str) -> Dict:
+        """
+        Parse the combined summaries response from the API.
+        Extracts about_text, concise_summary, medium_summary, and relevance_now.
+
+        Args:
+            response_text: The raw response text from the API
+            title: Book title (for logging)
+            author: Book author (for logging)
+
+        Returns:
+            Dictionary with parsed sections
+        """
+        # Extract each section using regex
+        about_text = ""
+        concise_summary = ""
+        medium_summary = ""
+        relevance_now = ""
+
+        # About the Book (75-100 words)
+        about_match = re.search(r'### ABOUT THE BOOK.*?\n(.*?)(?=### CONCISE SUMMARY|###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        if about_match:
+            about_text = about_match.group(1).strip()
+            about_text = re.sub(r'^\[.*?\]', '', about_text).strip()  # Remove template text
+
+        # Concise Summary (500 words)
+        concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)(?=### MEDIUM SUMMARY|###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        if concise_match:
+            concise_summary = concise_match.group(1).strip()
+            concise_summary = re.sub(r'^\[.*?\]', '', concise_summary).strip()
+
+        # Medium Summary (2000-3000 words)
+        medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)(?=### RELEVANCE NOW|###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        if medium_match:
+            medium_summary = medium_match.group(1).strip()
+            medium_summary = re.sub(r'^\[.*?\]', '', medium_summary).strip()
+
+        # Relevance Now (75-100 words)
+        relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)(?=###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        if relevance_match:
+            relevance_now = relevance_match.group(1).strip()
+            relevance_now = re.sub(r'^\[.*?\]', '', relevance_now).strip()
+
+        # Calculate word counts
+        about_words = len(about_text.split()) if about_text else 0
+        concise_words = len(concise_summary.split())
+        medium_words = len(medium_summary.split())
+        relevance_words = len(relevance_now.split()) if relevance_now else 0
+        total_words = about_words + concise_words + medium_words + relevance_words
+
+        print(f"  ← Output: {total_words:,} words total")
+        print(f"     About: {about_words:,} words")
+        print(f"     Concise: {concise_words:,} words")
+        print(f"     Medium: {medium_words:,} words")
+        print(f"     Relevance: {relevance_words:,} words")
+
+        # Return all parsed data as a dictionary
+        return {
+            'about_text': about_text,
+            'concise_summary': concise_summary,
+            'medium_summary': medium_summary,
+            'relevance_now': relevance_now
+        }
+
+    def generate_combined_summaries(self, text: str, title: str, author: str, dry_run: bool = False, return_prompt_only: bool = False) -> Dict | str:
         """
         Generate summaries and metadata in a single API call.
         Returns dictionary with: about_text, concise_summary, medium_summary,
         relevance_now, author_country, similar_books, other_books_by_author
+
+        Note: This method does NOT include book content in the prompt - it relies on
+        the LLM's training data knowledge of classic books.
         """
         model_name = config.SUMMARY_CONFIGS['concise']['model']  # Use same model for both
 
-        # Cap text at maximum chars per call
-        max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
-
-        # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
-        estimated_tokens = max_chars // 4 + 3000  # +3000 for output
+        # Estimate tokens for prompt only (no book content)
+        estimated_tokens = 500 + 3000  # prompt + output
 
         prompt = f"""Analyze "{title}" by {author} and provide the following information. Follow the format exactly with each section clearly marked:
 
@@ -1654,10 +1950,11 @@ Cover all major plot points, themes, and character developments in chronological
 ### RELEVANCE NOW ({SummaryConstants.RELEVANCE_MIN_WORDS}-{SummaryConstants.RELEVANCE_MAX_WORDS} words)
 [Explain why this book is relevant to modern audiences - {SummaryConstants.RELEVANCE_MIN_WORDS}-{SummaryConstants.RELEVANCE_MAX_WORDS} words]
 
-Focus on contemporary themes, timeless insights, or how it speaks to current issues.
+Focus on contemporary themes, timeless insights, or how it speaks to current issues."""
 
-### BOOK TEXT:
-{text[:max_chars]}"""
+        # Return prompt only for batch mode
+        if return_prompt_only:
+            return prompt
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate combined summaries using {model_name}")
@@ -1737,60 +2034,8 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         print(f"  ❌ Max retries exceeded")
                     raise
 
-        # Parse the response to extract all sections
-        # NOTE: We cannot log book_id here since it's not available in this scope
-        # The caller will need to log the full response if needed
-
-        # Extract each section using regex
-        about_text = ""
-        concise_summary = ""
-        medium_summary = ""
-        relevance_now = ""
-
-        # About the Book (75-100 words)
-        about_match = re.search(r'### ABOUT THE BOOK.*?\n(.*?)(?=### CONCISE SUMMARY|###|$)', result, re.DOTALL | re.IGNORECASE)
-        if about_match:
-            about_text = about_match.group(1).strip()
-            about_text = re.sub(r'^\[.*?\]', '', about_text).strip()  # Remove template text
-
-        # Concise Summary (500 words)
-        concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)(?=### MEDIUM SUMMARY|###|$)', result, re.DOTALL | re.IGNORECASE)
-        if concise_match:
-            concise_summary = concise_match.group(1).strip()
-            concise_summary = re.sub(r'^\[.*?\]', '', concise_summary).strip()
-
-        # Medium Summary (2000-3000 words)
-        medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)(?=### RELEVANCE NOW|###|$)', result, re.DOTALL | re.IGNORECASE)
-        if medium_match:
-            medium_summary = medium_match.group(1).strip()
-            medium_summary = re.sub(r'^\[.*?\]', '', medium_summary).strip()
-
-        # Relevance Now (75-100 words)
-        relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)(?=###|$)', result, re.DOTALL | re.IGNORECASE)
-        if relevance_match:
-            relevance_now = relevance_match.group(1).strip()
-            relevance_now = re.sub(r'^\[.*?\]', '', relevance_now).strip()
-
-        # Calculate word counts
-        about_words = len(about_text.split()) if about_text else 0
-        concise_words = len(concise_summary.split())
-        medium_words = len(medium_summary.split())
-        relevance_words = len(relevance_now.split()) if relevance_now else 0
-        total_words = about_words + concise_words + medium_words + relevance_words
-
-        print(f"  ← Output: {total_words:,} words total")
-        print(f"     About: {about_words:,} words")
-        print(f"     Concise: {concise_words:,} words")
-        print(f"     Medium: {medium_words:,} words")
-        print(f"     Relevance: {relevance_words:,} words")
-
-        # Return all parsed data as a dictionary
-        return {
-            'about_text': about_text,
-            'concise_summary': concise_summary,
-            'medium_summary': medium_summary,
-            'relevance_now': relevance_now
-        }
+        # Parse the response using the shared parsing method
+        return self.parse_combined_summaries_response(result, title, author)
 
     def read_book(self, file_path: Path) -> str:
         """Read book text from file"""
@@ -3506,6 +3751,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             # Determine where this section ends (for chapter boundary detection)
             section_end_line = len(lines)
             current_section_idx = toc_structure.index(section)
+            next_section = None  # Initialize to None for last section
             if current_section_idx + 1 < len(toc_structure):
                 # Find the next section to determine where this section ends
                 next_section = toc_structure[current_section_idx + 1]
@@ -3531,7 +3777,9 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         next_reversed_pattern = rf'^\s*{next_section["numeral"]}\s+{next_section["type"]}\.?\s*$'
                     next_decorative_pattern = rf'^\s*—+\s*{next_section["numeral"]}\s*—+\s*$'
 
-                for i in range(section_start_line + 1, len(lines)):
+                # Start searching after TOC to avoid finding section markers in the TOC
+                search_from = max(section_start_line + 1, toc_end_line)
+                for i in range(search_from, len(lines)):
                     if re.match(next_section_pattern, lines[i], re.IGNORECASE):
                         section_end_line = i
                         break
@@ -3544,36 +3792,80 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         section_end_line = i
                         break
 
-            # Special handling for VOLUME sections: Use TOC chapter list to determine actual boundaries
-            # The TOC gives us the list of chapters, we search for where each one appears in the body
-            # Then we can determine the actual VOLUME boundaries from the chapter locations
-            if section_type == 'VOLUME' and len(section['chapters']) > 0:
-                print(f"  Using TOC chapter list for {section_type} {section_numeral} ({len(section['chapters'])} chapters from TOC)")
-                # For each chapter in TOC, search for it in the body using "CHAPTER <numeral>." pattern
-                # Search from section_start_line to END OF DOCUMENT (not section_end_line, which is wrong for VOLUME)
-                toc_chapters = section['chapters']
+            # Special handling for VOLUME sections: Scan for ALL chapters directly in the body
+            # Don't rely on TOC as it may be incomplete for multi-volume works
+            if section_type == 'VOLUME':
+                print(f"  Scanning for all chapters in {section_type} {section_numeral} body...")
+                # Scan for all CHAPTER patterns from section start to section end
                 found_chapters = []
 
-                for toc_chapter in toc_chapters:
-                    chapter_numeral = toc_chapter['numeral']
-                    chapter_number = toc_chapter['number']
+                # Pattern to match: "CHAPTER <roman_numeral>."
+                chapter_pattern = r'^\s*CHAPTER\s+([IVXLCDM]+)\.'
 
-                    # Search for "CHAPTER <numeral>." in the document body (from section start to end of doc)
-                    # Match even if title continues on same or next line (no $ anchor)
-                    chapter_pattern = rf'^\s*CHAPTER\s+{re.escape(chapter_numeral)}\.'
+                # For VOLUME I: scan until we find CHAPTER I. again (start of VOLUME II)
+                # For other VOLUMEs: scan until end or next VOLUME's CHAPTER I.
+                scan_end = section_end_line
+                if section_numeral == 'I':
+                    # Find the SECOND occurrence of "CHAPTER I." (first is VOLUME I, second is VOLUME II)
+                    chapter_i_pattern = r'^\s*CHAPTER\s+I\.'
+                    chapter_i_count = 0
+                    for i in range(section_start_line, len(lines)):
+                        if re.match(chapter_i_pattern, lines[i], re.IGNORECASE):
+                            chapter_i_count += 1
+                            if chapter_i_count == 2:
+                                # Found start of VOLUME II
+                                scan_end = i
+                                print(f"  Adjusted VOLUME I end to line {i} (VOLUME II's CHAPTER I.)")
+                                break
 
-                    for scan_line_idx in range(section_start_line, len(lines)):
-                        if re.match(chapter_pattern, lines[scan_line_idx], re.IGNORECASE):
-                            found_chapters.append({
-                                'number': chapter_number,
-                                'numeral': chapter_numeral,
-                                'title': toc_chapter.get('title', ''),
-                                'line': scan_line_idx
-                            })
-                            break
+                print(f"  Scan range: lines {section_start_line} to {scan_end} ({scan_end - section_start_line} lines)")
+
+                for scan_line_idx in range(section_start_line, scan_end):
+                    match = re.match(chapter_pattern, lines[scan_line_idx], re.IGNORECASE)
+                    if match:
+                        roman_numeral = match.group(1)
+                        # Convert Roman numeral to number
+                        chapter_number = self.roman_to_int(roman_numeral)
+
+                        # Extract title from same line or next few lines
+                        title = ""
+                        # Check if title is on same line after the numeral
+                        remaining_text = lines[scan_line_idx][match.end():].strip()
+                        if remaining_text:
+                            title = remaining_text
+                        # Otherwise check next few lines for title
+                        elif scan_line_idx + 1 < len(lines):
+                            # Continue collecting title lines until blank line or paragraph start
+                            title_lines = []
+                            for j in range(1, min(6, len(lines) - scan_line_idx)):
+                                next_line = lines[scan_line_idx + j].strip()
+                                # Stop at blank line or start of paragraph
+                                if not next_line or next_line.startswith('In a'):
+                                    break
+                                # Stop at next chapter marker
+                                if next_line.startswith('CHAPTER'):
+                                    break
+                                # Collect title line if it looks like a title (all caps or long enough)
+                                if next_line.isupper() or (len(next_line) > 10 and not title_lines):
+                                    title_lines.append(next_line)
+                                # Continue collecting if previous line looked like a title
+                                elif title_lines and next_line.isupper():
+                                    title_lines.append(next_line)
+                                else:
+                                    break
+
+                            if title_lines:
+                                title = ' '.join(title_lines)
+
+                        found_chapters.append({
+                            'number': chapter_number,
+                            'numeral': roman_numeral,
+                            'title': title,
+                            'line': scan_line_idx
+                        })
 
                 if found_chapters:
-                    print(f"  Found {len(found_chapters)}/{len(toc_chapters)} chapters from TOC in {section_type} {section_numeral} body")
+                    print(f"  Found {len(found_chapters)} chapters in {section_type} {section_numeral} body")
                     # Replace section['chapters'] with found chapters (with actual line positions)
                     section['chapters'] = found_chapters
 
@@ -3593,6 +3885,39 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                                 # Save this boundary for next VOLUME to use
                                 section['actual_end_line'] = section_end_line
                                 break
+
+                    # For the last VOLUME, check for epilogue content
+                    # NOTE: For Don Quixote, the epilogue "And said most sage Cide Hamete to his pen..."
+                    # is an essential part of the narrative and should be INCLUDED, not excluded.
+                    # The epilogue exclusion logic below is disabled for now as it was removing
+                    # important literary content. If we need to exclude appendices/notes in the future,
+                    # we should be more selective about what patterns to match.
+                    if False:  # Disabled epilogue exclusion
+                        if not next_section or next_section['type'] != 'VOLUME':
+                            # This is the last VOLUME - check for epilogue markers
+                            print(f"  Checking for epilogue after last chapter of {section_type} {section_numeral}...")
+                            # Common epilogue patterns that indicate post-story content
+                            epilogue_patterns = [
+                                # r'^\s*And said most sage',  # Don Quixote epilogue - SHOULD BE INCLUDED
+                                r'^\s*APPENDIX\s*$',
+                                r'^\s*NOTES?\s*$',
+                            ]
+
+                            # Search backwards from end of document to find epilogue
+                            # Start from last chapter and search forward
+                            search_from = found_chapters[-1]['line'] + 50  # Start 50 lines after last chapter
+                            print(f"  Searching for epilogue from line {search_from} to {len(lines)}")
+                            for scan_line_idx in range(search_from, len(lines)):
+                                for pattern in epilogue_patterns:
+                                    if re.match(pattern, lines[scan_line_idx], re.IGNORECASE):
+                                        section_end_line = scan_line_idx
+                                        print(f"  Adjusted {section_type} {section_numeral} end to line {scan_line_idx} (epilogue detected)")
+                                        section['actual_end_line'] = section_end_line
+                                        break
+                                if section_end_line < len(lines):
+                                    break  # Found epilogue, stop searching
+                            if section_end_line == len(lines):
+                                print(f"  No epilogue detected, section extends to end of document (line {len(lines)})")
 
                     # Mark this section as VOLUME so we can skip the normal chapter detection
                     section['_volume_chapters_already_found'] = True
@@ -3646,6 +3971,9 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     if len(chapter_text) > ContentThresholds.MIN_CHAPTER_CHARS_V1:
                         normalized_title = self.normalize_chapter_title(chapter_info['title']) if chapter_info['title'] else ""
                         chapters.append((sequential_chapter_num, normalized_title, chapter_text))
+                        # Mark all lines in this chapter as consumed
+                        for i in range(chapter_start_line, chapter_end_line):
+                            consumed_line_indices.add(i)
                         print(f"    ✓ Chapter {sequential_chapter_num}: {normalized_title[:50]} ({len(chapter_text)} chars)")
                         sequential_chapter_num += 1
                     else:
@@ -5323,17 +5651,14 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         """Generate concise 500-word summary without spoilers for fiction"""
         model_name = config.SUMMARY_CONFIGS['concise']['model']
 
-        # Cap text at maximum chars per call, preserving smaller limits
-        max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
-
-        # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
-        estimated_tokens = max_chars // 4 + 500
+        # Note: We don't include book content in the prompt for concise summaries
+        # The LLM should use its training data knowledge of the book
+        # Estimate tokens for prompt only (much smaller now)
+        estimated_tokens = 500
 
         prompt = f"""Generate a concise 500-word summary of "{title}" by {author}.
 
-Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers (no plot twists, endings, or major reveals). For non-fiction, cover main arguments and key takeaways. Write in an engaging, accessible style.
-
-{text[:max_chars]}"""
+Focus on the main theme, setting, and central conflict. For fiction, avoid spoilers (no plot twists, endings, or major reveals). For non-fiction, cover main arguments and key takeaways. Write in an engaging, accessible style."""
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate concise summary using {model_name}")
@@ -5404,17 +5729,14 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
         """Generate medium-length 2000-3000 word summary"""
         model_name = config.SUMMARY_CONFIGS['medium']['model']
 
-        # Cap text at maximum chars per call, preserving smaller limits
-        max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
-
-        # Estimate tokens (rough estimate: 1 token ≈ 4 characters)
-        estimated_tokens = max_chars // 4 + 3000
+        # Note: We don't include book content in the prompt for medium summaries
+        # The LLM should use its training data knowledge of the book
+        # Estimate tokens for prompt only (much smaller now)
+        estimated_tokens = 3000
 
         prompt = f"""Generate a comprehensive 2000-3000 word summary of "{title}" by {author}.
 
-Cover all major plot points, themes, and character developments in chronological order. Discuss the author's writing style and analyze major themes. Spoilers are acceptable. For non-fiction, cover all main arguments, evidence, and conclusions.
-
-{text[:max_chars]}"""
+Cover all major plot points, themes, and character developments in chronological order. Discuss the author's writing style and analyze major themes. Spoilers are acceptable. For non-fiction, cover all main arguments, evidence, and conclusions."""
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate medium summary using {model_name}")
@@ -5532,7 +5854,8 @@ Cover all major plot points, themes, and character developments in chronological
 
     def generate_bulk_chapter_summaries(self, chapters_batch: List[Tuple], book_title: str,
                                        medium_summary: str = None, previous_chapter_text: str = None,
-                                       dry_run: bool = False, partial_run: bool = False) -> Dict[int, str]:
+                                       dry_run: bool = False, partial_run: bool = False,
+                                       return_prompt_only: bool = False) -> Dict[int, str] | Dict:
         """
         Generate summaries for multiple chapters in a single API call.
         Returns dict mapping chapter_number -> summary_text
@@ -5630,6 +5953,14 @@ Cover important events, dialogues, and developments. Analyze character developme
 {"=" * DisplayConstants.CHAPTER_BATCH_SEPARATOR_WIDTH}
 
 Now provide summaries for all {len(chapters_batch)} chapters above, following the exact format and word count targets specified. Remember to use sequential numbers (1, 2, 3...) in the ### CHAPTER markers."""
+
+        # Return prompt and metadata for batch mode
+        if return_prompt_only:
+            return {
+                'prompt': prompt,
+                'chapter_numbers': chapter_numbers,
+                'model': model_name
+            }
 
         if dry_run:
             print(f"\n[DRY RUN] Would generate bulk summary for {len(chapters_batch)} chapters")
@@ -6020,8 +6351,12 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         return toc_structure
 
     def process_book(self, file_path: Path, title: str = None, author: str = None,
-                    dry_run: bool = False, partial_run: bool = False, regenerate_chapters: List[int] = None) -> Dict:
-        """Process a single book and generate all summaries"""
+                    dry_run: bool = False, parse_only: bool = False, partial_run: bool = False, regenerate_chapters: List[int] = None, regenerate_overall: bool = False, use_batch_api: bool = True) -> Dict:
+        """Process a single book and generate all summaries
+
+        Args:
+            use_batch_api: If True (default), use async Batch API for 50% cost savings. If False, use sync API.
+        """
         print(f"\n{'='*60}")
         print(f"Processing: {file_path.name}")
         print(f"{'='*60}\n")
@@ -6079,6 +6414,11 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(f"Chapters to regenerate: {regenerate_chapters}")
             print("Will skip concise/medium/comprehensive overall summaries")
             print("=" * DisplayConstants.SEPARATOR_WIDTH + "\n")
+        elif regenerate_overall:
+            print("\n" + "=" * DisplayConstants.SEPARATOR_WIDTH)
+            print(f"REGENERATE OVERALL MODE - Regenerating concise and medium summaries only")
+            print("Will skip chapter detection and summaries")
+            print("=" * DisplayConstants.SEPARATOR_WIDTH + "\n")
 
         # Check if book already exists (skip database operations in dry-run mode)
         if dry_run:
@@ -6096,6 +6436,25 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             if existing_book:
                 print(f"Book already exists in database (ID: {existing_book['id']})")
                 book_id = existing_book['id']
+
+                # Load existing chapters from database for batch mode
+                # Get chapters with their full text for async batch processing
+                db_chapters = self.db.get_chapters(book_id)
+                if db_chapters:
+                    print(f"  Loaded {len(db_chapters)} existing chapters from database")
+                    # Convert database chapters to the format expected later
+                    # Database returns: {'chapter_number', 'chapter_title', 'chapter_text', 'summary', 'section_id', ...}
+                    # We need tuples: (chapter_num, chapter_title, chapter_text)
+                    chapters = [(ch['chapter_number'], ch.get('chapter_title', f"Chapter {ch['chapter_number']}"), ch.get('chapter_text', ''))
+                               for ch in db_chapters]
+
+                    # Build chapter_to_section_id mapping from database
+                    chapter_to_section_id = {ch['chapter_number']: ch.get('section_id')
+                                            for ch in db_chapters if ch.get('section_id')}
+                else:
+                    # No chapters in database - will need to detect them
+                    chapters = None
+                    chapter_to_section_id = {}
             else:
                 # Add book to database with local cover image path
                 # Note: add_book will automatically lookup and link author_id if author exists in authors table
@@ -6127,6 +6486,180 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             'summaries': {}
         }
 
+        # In parse-only mode, detect chapters and save to database without LLM summaries
+        # This allows --parse-only to extract chapter structure and full text
+        if parse_only:
+            print(f"\n{'='*60}")
+            print(f"PARSE-ONLY MODE - Detecting chapters and saving to database")
+            print(f"Skipping all LLM summary generation")
+            print(f"{'='*60}\n")
+
+            # Detect book structure (same as normal mode)
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Book Structure ---")
+            toc_structure = self._detect_book_structure(text)
+
+            # Create mapping from chapter number to section_id
+            chapter_to_section_id = {}
+
+            if toc_structure:
+                print(f"✓ Detected two-level structure: {len(toc_structure)} sections")
+                for section in toc_structure[:3]:  # Show first 3 sections
+                    print(f"  {section['type']} {section['numeral']}: {section['title']} ({len(section['chapters'])} chapters)")
+                if len(toc_structure) > 3:
+                    print(f"  ... and {len(toc_structure) - 3} more sections")
+            else:
+                print("✓ Single-level structure (traditional chapters)")
+
+            # Detect chapters FIRST (before saving sections)
+            # This is needed because the actual detected chapters may differ from TOC
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Chapters ---")
+            chapters, consumed_line_indices = self.detect_chapters(text, toc_structure)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Detected {len(chapters)} chapter(s)")
+
+            # Now save sections and build chapter-to-section mapping based on ACTUAL detected chapters
+            if toc_structure:
+                if not dry_run:
+                    print("\nSaving book sections to database...")
+                    # Save sections and build mapping using the detected chapter numbers
+                    # We need to find which section each chapter belongs to based on TOC detection
+                    section_ids = []
+                    for section in toc_structure:
+                        section_id = self.db.add_book_section(
+                            book_id,
+                            section['type'],
+                            section['number'],
+                            section['title']
+                        )
+                        section_ids.append(section_id)
+                        print(f"  ✓ Saved {section['type']} {section['numeral']}: {section['title']}")
+
+                    # Build mapping from actual detected chapters to sections
+                    # IMPORTANT: The TOC may use per-section numbering (e.g., VOLUME I: 1-52, VOLUME II: 1-74)
+                    # but the body scan uses sequential numbering (e.g., 1-52, 53-126).
+                    # We need to use the actual chapter numbers from the body scan, not the TOC.
+
+                    # Group detected chapters by their section based on scan results
+                    # The section info is embedded in the chapter detection
+                    # We'll use the section_start_line to determine which section each chapter belongs to
+
+                    # Get the chapter numbers that were actually detected in the body scan for each section
+                    section_chapter_ranges = []
+                    current_ch_start = None
+
+                    for section_idx, section in enumerate(toc_structure):
+                        # Count how many chapters were found in this section's body
+                        # This info is printed during detection as "Found X chapters in VOLUME Y body"
+                        # For now, we'll determine ranges based on detected chapter sequence
+
+                        # Find all chapters that belong to this section
+                        # Since chapters are detected sequentially, we can infer section boundaries
+                        # from the chapter numbers
+
+                        if section_idx == 0:
+                            # First section: starts at chapter 1
+                            current_ch_start = 1
+                        else:
+                            # Subsequent sections: start after the previous section's last chapter
+                            current_ch_start = section_chapter_ranges[-1][1] + 1
+
+                        # Find the actual last chapter number for this section
+                        # by counting chapters that were detected in the body scan
+                        # The log shows "Found 52 chapters in VOLUME I body" and "Found 74 chapters in VOLUME II body"
+                        # We can infer this from the chapter count in the detection
+
+                        # For Don Quixote specifically:
+                        # VOLUME I: chapters 1-52 (52 chapters)
+                        # VOLUME II: chapters 53-126 (74 chapters)
+
+                        # Count chapters that would belong to this section
+                        # Since we can't easily parse the log, we'll use the actual chapter numbers
+                        section_chapters = []
+
+                        # The section['chapters'] list contains the actual detected chapters
+                        # These use per-section numbering (both VOLUME I and II start at 1)
+                        # But the returned chapters tuple uses sequential numbering (1-52, 53-126)
+                        # So we map based on the COUNT of chapters in each section
+
+                        section_ch_count = len(section['chapters'])
+                        current_ch_end = current_ch_start + section_ch_count - 1
+
+                        section_chapter_ranges.append((current_ch_start, current_ch_end))
+                        section_id = section_ids[section_idx]
+
+                        # Map all chapters in this sequential range to this section
+                        for ch_num in range(current_ch_start, current_ch_end + 1):
+                            chapter_to_section_id[ch_num] = section_id
+
+                        print(f"Section {section_idx} ({section['type']} {section['number']}): chapters {current_ch_start}-{current_ch_end} ({section_ch_count} chapters) → section_id {section_id}")
+
+            # Calculate coverage
+            total_parsed_chars = sum(len(ch_text) for _, _, ch_text in chapters)
+            original_chars = len(text)
+            coverage_percent = (total_parsed_chars / original_chars * 100) if original_chars > 0 else 0
+
+            print(f"\nContent Coverage:")
+            print(f"  Original text: {original_chars:,} chars")
+            print(f"  Parsed chapters: {total_parsed_chars:,} chars")
+            print(f"  Coverage: {coverage_percent:.1f}%")
+
+            if coverage_percent < ContentThresholds.MIN_COVERAGE_PERCENT:
+                print(f"  ⚠️  WARNING: Only {coverage_percent:.1f}% of content captured - may be losing content!")
+            elif coverage_percent > ContentThresholds.MAX_COVERAGE_PERCENT:
+                print(f"  ⚠️  WARNING: Parsed content is {coverage_percent:.1f}% - may have duplicates!")
+            else:
+                print(f"  ✓ Good coverage - parsing looks correct")
+
+            # Save chapters to database with empty summaries
+            if not dry_run and book_id is not None:
+                print(f"\nSaving {len(chapters)} chapters to database (with empty summaries)...")
+                for chapter_num, chapter_title, chapter_text in chapters:
+                    section_id = chapter_to_section_id.get(chapter_num)
+                    self.db.add_chapter(
+                        book_id,
+                        chapter_num,
+                        chapter_title,
+                        '',  # Empty summary - will be generated later
+                        chapter_text,  # Full chapter text
+                        section_id  # Link to section if two-level structure
+                    )
+                print(f"✓ Saved {len(chapters)} chapters to database")
+
+            print(f"\n{'='*60}")
+            print(f"PARSE-ONLY MODE COMPLETE")
+            print(f"Book metadata, sections, and chapter full text saved to database")
+            print(f"Run without --parse-only to generate summaries")
+            print(f"{'='*60}\n")
+            return results
+
+        # Route to async batch mode if enabled
+        # Only route if chapters are already loaded (from database for existing books)
+        # For new books, chapters haven't been detected yet, so skip routing and use normal flow
+        if use_batch_api and not dry_run and not parse_only and not regenerate_overall and not partial_run and 'chapters' in locals() and chapters is not None:
+            print("\n" + "="*60)
+            print("🚀 ASYNC BATCH MODE ENABLED (50% cost savings)")
+            print("="*60)
+
+            # Convert chapters to the format expected by process_book_async_batch
+            chapters_list = []
+            for chapter_num, chapter_title, chapter_text in chapters:
+                chapters_list.append({
+                    'chapter_number': chapter_num,
+                    'title': chapter_title,
+                    'text': chapter_text
+                })
+
+            return self.process_book_async_batch(
+                file_path=file_path,
+                title=title,
+                author=author,
+                book_text=text,
+                chapters=chapters_list,
+                book_id=book_id,
+                medium_summary_for_context=None,  # Will be None on first run
+                chapter_to_section_id=chapter_to_section_id,
+                skip_overall_summaries=bool(regenerate_chapters)  # Skip overall if regenerating chapters
+            )
+
         # Early return for regenerate mode - skip concise/medium generation
         # Use the normal mode flow for everything else
         if regenerate_chapters:
@@ -6136,8 +6669,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(f"Will skip concise/medium summaries (already exist)")
             print(f"{'='*60}\n")
 
-        # Generate combined concise and medium summaries (skip in regenerate mode)
-        if not regenerate_chapters:
+        # Generate combined concise and medium summaries (skip in regenerate_chapters mode, but DO generate in regenerate_overall mode)
+        if not regenerate_chapters or regenerate_overall:
             print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Generating Combined Summaries (Concise + Medium) ---")
 
             # In partial-run mode, check if we already have both summaries
@@ -6192,8 +6725,8 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(f"✓ Concise summary: {results['summaries']['concise']['word_count']} words")
             print(f"✓ Medium summary: {results['summaries']['medium']['word_count']} words")
 
-            # Categorize the book automatically after medium summary is generated
-            if not dry_run:
+            # Categorize the book automatically after medium summary is generated (skip in regenerate_overall mode)
+            if not dry_run and not regenerate_overall:
                 print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Categorizing Book ---")
                 try:
                     # Get all categories from database
@@ -6238,6 +6771,15 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
                 print(f"{'='*60}")
                 print(medium)
                 print(f"{'='*60}\n")
+
+            # Early return for regenerate_overall mode - we're done after generating summaries
+            if regenerate_overall:
+                print(f"\n{'='*60}")
+                print("✓ REGENERATE OVERALL MODE COMPLETE")
+                print(f"{'='*60}\n")
+                print(f"✓ Updated concise summary: {results['summaries']['concise']['word_count']} words")
+                print(f"✓ Updated medium summary: {results['summaries']['medium']['word_count']} words\n")
+                return results
         else:
             # Regenerate mode: get medium summary from database for context
             medium_summary_record = self.db.get_summary(book_id, 'medium')
@@ -6246,76 +6788,115 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             if medium:
                 print(f"  ✓ Found medium summary ({len(medium.split())} words) for context")
 
-        # Detect book structure using helper method (shared between normal and regenerate modes)
-        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Book Structure ---")
-        toc_structure = self._detect_book_structure(text)
+        # Check if chapters already exist in database (from --parse-only run)
+        # If they exist, skip chapter detection and use existing chapter data
+        existing_chapters_from_db = None
+        if not dry_run:
+            existing_chapters_from_db = self.db.get_chapters(book_id)
 
-        # Create mapping from chapter number to section_id
-        # This will be used when saving chapters to link them to their sections
-        chapter_to_section_id = {}
+        if existing_chapters_from_db and len(existing_chapters_from_db) > 0:
+            # Chapters already exist - use them instead of re-parsing
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Using Existing Chapters from Database ---")
+            print(f"✓ Found {len(existing_chapters_from_db)} existing chapters in database")
+            print(f"  Skipping chapter detection (already parsed with --parse-only)")
 
-        if toc_structure:
-            print(f"✓ Detected two-level structure: {len(toc_structure)} sections")
-            for section in toc_structure[:3]:  # Show first 3 sections
-                print(f"  {section['type']} {section['numeral']}: {section['title']} ({len(section['chapters'])} chapters)")
-            if len(toc_structure) > 3:
-                print(f"  ... and {len(toc_structure) - 3} more sections")
+            # Convert database chapters to the format expected by the rest of the code
+            # Format: List of tuples (chapter_num, chapter_title, chapter_text)
+            chapters = [
+                (ch['chapter_number'], ch['chapter_title'], ch['chapter_text'])
+                for ch in existing_chapters_from_db
+            ]
 
-            # Save book sections to database and build chapter mapping
-            # Skip section creation in regenerate mode to avoid deleting existing sections
-            if not dry_run and not partial_run and not regenerate_chapters:
-                print("\nSaving book sections to database...")
-                sequential_chapter_num = 1  # Track sequential chapter numbers (1, 2, 3, ...)
-                for section in toc_structure:
-                    section_id = self.db.add_book_section(
-                        book_id,
-                        section['type'],
-                        section['number'],
-                        section['title']
-                    )
-                    print(f"  ✓ Saved {section['type']} {section['numeral']}: {section['title']}")
+            # Get existing sections if any
+            existing_sections = self.db.get_book_sections(book_id)
+            toc_structure = None  # We don't need to detect structure since we have chapters
 
-                    # Map each chapter in this section to the section_id
-                    # Use sequential numbering (1, 2, 3, ...) across all sections
-                    for chapter in section['chapters']:
-                        chapter_to_section_id[sequential_chapter_num] = section_id
-                        sequential_chapter_num += 1
-            elif regenerate_chapters:
-                # In regenerate mode, retrieve existing sections from database instead of recreating
-                print("\n[REGENERATE MODE] Using existing book sections from database...")
-                existing_sections = self.db.get_book_sections(book_id)
-                if existing_sections:
-                    # Build section_id mapping from existing database sections
-                    # Match by section_number (1, 2, 3, ...) to the detected structure
-                    section_lookup = {s['section_number']: s['id'] for s in existing_sections}
+            # Build chapter_to_section_id mapping from existing database chapters
+            chapter_to_section_id = {}
+            for ch in existing_chapters_from_db:
+                if ch.get('section_id'):
+                    chapter_to_section_id[ch['chapter_number']] = ch['section_id']
 
+            # Set consumed_line_indices to empty set since we're using pre-parsed chapters
+            # This is only used for tracking removed content during initial parsing
+            consumed_line_indices = set()
+
+            print(f"  ✓ Loaded {len(chapters)} chapters from database")
+            if existing_sections:
+                print(f"  ✓ Book has {len(existing_sections)} sections")
+            else:
+                print(f"  ✓ Single-level structure (no sections)")
+        else:
+            # No existing chapters - run normal detection flow
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Book Structure ---")
+            toc_structure = self._detect_book_structure(text)
+
+            # Create mapping from chapter number to section_id
+            # This will be used when saving chapters to link them to their sections
+            chapter_to_section_id = {}
+
+            if toc_structure:
+                print(f"✓ Detected two-level structure: {len(toc_structure)} sections")
+                for section in toc_structure[:3]:  # Show first 3 sections
+                    print(f"  {section['type']} {section['numeral']}: {section['title']} ({len(section['chapters'])} chapters)")
+                if len(toc_structure) > 3:
+                    print(f"  ... and {len(toc_structure) - 3} more sections")
+
+                # Save book sections to database and build chapter mapping
+                # Skip section creation in regenerate mode to avoid deleting existing sections
+                if not dry_run and not partial_run and not regenerate_chapters:
+                    print("\nSaving book sections to database...")
+                    sequential_chapter_num = 1  # Track sequential chapter numbers (1, 2, 3, ...)
+                    for section in toc_structure:
+                        section_id = self.db.add_book_section(
+                            book_id,
+                            section['type'],
+                            section['number'],
+                            section['title']
+                        )
+                        print(f"  ✓ Saved {section['type']} {section['numeral']}: {section['title']}")
+
+                        # Map each chapter in this section to the section_id
+                        # Use sequential numbering (1, 2, 3, ...) across all sections
+                        for chapter in section['chapters']:
+                            chapter_to_section_id[sequential_chapter_num] = section_id
+                            sequential_chapter_num += 1
+                elif regenerate_chapters:
+                    # In regenerate mode, retrieve existing sections from database instead of recreating
+                    print("\n[REGENERATE MODE] Using existing book sections from database...")
+                    existing_sections = self.db.get_book_sections(book_id)
+                    if existing_sections:
+                        # Build section_id mapping from existing database sections
+                        # Match by section_number (1, 2, 3, ...) to the detected structure
+                        section_lookup = {s['section_number']: s['id'] for s in existing_sections}
+
+                        sequential_chapter_num = 1
+                        for section in toc_structure:
+                            section_number = section['number']
+                            section_id = section_lookup.get(section_number)
+                            if section_id:
+                                print(f"  ✓ Using existing {section['type']} {section['numeral']}: section_id={section_id}")
+                                # Map chapters to existing section_id
+                                for chapter in section['chapters']:
+                                    chapter_to_section_id[sequential_chapter_num] = section_id
+                                    sequential_chapter_num += 1
+                            else:
+                                print(f"  ⚠️  WARNING: No existing section found for {section['type']} {section['numeral']}")
+                    else:
+                        print("  ⚠️  WARNING: No existing sections found in database for regenerate mode")
+                else:
+                    # dry_run or partial_run mode - just build the mapping without saving
                     sequential_chapter_num = 1
                     for section in toc_structure:
-                        section_number = section['number']
-                        section_id = section_lookup.get(section_number)
-                        if section_id:
-                            print(f"  ✓ Using existing {section['type']} {section['numeral']}: section_id={section_id}")
-                            # Map chapters to existing section_id
-                            for chapter in section['chapters']:
-                                chapter_to_section_id[sequential_chapter_num] = section_id
-                                sequential_chapter_num += 1
-                        else:
-                            print(f"  ⚠️  WARNING: No existing section found for {section['type']} {section['numeral']}")
-                else:
-                    print("  ⚠️  WARNING: No existing sections found in database for regenerate mode")
+                        for chapter in section['chapters']:
+                            sequential_chapter_num += 1
             else:
-                # dry_run or partial_run mode - just build the mapping without saving
-                sequential_chapter_num = 1
-                for section in toc_structure:
-                    for chapter in section['chapters']:
-                        sequential_chapter_num += 1
-        else:
-            print("✓ Single-level structure (traditional chapters)")
+                print("✓ Single-level structure (traditional chapters)")
 
-        # Detect chapters
-        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Chapters ---")
-        chapters, consumed_line_indices = self.detect_chapters(text, toc_structure)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Detected {len(chapters)} chapter(s)")
+            # Detect chapters
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] --- Detecting Chapters ---")
+            chapters, consumed_line_indices = self.detect_chapters(text, toc_structure)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Detected {len(chapters)} chapter(s)")
 
         # Calculate total parsed content
         total_parsed_chars = sum(len(ch_text) for _, _, ch_text in chapters)
@@ -6518,18 +7099,291 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
         return results
 
+    def process_book_async_batch(self, file_path: Path, title: str, author: str,
+                                 book_text: str, chapters: List, book_id: int,
+                                 medium_summary_for_context: str = None,
+                                 chapter_to_section_id: Dict = None,
+                                 poll_interval: int = BATCH_POLL_INTERVAL_SECONDS,
+                                 skip_overall_summaries: bool = False) -> Dict:
+        """
+        Process book using async Batch API for 50% cost savings.
+
+        Builds all prompts, submits as one batch job, polls for completion,
+        and saves results to database.
+
+        Args:
+            skip_overall_summaries: If True, skip generating concise/medium summaries (for --regenerate-chapters)
+        """
+        print(f"\n{'='*60}")
+        if skip_overall_summaries:
+            print("ASYNC BATCH MODE - Regenerating chapter summaries only...")
+        else:
+            print("ASYNC BATCH MODE - Building requests...")
+        print(f"{'='*60}")
+
+        batch_requests = []
+        request_metadata = []
+
+        # Request 1: Overall summaries (concise + medium) - skip if regenerating chapters only
+        if not skip_overall_summaries:
+            print(f"\n[1/N] Building overall summaries request...")
+            overall_prompt = self.generate_combined_summaries(
+                text=book_text,
+                title=title,
+                author=author,
+                return_prompt_only=True
+            )
+            batch_requests.append(self.build_batch_request(overall_prompt))
+            request_metadata.append({
+                'type': 'overall',
+                'model': config.SUMMARY_CONFIGS['concise']['model']
+            })
+        else:
+            print(f"\n[Skipping overall summaries - regenerating chapters only]")
+
+        # Requests 2-N: Chapter summaries (keeping existing bulk batching)
+        print(f"\n[2/N] Building chapter summary requests...")
+
+        # Prepare chapters for bulk processing (reuse existing logic from process_book)
+        chapters_needing_summary = []
+        for chapter in chapters:
+            chapter_num = chapter['chapter_number']
+            chapter_title = chapter['title']
+            chapter_text = chapter['text']
+            word_count = len(chapter_text.split())
+
+            if word_count < SummaryConstants.MIN_WORDS_FOR_CHAPTER_SUMMARY:
+                continue
+
+            chapters_needing_summary.append((chapter_num, chapter_title, chapter_text))
+
+        # Split into batches (reuse existing batching logic)
+        MAX_BATCH_CHARS = APIConstants.MAX_BATCH_CHARS
+        MAX_CHAPTERS_PER_BATCH = APIConstants.MAX_CHAPTERS_PER_BATCH
+
+        batches = []
+        current_batch = []
+        current_batch_chars = 0
+
+        for chapter_num, chapter_title, chapter_text in chapters_needing_summary:
+            chapter_chars = len(chapter_text)
+
+            if current_batch and (current_batch_chars + chapter_chars > MAX_BATCH_CHARS or
+                                 len(current_batch) >= MAX_CHAPTERS_PER_BATCH):
+                batches.append(current_batch)
+                current_batch = []
+                current_batch_chars = 0
+
+            current_batch.append((chapter_num, chapter_title, chapter_text))
+            current_batch_chars += chapter_chars
+
+        if current_batch:
+            batches.append(current_batch)
+
+        # Build chapter number to title and text mappings
+        chapter_num_to_title = {}
+        chapter_num_to_text = {}
+        for chapter_num, chapter_title, chapter_text in chapters_needing_summary:
+            chapter_num_to_title[chapter_num] = chapter_title
+            chapter_num_to_text[chapter_num] = chapter_text
+
+        # Build bulk chapter summary requests
+        previous_batch_last_chapter = None
+
+        for batch_idx, batch in enumerate(batches, 1):
+            previous_chapter_text = previous_batch_last_chapter[2] if previous_batch_last_chapter else None
+
+            prompt_data = self.generate_bulk_chapter_summaries(
+                batch,
+                title,
+                medium_summary=medium_summary_for_context,
+                previous_chapter_text=previous_chapter_text,
+                return_prompt_only=True
+            )
+
+            batch_requests.append(self.build_batch_request(prompt_data['prompt']))
+            request_metadata.append({
+                'type': 'chapters',
+                'chapter_numbers': prompt_data['chapter_numbers'],
+                'chapter_titles': {num: chapter_num_to_title[num] for num in prompt_data['chapter_numbers']},
+                'model': prompt_data['model'],
+                'batch_index': batch_idx
+            })
+
+            previous_batch_last_chapter = batch[-1]
+
+        print(f"\n✓ Built {len(batch_requests)} batch request(s)")
+        if not skip_overall_summaries:
+            print(f"  - 1 overall summaries request")
+        print(f"  - {len(batches)} chapter summary request(s)")
+
+        # Submit batch job
+        print(f"\n{'='*60}")
+        print("Submitting batch job...")
+        print(f"{'='*60}")
+
+        model_name = config.SUMMARY_CONFIGS['concise']['model']
+        job_name = self.submit_batch_job(
+            requests=batch_requests,
+            model_name=model_name,
+            display_name=f"book-{book_id}-summaries"
+        )
+
+        if not job_name:
+            raise ValueError("Failed to submit batch job")
+
+        # Save state for resumption
+        state_file = save_batch_job_state(
+            book_id=book_id,
+            job_name=job_name,
+            book_title=title,
+            request_metadata=request_metadata
+        )
+        update_batch_job_state(state_file, "running")
+
+        print(f"\n💡 Job can be resumed later using:")
+        print(f"   python {Path(__file__).name} --resume {state_file}")
+
+        # Poll for completion
+        print(f"\n{'='*60}")
+        print(f"⏳ Waiting for batch completion...")
+        print(f"{'='*60}")
+
+        batch_job = self.poll_batch_job(job_name, poll_interval_seconds=poll_interval)
+
+        if not batch_job:
+            update_batch_job_state(state_file, "failed")
+            raise ValueError("Batch job did not complete successfully")
+
+        # Retrieve results
+        print(f"\n{'='*60}")
+        print(f"📥 Retrieving results...")
+        print(f"{'='*60}")
+
+        results = self.retrieve_batch_results(batch_job)
+
+        if not results or len(results) != len(request_metadata):
+            update_batch_job_state(state_file, "failed")
+            raise ValueError(f"Expected {len(request_metadata)} results, got {len(results)}")
+
+        # Process results and save to database
+        print(f"\n{'='*60}")
+        print(f"💾 Processing results and saving to database...")
+        print(f"{'='*60}")
+
+        all_success = True
+
+        for idx, (result, metadata) in enumerate(zip(results, request_metadata)):
+            if 'error' in result:
+                print(f"  ❌ Request {idx+1} failed: {result['error']}")
+                all_success = False
+                continue
+
+            response_text = result['text']
+
+            if metadata['type'] == 'overall':
+                # Parse and save overall summaries (reuse existing parsing logic)
+                parsed = self.parse_combined_summaries_response(response_text, title, author)
+                if parsed:
+                    # Save summaries
+                    self.db.add_summary(book_id, 'concise', parsed['concise_summary'])
+                    self.db.add_summary(book_id, 'medium', parsed['medium_summary'])
+
+                    # Save book metadata (about_text, relevance_now)
+                    self.db.update_book_metadata(
+                        book_id,
+                        about_text=parsed.get('about_text'),
+                        relevance_now=parsed.get('relevance_now')
+                    )
+                    print(f"  ✓ Saved overall summaries")
+                else:
+                    all_success = False
+
+            elif metadata['type'] == 'chapters':
+                # Parse and save chapter summaries (reuse existing parsing logic)
+                chapter_numbers = metadata['chapter_numbers']
+                chapter_titles = metadata.get('chapter_titles', {})
+
+                # Build index_to_chapter mapping (sequential index -> actual chapter number)
+                index_to_chapter = {i+1: chapter_num for i, chapter_num in enumerate(chapter_numbers)}
+
+                summaries = self.parse_bulk_summary_response(
+                    response_text,
+                    index_to_chapter
+                )
+
+                for chapter_num in chapter_numbers:
+                    if chapter_num in summaries:
+                        section_id = chapter_to_section_id.get(chapter_num) if chapter_to_section_id else None
+                        chapter_title = chapter_titles.get(chapter_num, f"Chapter {chapter_num}")
+                        chapter_text = chapter_num_to_text.get(chapter_num)  # Get full chapter text
+
+                        self.db.add_chapter(
+                            book_id=book_id,
+                            chapter_number=chapter_num,
+                            chapter_title=chapter_title,
+                            summary=summaries[chapter_num],
+                            chapter_text=chapter_text,  # Include full chapter text
+                            section_id=section_id
+                        )
+                        print(f"  ✓ Saved chapter {chapter_num}")
+                    else:
+                        print(f"  ⚠️  Missing summary for chapter {chapter_num}")
+                        all_success = False
+
+        if all_success:
+            update_batch_job_state(state_file, "completed")
+            print(f"\n✅ All summaries generated and saved successfully!")
+        else:
+            update_batch_job_state(state_file, "partial_failure")
+            print(f"\n⚠️  Some requests failed - check output above")
+
+        return {
+            'success': all_success,
+            'state_file': state_file
+        }
+
 
 def main():
     parser = argparse.ArgumentParser(description='Generate book summaries using Gemini API')
-    parser.add_argument('input', help='Book file (.txt) or directory for batch processing')
+    parser.add_argument('input', nargs='?', help='Book file (.txt) or directory for batch processing')
     parser.add_argument('--title', help='Book title (optional, will try to extract from text)')
     parser.add_argument('--author', help='Author name (optional, will try to extract from text)')
     parser.add_argument('--batch', action='store_true', help='Process all .txt files in directory')
     parser.add_argument('--dry-run', action='store_true', help='Preview chapter detection and prompts without making API calls')
+    parser.add_argument('--parse-only', action='store_true', help='Parse book and store to database without making any LLM calls')
     parser.add_argument('--partial-run', action='store_true', help='Test mode: Make only 5 LLM calls (concise + medium + first 3 chapters)')
     parser.add_argument('--regenerate-chapters', help='Regenerate specific chapters only (comma-separated, e.g., "101,111")')
+    parser.add_argument('--regenerate-overall', action='store_true', help='Regenerate only concise and medium overall summaries')
+    parser.add_argument('--sync', action='store_true', help='Use synchronous API mode (default is async batch mode for 50%% cost savings)')
+    parser.add_argument('--resume', type=str, metavar='STATE_FILE', help='Resume a previously interrupted batch job from state file')
+    parser.add_argument('--list-jobs', action='store_true', help='List all pending batch jobs')
+    parser.add_argument('--batch-poll-interval', type=int, default=BATCH_POLL_INTERVAL_SECONDS, help=f'Seconds between batch status checks (default: {BATCH_POLL_INTERVAL_SECONDS})')
 
     args = parser.parse_args()
+
+    # Validate that input is provided when needed
+    if not args.list_jobs and not args.resume and not args.input:
+        parser.error('input is required unless using --list-jobs or --resume')
+
+    # Handle --list-jobs
+    if args.list_jobs:
+        print("\n" + "="*60)
+        print("Pending Batch Jobs")
+        print("="*60 + "\n")
+
+        pending_jobs = list_pending_batch_jobs()
+        if not pending_jobs:
+            print("No pending batch jobs found.")
+        else:
+            for i, job in enumerate(pending_jobs, 1):
+                print(f"{i}. Book ID: {job['book_id']} - {job['book_title']}")
+                print(f"   Status: {job['status']}")
+                print(f"   Job Name: {job['job_name']}")
+                print(f"   State File: {job['state_file']}")
+                created_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(job['created_at']))
+                print(f"   Created: {created_time}\n")
+        return
 
     # Parse regenerate_chapters argument
     regenerate_chapters = None
@@ -6554,6 +7408,128 @@ def main():
     # Initialize generator
     generator = SummaryGenerator(api_key)
 
+    # Handle --resume
+    if args.resume:
+        state_file = Path(args.resume)
+        if not state_file.exists():
+            print(f"❌ State file not found: {state_file}")
+            sys.exit(1)
+
+        print(f"\n{'='*60}")
+        print(f"📂 Resuming batch job from state file...")
+        print(f"{'='*60}")
+
+        state = load_batch_job_state(state_file)
+        book_id = state['book_id']
+        job_name = state['job_name']
+        request_metadata = state['request_metadata']
+
+        print(f"  📖 Book ID: {book_id} - {state['book_title']}")
+        print(f"  🆔 Job Name: {job_name}")
+        print(f"  📊 Status: {state['status']}")
+
+        update_batch_job_state(state_file, "running")
+
+        # Poll for job completion
+        batch_job = generator.poll_batch_job(job_name, poll_interval_seconds=args.batch_poll_interval)
+
+        if not batch_job:
+            print(f"❌ Batch job did not complete successfully")
+            update_batch_job_state(state_file, "failed")
+            sys.exit(1)
+
+        # Retrieve and save results
+        print(f"\n{'='*60}")
+        print(f"📥 Retrieving results...")
+        print(f"{'='*60}")
+
+        results = generator.retrieve_batch_results(batch_job)
+
+        if not results or len(results) != len(request_metadata):
+            update_batch_job_state(state_file, "failed")
+            print(f"❌ Expected {len(request_metadata)} results, got {len(results)}")
+            sys.exit(1)
+
+        # Process results and save to database
+        print(f"\n{'='*60}")
+        print(f"💾 Processing results and saving to database...")
+        print(f"{'='*60}")
+
+        # Get book info and chapter_to_section_id from database
+        book = generator.db.get_book(book_id)
+        chapters = generator.db.get_chapters(book_id)
+        chapter_to_section_id = {}
+        for chapter in chapters:
+            if chapter.get('section_id'):
+                chapter_to_section_id[chapter['chapter_number']] = chapter['section_id']
+
+        all_success = True
+
+        for idx, (result, metadata) in enumerate(zip(results, request_metadata)):
+            if 'error' in result:
+                print(f"  ❌ Request {idx+1} failed: {result['error']}")
+                all_success = False
+                continue
+
+            response_text = result['text']
+
+            if metadata['type'] == 'overall':
+                # Parse and save overall summaries
+                parsed = generator.parse_combined_summaries_response(response_text, book['title'], book['author'])
+                if parsed:
+                    # Save summaries
+                    generator.db.add_summary(book_id, 'concise', parsed['concise_summary'])
+                    generator.db.add_summary(book_id, 'medium', parsed['medium_summary'])
+
+                    # Save book metadata (about_text, relevance_now)
+                    generator.db.update_book_metadata(
+                        book_id,
+                        about_text=parsed.get('about_text'),
+                        relevance_now=parsed.get('relevance_now')
+                    )
+                    print(f"  ✓ Saved overall summaries")
+                else:
+                    all_success = False
+
+            elif metadata['type'] == 'chapters':
+                # Parse and save chapter summaries
+                chapter_numbers = metadata['chapter_numbers']
+                chapter_titles = metadata.get('chapter_titles', {})
+
+                # Build index_to_chapter mapping (sequential index -> actual chapter number)
+                index_to_chapter = {i+1: chapter_num for i, chapter_num in enumerate(chapter_numbers)}
+
+                summaries = generator.parse_bulk_summary_response(
+                    response_text,
+                    index_to_chapter
+                )
+
+                for chapter_num in chapter_numbers:
+                    if chapter_num in summaries:
+                        section_id = chapter_to_section_id.get(chapter_num) if chapter_to_section_id else None
+                        chapter_title = chapter_titles.get(chapter_num, f"Chapter {chapter_num}")
+
+                        generator.db.add_chapter(
+                            book_id=book_id,
+                            chapter_number=chapter_num,
+                            chapter_title=chapter_title,
+                            summary=summaries[chapter_num],
+                            section_id=section_id
+                        )
+                        print(f"  ✓ Saved chapter {chapter_num}")
+                    else:
+                        print(f"  ⚠️  Missing summary for chapter {chapter_num}")
+                        all_success = False
+
+        if all_success:
+            update_batch_job_state(state_file, "completed")
+            print(f"\n✅ Job resumed and completed successfully!")
+        else:
+            update_batch_job_state(state_file, "partial_failure")
+            print(f"\n⚠️  Some requests failed - check output above")
+
+        sys.exit(0 if all_success else 1)
+
     # Process books
     if args.batch:
         # Batch mode: process all .txt files in directory
@@ -6571,7 +7547,7 @@ def main():
 
         for book_file in txt_files:
             try:
-                generator.process_book(book_file, dry_run=args.dry_run, partial_run=args.partial_run, regenerate_chapters=regenerate_chapters)
+                generator.process_book(book_file, dry_run=args.dry_run, parse_only=args.parse_only, partial_run=args.partial_run, regenerate_chapters=regenerate_chapters, regenerate_overall=args.regenerate_overall, use_batch_api=not args.sync)
             except Exception as e:
                 print(f"Error processing {book_file.name}: {e}")
                 continue
@@ -6583,7 +7559,7 @@ def main():
             print(f"Error: File not found: {book_file}")
             sys.exit(1)
 
-        generator.process_book(book_file, args.title, args.author, args.dry_run, args.partial_run, regenerate_chapters)
+        generator.process_book(book_file, args.title, args.author, args.dry_run, args.parse_only, args.partial_run, regenerate_chapters, args.regenerate_overall, use_batch_api=not args.sync)
 
 
 if __name__ == '__main__':

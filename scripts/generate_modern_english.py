@@ -346,89 +346,103 @@ Now provide modern English translations for all {len(chapters_batch)} chapters a
             print(f"{'-'*80}")
             return {ch_num: f"[DRY RUN] Translation for chapter {ch_num}" for ch_num in chapter_numbers}
 
-        # Make API call
+        # Make API call with retry logic
         print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Generating bulk modern English for {len(chapters_batch)} chapters: {chapter_numbers}")
         print(f"  Book: {book['title']} by {book['author']}")
         print(f"  Input: {total_words:,} words (~{total_chars:,} chars)")
 
-        response_text = ""
-        error_msg = None
-        start_time = time.time()
+        max_retries = 2
+        retry_delay = 30  # seconds
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.3,  # Lower temperature for more consistent translations
-                    top_p=0.95,
-                    max_output_tokens=self.MAX_OUTPUT_TOKENS,
+        for attempt in range(max_retries + 1):
+            response_text = ""
+            error_msg = None
+            start_time = time.time()
+
+            try:
+                if attempt > 0:
+                    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Retry attempt {attempt}/{max_retries}...")
+                    time.sleep(retry_delay)
+
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.3,  # Lower temperature for more consistent translations
+                        top_p=0.95,
+                        max_output_tokens=self.MAX_OUTPUT_TOKENS,
+                    )
                 )
-            )
 
-            response_text = response.text.strip()
-            generation_time = time.time() - start_time
+                response_text = response.text.strip()
+                generation_time = time.time() - start_time
 
-            # Parse the response
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Parsing response...")
-            translations = self.parse_bulk_response(response_text, chapters_batch)
+                # Parse the response
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Parsing response...")
+                translations = self.parse_bulk_response(response_text, chapters_batch)
 
-            # Validation checks for each chapter
-            for chapter_num, modern_text in translations.items():
-                # Find original text
-                original_text = None
-                for ch_num, ch_title, ch_text in chapters_batch:
-                    if ch_num == chapter_num:
-                        original_text = ch_text
-                        break
+                # Validation checks for each chapter
+                for chapter_num, modern_text in translations.items():
+                    # Find original text
+                    original_text = None
+                    for ch_num, ch_title, ch_text in chapters_batch:
+                        if ch_num == chapter_num:
+                            original_text = ch_text
+                            break
 
-                if original_text:
-                    original_paragraphs = len(original_text.strip().split('\n\n'))
-                    modern_paragraphs = len(modern_text.strip().split('\n\n'))
+                    if original_text:
+                        original_paragraphs = len(original_text.strip().split('\n\n'))
+                        modern_paragraphs = len(modern_text.strip().split('\n\n'))
 
-                    print(f"  Chapter {chapter_num}: {len(modern_text.split()):,} words, Paragraphs: Orig={original_paragraphs}, Modern={modern_paragraphs}")
+                        print(f"  Chapter {chapter_num}: {len(modern_text.split()):,} words, Paragraphs: Orig={original_paragraphs}, Modern={modern_paragraphs}")
 
-                    # Warn if structure changed significantly
-                    if abs(original_paragraphs - modern_paragraphs) > 2:
-                        print(f"    ⚠️  WARNING: Paragraph count mismatch for chapter {chapter_num}")
+                        # Warn if structure changed significantly
+                        if abs(original_paragraphs - modern_paragraphs) > 2:
+                            print(f"    ⚠️  WARNING: Paragraph count mismatch for chapter {chapter_num}")
 
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Bulk generation complete ({len(translations)}/{len(chapters_batch)} chapters)")
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Bulk generation complete ({len(translations)}/{len(chapters_batch)} chapters)")
 
-            # Save LLM log (success case)
-            self._save_llm_log(
-                book_id=book['id'],
-                book_title=book['title'],
-                book_author=book['author'],
-                chapters_batch=chapters_batch,
-                prompt=prompt,
-                response_text=response_text,
-                success=True,
-                generation_time=generation_time,
-                parsed_count=len(translations)
-            )
+                # Save LLM log (success case)
+                self._save_llm_log(
+                    book_id=book['id'],
+                    book_title=book['title'],
+                    book_author=book['author'],
+                    chapters_batch=chapters_batch,
+                    prompt=prompt,
+                    response_text=response_text,
+                    success=True,
+                    generation_time=generation_time,
+                    parsed_count=len(translations)
+                )
 
-            return translations
+                return translations
 
-        except Exception as e:
-            generation_time = time.time() - start_time
-            error_msg = str(e)
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Error generating bulk modern English: {e}")
+            except Exception as e:
+                generation_time = time.time() - start_time
+                error_msg = str(e)
 
-            # Save LLM log (error case)
-            self._save_llm_log(
-                book_id=book['id'],
-                book_title=book['title'],
-                book_author=book['author'],
-                chapters_batch=chapters_batch,
-                prompt=prompt,
-                response_text=response_text,
-                success=False,
-                error_msg=error_msg,
-                generation_time=generation_time,
-                parsed_count=0
-            )
+                if attempt < max_retries:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️  Error on attempt {attempt + 1}: {e}")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Will retry in {retry_delay} seconds...")
+                    continue
+                else:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Error generating bulk modern English after {max_retries + 1} attempts: {e}")
 
-            return {}
+                    # Save LLM log (error case) only for final failure
+                    self._save_llm_log(
+                        book_id=book['id'],
+                        book_title=book['title'],
+                        book_author=book['author'],
+                        chapters_batch=chapters_batch,
+                        prompt=prompt,
+                        response_text=response_text,
+                        success=False,
+                        error_msg=error_msg,
+                        generation_time=generation_time,
+                        parsed_count=0
+                    )
+
+                    return {}
 
     def generate_modern_english_chapter(self, book_id: int, chapter_number: int,
                                        dry_run: bool = False) -> Optional[str]:

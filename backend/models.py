@@ -275,6 +275,14 @@ class Database:
             )
         ''')
 
+        # Add header_image_url column if it doesn't exist (migration for existing databases)
+        try:
+            cursor.execute("ALTER TABLE blog_posts ADD COLUMN header_image_url TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         conn.commit()
         conn.close()
 
@@ -456,11 +464,35 @@ class Database:
                     chapter_title: str, summary: str, chapter_text: str = None,
                     section_id: int = None, illustration_url: str = None,
                     modern_english_text: str = None) -> int:
-        """Add or update a chapter summary"""
+        """Add or update a chapter summary
+
+        If chapter already exists and a parameter is None, preserves the existing value.
+        This allows updating summaries without accidentally deleting chapter_text.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
         word_count = len(summary.split())
+
+        # Check if chapter already exists
+        cursor.execute('''
+            SELECT chapter_text, section_id, illustration_url, modern_english_text
+            FROM chapters
+            WHERE book_id = ? AND chapter_number = ?
+        ''', (book_id, chapter_number))
+
+        existing = cursor.fetchone()
+
+        # Preserve existing values if new values are None
+        if existing:
+            if chapter_text is None:
+                chapter_text = existing['chapter_text']
+            if section_id is None:
+                section_id = existing['section_id']
+            if illustration_url is None:
+                illustration_url = existing['illustration_url']
+            if modern_english_text is None:
+                modern_english_text = existing['modern_english_text']
 
         cursor.execute('''
             INSERT OR REPLACE INTO chapters
@@ -1552,15 +1584,15 @@ class Database:
     # Blog-related methods
 
     def add_blog_post(self, slug: str, title: str, content: str, excerpt: str = None,
-                      author: str = 'Summra Team', published_date: str = None) -> int:
+                      author: str = 'Summra Team', published_date: str = None, header_image_url: str = None) -> int:
         """Add a new blog post to the database"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
-            INSERT OR REPLACE INTO blog_posts (slug, title, content, excerpt, author, published_date, updated_date)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (slug, title, content, excerpt, author, published_date))
+            INSERT OR REPLACE INTO blog_posts (slug, title, content, excerpt, author, published_date, updated_date, header_image_url)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ''', (slug, title, content, excerpt, author, published_date, header_image_url))
 
         blog_id = cursor.lastrowid
         conn.commit()
@@ -1569,12 +1601,12 @@ class Database:
         return blog_id
 
     def get_all_blog_posts(self) -> List[Dict]:
-        """Get all blog posts (title, slug, excerpt, date only)"""
+        """Get all blog posts (title, slug, excerpt, date, header image only)"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, slug, title, excerpt, author, published_date, created_at
+            SELECT id, slug, title, excerpt, author, published_date, created_at, header_image_url
             FROM blog_posts
             ORDER BY published_date DESC, created_at DESC
         ''')

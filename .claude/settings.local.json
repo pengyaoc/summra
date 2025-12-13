@@ -54,7 +54,12 @@
       "Bash(timeout 30 python:*)",
       "Bash(/tmp/pg844_test.log)",
       "Bash(timeout 180 python:*)",
-      "Bash(timeout 120 python scripts/generate_summaries.py:*)"
+      "Bash(timeout 120 python scripts/generate_summaries.py:*)",
+      "Bash(/tmp/pg996_direct_scan_test.log)",
+      "Bash(timeout 120 bash:*)",
+      "Bash(timeout 60 python:*)",
+      "Bash(timeout 90 python:*)",
+      "Bash(UNSPLASH_ACCESS_KEY=\"-SjcMRsLyixvHCFgFdUTxLjV9gvlGTmWogdWb0WsVJc\" source venv/bin/activate:*)"
     ],
     "deny": [],
     "ask": []

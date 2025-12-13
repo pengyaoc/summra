@@ -33,8 +33,18 @@ class BlogIndex {
             const date = this.formatDate(post.published_date || post.created_at);
             const excerpt = post.excerpt || 'Read this article to learn more...';
 
+            // Add thumbnail image if available
+            const thumbnailHTML = post.header_image_url ? `
+                <div class="blog-card-image">
+                    <img src="${this.app.escapeHtml(post.header_image_url)}"
+                         alt="${this.app.escapeHtml(post.title)}"
+                         loading="lazy">
+                </div>
+            ` : '';
+
             return `
                 <div class="blog-card" data-slug="${this.app.escapeHtml(post.slug)}">
+                    ${thumbnailHTML}
                     <div class="blog-card-content">
                         <h3 class="blog-card-title">${this.app.escapeHtml(post.title)}</h3>
                         <p class="blog-card-date">${date}</p>
