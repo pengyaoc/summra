@@ -43,9 +43,19 @@ class BlogPost {
 
         const contentHTML = this.app.renderMarkdown(content);
 
+        // Add header image if available
+        const headerImageHTML = this.post.header_image_url ? `
+            <div class="blog-post-header-image">
+                <img src="${this.app.escapeHtml(this.post.header_image_url)}"
+                     alt="${this.app.escapeHtml(this.post.title)}"
+                     loading="eager">
+            </div>
+        ` : '';
+
         // Render post (no "Back to blog" button - breadcrumb handles navigation)
         container.innerHTML = `
             <article class="blog-post">
+                ${headerImageHTML}
                 <header class="blog-post-header">
                     <h1 class="blog-post-title">${this.app.escapeHtml(this.post.title)}</h1>
                     <div class="blog-post-meta">

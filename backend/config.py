@@ -20,6 +20,9 @@ ILLUSTRATIONS_DIR = BASE_DIR / 'frontend' / 'static' / 'illustrations'
 # Gemini API configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
+# Unsplash API configuration
+UNSPLASH_ACCESS_KEY = os.getenv('UNSPLASH_ACCESS_KEY', '')
+
 # Rate limiting for Gemini API
 MAX_REQUESTS_PER_MINUTE = 10
 MAX_TOKENS_PER_MINUTE = 250000

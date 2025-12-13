@@ -14,6 +14,7 @@ This document provides in-depth technical documentation for the Summra project, 
 8. [Project Gutenberg Integration](#project-gutenberg-integration)
 9. [Gemini Image Generation System](#gemini-image-generation-system)
 10. [Book Metadata Enrichment](#book-metadata-enrichment)
+11. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
 
 ---
 
@@ -77,6 +78,25 @@ This document provides in-depth technical documentation for the Summra project, 
          └──────────────────────────────────┴──────────────────────────┘                 │ created_at          │
                                                                                          └─────────────────────┘
 
+┌─────────────────────────┐
+│     blog_posts          │
+│  (added 2025-12-12)     │
+├─────────────────────────┤
+│ id (PK)                 │
+│ slug (UNIQUE)           │
+│ title                   │
+│ content                 │
+│ excerpt                 │
+│ author                  │
+│ published_date          │
+│ updated_date            │
+│ header_image_url        │
+│ created_at              │
+└─────────────────────────┘
+
+Standalone table for blog content.
+No foreign key relationships.
+
 UNIQUE Constraints:
 - books: (filename), (slug)
 - authors: (name)
@@ -86,6 +106,7 @@ UNIQUE Constraints:
 - chapters: (book_id, chapter_number)
 - book_categories: (book_id, category_id)
 - similar_books: (book_id, similar_book_id)
+- blog_posts: (slug)
 
 Foreign Keys:
 - books.author_id → authors.id
@@ -417,12 +438,19 @@ def add_summary(self, book_id, summary_type, content) -> int
 
 ```python
 def add_chapter(self, book_id, chapter_number, chapter_title,
-                summary, full_text=None, illustration_url=None) -> int
+                summary, full_text=None, section_id=None,
+                illustration_url=None, modern_english_text=None) -> int
 ```
 - Uses `INSERT OR REPLACE` via UNIQUE(book_id, chapter_number)
+- **CRITICAL:** Preserves existing values when parameters are None (added 2025-12-12)
+  - Prevents data loss during two-step processing (--parse-only then async batch)
+  - Queries existing row before INSERT OR REPLACE
+  - Uses existing chapter_text, section_id, illustration_url, modern_english_text when new values are None
 - Critical for chapter regeneration mode
 - Automatically calculates word count
 - Optional `illustration_url` parameter for chapter illustrations (added 2025-12-01)
+- Optional `section_id` parameter for two-level book structure (added 2025-12-01)
+- Optional `modern_english_text` parameter for Shakespeare translations (added 2025-12-03)
 
 ```python
 def get_book_by_filename(self, filename) -> dict
@@ -2727,19 +2755,21 @@ class SummaryGenerator:
         )
 ```
 
-### Combined Summary & Metadata Generation (Added 2025-12-02)
+### Combined Summary & Metadata Generation (Added 2025-12-02, Optimized 2025-12-12)
 
 **Purpose:** Generate all summaries (concise + medium) and book metadata in a single LLM call for efficiency and cost savings.
 
 **Model:** `gemini-2.5-flash`
 
-**Location:** `scripts/generate_summaries.py:181-408`
+**Location:** `scripts/generate_summaries.py:1629-1788`
+
+**Token Optimization (2025-12-12):** Book content removed from prompt. The LLM now relies on its training data knowledge of classic literature, using only title and author. This reduced input tokens from ~140,000 to ~200 per call (99.86% reduction).
 
 **Returns:** Dictionary with 7 fields:
-1. `about_text` - Short "About the Book" section (150-200 words)
-2. `concise_summary` - Spoiler-free overview (500 words)
+1. `about_text` - Short "About the Book" section (75-100 words)
+2. `concise_summary` - Spoiler-free overview (~500 words)
 3. `medium_summary` - Comprehensive analysis (2000-3000 words)
-4. `relevance_now` - Why relevant today (100-150 words)
+4. `relevance_now` - Why relevant today (75-100 words)
 5. `author_country` - Author's country of origin (country name only)
 6. `similar_books` - List of 5 similar books (title/author pairs)
 7. `other_books_by_author` - List of author's other notable works (max 10)
@@ -2751,19 +2781,24 @@ def generate_combined_summaries(self, text: str, title: str, author: str,
     Generate summaries and metadata in a single API call.
     Returns dictionary with: about_text, concise_summary, medium_summary,
     relevance_now, author_country, similar_books, other_books_by_author
+
+    Note: This method does NOT include book content in the prompt - it relies on
+    the LLM's training data knowledge of classic books.
     """
     model_name = config.SUMMARY_CONFIGS['concise']['model']
 
-    # Cap text at maximum chars per call
-    max_chars = min(len(text), self.MAX_CHARS_PER_CALL)
+    # Estimate tokens for prompt only (no book content)
+    estimated_tokens = 500 + 3000  # prompt + output
 
     prompt = f"""Analyze "{title}" by {author} and provide the following information.
 Follow the format exactly with each section clearly marked:
 
-### ABOUT THE BOOK (150-200 words)
-[Generate a short, engaging summary for the "About the Book" section - 150-200 words]
+### ABOUT THE BOOK (75-100 words)
+[Generate a short, engaging summary for the "About the Book" section - 75-100 words]
 
-This should be concise but compelling, suitable for a book overview page.
+This should be concise but compelling, suitable for a book overview page. **ABSOLUTELY
+NO SPOILERS** - do not reveal plot twists, endings, character fates, or major reveals.
+Focus only on the premise, themes, and setting.
 
 ### CONCISE SUMMARY (500 words)
 [Generate a concise 500-word summary here]
@@ -2779,11 +2814,10 @@ Cover all major plot points, themes, and character developments in chronological
 Discuss the author's writing style and analyze major themes. Spoilers are acceptable.
 For non-fiction, cover all main arguments, evidence, and conclusions.
 
-### RELEVANCE NOW (100-150 words)
-[Explain why this book is relevant to modern audiences - 100-150 words]
+### RELEVANCE NOW (75-100 words)
+[Explain why this book is relevant to modern audiences - 75-100 words]
 
-Discuss how themes, ideas, or narratives connect to contemporary issues, values,
-or experiences.
+Focus on contemporary themes, timeless insights, or how it speaks to current issues.
 
 ### AUTHOR COUNTRY
 [State ONLY the country name where the author is from, without any other text]
@@ -2797,10 +2831,7 @@ TITLE|AUTHOR
 TITLE|AUTHOR
 
 ### OTHER BOOKS BY AUTHOR
-[List the author's other notable works, maximum 10 books, one per line]
-
-### BOOK TEXT:
-{text[:max_chars]}"""
+[List the author's other notable works, maximum 10 books, one per line]"""
 
     if dry_run:
         return {
@@ -3177,6 +3208,155 @@ def clean_llm_response(self, text: str) -> str:
 ```
 Input:  "Of course. Here is a comprehensive summary:\n\n**Summary**\n\nThe Odyssey is an epic poem..."
 Output: "The Odyssey is an epic poem..."
+```
+
+---
+
+## Summary Regeneration Modes (Added 2025-12-12)
+
+### --regenerate-overall Flag
+
+**Purpose:** Efficiently regenerate overall book summaries (concise + medium) and metadata (about_text, relevance_now) without reprocessing chapter structure or chapter summaries.
+
+**Use Cases:**
+- Updating summary style/tone across all books
+- Fixing summary quality issues
+- Testing new summary prompts
+- Recovering from database corruption (summaries only)
+
+**Command Line Usage:**
+```bash
+python scripts/generate_summaries.py data/books/pg996.txt --regenerate-overall
+```
+
+**What It Does:**
+1. Loads book from database (skips file parsing)
+2. Generates summaries using `generate_combined_summaries()` (single API call)
+3. Updates `summaries` table (concise + medium)
+4. Updates `books` table (about_text, relevance_now)
+5. Skips: Chapter detection, chapter summaries, categorization
+
+**What It Skips:**
+- Chapter detection and parsing
+- Chapter summary generation
+- Book categorization
+- Author metadata updates
+
+**Performance:**
+- Execution time: ~30-40 seconds per book
+- Token usage: ~200 tokens input (vs ~140,000 before optimization)
+- Cost: ~$0.000015 per book (vs ~$0.0105 before)
+- Savings: 99.86% cost reduction
+
+**Implementation Details:**
+
+**Location:** `scripts/generate_summaries.py:6103-6479`
+
+```python
+def process_book(self, file_path: Path, title: str = None, author: str = None,
+                dry_run: bool = False, parse_only: bool = False,
+                partial_run: bool = False, regenerate_chapters: List[int] = None,
+                regenerate_overall: bool = False) -> Dict:
+    """
+    Process a book to generate summaries, chapters, and metadata.
+
+    Args:
+        regenerate_overall: If True, regenerate only overall summaries
+                           (concise + medium) without reprocessing chapters
+    """
+
+    # Display regenerate_overall mode banner
+    if regenerate_overall:
+        print("\n" + "=" * 60)
+        print(f"REGENERATE OVERALL MODE - Regenerating concise and medium summaries only")
+        print("Will skip chapter detection and summaries")
+        print("=" * 60 + "\n")
+
+    # ... book loading and metadata extraction ...
+
+    # Generate summaries using combined method (single API call)
+    if not regenerate_chapters or regenerate_overall:
+        summary_data = self.generate_combined_summaries(text, title, author, dry_run)
+        concise = summary_data['concise_summary']
+        medium = summary_data['medium_summary']
+
+        if not dry_run:
+            # Save summaries (uses INSERT OR REPLACE)
+            self.db.add_summary(book_id, 'concise', concise)
+            self.db.add_summary(book_id, 'medium', medium)
+
+            # Save book metadata
+            self.db.update_book_metadata(
+                book_id,
+                about_text=summary_data.get('about_text'),
+                relevance_now=summary_data.get('relevance_now')
+            )
+
+    # Skip categorization in regenerate_overall mode
+    if not dry_run and not regenerate_overall:
+        self.categorize_book(book_id, medium, title, author)
+
+    # Early return for regenerate_overall mode
+    if regenerate_overall:
+        print(f"\n{'='*60}")
+        print("✓ REGENERATE OVERALL MODE COMPLETE")
+        print(f"{'='*60}\n")
+        print(f"✓ Updated concise summary: {results['summaries']['concise']['word_count']} words")
+        print(f"✓ Updated medium summary: {results['summaries']['medium']['word_count']} words\n")
+        return results
+```
+
+**Database Operations:**
+
+**Summaries Table:** Uses `INSERT OR REPLACE` via `add_summary()` method
+```sql
+INSERT OR REPLACE INTO summaries (book_id, summary_type, content, word_count)
+VALUES (?, ?, ?, ?)
+```
+
+**Books Table:** Updates metadata fields via `update_book_metadata()` method
+```sql
+UPDATE books
+SET about_text = ?, relevance_now = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+```
+
+**Example Output:**
+```
+============================================================
+Processing: pg996.txt
+============================================================
+
+Book loaded: 2318534 characters, ~430277 words
+Title: Don Quixote
+Author: Miguel de Cervantes Saavedra
+
+============================================================
+REGENERATE OVERALL MODE - Regenerating concise and medium summaries only
+Will skip chapter detection and summaries
+============================================================
+
+Book already exists in database (ID: 98)
+
+[14:58:07] --- Generating Combined Summaries (Concise + Medium) ---
+[14:58:07] Generating combined summaries using gemini-2.5-flash...
+  → Input: 197 words (~1,327 chars)
+[14:58:07] Making API call (attempt 1/3)...
+[14:58:44] ✓ API call successful
+  ← Output: 2,630 words total
+     About: 111 words
+     Concise: 423 words
+     Medium: 1,988 words
+     Relevance: 108 words
+✓ Concise summary: 423 words
+✓ Medium summary: 1988 words
+
+============================================================
+✓ REGENERATE OVERALL MODE COMPLETE
+============================================================
+
+✓ Updated concise summary: 423 words
+✓ Updated medium summary: 1988 words
 ```
 
 ---
@@ -6768,16 +6948,22 @@ The Gemini Image Generation System provides automated creation of book covers an
 ### Overview
 
 The system generates two types of images with support for both synchronous and asynchronous batch processing:
-1. **Book Covers**: Professional cover art with title and author text (sync only)
-2. **Chapter Illustrations**: Visual storytelling for individual chapters with character and style consistency (sync or batch)
+1. **Book Covers**: Professional cover art with title and author text (async by default, sync optional)
+2. **Chapter Illustrations**: Visual storytelling for individual chapters with character and style consistency (async by default, sync optional)
 
 **Supported Models:**
 - `gemini-3-pro-image-preview`: High quality, 2K resolution (2048×3072 @ 2:3 aspect ratio)
 - `gemini-2.5-flash-image`: Faster generation, lower cost, auto resolution
 
-**Processing Modes:**
-- **Synchronous Mode**: Real-time generation with immediate results, live progress feedback
-- **Batch Mode**: Asynchronous bulk processing with 50% cost savings, ideal for 50+ chapters
+**Processing Modes (Updated 2025-12-13):**
+- **Async Mode (DEFAULT)**: Batch API processing with 50% cost savings, completion in 1-4 hours
+  - Single covers: Submitted as 1-item batch
+  - Chapters: Ch1 generated sync (reference), Ch2+ as batch
+  - No flag required (automatic)
+- **Sync Mode (opt-in with `--sync-mode`)**: Real-time generation with immediate results, 2x cost
+  - Live progress feedback
+  - Immediate results
+  - Useful for testing/debugging
 
 ### Architecture
 
@@ -8889,5 +9075,194 @@ Location: `frontend/static/js/app.js:800-805`
 - `frontend/static/js/app.js:955-980` - New popular carousel renderer
 - `frontend/static/js/app.js:2871-2872` - Ensure books loaded
 - `frontend/static/js/app.js:2895-2901` - Render popular carousel on page
+
+---
+
+## Blog Header Images & Unsplash Integration
+
+### Overview
+
+Blog posts feature header images automatically sourced from Unsplash API, displayed both as thumbnails in the blog index grid and full headers on individual post pages.
+
+**Added:** 2025-12-12
+
+### Database Schema
+
+**Table:** `blog_posts` (added to ERD above)
+
+**New Field:**
+- `header_image_url` (TEXT, nullable): URL to Unsplash image for blog header
+
+### Unsplash API Integration
+
+**Configuration:** `backend/config.py:23-24`
+```python
+UNSPLASH_ACCESS_KEY = os.getenv('UNSPLASH_ACCESS_KEY', '')
+```
+
+**Environment Variable:** `.env`
+```
+UNSPLASH_ACCESS_KEY=<your-api-key>
+```
+
+**API Limits:**
+- 1,000 requests per hour (Demo tier)
+- Images served from Unsplash CDN
+- Attribution required per Unsplash guidelines
+
+### Image Assignment Script
+
+**Location:** `scripts/assign_blog_header_images.py`
+
+**Usage:**
+```bash
+# Assign to all posts missing images
+python scripts/assign_blog_header_images.py
+
+# Assign to specific post by slug
+python scripts/assign_blog_header_images.py --slug british-vs-american-english
+
+# Re-assign to all posts (force)
+python scripts/assign_blog_header_images.py --force
+```
+
+**Search Strategy:**
+
+The script uses keyword-based search query mapping to find relevant images:
+
+```python
+query_mappings = {
+    'british': 'british library books vintage',
+    'american': 'american literature library',
+    'shortest': 'reading book cozy',
+    'non-native': 'reading learning education',
+    'horror': 'dark atmospheric gothic',
+    'romance': 'romantic vintage couple',
+    'mystery': 'detective noir mystery',
+    'adventure': 'adventure explore journey',
+    'classics': 'classic literature vintage books',
+    'english': 'english literature library'
+}
+```
+
+**Selection Criteria:**
+1. Keyword mapping generates smart search query from title/slug
+2. Unsplash API filters for landscape orientation
+3. First result selected (based on Unsplash relevance ranking)
+4. Regular size image (1080px width) stored in database
+
+**Image Properties:**
+- `url`: Regular size (1080px width) for full headers
+- `thumb_url`: Small size for thumbnails (not currently used)
+- `photographer`: Attribution info (not currently displayed)
+- `photographer_url`: Link to photographer profile
+
+### Frontend Display
+
+**Blog Index:** `frontend/static/js/components/BlogIndex.js:37-43`
+
+Thumbnail display in blog grid cards:
+```javascript
+const thumbnailHTML = post.header_image_url ? `
+    <div class="blog-card-image">
+        <img src="${this.app.escapeHtml(post.header_image_url)}"
+             alt="${this.app.escapeHtml(post.title)}"
+             loading="lazy">
+    </div>
+` : '';
+```
+
+**Blog Post:** `frontend/static/js/components/BlogPost.js:46-53`
+
+Full header image on post pages:
+```javascript
+const headerImageHTML = this.post.header_image_url ? `
+    <div class="blog-post-header-image">
+        <img src="${this.app.escapeHtml(this.post.header_image_url)}"
+             alt="${this.app.escapeHtml(this.post.title)}"
+             loading="eager">
+    </div>
+` : '';
+```
+
+### CSS Styling
+
+**Thumbnail Cards:** `frontend/static/css/style.css:4462-4500`
+- Height: 200px
+- Object-fit: cover (crops to fill)
+- Hover effect: 1.05x scale
+
+**Full Headers:** `frontend/static/css/style.css:4541-4553`
+- Max height: 400px
+- Object-fit: cover
+- Border radius: 12px
+- Margin bottom: 30px
+
+**Responsive:**
+- Mobile: Single column grid
+- Desktop: Multi-column grid (auto-fill, minmax 320px)
+
+### API Endpoints
+
+**Get Blog Posts:** `GET /api/blog`
+```json
+{
+    "success": true,
+    "posts": [
+        {
+            "slug": "british-vs-american-english",
+            "title": "British vs American English in Classic Literature",
+            "excerpt": "Exploring the differences...",
+            "header_image_url": "https://images.unsplash.com/...",
+            "published_date": "2025-12-11",
+            ...
+        }
+    ]
+}
+```
+
+**Get Single Post:** `GET /api/blog/{slug}`
+```json
+{
+    "success": true,
+    "post": {
+        "slug": "british-vs-american-english",
+        "title": "British vs American English in Classic Literature",
+        "content": "# Full markdown content...",
+        "header_image_url": "https://images.unsplash.com/...",
+        ...
+    }
+}
+```
+
+### Future Improvements
+
+**Current Limitation:** Script selects first Unsplash result automatically
+
+**Possible Enhancements:**
+1. Interactive selection tool to browse multiple image options
+2. Additional filters (likes, downloads, color palette)
+3. Manual image URL override capability
+4. Photographer attribution display on frontend
+5. Local image caching to reduce API calls
+
+### Files Modified
+
+**Backend:**
+- `backend/models.py:278-284` - Database migration for header_image_url
+- `backend/models.py:1562-1577` - Updated add_blog_post() method
+- `backend/config.py:23-24` - Unsplash API key configuration
+
+**Frontend:**
+- `frontend/static/js/components/BlogIndex.js:37-43` - Thumbnail display
+- `frontend/static/js/components/BlogPost.js:46-53` - Full header display
+- `frontend/static/css/style.css:4462-4500` - Blog card styling
+- `frontend/static/css/style.css:4541-4553` - Header image styling
+
+**Scripts:**
+- `scripts/assign_blog_header_images.py` - New script for image assignment
+
+**Configuration:**
+- `.env` - Added UNSPLASH_ACCESS_KEY
 
 ---

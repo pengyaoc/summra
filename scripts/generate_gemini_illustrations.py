@@ -15,46 +15,48 @@ Features:
 - Batch API support for 50% cost savings on both covers and chapter illustrations
 
 Processing Modes:
-1. Synchronous (default): Generates one at a time with live progress
-2. Async (--async-mode): Submits requests as async batch job via Batch API
+1. Async (default): Submits requests as async batch job via Batch API
    - 50% cost reduction
    - Typical completion: 1-4 hours for 100 chapters
    - For chapters: Chapter 1 generated sync as reference for other chapters
    - For covers: All covers generated asynchronously
+2. Synchronous (--sync-mode): Generates one at a time with live progress
+   - Costs 2x more than async mode
+   - Immediate results with live progress feedback
 
 Usage:
-    # Generate cover only (default behavior) with default model (gemini-3-pro-image-preview, 2K)
+    # Generate cover only (default: async mode with 50% cost savings)
     python scripts/generate_gemini_illustrations.py --book-id 53
 
-    # Generate cover with async mode for 50% cost savings
-    python scripts/generate_gemini_illustrations.py --book-id 53 --async-mode
+    # Generate cover with sync mode for immediate results (costs 2x more)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --sync-mode
 
-    # Use faster flash model with async mode
-    python scripts/generate_gemini_illustrations.py --book-id 53 --model gemini-2.5-flash-image --async-mode
+    # Use faster flash model (async mode is default)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --model gemini-2.5-flash-image
 
-    # Generate covers for multiple books with async mode
-    python scripts/generate_gemini_illustrations.py --book-ids 53,54,55 --async-mode
-
-    # Generate cover AND chapter illustrations (sync mode)
-    python scripts/generate_gemini_illustrations.py --book-id 53 --with-chapters
+    # Generate covers for multiple books (async mode is default)
+    python scripts/generate_gemini_illustrations.py --book-ids 53,54,55
 
     # Generate cover AND chapter illustrations (async mode)
-    python scripts/generate_gemini_illustrations.py --book-id 53 --with-chapters --async-mode
+    python scripts/generate_gemini_illustrations.py --book-id 53 --with-chapters
 
-    # Generate chapter illustrations only (skip cover)
+    # Generate cover AND chapter illustrations (sync mode)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --with-chapters --sync-mode
+
+    # Generate chapter illustrations only, skip cover (async mode)
     python scripts/generate_gemini_illustrations.py --book-id 53 --chapters-only
 
-    # Generate specific chapters with async mode (uses existing Chapter 1 if available)
-    python scripts/generate_gemini_illustrations.py --book-id 53 --chapters-only --chapter-range 2-50 --async-mode
+    # Generate specific chapters (uses existing Chapter 1 if available)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --chapters-only --chapter-range 2-50
 
     # Batch process all books missing illustrations (async mode)
-    python scripts/generate_gemini_illustrations.py --batch-all --async-mode
+    python scripts/generate_gemini_illustrations.py --batch-all
 
     # Dry run to see what would be generated
-    python scripts/generate_gemini_illustrations.py --book-id 53 --async-mode --dry-run
+    python scripts/generate_gemini_illustrations.py --book-id 53 --dry-run
 
-    # Customize batch polling interval
-    python scripts/generate_gemini_illustrations.py --book-id 53 --async-mode --batch-poll-interval 60
+    # Customize batch polling interval (for async mode)
+    python scripts/generate_gemini_illustrations.py --book-id 53 --batch-poll-interval 60
 
     # List pending batch jobs
     python scripts/generate_gemini_illustrations.py --list-jobs
@@ -892,9 +894,13 @@ def auto_optimize_covers(book_ids: list, dry_run: bool = False) -> bool:
             dest_png = frontend_covers_dir / f"{book_id}.png"
 
             if source_png.exists():
-                if dest_png.exists():
-                    # Remove existing PNG in frontend to avoid conflicts
-                    dest_png.unlink()
+                # Remove ALL existing versions (PNG, JPG, WebP) to avoid conflicts with old optimized files
+                for ext in ['.png', '.jpg', '.webp']:
+                    old_file = frontend_covers_dir / f"{book_id}{ext}"
+                    if old_file.exists():
+                        old_file.unlink()
+                        print(f"  🗑️  Removed old version: {old_file.name}")
+
                 shutil.copy2(source_png, dest_png)
                 print(f"  ✓ Prepared cover for book {book_id}")
             else:
@@ -1200,7 +1206,8 @@ def generate_chapter_illustrations_batch(db: Database, generator: GeminiImageGen
                 if save_image(image_data, chapter_1_save_path):
                     reference_image = image_data
                     print(f"✅ Chapter 1 generated and saved to {chapter_1_save_path}")
-                    print(f"  ℹ️  Run reduce_illustration_resolution.py to create optimized versions")
+                    # Auto-optimize Chapter 1 immediately
+                    auto_optimize_illustrations(book_id, chapter_numbers=[1], dry_run=False)
                 else:
                     print(f"❌ Failed to save Chapter 1")
                     return False
@@ -1791,10 +1798,11 @@ def main():
         help='Image generation model to use (default: gemini-3-pro-image-preview)'
     )
     parser.add_argument(
-        '--async-mode',
+        '--sync-mode',
         action='store_true',
-        help='Use async Batch API for generation (50%% cost reduction). '
-             'For chapters: Chapter 1 generated sync as reference. '
+        help='Use synchronous API for generation (provides live progress but costs 2x more). '
+             'Default is async mode using Batch API for 50%% cost reduction. '
+             'For chapters: Chapter 1 generated first as reference, others batched. '
              'For covers: All covers generated asynchronously.'
     )
     parser.add_argument(
@@ -1902,20 +1910,29 @@ def main():
         success = True
 
         if not args.chapters_only:
-            success = generate_book_cover(db, generator, args.book_id, args.dry_run) and success
+            # Generate cover using async mode by default
+            if args.sync_mode:
+                success = generate_book_cover(db, generator, args.book_id, args.dry_run) and success
+            else:
+                # Use async batch API for cover (default)
+                success = generate_book_covers_batch(
+                    db, generator, [args.book_id],
+                    poll_interval=args.batch_poll_interval,
+                    dry_run=args.dry_run
+                ) and success
 
-        if args.with_chapters:
-            if args.async_mode:
-                # Use async batch API for chapter illustrations
+        if args.with_chapters or args.chapters_only:
+            if args.sync_mode:
+                # Use synchronous API
+                success = generate_chapter_illustrations_for_book(
+                    db, generator, args.book_id, chapter_range, args.dry_run
+                ) and success
+            else:
+                # Use async batch API for chapter illustrations (default)
                 success = generate_chapter_illustrations_batch(
                     db, generator, args.book_id, chapter_range,
                     poll_interval=args.batch_poll_interval,
                     dry_run=args.dry_run
-                ) and success
-            else:
-                # Use synchronous API
-                success = generate_chapter_illustrations_for_book(
-                    db, generator, args.book_id, chapter_range, args.dry_run
                 ) and success
 
         return 0 if success else 1
@@ -1930,14 +1947,7 @@ def main():
 
         print(f"Processing covers for {len(book_ids)} books: {book_ids}")
 
-        if args.async_mode:
-            # Use async batch API for bulk cover generation
-            success = generate_book_covers_batch(
-                db, generator, book_ids,
-                poll_interval=args.batch_poll_interval,
-                dry_run=args.dry_run
-            )
-        else:
+        if args.sync_mode:
             # Generate covers one at a time synchronously
             success = True
             for i, book_id in enumerate(book_ids, 1):
@@ -1945,6 +1955,13 @@ def main():
                 print(f"Cover {i}/{len(book_ids)}")
                 print(f"{'='*80}")
                 success = generate_book_cover(db, generator, book_id, args.dry_run) and success
+        else:
+            # Use async batch API for bulk cover generation (default)
+            success = generate_book_covers_batch(
+                db, generator, book_ids,
+                poll_interval=args.batch_poll_interval,
+                dry_run=args.dry_run
+            )
 
         return 0 if success else 1
 
@@ -1974,14 +1991,14 @@ def main():
             print(f"\n{'='*80}")
             print(f"Book {i}/{len(books_for_chapters)}")
             print(f"{'='*80}")
-            if args.async_mode:
+            if args.sync_mode:
+                generate_chapter_illustrations_for_book(db, generator, book['id'], None, args.dry_run)
+            else:
                 generate_chapter_illustrations_batch(
                     db, generator, book['id'], None,
                     poll_interval=args.batch_poll_interval,
                     dry_run=args.dry_run
                 )
-            else:
-                generate_chapter_illustrations_for_book(db, generator, book['id'], None, args.dry_run)
 
         print(f"\n{'='*80}")
         print("✅ Batch processing complete!")
