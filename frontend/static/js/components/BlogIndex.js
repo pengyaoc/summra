@@ -63,14 +63,17 @@ class BlogIndex {
             </div>
         `;
 
-        // Add click handlers
+        // Add click handlers (use pushState for client-side navigation to preserve audio)
         container.querySelectorAll('.blog-card').forEach(card => {
             card.addEventListener('click', (e) => {
                 // Don't navigate if clicking on the link directly (let the link handle it)
                 if (e.target.classList.contains('blog-card-link')) return;
 
                 const slug = card.dataset.slug;
-                window.location.href = `/blog/${slug}`;
+                window.history.pushState(null, '', `/blog/${slug}`);
+                if (window.summraApp) {
+                    window.summraApp.handleRoute();
+                }
             });
         });
     }

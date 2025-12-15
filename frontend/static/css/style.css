@@ -2083,6 +2083,16 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    .header-content {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .header-nav-buttons {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
     .logo {
         font-size: 1.3rem;
     }

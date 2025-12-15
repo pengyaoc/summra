@@ -1,10 +1,29 @@
 import sqlite3
 import json
 import wave
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict
 import config
+
+
+def slugify(text: str) -> str:
+    """Convert text to URL-friendly slug.
+
+    Matches the frontend slugify logic for consistency.
+
+    Args:
+        text: Text to convert to slug
+
+    Returns:
+        URL-friendly slug string
+    """
+    text = text.lower()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[\s_-]+', '-', text)
+    text = re.sub(r'^-+|-+$', '', text)
+    return text
 
 
 class Database:
@@ -170,6 +189,14 @@ class Database:
             # Column already exists
             pass
 
+        # Add is_poetry column to books table if it doesn't exist (migration)
+        try:
+            cursor.execute("ALTER TABLE books ADD COLUMN is_poetry INTEGER DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Audio files table (for TTS)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS audio_files (
@@ -287,7 +314,7 @@ class Database:
         conn.close()
 
     def add_book(self, title: str, author: str, filename: str, full_text: str,
-                 gutenberg_id: int = None, cover_image_url: str = None, author_id: int = None) -> int:
+                 gutenberg_id: int = None, cover_image_url: str = None, author_id: int = None, is_poetry: bool = False) -> int:
         """Add a new book to the database
 
         Args:
@@ -298,6 +325,7 @@ class Database:
             gutenberg_id: Project Gutenberg ID (optional)
             cover_image_url: Path to cover image (optional)
             author_id: Foreign key to authors table (optional, will auto-lookup if not provided)
+            is_poetry: Whether this book is poetry (preserves line breaks) (optional)
 
         Returns:
             book_id: The ID of the newly created book
@@ -307,6 +335,9 @@ class Database:
 
         word_count = len(full_text.split())
 
+        # Auto-generate slug from title
+        slug = slugify(title)
+
         # Auto-lookup author_id if not provided
         if author_id is None and author:
             author_record = self.get_author_by_name(author)
@@ -314,15 +345,29 @@ class Database:
                 author_id = author_record['id']
 
         cursor.execute('''
-            INSERT INTO books (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url, author_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url, author_id))
+            INSERT INTO books (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url, author_id, slug, is_poetry)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (title, author, filename, full_text, word_count, gutenberg_id, cover_image_url, author_id, slug, 1 if is_poetry else 0))
 
         book_id = cursor.lastrowid
         conn.commit()
         conn.close()
 
         return book_id
+
+    def update_book_poetry_flag(self, book_id: int, is_poetry: bool):
+        """Update book's is_poetry flag"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE books
+            SET is_poetry = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (1 if is_poetry else 0, book_id))
+
+        conn.commit()
+        conn.close()
 
     def update_book_cover(self, book_id: int, gutenberg_id: int, cover_image_url: str, cover_source: str = None):
         """Update book cover image URL, Gutenberg ID, and cover source"""

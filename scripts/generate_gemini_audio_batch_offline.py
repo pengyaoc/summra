@@ -123,7 +123,8 @@ def find_books_without_audio(db: Database, summary_type: str) -> list:
 
 
 def generate_audio_for_book(db: Database, tts_handler: GeminiTTSHandler,
-                            book: dict, summary_type: str, dry_run: bool = False) -> bool:
+                            book: dict, summary_type: str, dry_run: bool = False,
+                            max_retries: int = 3) -> bool:
     """Generate audio for a single book's summary
 
     Args:
@@ -132,6 +133,7 @@ def generate_audio_for_book(db: Database, tts_handler: GeminiTTSHandler,
         book: Book info dict
         summary_type: 'concise' or 'medium'
         dry_run: If True, don't actually generate audio
+        max_retries: Maximum number of retry attempts (default: 3)
 
     Returns:
         True if successful, False otherwise
@@ -165,66 +167,88 @@ def generate_audio_for_book(db: Database, tts_handler: GeminiTTSHandler,
         print(f"[DRY RUN] Cleaned text preview (first 500 chars):\n{cleaned_text[:500]}")
         return True
 
-    # Generate audio (WAV first)
+    # Generate audio (WAV first) with retry logic
     audio_id = f"book_{book['book_id']}_{summary_type}"
+    wav_path = None
 
-    try:
-        wav_path = tts_handler.generate_audio(
-            text=cleaned_text,
-            audio_id=audio_id
-        )
+    for attempt in range(1, max_retries + 1):
+        try:
+            if attempt > 1:
+                print(f"\n{'='*80}")
+                print(f"🔄 Retry attempt {attempt}/{max_retries}")
+                print(f"{'='*80}\n")
+                # Wait before retry (exponential backoff)
+                wait_time = 5 * (2 ** (attempt - 2))  # 5s, 10s, 20s...
+                print(f"Waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
 
-        if wav_path:
-            print(f"✅ Generated WAV audio: {wav_path}")
+            wav_path = tts_handler.generate_audio(
+                text=cleaned_text,
+                audio_id=audio_id
+            )
 
-            # Convert WAV to Opus
-            opus_path = wav_path.replace('.wav', '.opus')
-            print(f"\nConverting to Opus (32kbps, speech-optimized)...")
-
-            if convert_wav_to_opus(wav_path, opus_path):
-                print(f"✅ Generated Opus audio: {opus_path}")
-
-                # Move WAV to archive
-                archive_dir = project_root / "data" / "audios"
-                archive_dir.mkdir(parents=True, exist_ok=True)
-                archive_path = archive_dir / Path(wav_path).name
-
-                import shutil
-                shutil.move(wav_path, archive_path)
-                print(f"✅ Archived WAV to: {archive_path}")
-
-                # Calculate duration from Opus for database
-                try:
-                    # Read the original WAV from archive to get duration
-                    with wave.open(str(archive_path), 'rb') as wav_file:
-                        frames = wav_file.getnframes()
-                        rate = wav_file.getframerate()
-                        duration = frames / float(rate)
-
-                    # Save Opus path to database
-                    db.add_audio_file(
-                        summary_id=book['summary_id'],
-                        chapter_id=None,
-                        audio_path=opus_path,
-                        duration=duration
-                    )
-                    print(f"✅ Saved audio file to database (duration: {duration:.2f}s)")
-                except Exception as db_error:
-                    print(f"⚠️  Warning: Failed to save to database: {db_error}")
-                    # Don't fail the whole operation if database save fails
-
-                return True
+            if wav_path:
+                # Success!
+                break
             else:
-                print(f"❌ Failed to convert to Opus")
-                return False
-        else:
-            print(f"❌ Failed to generate audio")
-            return False
+                print(f"❌ Attempt {attempt}/{max_retries} failed: No audio path returned")
+                if attempt < max_retries:
+                    print(f"Will retry...")
 
-    except Exception as e:
-        print(f"❌ Error generating audio: {e}")
-        import traceback
-        traceback.print_exc()
+        except Exception as e:
+            print(f"❌ Attempt {attempt}/{max_retries} failed with exception: {e}")
+            if attempt < max_retries:
+                print(f"Will retry...")
+            else:
+                import traceback
+                traceback.print_exc()
+
+    # Check if we got a valid wav_path after all retries
+    if wav_path:
+        print(f"✅ Generated WAV audio: {wav_path}")
+
+        # Convert WAV to Opus
+        opus_path = wav_path.replace('.wav', '.opus')
+        print(f"\nConverting to Opus (32kbps, speech-optimized)...")
+
+        if convert_wav_to_opus(wav_path, opus_path):
+            print(f"✅ Generated Opus audio: {opus_path}")
+
+            # Move WAV to archive
+            archive_dir = project_root / "data" / "audios"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_path = archive_dir / Path(wav_path).name
+
+            import shutil
+            shutil.move(wav_path, archive_path)
+            print(f"✅ Archived WAV to: {archive_path}")
+
+            # Calculate duration from Opus for database
+            try:
+                # Read the original WAV from archive to get duration
+                with wave.open(str(archive_path), 'rb') as wav_file:
+                    frames = wav_file.getnframes()
+                    rate = wav_file.getframerate()
+                    duration = frames / float(rate)
+
+                # Save Opus path to database
+                db.add_audio_file(
+                    summary_id=book['summary_id'],
+                    chapter_id=None,
+                    audio_path=opus_path,
+                    duration=duration
+                )
+                print(f"✅ Saved audio file to database (duration: {duration:.2f}s)")
+            except Exception as db_error:
+                print(f"⚠️  Warning: Failed to save to database: {db_error}")
+                # Don't fail the whole operation if database save fails
+
+            return True
+        else:
+            print(f"❌ Failed to convert to Opus")
+            return False
+    else:
+        print(f"❌ Failed to generate audio after {max_retries} attempts")
         return False
 
 
@@ -259,6 +283,12 @@ def main():
         '--book-id',
         type=int,
         help='Process only this specific book ID (optional)'
+    )
+    parser.add_argument(
+        '--max-retries',
+        type=int,
+        default=3,
+        help='Maximum number of retry attempts per book (default: 3)'
     )
 
     args = parser.parse_args()
@@ -332,7 +362,7 @@ def main():
     if args.dry_run:
         print("\n[DRY RUN] Would process these books with delays...")
         for i, book in enumerate(books, 1):
-            generate_audio_for_book(db, tts_handler, book, summary_type, dry_run=True)
+            generate_audio_for_book(db, tts_handler, book, summary_type, dry_run=True, max_retries=args.max_retries)
             if i < len(books):
                 print(f"\n[DRY RUN] Would wait {args.delay} seconds before next request...")
         print("\n[DRY RUN] Complete!")
@@ -340,7 +370,8 @@ def main():
 
     # Process each book sequentially
     print(f"\nStarting sequential audio generation...")
-    print(f"Rate limit: 3 requests per minute (waiting {args.delay}s between requests)\n")
+    print(f"Rate limit: 3 requests per minute (waiting {args.delay}s between requests)")
+    print(f"Max retries per book: {args.max_retries}\n")
 
     successful = 0
     failed = 0
@@ -350,7 +381,7 @@ def main():
         print(f"Progress: {i}/{len(books)}")
         print(f"{'='*80}")
 
-        success = generate_audio_for_book(db, tts_handler, book, summary_type, dry_run=False)
+        success = generate_audio_for_book(db, tts_handler, book, summary_type, dry_run=False, max_retries=args.max_retries)
 
         if success:
             successful += 1

@@ -158,7 +158,7 @@ class SummraApp {
             } else if (chapterMatch) {
                 const bookSlug = chapterMatch[1];
                 const chapterNum = parseInt(chapterMatch[2]);
-                const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
+                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
                 if (book) {
                     // Set current book and load chapters if not already loaded
                     this.currentBook = book;
@@ -169,13 +169,13 @@ class SummraApp {
                 }
             } else if (mediumMatch) {
                 const bookSlug = mediumMatch[1];
-                const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
+                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
                 if (book) {
                     await this.showMediumDetail(book, true);
                 }
             } else if (bookMatch) {
                 const bookSlug = bookMatch[1];
-                const book = this.allBooks.find(b => this.slugify(b.title) === bookSlug);
+                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
                 if (book) {
                     await this.selectBook(book, true);
                 }
@@ -357,7 +357,8 @@ class SummraApp {
     }
 
     updateURL(book, page = null) {
-        const slug = this.slugify(book.title);
+        // Use slug from backend if available, fallback to generating from title
+        const slug = book.slug || this.slugify(book.title);
         let newPath = `/books/${slug}`;
 
         if (page === 'summary') {
@@ -1278,6 +1279,9 @@ class SummraApp {
             authorLearnMoreBtn.classList.remove('hidden');
         }
 
+        // Always call updateReadingGuide to remove loading spinners
+        this.updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes);
+
         // Only show section if we have at least some data
         if (!hasAbout && !hasBio && !hasCharacterGuide && !hasTimeline && !hasThemes) {
             if (aboutSection) aboutSection.classList.add('hidden');
@@ -1292,9 +1296,6 @@ class SummraApp {
             aboutText.innerHTML = hasAbout ? this.renderMarkdown(book.about_text) : '';
             aboutText.parentElement.style.display = hasAbout ? 'block' : 'none';
         }
-
-        // Update Reading Guide section
-        this.updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes);
 
         // Populate author bio
         if (authorBioText) {
@@ -1322,7 +1323,8 @@ class SummraApp {
         const timelineGuideImage = document.getElementById('timeline-guide-image');
         const themesGuideImage = document.getElementById('themes-guide-image');
 
-        // Remove loading spinner and skeleton placeholders from all tab contents
+        // ALWAYS remove loading spinner and skeleton placeholders from all tab contents
+        // (This needs to happen whether or not we have guide content)
         const themesContent = document.getElementById('reading-tab-themes');
         const charactersContent = document.getElementById('reading-tab-characters');
         const timelineContent = document.getElementById('reading-tab-timeline');
@@ -2335,7 +2337,15 @@ class SummraApp {
 
             if (data.success) {
                 const audioUrls = data.streaming && data.audio_urls ? data.audio_urls : [data.audio_url];
-                this.startPersistentPlayback(audioUrls, this.currentBook.title, `${type} summary`, data.audio_id);
+                // Use better labels for lock screen display: "Quick Summary" or "Full Summary"
+                const displayType = type === 'concise' ? 'Quick Summary' : 'Full Summary';
+                this.startPersistentPlayback(
+                    audioUrls,
+                    this.currentBook.title,
+                    displayType,
+                    data.audio_id,
+                    this.currentBook.author
+                );
                 buttonElement.disabled = false;
                 buttonElement.textContent = '🔊 Listen';
             } else {
@@ -2383,7 +2393,13 @@ class SummraApp {
 
             if (data.success) {
                 const audioUrls = data.streaming && data.audio_urls ? data.audio_urls : [data.audio_url];
-                this.startPersistentPlayback(audioUrls, this.currentBook.title, chapterTitle, data.audio_id);
+                this.startPersistentPlayback(
+                    audioUrls,
+                    this.currentBook.title,
+                    chapterTitle,
+                    data.audio_id,
+                    this.currentBook.author
+                );
                 buttonElement.textContent = originalText;
                 buttonElement.disabled = false;
             } else {
@@ -2409,16 +2425,20 @@ class SummraApp {
         if ('mediaSession' in navigator && this.currentPlayback) {
             const bookTitle = this.currentPlayback.bookTitle || 'Unknown Book';
             const chapterTitle = this.currentPlayback.chapterTitle || 'Summary';
+            const author = this.currentPlayback.author || 'Unknown Author';
 
             // Get book cover URL if available
             const coverUrl = this.currentBook && this.currentBook.cover_image_url
                 ? window.location.origin + this.currentBook.cover_image_url
                 : null;
 
+            // Format: Title = "{book name} by {author name}", Artist = "Quick Summary" or "Full Summary" or "Chapter X"
+            const displayTitle = `${bookTitle} by ${author}`;
+
             // Set metadata
             navigator.mediaSession.metadata = new MediaMetadata({
-                title: chapterTitle,
-                artist: bookTitle,
+                title: displayTitle,
+                artist: chapterTitle,
                 album: 'Summra Audiobook Summaries',
                 artwork: coverUrl ? [
                     { src: coverUrl, sizes: '512x512', type: 'image/jpeg' },
@@ -2461,7 +2481,7 @@ class SummraApp {
         }
     }
 
-    async startPersistentPlayback(audioUrls, bookTitle, chapterTitle, audioId = null) {
+    async startPersistentPlayback(audioUrls, bookTitle, chapterTitle, audioId = null, author = null) {
         const persistentPlayer = document.getElementById('persistent-player');
 
         this.currentPlayback = {
@@ -2470,7 +2490,8 @@ class SummraApp {
             audioUrls: audioUrls,
             bookTitle: bookTitle,
             chapterTitle: chapterTitle,
-            audioId: audioId
+            audioId: audioId,
+            author: author
         };
 
         this.updatePlayerInfo(bookTitle, chapterTitle);
@@ -2546,10 +2567,162 @@ class SummraApp {
         const heroSection = document.getElementById('hero-section');
         const isPlaceholder = heroSection && heroSection.classList.contains('hidden') && heroSection.children.length === 0;
 
-        // If hero section is just a placeholder (from blog/book pages), do a full page reload
+        // If hero section is just a placeholder (from blog/book pages), render it dynamically
+        // instead of doing a full page reload (which would stop audio playback)
         if (isPlaceholder) {
-            window.location.href = '/';
-            return;
+            // Render hero section content dynamically
+            heroSection.innerHTML = `
+                <!-- Main Hero Banner -->
+                <section class="hero-banner hero-main">
+                    <div class="hero-banner-content">
+                        <h1 class="hero-banner-title">Classic Literature, Made&nbsp;Easy</h1>
+                        <p class="hero-banner-subtitle">Reading companion that makes you enjoy reading.</p>
+                        <div class="hero-search-container">
+                            <div class="hero-search-wrapper">
+                                <input type="text"
+                                       class="hero-search-input"
+                                       id="hero-search-input"
+                                       placeholder="Search for a book or author..."
+                                       autocomplete="off">
+                                <div class="hero-search-results hidden" id="hero-search-results">
+                                    <!-- Typeahead results will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Discover Banner -->
+                <section class="hero-banner hero-discover">
+                    <div class="hero-banner-content">
+                        <h2 class="hero-banner-heading">Discover Classics the&nbsp;Modern&nbsp;Way</h2>
+                    </div>
+
+                    <!-- Top 10 Books Carousel (direct child of section, breaks out on mobile) -->
+                    <div class="top-10-carousel-wrapper">
+                        <div class="carousel-container top-10-carousel">
+                            <button class="carousel-nav-btn left" id="top-10-nav-left">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M15 18l-6-6 6-6"></path>
+                                </svg>
+                            </button>
+                            <div class="carousel-scroll" id="top-10-scroll">
+                                <!-- Loading skeleton cards (will be replaced when books load) -->
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                                <div class="skeleton-book-card"></div>
+                            </div>
+                            <button class="carousel-nav-btn right" id="top-10-nav-right">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18l6-6-6-6"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="hero-banner-content">
+                        <div class="hero-banner-ctas">
+                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="discover">Explore Classics</a>
+                            <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Learn Banner -->
+                <section class="hero-banner hero-learn">
+                    <div class="hero-banner-content">
+                        <h2 class="hero-banner-heading">Literature, Beautifully&nbsp;Explained</h2>
+
+                        <!-- 3-Column Features Grid -->
+                        <div class="learn-features-grid">
+                            <!-- Column 1: Beautiful Illustrations -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="/static/images/infographic.webp" type="image/webp">
+                                        <source srcset="/static/images/infographic.jpg" type="image/jpeg">
+                                        <img src="/static/images/infographic.jpg" alt="Visual guides with color and interactivity" class="learn-feature-image">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">Beautiful Illustrations</h3>
+                                <p class="learn-feature-description">Make sense of complex plots and symbolism with beautifully illustrated character maps, timelines, and theme guides.</p>
+                            </div>
+
+                            <!-- Column 2: Audio Summary -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="/static/images/summary.webp" type="image/webp">
+                                        <source srcset="/static/images/summary.jpg" type="image/jpeg">
+                                        <img src="/static/images/summary.jpg" alt="Comprehensive book summaries" class="learn-feature-image">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">Audio Summary</h3>
+                                <p class="learn-feature-description">Help you preview, understand, and enjoy classics at your own pace.</p>
+                            </div>
+
+                            <!-- Column 3: For Every Reader -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="/static/images/chapter_view.webp" type="image/webp">
+                                        <source srcset="/static/images/chapter_view.jpg" type="image/jpeg">
+                                        <img src="/static/images/chapter_view.jpg" alt="Accessible reading experience" class="learn-feature-image">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">For Every Reader</h3>
+                                <p class="learn-feature-description">Kindle-like reading experience enhanced with chapter illustrations, summaries and plain-English version for English learners.</p>
+                            </div>
+                        </div>
+
+                        <div class="hero-banner-ctas">
+                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="books/jane-eyre">See Example: Jane Eyre</a>
+                        </div>
+                    </div>
+                </section>
+            `;
+
+            // Re-initialize hero search after rendering
+            if (window.heroSearchInstance) {
+                // Re-query DOM elements in case they changed
+                window.heroSearchInstance.searchInput = document.getElementById('hero-search-input');
+                window.heroSearchInstance.searchResults = document.getElementById('hero-search-results');
+                if (window.heroSearchInstance.searchInput && window.heroSearchInstance.searchResults) {
+                    window.heroSearchInstance.init();
+                }
+            } else {
+                window.heroSearchInstance = new HeroSearch();
+            }
+
+            // Re-attach hero banner CTA listeners
+            const heroCtas = heroSection.querySelectorAll('[data-route]');
+            heroCtas.forEach(cta => {
+                cta.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const route = cta.dataset.route;
+
+                    // Special handling for "Read" CTA
+                    if (cta.id === 'hero-read-cta') {
+                        // Check screen width to determine which view mode to set
+                        const isMobile = window.innerWidth < 1024;
+                        const viewMode = isMobile ? 'modern' : 'side-by-side';
+
+                        // Set the view mode preference before navigation
+                        localStorage.setItem('reading_chapterViewMode', viewMode);
+                    }
+
+                    // Use pushState for client-side navigation (preserves audio)
+                    window.history.pushState(null, '', `/${route}`);
+                    this.handleRoute();
+                });
+            });
         }
 
         // Show only hero section (uses centralized section management)
@@ -3948,7 +4121,7 @@ class HeroSearch {
         }
 
         const resultsHtml = results.map(book => {
-            const bookSlug = this.slugify(book.title);
+            const bookSlug = book.slug || this.slugify(book.title);
             return `
                 <div class="hero-search-result-item" data-slug="${bookSlug}">
                     <img src="/static/covers/${book.cover_image}"
@@ -3965,11 +4138,15 @@ class HeroSearch {
 
         this.searchResults.innerHTML = resultsHtml;
 
-        // Add click handlers to results
+        // Add click handlers to results (use pushState for client-side navigation to preserve audio)
         this.searchResults.querySelectorAll('.hero-search-result-item').forEach(item => {
             item.addEventListener('click', () => {
                 const slug = item.dataset.slug;
-                window.location.href = `/books/${slug}`;
+                window.history.pushState(null, '', `/books/${slug}`);
+                // Trigger the app's router to handle the new route
+                if (window.summraApp) {
+                    window.summraApp.handleRoute();
+                }
             });
         });
 
@@ -3992,10 +4169,11 @@ class HeroSearch {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    new SummraApp();
-    new HeroSearch();
+    // Store app instance globally for use by other components
+    window.summraApp = new SummraApp();
+    window.heroSearchInstance = new HeroSearch();
 
-    // Handle hero banner CTAs with data-route attribute
+    // Handle hero banner CTAs with data-route attribute (use pushState to preserve audio)
     const heroCtas = document.querySelectorAll('[data-route]');
     heroCtas.forEach(cta => {
         cta.addEventListener('click', (e) => {
@@ -4012,8 +4190,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('reading_chapterViewMode', viewMode);
             }
 
-            // Navigate to the route using proper URL (not hash-based)
-            window.location.href = `/${route}`;
+            // Use pushState for client-side navigation (preserves audio)
+            window.history.pushState(null, '', `/${route}`);
+            window.summraApp.handleRoute();
         });
     });
 });
