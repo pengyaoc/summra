@@ -143,6 +143,7 @@ class GeminiTTSHandler:
         print(f"{'='*80}\n")
 
         chunk_files = []
+        max_chunk_retries = 3  # Maximum retries per chunk
 
         try:
             for i, (chunk_text, word_count, start_pos) in enumerate(chunks, 1):
@@ -154,44 +155,71 @@ class GeminiTTSHandler:
                 estimated_tokens = self.estimate_tokens(chunk_text)
                 print(f"\nEstimated tokens: {estimated_tokens}")
 
-                self.rate_limiter.wait_if_needed(estimated_tokens)
+                # Retry logic for this chunk
+                chunk_success = False
+                for chunk_attempt in range(1, max_chunk_retries + 1):
+                    try:
+                        if chunk_attempt > 1:
+                            print(f"\n{'='*80}")
+                            print(f"🔄 Retry chunk {i} (attempt {chunk_attempt}/{max_chunk_retries})")
+                            print(f"{'='*80}\n")
+                            # Wait before retry (exponential backoff)
+                            wait_time = 5 * (2 ** (chunk_attempt - 2))  # 5s, 10s...
+                            print(f"Waiting {wait_time}s before retry...")
+                            time.sleep(wait_time)
 
-                # Generate speech for this chunk
-                print(f"\nCalling Gemini TTS API for chunk {i}...")
+                        self.rate_limiter.wait_if_needed(estimated_tokens)
 
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=chunk_text,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["AUDIO"],
-                        speech_config=types.SpeechConfig(
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=self.voice
+                        # Generate speech for this chunk
+                        print(f"\nCalling Gemini TTS API for chunk {i}... (attempt {chunk_attempt})")
+
+                        response = self.client.models.generate_content(
+                            model=self.model_name,
+                            contents=chunk_text,
+                            config=types.GenerateContentConfig(
+                                response_modalities=["AUDIO"],
+                                speech_config=types.SpeechConfig(
+                                    voice_config=types.VoiceConfig(
+                                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                            voice_name=self.voice
+                                        )
+                                    )
                                 )
                             )
                         )
-                    )
-                )
 
-                # Record the request
-                self.rate_limiter.record_request(estimated_tokens)
+                        # Record the request
+                        self.rate_limiter.record_request(estimated_tokens)
 
-                # Extract PCM audio data from response
-                pcm_data = response.candidates[0].content.parts[0].inline_data.data
+                        # Extract PCM audio data from response
+                        pcm_data = response.candidates[0].content.parts[0].inline_data.data
 
-                # Save chunk to temporary file
-                chunk_filename = f"{audio_id}_chunk_{i:03d}.wav" if audio_id else f"chunk_{i:03d}.wav"
-                chunk_path = self.output_dir / chunk_filename
+                        # Save chunk to temporary file
+                        chunk_filename = f"{audio_id}_chunk_{i:03d}.wav" if audio_id else f"chunk_{i:03d}.wav"
+                        chunk_path = self.output_dir / chunk_filename
 
-                with wave.open(str(chunk_path), 'wb') as wf:
-                    wf.setnchannels(1)  # Mono
-                    wf.setsampwidth(2)  # 16-bit = 2 bytes
-                    wf.setframerate(24000)  # 24kHz
-                    wf.writeframes(pcm_data)
+                        with wave.open(str(chunk_path), 'wb') as wf:
+                            wf.setnchannels(1)  # Mono
+                            wf.setsampwidth(2)  # 16-bit = 2 bytes
+                            wf.setframerate(24000)  # 24kHz
+                            wf.writeframes(pcm_data)
 
-                chunk_files.append(str(chunk_path))
-                print(f"Generated chunk audio: {chunk_path} ({len(pcm_data)} bytes)")
+                        chunk_files.append(str(chunk_path))
+                        print(f"✅ Generated chunk audio: {chunk_path} ({len(pcm_data)} bytes)")
+                        chunk_success = True
+                        break  # Success, exit retry loop
+
+                    except Exception as chunk_error:
+                        print(f"❌ Chunk {i} attempt {chunk_attempt}/{max_chunk_retries} failed: {chunk_error}")
+                        if chunk_attempt < max_chunk_retries:
+                            print(f"Will retry chunk {i}...")
+                        else:
+                            print(f"❌ Chunk {i} failed after {max_chunk_retries} attempts")
+                            import traceback
+                            traceback.print_exc()
+
+                if not chunk_success:
+                    raise Exception(f"Failed to generate chunk {i} after {max_chunk_retries} attempts")
 
             # Stitch all chunks together using shared utility
             print(f"\n{'='*80}")
@@ -274,54 +302,69 @@ class GeminiTTSHandler:
             print(f"Text exceeds {config.GEMINI_TTS_CHUNK_SIZE_WORDS} words - using chunking mode")
             return self.generate_audio_chunked(text, audio_id)
 
-        # For shorter texts, use single API call
-        try:
-            # Estimate tokens and wait if needed
-            estimated_tokens = self.estimate_tokens(cleaned_text)
-            print(f"Estimated tokens: {estimated_tokens}")
+        # For shorter texts, use single API call with retry logic
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                if attempt > 1:
+                    print(f"\n{'='*80}")
+                    print(f"🔄 Retry attempt {attempt}/{max_retries}")
+                    print(f"{'='*80}\n")
+                    # Wait before retry (exponential backoff)
+                    wait_time = 5 * (2 ** (attempt - 2))  # 5s, 10s...
+                    print(f"Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
 
-            self.rate_limiter.wait_if_needed(estimated_tokens)
+                # Estimate tokens and wait if needed
+                estimated_tokens = self.estimate_tokens(cleaned_text)
+                print(f"Estimated tokens: {estimated_tokens}")
 
-            # Generate speech using Gemini TTS API
-            print(f"Calling Gemini TTS API with voice: {self.voice}")
+                self.rate_limiter.wait_if_needed(estimated_tokens)
 
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=cleaned_text,
-                config=types.GenerateContentConfig(
-                    response_modalities=["AUDIO"],
-                    speech_config=types.SpeechConfig(
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name=self.voice
+                # Generate speech using Gemini TTS API
+                print(f"Calling Gemini TTS API with voice: {self.voice} (attempt {attempt})")
+
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=cleaned_text,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["AUDIO"],
+                        speech_config=types.SpeechConfig(
+                            voice_config=types.VoiceConfig(
+                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                    voice_name=self.voice
+                                )
                             )
                         )
                     )
                 )
-            )
 
-            # Record the request
-            self.rate_limiter.record_request(estimated_tokens)
+                # Record the request
+                self.rate_limiter.record_request(estimated_tokens)
 
-            # Extract PCM audio data from response
-            pcm_data = response.candidates[0].content.parts[0].inline_data.data
+                # Extract PCM audio data from response
+                pcm_data = response.candidates[0].content.parts[0].inline_data.data
 
-            # Write WAV file with proper headers
-            # Gemini TTS returns PCM at 24kHz, 1 channel, 16-bit
-            with wave.open(str(output_path), 'wb') as wf:
-                wf.setnchannels(1)  # Mono
-                wf.setsampwidth(2)  # 16-bit = 2 bytes
-                wf.setframerate(24000)  # 24kHz
-                wf.writeframes(pcm_data)
+                # Write WAV file with proper headers
+                # Gemini TTS returns PCM at 24kHz, 1 channel, 16-bit
+                with wave.open(str(output_path), 'wb') as wf:
+                    wf.setnchannels(1)  # Mono
+                    wf.setsampwidth(2)  # 16-bit = 2 bytes
+                    wf.setframerate(24000)  # 24kHz
+                    wf.writeframes(pcm_data)
 
-            print(f"Generated audio: {output_path} ({len(pcm_data)} bytes)")
-            return str(output_path)
+                print(f"✅ Generated audio: {output_path} ({len(pcm_data)} bytes)")
+                return str(output_path)
 
-            print("No audio data found in response")
-            return None
+            except Exception as e:
+                print(f"❌ Attempt {attempt}/{max_retries} failed: {e}")
+                if attempt < max_retries:
+                    print(f"Will retry...")
+                else:
+                    print(f"❌ Failed after {max_retries} attempts")
+                    import traceback
+                    traceback.print_exc()
 
-        except Exception as e:
-            print(f"Error generating audio: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        # All retries failed
+        print(f"No audio data generated after {max_retries} attempts")
+        return None

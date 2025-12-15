@@ -1048,7 +1048,14 @@ def get_discover_carousels():
             if book.get('id') in audio_book_ids and book.get('slug'):
                 books_with_audio.append(book)
 
-        # Carousel 3: Adventure Category (category_id = 34)
+        # Carousel 3: Books You Can Read in a Day (under 50,000 words)
+        quick_reads = []
+        for book in all_books:
+            word_count = book.get('word_count')
+            if word_count and word_count < 50000 and book.get('slug'):
+                quick_reads.append(book)
+
+        # Carousel 4: Adventure Category (category_id = 34)
         adventure_books = []
         for book in all_books:
             if book.get('slug') and book.get('categories'):
@@ -1092,6 +1099,14 @@ def get_discover_carousels():
                 'title': 'Books with Full Audio Summaries',
                 'description': 'Listen to comprehensive summaries of these classics',
                 'books': books_with_audio
+            })
+
+        if quick_reads:
+            carousels.append({
+                'id': 'quick-reads',
+                'title': 'Books You Can Read in a Day',
+                'description': 'Shorter classics under 50,000 words - perfect for a quick read',
+                'books': quick_reads
             })
 
         if adventure_books:

@@ -59,7 +59,11 @@
       "Bash(timeout 120 bash:*)",
       "Bash(timeout 60 python:*)",
       "Bash(timeout 90 python:*)",
-      "Bash(UNSPLASH_ACCESS_KEY=\"-SjcMRsLyixvHCFgFdUTxLjV9gvlGTmWogdWb0WsVJc\" source venv/bin/activate:*)"
+      "Bash(UNSPLASH_ACCESS_KEY=\"-SjcMRsLyixvHCFgFdUTxLjV9gvlGTmWogdWb0WsVJc\" source venv/bin/activate:*)",
+      "Bash(awk:*)",
+      "Bash(venv/bin/python:*)",
+      "Bash(/Users/pengyao/Documents/dev/summra/venv/bin/python3:*)",
+      "Bash(/Users/pengyao/Documents/dev/summra/venv/bin/python:*)"
     ],
     "deny": [],
     "ask": []

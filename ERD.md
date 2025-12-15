@@ -14,7 +14,8 @@ This document provides in-depth technical documentation for the Summra project, 
 8. [Project Gutenberg Integration](#project-gutenberg-integration)
 9. [Gemini Image Generation System](#gemini-image-generation-system)
 10. [Book Metadata Enrichment](#book-metadata-enrichment)
-11. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
+11. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
+12. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
 
 ---
 
@@ -4507,33 +4508,54 @@ async handleRoute() {
 }
 ```
 
-**Slug Generation:**
-```javascript
-slugify(text) {
+**Slug Generation (Updated 2025-12-13):**
+
+**Backend (Single Source of Truth):**
+```python
+# backend/models.py
+def slugify(text: str) -> str:
+    """Convert text to URL-friendly slug."""
+    text = text.lower()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[\s_-]+', '-', text)
+    text = re.sub(r'^-+|-+$', '', text)
     return text
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')      // Remove special chars
-        .replace(/\s+/g, '-')          // Spaces to hyphens
-        .replace(/--+/g, '-')          // Collapse multiple hyphens
-        .trim();
-}
+
+# Auto-generated when books are added
+def add_book(self, title, ...):
+    slug = slugify(title)  # Automatically set
+    cursor.execute('''
+        INSERT INTO books (..., slug)
+        VALUES (..., ?)
+    ''', (..., slug))
 ```
 
-**URL Updates:**
+**Frontend (Uses Backend Slug):**
 ```javascript
+// frontend/static/js/app.js
 updateURL(book, page = null) {
-    const slug = this.slugify(book.title);
-    let newHash = `#/book/${slug}`;
+    // Use slug from backend, fallback to client-side generation
+    const slug = book.slug || this.slugify(book.title);
+    let newPath = `/books/${slug}`;
 
-    if (page === 'medium') {
-        newHash = `#/book/${slug}/medium`;
+    if (page === 'summary') {
+        newPath = `/books/${slug}/summary`;
     } else if (typeof page === 'number') {
-        newHash = `#/book/${slug}/chapter/${page}`;
+        newPath = `/books/${slug}/chapters/${page}`;
     }
 
-    window.history.pushState(null, '', newHash);
+    window.history.pushState(null, '', newPath);
 }
+
+// Routing: find books by slug
+const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
 ```
+
+**Key Design Decision:**
+- Backend stores canonical slugs in database for SEO and consistency
+- Frontend uses backend slugs preferentially, with client-side fallback
+- All new books automatically get slugs via `models.py:add_book()`
+- Legacy books backfilled using `scripts/backfill_book_slugs.py`
 
 ### Page Sections & State Management
 
@@ -8936,15 +8958,19 @@ Legacy skeleton classes retained for backward compatibility:
 
 ### Overview
 
-The Discover page provides curated book discovery through difficulty-based carousels, with a popular books carousel added at the top for immediate access to widely-read classics.
+The Discover page provides curated book discovery through themed carousels, with a popular books carousel added at the top for immediate access to widely-read classics.
 
 ### Page Structure
 
-**Carousel Flow:**
+**Carousel Flow (as of 2025-12-14):**
 1. **Popular Carousel** - Top 10 most downloaded classics
-2. **Easy Carousel** - Books for beginning readers
-3. **Intermediate Carousel** - Moderate difficulty classics
-4. **Advanced Carousel** - Complex, challenging works
+2. **Easy to Read** - Books for beginning readers (A2-B1 CEFR level)
+3. **Books with Full Audio Summaries** - Books with complete audio narration
+4. **Books You Can Read in a Day** - Shorter classics under 50,000 words (Added 2025-12-14)
+5. **Adventure** - Adventure category books
+6. **Children's Literature** - Children's category books
+7. **Romance** - Romance category books
+8. **Books by Charles Dickens** - Works by Charles Dickens
 
 ### Popular Carousel Implementation
 
@@ -9054,6 +9080,60 @@ Location: `frontend/static/js/app.js:800-805`
 - **All Books carousel:** "View All" would link to same page
 - **Popular carousel:** No dedicated page for popular books (top 10 is complete set)
 
+### "Books You Can Read in a Day" Carousel (Added 2025-12-14)
+
+#### Overview
+
+Quick-read carousel featuring shorter classics (under 50,000 words) perfect for readers who want to finish a complete classic in one sitting.
+
+#### Implementation
+
+**Backend Filter Logic:**
+Location: `backend/app_base.py:1051-1056`
+
+```python
+# Carousel 3: Books You Can Read in a Day (under 50,000 words)
+quick_reads = []
+for book in all_books:
+    word_count = book.get('word_count')
+    if word_count and word_count < 50000 and book.get('slug'):
+        quick_reads.append(book)
+```
+
+**Carousel Data Structure:**
+Location: `backend/app_base.py:1104-1110`
+
+```python
+if quick_reads:
+    carousels.append({
+        'id': 'quick-reads',
+        'title': 'Books You Can Read in a Day',
+        'description': 'Shorter classics under 50,000 words - perfect for a quick read',
+        'books': quick_reads
+    })
+```
+
+#### Books Included (17 total)
+
+Representative examples:
+- A Christmas Carol in Prose (28,541 words)
+- Alice's Adventures in Wonderland (29,564 words)
+- The Great Gatsby (48,208 words)
+- Peter Pan (47,268 words)
+- Romeo and Juliet (25,958 words)
+- Metamorphosis (21,943 words)
+- The Importance of Being Earnest (20,714 words)
+
+**Word Count Range:** 20,714 - 48,500 words
+**Average:** ~32,000 words (2-3 hours reading time)
+
+#### Positioning Strategy
+
+Placed after "Books with Full Audio Summaries" to:
+1. Maintain engagement flow from audio to quick-read discovery
+2. Appeal to users who prefer shorter, manageable classics
+3. Create a clear differentiation between difficulty-based and length-based curation
+
 ### Component Reusability
 
 **Shared Infrastructure:**
@@ -9071,10 +9151,15 @@ Location: `frontend/static/js/app.js:800-805`
 
 ### Files Modified
 
+**Original Implementation (2025-12-11):**
 - `frontend/static/js/app.js:800-805` - View All link logic
 - `frontend/static/js/app.js:955-980` - New popular carousel renderer
 - `frontend/static/js/app.js:2871-2872` - Ensure books loaded
 - `frontend/static/js/app.js:2895-2901` - Render popular carousel on page
+
+**Quick-Reads Carousel Addition (2025-12-14):**
+- `backend/app_base.py:1051-1056` - Filter logic for books under 50k words
+- `backend/app_base.py:1104-1110` - Carousel data structure
 
 ---
 
@@ -9266,3 +9351,47 @@ const headerImageHTML = this.post.header_image_url ? `
 - `.env` - Added UNSPLASH_ACCESS_KEY
 
 ---
+
+
+## Database Quality & Audit System
+
+### Overview
+
+Summra maintains high data integrity for chapter text extracted from Project Gutenberg sources. A comprehensive audit system verifies that chapter text stored in the database matches the original source material.
+
+**Audit Results (2025-12-14):**
+- **98.7% overall coverage** across 55 books with source files
+- **0 genuine discrepancies** (2 false positives due to audit script limitations)
+- **55.6% perfect matches** (<1% difference)
+- **9.9% minor differences** (whitespace normalization only)
+
+### Audit Script
+
+**Location:** `scripts/audit_chapter_text.py`
+
+**Purpose:**
+Compares database `chapter_text` with re-extracted chapters from Gutenberg source files to identify discrepancies and verify data integrity.
+
+**Usage:**
+```bash
+# Run full audit on all 81 books
+python scripts/audit_chapter_text.py
+```
+
+### Coverage Metrics
+
+**Overall Database Coverage:**
+- Total books audited: 81
+- Books with source files: 55 (67.9%)
+- Overall coverage: 98.7%
+- DB chars: 54,341,732 vs Source chars: 55,046,438
+- Difference: 1.3%
+
+**Status Distribution:**
+- Perfect (<1% diff): 45 books (55.6%)
+- Minor (1-10% diff): 8 books (9.9%)  
+- Major (>10% diff): 0 books (2 false positives identified)
+- No Source: 26 books (32.1%)
+
+---
+

@@ -1650,50 +1650,74 @@ Replaced skeleton loading states with a modern centered spinner design for a cle
 - [✅] Spinner dismissed immediately when content loads
 - [✅] Reading guide images properly dismiss loading state
 
-### Discover Page Popular Carousel
+### Discover Page Carousels
 
 **Feature Description:**
-Added a "Popular" carousel at the top of the Discover page featuring the 10 most popular classic books from Project Gutenberg.
+The Discover page features multiple curated carousels to help users find books based on different criteria: popularity, difficulty level, audio availability, reading time, and thematic categories.
 
 **User Experience:**
-- **Prominent Placement:** First carousel on Discover page (before difficulty-based carousels)
-- **Title:** "Popular"
-- **Content:** Top 10 most downloaded books from Project Gutenberg
-  - Based on Gutenberg IDs: [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345]
-- **UI Consistency:** Uses standard carousel design (same as Easy/Intermediate/Advanced)
+- **Multiple Discovery Paths:** Users can find books through various lenses
+- **UI Consistency:** All carousels use standard carousel design
   - Regular book cards with cover, title, and author
   - Left/right navigation arrows
-  - No rank overlays (different from home page version)
-  - No "View All" link
+  - No rank overlays
+  - No "View All" links
+- **Clear Descriptions:** Each carousel includes a helpful subtitle explaining its criteria
 
-**Page Flow:**
-1. Popular carousel (top 10 books)
-2. Easy carousel (difficulty-based)
-3. Intermediate carousel (difficulty-based)
-4. Advanced carousel (difficulty-based)
+**Page Flow (Updated 2025-12-14):**
+1. **Popular** - Top 10 most downloaded books from Project Gutenberg
+   - Based on Gutenberg IDs: [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345]
+2. **Easy to Read** - Books for beginning readers (A2-B1 CEFR level)
+3. **Books with Full Audio Summaries** - Books with complete audio narration
+4. **Books You Can Read in a Day** - Shorter classics under 50,000 words (Added 2025-12-14)
+5. **Adventure** - Adventure category books
+6. **Children's Literature** - Children's category books
+7. **Romance** - Romance category books
+8. **Books by Charles Dickens** - Works by Charles Dickens
 
 **User Stories:**
 - As a new visitor, I want to see the most popular classics first so I can start with widely-loved books
 - As a curious reader, I want quick access to popular books without searching
 - As a literature explorer, I want popular books presented alongside difficulty levels
+- As a busy reader, I want to find shorter classics that I can finish in one sitting
+- As someone new to classics, I want audio summaries to help me understand books before reading them
 
 **Technical Implementation:**
+
+*Popular Carousel:*
 - New method: `renderTop10AsStandardCarousel()`
 - Reuses existing `renderCategoryCarousel()` for consistent UI
 - Books loaded via `ensureBooksLoaded()` before rendering
 - Popular carousel ID: 'popular' (excluded from "View All" link logic)
 
+*Books You Can Read in a Day Carousel (Added 2025-12-14):*
+- Backend filter: Books with `word_count < 50000`
+- Carousel ID: 'quick-reads'
+- Location: `backend/app_base.py:1051-1110`
+- Returns 17 books ranging from 20,714 to 48,500 words
+- Average reading time: 2-3 hours
+
+*Other Carousels:*
+- Backend endpoint: `/api/discover/carousels`
+- Dynamic filtering based on CEFR level, audio availability, categories, and authors
+- Location: `backend/app_base.py:1020-1138`
+
 **User Benefits:**
+- Multiple discovery paths for different user needs
+- Quick identification of books by reading time
 - Immediate access to popular books on Discover page
-- Consistent UI with other carousels (no learning curve)
+- Consistent UI with all carousels (no learning curve)
 - Better discovery of widely-read classics
-- Complements difficulty-based discovery
+- Audio learners can find books with summaries
 
 **Acceptance Criteria:**
 - [✅] Popular carousel displays at top of Discover page
 - [✅] Contains top 10 books based on Gutenberg download statistics
-- [✅] Uses standard carousel UI (no rank overlays)
-- [✅] No "View All" link displayed
+- [✅] Easy to Read carousel shows A2-B1 CEFR level books
+- [✅] Books with Full Audio Summaries carousel shows only books with audio files
+- [✅] Books You Can Read in a Day shows books under 50,000 words (Added 2025-12-14)
+- [✅] All carousels use standard carousel UI (no rank overlays)
+- [✅] No "View All" links displayed on any discover carousels
 - [✅] Books load before carousel renders (no empty carousel)
 
 ---
@@ -1775,3 +1799,56 @@ Blog posts feature visually engaging header images automatically sourced from Un
 **Last Updated:** 2025-12-12
 **Author:** Summra Team
 **Status:** Living Document
+
+
+## 12. Data Quality & Integrity
+
+### Database Audit System
+
+**Feature Owner:** Engineering Team
+**Priority:** High
+**Status:** ✅ Implemented (2025-12-14)
+
+#### Overview
+
+Automated audit system to verify data integrity of chapter text stored in the database against original Project Gutenberg source files.
+
+#### Current Quality Metrics
+
+**As of 2025-12-14:**
+- **98.7% overall coverage** across 55 books with source files
+- **0 genuine discrepancies** (2 false positives due to audit limitations)
+- **55.6% perfect matches** (<1% character difference)
+- **9.9% minor differences** (whitespace normalization only)
+
+#### Audit Process
+
+1. Compare database `chapter_text` with re-extracted source chapters
+2. Calculate character and word count discrepancies
+3. Identify missing or extra chapters
+4. Generate comprehensive metrics report
+5. Flag books requiring investigation (>10% difference)
+
+#### Acceptance Criteria
+
+- [✅] Audit all 81 books in database
+- [✅] Generate detailed CSV report with metrics
+- [✅] Identify discrepancies >10% (requires investigation)
+- [✅] Verify database integrity (98.7% coverage achieved)
+- [✅] Document known edge cases (em-dash format, poems, etc.)
+
+#### Future Enhancements
+
+- Improve audit script chapter detection patterns
+- Add source files for 26 books currently missing
+- Automated verification after book processing
+- Coverage metrics in admin interface
+- Alert system for <95% coverage
+
+---
+
+**Document Version:** 2.0
+**Last Updated:** 2025-12-14
+**Author:** Summra Team
+**Status:** Living Document
+

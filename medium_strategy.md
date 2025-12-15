@@ -880,3 +880,114 @@ Tags: Reading, Books, Self Improvement, Classic Literature, Learning
 - **Goal:** 2 hours/week total time investment
 
 Start with Phase 1 immediately—you can generate your first 3 articles today.
+
+---
+
+## Priority Books to Add to Summra Library
+
+Based on SEO value, search volume, and marketing potential, prioritize adding these public domain books:
+
+### Tier 1: Highest Impact (Add First)
+
+1. **Beowulf** (Anonymous)
+   - **Why:** Old English → Modern English showcases your core value
+   - **SEO:** "Beowulf summary," "Beowulf modern translation" (10K+ monthly searches)
+   - **Medium article:** "Beowulf Translated: From Gibberish to Greatness"
+   - **Project Gutenberg:** #16328
+
+2. **Les Misérables** (Victor Hugo)
+   - **Why:** Musical fans + students = massive audience
+   - **SEO:** "Les Miserables summary," "Jean Valjean analysis" (50K+ monthly searches)
+   - **Medium article:** "Understanding Les Mis Without Reading 1,500 Pages"
+   - **Project Gutenberg:** #135
+
+3. **Meditations** (Marcus Aurelius)
+   - **Why:** Stoicism is trending, self-help/productivity audience
+   - **SEO:** "Meditations summary," "Marcus Aurelius quotes" (20K+ monthly searches)
+   - **Medium article:** "Ancient Stoic Wisdom for Modern Stress"
+   - **Project Gutenberg:** #2680
+
+4. **The Divine Comedy (Inferno)** (Dante)
+   - **Why:** Cultural icon, memes, students need help
+   - **SEO:** "Inferno summary," "Dante explained" (15K+ monthly searches)
+   - **Medium article:** "Dante's Hell Explained: What Each Circle Really Means"
+   - **Project Gutenberg:** Multiple translations
+
+5. **The Republic** (Plato)
+   - **Why:** Philosophy classic, college students
+   - **SEO:** "Plato Republic summary," "Allegory of the cave" (25K+ monthly searches)
+   - **Medium article:** "Philosophy's Most Important Book, Simplified"
+   - **Project Gutenberg:** #1497
+
+### Tier 2: High Value (Add Next)
+
+6. **Canterbury Tales** (Chaucer)
+   - **SEO:** "Canterbury Tales modern English" (8K+ monthly searches)
+   - **Perfect for:** Your translation feature (Middle English → Modern)
+
+7. **The Prince** (Machiavelli)
+   - **SEO:** "The Prince summary," "Machiavellian" (12K+ monthly searches)
+   - **Audience:** Business readers, leadership content
+
+8. **The Art of War** (Sun Tzu)
+   - **SEO:** "Art of War summary" (30K+ monthly searches)
+   - **Audience:** Business/strategy crossover
+
+9. **Paradise Lost** (Milton)
+   - **SEO:** "Paradise Lost summary" (10K+ monthly searches)
+   - **Academic:** English literature canon
+
+10. **The Aeneid** (Virgil)
+    - **SEO:** "Aeneid summary" (8K+ monthly searches)
+    - **Complements:** Your existing Odyssey/Iliad
+
+### Tier 3: Niche but Valuable
+
+11. **Walden** (Thoreau) - Minimalism/nature trend
+12. **The Communist Manifesto** (Marx) - Political theory
+13. **Candide** (Voltaire) - Short, satirical, accessible
+14. **Siddhartha** (Hesse) - Spiritual/philosophical
+15. **Heart of Darkness** (Conrad) - Short, challenging, important
+
+### Content Strategy by Book Type
+
+**Philosophy (Great for LinkedIn):**
+- The Republic, Meditations, The Prince, Art of War
+- **Angle:** Self-improvement, leadership, wisdom for modern life
+
+**Old English/Translation Showcases (Best for SEO):**
+- Beowulf, Canterbury Tales
+- **Angle:** "You need modern English to understand these"
+
+**Epic Literature (Student Audience):**
+- Les Misérables, Divine Comedy, Paradise Lost, Aeneid
+- **Angle:** "The CliffsNotes won't cut it—here's the real deal"
+
+**Short & Punchy (Easy Wins):**
+- The Prince, Meditations, Heart of Darkness, Candide
+- **Angle:** Quick reads with big ideas
+
+### Medium Article Templates for New Books
+
+**Template: "Why [Book] Is Impossible to Read (And How to Fix It)"**
+Works for: Beowulf, Canterbury Tales, Divine Comedy, Paradise Lost
+
+**Template: "[Book] Explained: What Your Teacher Missed"**
+Works for: The Republic, Les Misérables, Divine Comedy
+
+**Template: "Ancient Wisdom for Modern [Problem]: Lessons from [Book]"**
+Works for: Meditations, The Art of War, The Prince
+
+**Template: "[Number] Quotes from [Book] That Hit Different in 2025"**
+Works for: All philosophy books, Meditations especially
+
+### SEO Priority Order
+
+If you can only add 5 books immediately, add these for maximum SEO impact:
+1. **The Art of War** (30K monthly searches)
+2. **Les Misérables** (50K+ monthly searches combined)
+3. **The Republic** (25K monthly searches)
+4. **Meditations** (20K monthly searches)
+5. **Divine Comedy** (15K monthly searches)
+
+These 5 books alone could drive 10,000+ monthly organic visitors from Google within 6 months.
