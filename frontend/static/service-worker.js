@@ -391,6 +391,37 @@ if (workbox) {
                 }
             }
         }
+
+        // Get list of all offline-saved books
+        if (event.data && event.data.type === 'GET_OFFLINE_BOOKS') {
+            try {
+                const offlineCache = await caches.open('offline-books-cache');
+                const requests = await offlineCache.keys();
+
+                // Extract book IDs from marker URLs
+                const offlineBookIds = [];
+                for (const request of requests) {
+                    const match = request.url.match(/\/offline-book-marker\/(\d+)/);
+                    if (match) {
+                        offlineBookIds.push(parseInt(match[1]));
+                    }
+                }
+
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'OFFLINE_BOOKS_LIST',
+                        bookIds: offlineBookIds
+                    });
+                }
+            } catch (error) {
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'OFFLINE_BOOKS_LIST',
+                        bookIds: []
+                    });
+                }
+            }
+        }
     });
 
     // Helper function to determine cache name for URL

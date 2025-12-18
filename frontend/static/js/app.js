@@ -3047,11 +3047,29 @@ class SummraApp {
         document.getElementById('category-detail-subtitle').textContent =
             `${this.allBooks.length} book${this.allBooks.length !== 1 ? 's' : ''}`;
 
-        // Render all books in grid
+        // Get list of offline-saved books to sort and mark them
+        const offlineBookIds = await this.getOfflineBooks();
+        const offlineBookIdsSet = new Set(offlineBookIds);
+
+        // Sort books: offline-saved books first, then alphabetically by title
+        const sortedBooks = [...this.allBooks].sort((a, b) => {
+            const aIsOffline = offlineBookIdsSet.has(a.id);
+            const bIsOffline = offlineBookIdsSet.has(b.id);
+
+            // Offline books come first
+            if (aIsOffline && !bIsOffline) return -1;
+            if (!aIsOffline && bIsOffline) return 1;
+
+            // Within the same category (both offline or both online), sort alphabetically
+            return a.title.localeCompare(b.title);
+        });
+
+        // Render sorted books in grid
         const grid = document.getElementById('category-books-grid');
         grid.innerHTML = '';
-        this.allBooks.forEach(book => {
-            const bookCard = this.createBookCard(book);
+        sortedBooks.forEach(book => {
+            const isOffline = offlineBookIdsSet.has(book.id);
+            const bookCard = this.createBookCard(book, isOffline);
             grid.appendChild(bookCard);
         });
 
@@ -3294,7 +3312,7 @@ class SummraApp {
         }
     }
 
-    createBookCard(book) {
+    createBookCard(book, isOffline = false) {
         const bookCard = document.createElement('div');
         bookCard.className = 'book-card';
 
@@ -3302,8 +3320,18 @@ class SummraApp {
             ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'book-cover')
             : '';
 
+        // Add offline badge if book is saved offline
+        const offlineBadge = isOffline
+            ? `<div class="offline-badge" title="Saved for offline reading">
+                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                       <polyline points="20 6 9 17 4 12"></polyline>
+                   </svg>
+               </div>`
+            : '';
+
         bookCard.innerHTML = `
             ${coverImageHtml}
+            ${offlineBadge}
             <h3>${this.escapeHtml(book.title)}</h3>
             <p class="author">by ${this.escapeHtml(book.author)}</p>
             <div class="meta">
@@ -4106,6 +4134,33 @@ class SummraApp {
 
             // Timeout after 2 seconds
             setTimeout(() => resolve(false), 2000);
+        });
+    }
+
+    async getOfflineBooks() {
+        /**
+         * Get list of all offline-saved book IDs from service worker
+         * @returns {Promise<number[]>} - Array of book IDs that are saved offline
+         */
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+            return [];
+        }
+
+        return new Promise((resolve) => {
+            const messageChannel = new MessageChannel();
+
+            messageChannel.port1.onmessage = (event) => {
+                if (event.data.type === 'OFFLINE_BOOKS_LIST') {
+                    resolve(event.data.bookIds || []);
+                }
+            };
+
+            navigator.serviceWorker.controller.postMessage({
+                type: 'GET_OFFLINE_BOOKS'
+            }, [messageChannel.port2]);
+
+            // Timeout after 2 seconds
+            setTimeout(() => resolve([]), 2000);
         });
     }
 
