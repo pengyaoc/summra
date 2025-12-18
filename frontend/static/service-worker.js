@@ -278,14 +278,23 @@ if (workbox) {
                 const chaptersResponse = await fetch(`/api/books/${bookId}/chapters`);
                 if (chaptersResponse.ok) {
                     const chaptersData = await chaptersResponse.json();
-                    const chapters = chaptersData.chapters || [];
+
+                    // Extract chapters from sections (handling hierarchical structure)
+                    const allChapters = [];
+                    if (chaptersData.sections) {
+                        chaptersData.sections.forEach(section => {
+                            if (section.chapters && Array.isArray(section.chapters)) {
+                                allChapters.push(...section.chapters);
+                            }
+                        });
+                    }
 
                     // Add individual chapter endpoints
-                    chapters.forEach(chapter => {
+                    allChapters.forEach(chapter => {
                         resourcesToCache.push(`/api/books/${bookId}/chapters/${chapter.chapter_number}`);
                     });
 
-                    console.log(`📚 Found ${chapters.length} chapters to cache`);
+                    console.log(`📚 Found ${allChapters.length} chapters to cache`);
                 }
 
                 // Fetch and cache all resources
@@ -317,6 +326,21 @@ if (workbox) {
 
                 console.log(`✅ Cached ${cached}/${resourcesToCache.length} resources (${failed} failed)`);
 
+                // Mark this book as explicitly downloaded for offline
+                // This creates a marker so we can distinguish between:
+                // 1. Books cached automatically via Network-First (browsing)
+                // 2. Books explicitly downloaded for offline via "Save for Offline" button
+                const offlineCache = await caches.open('offline-books-cache');
+                const markerResponse = new Response(JSON.stringify({
+                    bookId,
+                    bookSlug,
+                    cachedAt: new Date().toISOString(),
+                    resourceCount: cached
+                }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                await offlineCache.put(`/offline-book-marker/${bookId}`, markerResponse);
+
                 // Send completion message
                 if (event.ports && event.ports[0]) {
                     event.ports[0].postMessage({
@@ -339,17 +363,16 @@ if (workbox) {
             }
         }
 
-        // Check if book is cached
+        // Check if book is cached for offline
         if (event.data && event.data.type === 'CHECK_BOOK_CACHED') {
             const { bookId } = event.data;
 
             try {
-                const summaryCache = await caches.open('summaries-cache');
-                const chaptersCache = await caches.open('chapters-cache');
-
-                // Check if at least the book summary is cached
-                const summaryResponse = await summaryCache.match(`/api/books/${bookId}/summary/medium`);
-                const isCached = !!summaryResponse;
+                // Check if this book was explicitly downloaded for offline
+                // We use a special cache to track offline downloads
+                const offlineCache = await caches.open('offline-books-cache');
+                const offlineMarker = await offlineCache.match(`/offline-book-marker/${bookId}`);
+                const isCached = !!offlineMarker;
 
                 if (event.ports && event.ports[0]) {
                     event.ports[0].postMessage({
