@@ -1313,6 +1313,9 @@ class SummraApp {
 
         // Update page title
         this.updatePageTitle(`${book.title} by ${book.author} | Summra`);
+
+        // Setup save for offline button (PWA-only feature)
+        this.setupSaveOfflineButton();
     }
 
     showBookDetail(restoreScroll = false) {
@@ -4030,6 +4033,148 @@ class SummraApp {
 
         // Store reference to openLightbox function for use when loading chapters
         this.openLightbox = openLightbox;
+    }
+
+    setupSaveOfflineButton() {
+        /**
+         * Setup "Save for Offline" button for PWA offline book caching
+         * Only shows when service worker is available (PWA-only feature)
+         */
+        const saveOfflineBtn = document.getElementById('save-offline-btn');
+        const saveOfflineText = document.getElementById('save-offline-text');
+
+        if (!saveOfflineBtn || !this.currentBook) {
+            return;
+        }
+
+        // Check if service worker is available
+        if (!('serviceWorker' in navigator)) {
+            saveOfflineBtn.classList.add('hidden');
+            return;
+        }
+
+        // Show button only if service worker is ready
+        navigator.serviceWorker.ready.then(async (registration) => {
+            saveOfflineBtn.classList.remove('hidden');
+
+            // Check if this book is already cached
+            const isCached = await this.checkBookCached(this.currentBook.id);
+
+            if (isCached) {
+                saveOfflineBtn.classList.add('saved');
+                saveOfflineText.textContent = 'Saved ✓';
+                saveOfflineBtn.disabled = true;
+            } else {
+                saveOfflineBtn.classList.remove('saved');
+                saveOfflineText.textContent = 'Save for Offline';
+                saveOfflineBtn.disabled = false;
+
+                // Setup click handler
+                saveOfflineBtn.onclick = async () => {
+                    await this.downloadBookForOffline(this.currentBook);
+                };
+            }
+        }).catch(error => {
+            console.error('Service worker not ready:', error);
+            saveOfflineBtn.classList.add('hidden');
+        });
+    }
+
+    async checkBookCached(bookId) {
+        /**
+         * Check if a book is already cached in the service worker
+         * @param {number} bookId - The book ID to check
+         * @returns {Promise<boolean>} - True if book is cached
+         */
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+            return false;
+        }
+
+        return new Promise((resolve) => {
+            const messageChannel = new MessageChannel();
+
+            messageChannel.port1.onmessage = (event) => {
+                if (event.data.type === 'BOOK_CACHE_STATUS') {
+                    resolve(event.data.isCached || false);
+                }
+            };
+
+            navigator.serviceWorker.controller.postMessage({
+                type: 'CHECK_BOOK_CACHED',
+                bookId: bookId
+            }, [messageChannel.port2]);
+
+            // Timeout after 2 seconds
+            setTimeout(() => resolve(false), 2000);
+        });
+    }
+
+    async downloadBookForOffline(book) {
+        /**
+         * Download all book content for offline reading
+         * @param {Object} book - The book object to cache
+         */
+        const saveOfflineBtn = document.getElementById('save-offline-btn');
+        const saveOfflineText = document.getElementById('save-offline-text');
+
+        if (!saveOfflineBtn || !('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+            alert('Offline functionality not available');
+            return;
+        }
+
+        // Update button to loading state
+        saveOfflineBtn.disabled = true;
+        saveOfflineBtn.classList.add('loading');
+        saveOfflineText.textContent = 'Downloading...';
+
+        try {
+            const messageChannel = new MessageChannel();
+            let progressReceived = false;
+
+            messageChannel.port1.onmessage = (event) => {
+                if (event.data.type === 'CACHE_PROGRESS') {
+                    progressReceived = true;
+                    const percent = Math.round((event.data.cached / event.data.total) * 100);
+                    saveOfflineText.textContent = `Downloading... ${percent}%`;
+                } else if (event.data.type === 'CACHE_COMPLETE') {
+                    if (event.data.success) {
+                        saveOfflineBtn.classList.remove('loading');
+                        saveOfflineBtn.classList.add('saved');
+                        saveOfflineText.textContent = 'Saved ✓';
+                        console.log(`✅ Book cached: ${event.data.cached}/${event.data.total} resources (${event.data.failed} failed)`);
+                    } else {
+                        saveOfflineBtn.classList.remove('loading');
+                        saveOfflineBtn.disabled = false;
+                        saveOfflineText.textContent = 'Save for Offline';
+                        alert(`Failed to save book: ${event.data.error}`);
+                    }
+                }
+            };
+
+            // Send message to service worker to cache the book
+            const bookSlug = book.slug || this.slugify(book.title);
+            navigator.serviceWorker.controller.postMessage({
+                type: 'CACHE_BOOK',
+                bookId: book.id,
+                bookSlug: bookSlug
+            }, [messageChannel.port2]);
+
+            // Timeout if no progress received after 30 seconds
+            setTimeout(() => {
+                if (!progressReceived) {
+                    saveOfflineBtn.classList.remove('loading');
+                    saveOfflineBtn.disabled = false;
+                    saveOfflineText.textContent = 'Save for Offline';
+                    alert('Download timed out. Please try again.');
+                }
+            }, 30000);
+        } catch (error) {
+            console.error('Error downloading book for offline:', error);
+            saveOfflineBtn.classList.remove('loading');
+            saveOfflineBtn.disabled = false;
+            saveOfflineText.textContent = 'Save for Offline';
+            alert('Failed to save book for offline. Please try again.');
+        }
     }
 
     setupAdminFeatures() {

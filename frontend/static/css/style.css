@@ -726,6 +726,91 @@ body {
     font-style: italic;
 }
 
+/* Save for Offline Button (PWA) */
+.save-offline-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    margin-top: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+}
+
+.save-offline-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+}
+
+.save-offline-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.save-offline-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.save-offline-btn .offline-icon {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+}
+
+/* Loading state - pulse animation */
+.save-offline-btn.loading {
+    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.save-offline-btn.loading .offline-icon {
+    animation: download 1.5s ease-in-out infinite;
+}
+
+@keyframes download {
+    0% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(4px);
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+/* Saved state - success green */
+.save-offline-btn.saved {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    box-shadow: 0 4px 6px rgba(72, 187, 120, 0.3);
+}
+
+.save-offline-btn.saved:hover {
+    transform: none;
+    box-shadow: 0 4px 6px rgba(72, 187, 120, 0.3);
+}
+
+/* Hide button by default - only show when PWA is available */
+.save-offline-btn.hidden {
+    display: none;
+}
+
 /* Book Content Sections */
 
 /* About This Book Section */
