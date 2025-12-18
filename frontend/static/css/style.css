@@ -4727,3 +4727,107 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     }
 }
 
+/* iOS Install Banner */
+.ios-install-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 16px 20px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.ios-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.ios-banner-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.ios-banner-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.ios-banner-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.ios-banner-subtitle {
+    font-size: 13px;
+    opacity: 0.95;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ios-share-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.ios-banner-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 20px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.ios-banner-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.ios-banner-close:active {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 768px) {
+    .ios-install-banner {
+        padding: 12px 16px;
+    }
+
+    .ios-banner-icon {
+        font-size: 28px;
+    }
+
+    .ios-banner-title {
+        font-size: 14px;
+    }
+
+    .ios-banner-subtitle {
+        font-size: 12px;
+    }
+}
+

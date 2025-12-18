@@ -1852,3 +1852,245 @@ Automated audit system to verify data integrity of chapter text stored in the da
 **Author:** Summra Team
 **Status:** Living Document
 
+
+---
+
+## Progressive Web App (PWA) Features
+
+**Feature Owner:** Engineering Team
+**Priority:** High
+**Status:** ✅ Implemented (2025-12-18)
+
+### Overview
+
+Summra is a Progressive Web App that enables users to install the application on their devices and read book summaries offline, providing a native app-like experience across all platforms.
+
+### User Stories
+
+**As a mobile user**, I want to:
+- Install Summra as an app on my home screen
+- Access previously viewed books offline (airplane mode, poor connectivity)
+- Have the app feel native without browser chrome
+
+**As an iOS user**, I want to:
+- See clear instructions on how to install the app (since iOS doesn't show automatic prompts)
+- Install via Share → "Add to Home Screen"
+
+**As an Android user**, I want to:
+- See automatic install prompts from Chrome
+- Install with one tap
+
+**As a commuter**, I want to:
+- Read book summaries on the subway without internet
+- Have pages load instantly from cache
+
+### Features
+
+#### 1. Installable App
+
+**What:**
+- Users can install Summra as a standalone app
+- App icon appears on device home screen
+- Opens in full-screen mode (no browser UI)
+
+**How:**
+- Web App Manifest defines app metadata
+- Service worker enables installation criteria
+- Android: Automatic install prompt
+- iOS: Custom install instructions banner
+
+**User Experience:**
+- **Android:** Chrome shows "Install Summra" banner after visiting site
+- **iOS:** Purple banner slides up with Share icon instructions
+- **Desktop:** Install icon appears in Chrome address bar
+
+**Acceptance Criteria:**
+- [✅] Manifest.json with app metadata
+- [✅] Icons (192x192, 512x512 PNG)
+- [✅] Standalone display mode
+- [✅] Theme color (#1a1a1a)
+- [✅] App opens full-screen when launched from home screen
+
+#### 2. Offline Reading
+
+**What:**
+- Users can access previously visited pages offline
+- Automatic caching of viewed content
+- Graceful offline fallback for new pages
+
+**How:**
+- Service worker intercepts network requests
+- Caches content as users browse
+- Network-First strategy for book data (fresh when online, cached fallback)
+- Cache-First strategy for images (fast loading)
+
+**User Experience:**
+- Browse "Pride and Prejudice" → Automatically cached
+- Read Chapter 1 → Automatically cached
+- Go offline → Can still read visited pages
+- Try new chapter offline → See friendly offline message
+
+**Acceptance Criteria:**
+- [✅] Service worker with Workbox 7.0.0
+- [✅] Network-First caching for book data, summaries, chapters
+- [✅] Cache-First for images (covers, icons)
+- [✅] Stale-While-Revalidate for lists/categories
+- [✅] Cache limits (100 images, 50 books, 100 chapters)
+- [✅] Cache expiration (7-30 days depending on content type)
+
+#### 3. iOS Install Instructions
+
+**What:**
+- Custom install banner for iOS users
+- Shows Safari Share icon + step-by-step instructions
+- Dismissible and non-intrusive
+
+**How:**
+- Detect iOS Safari via user agent
+- Show banner only if not installed and not dismissed
+- Display after 2-second delay
+- Save dismissal to localStorage
+
+**User Experience:**
+- Visit Summra on iPhone Safari
+- After 2 seconds, purple banner slides up from bottom
+- Banner shows: "Tap [Share icon] then 'Add to Home Screen'"
+- User can dismiss with X button (won't show again)
+- Banner doesn't show if already installed
+
+**Acceptance Criteria:**
+- [✅] iOS detection (iPad, iPhone, iPod)
+- [✅] Standalone mode detection (don't show if installed)
+- [✅] Beautiful banner design with gradient
+- [✅] Share icon SVG in instructions
+- [✅] Dismissible (localStorage persistence)
+- [✅] Slide-up animation
+- [✅] Responsive mobile design
+
+#### 4. Offline Fallback Page
+
+**What:**
+- Beautiful fallback page when offline and page not cached
+- Auto-retry connection
+- Explains offline functionality
+
+**How:**
+- Service worker catch-all handler
+- Serves `/offline` page for uncached navigation
+- JavaScript auto-retry every 5 seconds
+- Listens for online event to redirect
+
+**User Experience:**
+- Try to visit new page while offline
+- See purple gradient page with book icon
+- Message: "You're offline. You can still access pages you've visited before!"
+- "Try Again" button
+- Page automatically redirects when connection restored
+
+**Acceptance Criteria:**
+- [✅] Offline fallback page (`/offline`)
+- [✅] Beautiful gradient design
+- [✅] Auto-retry every 5 seconds (max 20 attempts)
+- [✅] Online event listener
+- [✅] Clear messaging about offline mode
+
+### Technical Implementation
+
+**New Files:**
+- `frontend/static/manifest.json` - Web app manifest
+- `frontend/static/service-worker.js` - Service worker with Workbox
+- `frontend/templates/offline.html` - Offline fallback page
+
+**Modified Files:**
+- `frontend/templates/index.html` - Manifest link, iOS meta tags, install banner
+- `frontend/static/js/app.js` - Service worker registration, install prompt
+- `frontend/static/css/style.css` - iOS banner styles
+- `backend/app_base.py` - Service worker and offline routes
+
+**Flask Routes:**
+- `/service-worker.js` - Serves service worker with correct headers
+- `/offline` - Serves offline fallback page
+
+### Browser Support
+
+| Feature | Chrome/Edge | Safari iOS | Firefox |
+|---------|-------------|------------|---------|
+| Offline Reading | ✅ Full | ✅ Full | ✅ Full |
+| Install App | ✅ Auto | ✅ Manual | ✅ Auto |
+| Standalone Mode | ✅ Yes | ✅ Yes | ✅ Yes |
+| Storage | ~500MB | ~50MB | ~500MB |
+
+### Caching Strategy
+
+**Automatic Caching:**
+- Content is cached passively as users browse
+- No explicit "Download" button (Phase 1)
+- Users accumulate offline content naturally
+
+**Cache Priorities:**
+1. App shell - Precached immediately
+2. Book covers - Cached on first view
+3. Book data - Cached when book opened
+4. Summaries - Cached when summary read
+5. Chapters - Cached when chapter read
+
+**Storage Management:**
+- Cache auto-expires after configured duration
+- LRU (Least Recently Used) eviction when storage fills
+- Max entries per cache type enforced
+
+### Success Metrics
+
+**Adoption:**
+- Install rate: % of visitors who install app
+- Daily active installs: Users opening from home screen
+- Offline usage: % of sessions while offline
+
+**Performance:**
+- Cache hit rate: % of requests served from cache
+- Offline fallback rate: How often offline page shown
+- Install banner dismissal rate (iOS)
+
+**Quality:**
+- Lighthouse PWA score: Target 90-100
+- Service worker registration success rate: >99%
+- Cache storage errors: <1%
+
+### Future Enhancements (Phase 2)
+
+**Active Download:**
+- "Save for Offline" button on book pages
+- Prefetch all chapters + summary for a book
+- Cache management UI (view/delete saved books)
+- Storage quota display
+
+**Advanced Features:**
+- Background sync for failed requests
+- Push notifications (Android only)
+- Share Target API (share text to Summra)
+- Periodic background sync
+
+### Testing Requirements
+
+**Manual Testing:**
+- [✅] Install on Android Chrome (automatic prompt)
+- [✅] Install on iOS Safari (manual with banner)
+- [✅] Install on desktop Chrome
+- [✅] Browse books, verify caching in DevTools
+- [✅] Toggle offline mode, verify cached pages load
+- [✅] Try uncached page offline, verify fallback shown
+- [✅] Dismiss iOS banner, verify doesn't reappear
+- [✅] Install app, verify iOS banner doesn't show
+
+**Automated Testing:**
+- Lighthouse PWA audit (score 90+)
+- Service worker registration check
+- Manifest validation
+- Cache API functionality
+
+---
+
+**Document Version:** 2.1
+**Last Updated:** 2025-12-18
+**Author:** Summra Team
+**Status:** Living Document

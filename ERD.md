@@ -9395,3 +9395,176 @@ python scripts/audit_chapter_text.py
 
 ---
 
+
+## Progressive Web App (PWA) Implementation
+
+### Overview
+
+Summra is implemented as a Progressive Web App, enabling offline reading, installation to home screen, and app-like experience on both mobile and desktop devices.
+
+**Implementation Date:** 2025-12-18
+
+### Core Components
+
+#### 1. Web App Manifest
+
+**Location:** `frontend/static/manifest.json`
+
+**Purpose:** Defines app metadata for installation and provides app-like behavior.
+
+**Key Properties:**
+```json
+{
+  "name": "Summra - Classic Literature Summaries",
+  "short_name": "Summra",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1a1a1a",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "/static/images/icon-192.png", "sizes": "192x192" },
+    { "src": "/static/images/icon-512.png", "sizes": "512x512" }
+  ]
+}
+```
+
+**Template Integration:**
+- Linked in `frontend/templates/index.html` via `<link rel="manifest">`
+- Includes Apple-specific meta tags for iOS compatibility
+
+#### 2. Service Worker
+
+**Location:** `frontend/static/service-worker.js`
+
+**Technology:** Workbox 7.0.0 (Google's service worker library)
+
+**Purpose:** Intercepts network requests to enable offline caching and improve performance.
+
+**Caching Strategies:**
+
+| Content Type | Strategy | Cache Duration | Max Entries |
+|--------------|----------|----------------|-------------|
+| App Shell (HTML, CSS, JS) | Precache | 30 days | N/A |
+| Images (covers, icons) | Cache-First | 30 days | 100 |
+| Book Data | Network-First | 7 days | 50 |
+| Summaries | Network-First | 7 days | 50 |
+| Chapters | Network-First | 7 days | 100 |
+| Book Lists | Stale-While-Revalidate | 1 day | 30 |
+| Categories | Stale-While-Revalidate | 1 day | 30 |
+| Authors | Stale-While-Revalidate | 7 days | 50 |
+| Blog Posts | Stale-While-Revalidate | 7 days | 20 |
+| TTS Requests | Network-Only | Never | N/A |
+| Admin Endpoints | Network-Only | Never | N/A |
+
+**Strategy Explanations:**
+- **Precache:** Cached on service worker install
+- **Cache-First:** Check cache first, fallback to network (best for static assets)
+- **Network-First:** Try network first, fallback to cache if offline (best for dynamic content)
+- **Stale-While-Revalidate:** Serve from cache immediately, update in background
+- **Network-Only:** Never cache (real-time data)
+
+**Flask Route:**
+- `/service-worker.js` - Serves service worker with correct headers
+- `Service-Worker-Allowed: /` header enables service worker scope
+
+#### 3. Service Worker Registration
+
+**Location:** `frontend/static/js/app.js` (method: `registerServiceWorker()`)
+
+**Features:**
+- Registers on page load
+- Detects service worker updates
+- Logs registration status to console
+- Graceful fallback for unsupported browsers
+
+#### 4. Offline Fallback Page
+
+**Location:** `frontend/templates/offline.html`
+
+**Purpose:** Displayed when user navigates to uncached page while offline.
+
+**Features:**
+- Beautiful gradient design
+- Auto-retry connection every 5 seconds
+- Listens for `online` event to auto-redirect
+- Explains offline functionality to users
+
+**Flask Route:**
+- `/offline` - Serves offline fallback page
+
+#### 5. iOS Install Instructions
+
+**Components:**
+- iOS detection in `app.js` (`setupInstallPrompt()`)
+- Install banner in `frontend/templates/index.html`
+- Banner styles in `frontend/static/css/style.css`
+
+**Detection Logic:**
+```javascript
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const isInStandaloneMode = window.navigator.standalone;
+
+// Only show banner if:
+// 1. User is on iOS
+// 2. Not already installed (standalone mode)
+// 3. Haven't dismissed the banner before
+```
+
+**Banner Behavior:**
+- Fixed position at bottom of screen
+- Slide-up animation
+- Shows iOS Share icon + instructions
+- Dismissible (saves to localStorage)
+- Appears 2 seconds after page load
+- Purple gradient design matching PWA theme
+
+**iOS Compatibility:**
+- Works on iOS 11.3+ (Safari)
+- Service workers fully supported
+- Manual "Add to Home Screen" required (no automatic prompt)
+- Storage quota ~50MB (less than Android's ~500MB)
+- No push notification support on iOS
+
+### Browser Support
+
+| Feature | Chrome/Edge | Safari iOS | Safari Desktop | Firefox |
+|---------|-------------|------------|----------------|---------|
+| Service Workers | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Offline Caching | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| Install Prompt | ✅ Auto | ⚠️ Manual | ✅ Auto | ✅ Auto |
+| Standalone Mode | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Push Notifications | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
+| Storage Quota | ~500MB | ~50MB | ~500MB | ~500MB |
+
+### Automatic Caching Behavior
+
+**How It Works:**
+1. User visits a page (e.g., book detail, summary, chapter)
+2. Service worker intercepts the request
+3. Fetches from network (for fresh content)
+4. Automatically saves response to cache
+5. On subsequent visits (even offline), serves from cache
+
+**Storage Limits:**
+- Mobile Chrome: ~50% of available storage
+- Typical: 100-500MB depending on device
+- Current limits configured: 100 images, 50 books, 100 chapters
+
+### Installation Flow
+
+**Android Chrome:**
+1. Visit summra.com
+2. Chrome shows "Add to Home Screen" banner (automatic)
+3. User taps "Install"
+4. App icon appears on home screen
+5. Tap icon → opens in standalone mode
+
+**iOS Safari:**
+1. Visit summra.com
+2. iOS install banner appears after 2 seconds
+3. User taps Share button (banner shows instructions)
+4. Taps "Add to Home Screen"
+5. App icon appears on home screen
+6. Tap icon → opens in standalone mode
+
+---

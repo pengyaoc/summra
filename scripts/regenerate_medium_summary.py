@@ -58,7 +58,7 @@ def regenerate_medium_summary(book_id: int):
     print("\nGenerating medium summary...")
 
     # Get model from config
-    model_name = config.SUMMARY_CONFIGS['medium']['model']
+    model_name = config.SUMMARY_CONFIGS['combined']['model']
 
     # Generate medium summary using Gemini
     prompt = f"""Generate a comprehensive 2000-3000 word summary of this book.

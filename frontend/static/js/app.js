@@ -41,6 +41,7 @@ class SummraApp {
         // Track where user came from for context-aware breadcrumbs
         this.originCategory = null; // Store category when book is selected from category page
         this.originDiscover = false; // Track if book is selected from Discover page
+        this.originAuthor = null; // Store author when book is selected from author page
         // Track short summary expanded state
         this.conciseSummaryExpanded = false;
 
@@ -74,6 +75,73 @@ class SummraApp {
         this.setupLightbox();
         this.setupAdminFeatures();
         this.loadReadingPreferences();
+        this.registerServiceWorker();
+        this.setupInstallPrompt();
+    }
+
+    registerServiceWorker() {
+        // Register service worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker registered successfully:', registration.scope);
+
+                        // Check for updates periodically
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('🔄 Service Worker update found');
+
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New service worker available, show update notification
+                                    console.log('✨ New content available! Refresh to update.');
+                                    // TODO: Show user-friendly update notification
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.log('❌ Service Worker registration failed:', error);
+                    });
+            });
+        } else {
+            console.log('⚠️  Service Workers not supported in this browser');
+        }
+    }
+
+    setupInstallPrompt() {
+        // Detect iOS Safari
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isInStandaloneMode = ('standalone' in window.navigator) && window.navigator.standalone;
+
+        // Check if already installed or dismissed
+        const installBannerDismissed = localStorage.getItem('installBannerDismissed');
+
+        // Show iOS install banner if:
+        // 1. User is on iOS
+        // 2. Not already in standalone mode (not installed)
+        // 3. Haven't dismissed the banner before
+        if (isIOS && !isInStandaloneMode && !installBannerDismissed) {
+            setTimeout(() => {
+                const banner = document.getElementById('ios-install-banner');
+                if (banner) {
+                    banner.classList.remove('hidden');
+                }
+            }, 2000); // Show after 2 seconds
+        }
+
+        // Handle Android Chrome install prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+
+            // Show custom install button (we can implement this later)
+            console.log('💡 Install prompt available');
+        });
     }
 
     setupRouting() {
@@ -637,6 +705,19 @@ class SummraApp {
             });
         }
 
+        // Setup iOS install banner close button
+        const iosBannerClose = document.getElementById('ios-banner-close');
+        if (iosBannerClose) {
+            iosBannerClose.addEventListener('click', () => {
+                const banner = document.getElementById('ios-install-banner');
+                if (banner) {
+                    banner.classList.add('hidden');
+                    // Remember user dismissed the banner
+                    localStorage.setItem('installBannerDismissed', 'true');
+                }
+            });
+        }
+
         // Setup summary tab switching
         this.setupSummaryTabs();
 
@@ -1111,16 +1192,28 @@ class SummraApp {
                 name: this.currentCategory.name
             };
             this.originDiscover = false;
+            this.originAuthor = null;
         }
         // If navigating from Discover page, set origin flag
         else if (this.currentView === 'discover') {
             this.originCategory = null;
             this.originDiscover = true;
+            this.originAuthor = null;
+        }
+        // If navigating from Author page, store author as origin
+        else if (this.currentView === 'author' && this.currentAuthor) {
+            this.originCategory = null;
+            this.originDiscover = false;
+            this.originAuthor = {
+                name: this.currentAuthor.name,
+                slug: this.slugify(this.currentAuthor.name)
+            };
         }
         // If navigating from All Books or home, clear origin
         else if (this.currentView === 'all-books' || this.currentView === 'home') {
             this.originCategory = null;
             this.originDiscover = false;
+            this.originAuthor = null;
         }
         // Otherwise, keep the existing origin (e.g., when navigating within book pages)
 
@@ -2741,6 +2834,7 @@ class SummraApp {
         this.mediumSummaryContent = null;
         this.originCategory = null;
         this.originDiscover = false;
+        this.originAuthor = null;
 
         // Hide all breadcrumbs when on home page
         this.hideAllBreadcrumbs();
@@ -2935,6 +3029,7 @@ class SummraApp {
         // Clear category and discover state since we're not viewing those
         this.currentCategory = null;
         this.originDiscover = false;
+        this.originAuthor = null;
 
         // Load books only when needed
         await this.ensureBooksLoaded();
@@ -3016,7 +3111,8 @@ class SummraApp {
             }
         } catch (error) {
             console.error('Error loading author:', error);
-            authorSection.innerHTML = `
+            const container = document.getElementById('author-detail-container');
+            container.innerHTML = `
                 <div class="error-message">
                     <h2>Author not found</h2>
                     <p>The author "${this.escapeHtml(authorName)}" could not be found.</p>
@@ -3126,7 +3222,10 @@ class SummraApp {
     }
 
     renderAuthorPage(author, books) {
-        const section = document.getElementById('author-detail-section');
+        const container = document.getElementById('author-detail-container');
+
+        // Store current author for breadcrumbs
+        this.currentAuthor = author;
 
         // Filter out books that are already on Summra
         const allOtherBooks = author.other_books || [];
@@ -3146,7 +3245,7 @@ class SummraApp {
             otherBooksColumns.push(otherBooks.slice(i, i + Math.ceil(otherBooks.length / 2)));
         }
 
-        section.innerHTML = `
+        container.innerHTML = `
             <div class="author-header">
                 <h1>${this.escapeHtml(author.name)}</h1>
                 ${author.country ? `<p class="author-country">${this.escapeHtml(author.country)}</p>` : ''}
@@ -3184,7 +3283,7 @@ class SummraApp {
 
         // Render books carousel if we have books
         if (books.length > 0) {
-            const carousel = section.querySelector('#author-books-carousel');
+            const carousel = container.querySelector('#author-books-carousel');
             books.forEach(book => {
                 const bookCard = this.createBookCard(book);
                 carousel.appendChild(bookCard);
@@ -3713,9 +3812,13 @@ class SummraApp {
         const discoverMatch = path === '/discover';
         const blogMatch = path === '/blog';
         const blogPostMatch = path.match(/^\/blog\/([^\/]+)$/);
+        const authorMatch = path.match(/^\/authors\/([^\/]+)$/);
 
         if (discoverMatch) {
             breadcrumbs.push({ name: 'Discover', url: '/discover', position: 2 });
+        } else if (authorMatch) {
+            const authorName = this.currentAuthor?.name || decodeURIComponent(authorMatch[1]).replace(/-/g, ' ');
+            breadcrumbs.push({ name: authorName, url: path, position: 2 });
         } else if (blogPostMatch) {
             breadcrumbs.push({ name: 'Blog', url: '/blog', position: 2 });
             const postName = this.currentBlogPost?.title || 'Post';
@@ -3750,6 +3853,15 @@ class SummraApp {
             // Use Discover if user came from Discover page
             else if (this.originDiscover) {
                 breadcrumbs.push({ name: 'Discover', url: '/discover', position: 2 });
+                breadcrumbs.push({
+                    name: this.currentBook.title,
+                    url: `/books/${this.slugify(this.currentBook.title)}`,
+                    position: 3
+                });
+            }
+            // Use Author if user came from Author page
+            else if (this.originAuthor) {
+                breadcrumbs.push({ name: this.originAuthor.name, url: `/authors/${this.originAuthor.slug}`, position: 2 });
                 breadcrumbs.push({
                     name: this.currentBook.title,
                     url: `/books/${this.slugify(this.currentBook.title)}`,
@@ -3791,7 +3903,7 @@ class SummraApp {
      * Hide all breadcrumb navigations
      */
     hideAllBreadcrumbs() {
-        const sections = ['book', 'medium', 'chapter', 'category', 'all-categories', 'blog', 'blog-post'];
+        const sections = ['book', 'medium', 'chapter', 'category', 'all-categories', 'blog', 'blog-post', 'author'];
         sections.forEach(section => {
             const breadcrumbNav = document.getElementById(`breadcrumb-nav-${section}`);
             if (breadcrumbNav) {

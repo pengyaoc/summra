@@ -90,7 +90,7 @@ Only respond with valid JSON, no additional text."""
 
     try:
         response = client.models.generate_content(
-            model=config.SUMMARY_CONFIGS['medium']['model'],
+            model=config.SUMMARY_CONFIGS['combined']['model'],
             contents=prompt,
             config=genai.types.GenerateContentConfig(
                 temperature=0.3,
@@ -231,7 +231,7 @@ Use the BOOK numbers (1, 2, 3...) as keys. Only respond with valid JSON, no addi
 
         try:
             response = client.models.generate_content(
-                model=config.SUMMARY_CONFIGS['medium']['model'],
+                model=config.SUMMARY_CONFIGS['combined']['model'],
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     temperature=0.3,

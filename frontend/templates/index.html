@@ -43,6 +43,13 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icon-180.png') }}">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}">
 
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Summra">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
     {% if structured_data %}
@@ -64,6 +71,20 @@
         window.__INITIAL_DATA__ = {{ initial_data|tojson }};
     </script>
     {% endif %}
+
+    <!-- iOS Install Banner -->
+    <div id="ios-install-banner" class="ios-install-banner hidden">
+        <div class="ios-banner-content">
+            <div class="ios-banner-icon">📱</div>
+            <div class="ios-banner-text">
+                <div class="ios-banner-title">Install Summra</div>
+                <div class="ios-banner-subtitle">
+                    Tap <svg class="ios-share-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z"/></svg> then "Add to Home Screen"
+                </div>
+            </div>
+            <button class="ios-banner-close" id="ios-banner-close" aria-label="Close">✕</button>
+        </div>
+    </div>
 
     <div class="container">
         <!-- Header -->
@@ -550,6 +571,30 @@
                 </nav>
 
                 <div id="blog-post-container"></div>
+            </section>
+
+            <!-- Author Detail Section -->
+            <section class="author-detail-section {% if not initial_data or initial_data.type != 'author' %}hidden{% endif %}" id="author-detail-section">
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-author" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-author">
+                        {% if initial_data and initial_data.type == 'author' and initial_data.breadcrumbs %}
+                            {% for crumb in initial_data.breadcrumbs %}
+                                <li class="breadcrumb-item">
+                                    {% if loop.last %}
+                                        <span class="breadcrumb-current">{{ crumb.name }}</span>
+                                    {% else %}
+                                        <a href="{{ crumb.url }}" class="breadcrumb-link">{{ crumb.name }}</a>
+                                        <span class="breadcrumb-separator">›</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                            <!-- Breadcrumbs will be dynamically loaded here -->
+                        {% endif %}
+                    </ol>
+                </nav>
+
+                <div id="author-detail-container"></div>
             </section>
         </main>
 

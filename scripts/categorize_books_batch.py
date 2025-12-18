@@ -84,7 +84,7 @@ Only respond with valid JSON, no additional text."""
 
     try:
         response = client.models.generate_content(
-            model=config.SUMMARY_CONFIGS['medium']['model'],
+            model=config.SUMMARY_CONFIGS['combined']['model'],
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.2,

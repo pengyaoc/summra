@@ -30,20 +30,16 @@ MAX_TOKENS_PER_MINUTE = 250000
 # Summary configurations
 # Note: Use model names compatible with google-genai v1beta API
 SUMMARY_CONFIGS = {
-    'concise': {
-        'max_words': 500,
-        'model': 'gemini-2.5-flash',  # Flash model for higher quota and cost efficiency
-        'description': 'Most concise summary - get the gist with no spoilers for fiction'
-    },
-    'medium': {
-        'max_words': 2500,  # Target middle of 2000-3000 range
-        'model': 'gemini-2.5-flash',  # Flash model for higher quota and cost efficiency
-        'description': 'Medium length summary - comprehensive overview'
+    'combined': {
+        'concise_max_words': 500,
+        'medium_max_words': 2500,  # Target middle of 2000-3000 range
+        'model': 'gemini-3-flash-preview',  # Used for generating concise + medium summaries together
+        'description': 'Combined generation of concise (500 words, no spoilers) and medium (2500 words) summaries in single API call'
     },
     'comprehensive': {
         'words_per_chapter': 1000,
         'overall_summary_words': 2500,
-        'model': 'gemini-2.5-flash',  # Flash model for higher quota and cost efficiency
+        'model': 'gemini-3-flash-preview',  # Used for chapter-by-chapter summaries
         'description': 'Most comprehensive - chapter-by-chapter breakdown with connections'
     }
 }
