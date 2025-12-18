@@ -249,12 +249,134 @@ if (workbox) {
         event.waitUntil(self.clients.claim());
     });
 
-    // Message event - for future features (e.g., cache specific book on demand)
-    self.addEventListener('message', (event) => {
+    // Message event - handle cache requests and other commands
+    self.addEventListener('message', async (event) => {
         if (event.data && event.data.type === 'SKIP_WAITING') {
             self.skipWaiting();
+            return;
+        }
+
+        // Handle book prefetch request
+        if (event.data && event.data.type === 'CACHE_BOOK') {
+            const { bookId, bookSlug } = event.data;
+            console.log(`📥 Caching book ${bookId} for offline reading...`);
+
+            try {
+                // Fetch and cache all book resources
+                const resourcesToCache = [
+                    // Book data
+                    `/api/books/${bookId}`,
+                    // Summaries
+                    `/api/books/${bookId}/summary/concise`,
+                    `/api/books/${bookId}/summary/medium`,
+                    `/api/books/${bookId}/summary/comprehensive`,
+                    // All chapters
+                    `/api/books/${bookId}/chapters`
+                ];
+
+                // First, fetch the chapters list to know how many there are
+                const chaptersResponse = await fetch(`/api/books/${bookId}/chapters`);
+                if (chaptersResponse.ok) {
+                    const chaptersData = await chaptersResponse.json();
+                    const chapters = chaptersData.chapters || [];
+
+                    // Add individual chapter endpoints
+                    chapters.forEach(chapter => {
+                        resourcesToCache.push(`/api/books/${bookId}/chapters/${chapter.chapter_number}`);
+                    });
+
+                    console.log(`📚 Found ${chapters.length} chapters to cache`);
+                }
+
+                // Fetch and cache all resources
+                let cached = 0;
+                let failed = 0;
+
+                for (const url of resourcesToCache) {
+                    try {
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            const cache = await caches.open(getCacheNameForUrl(url));
+                            await cache.put(url, response.clone());
+                            cached++;
+
+                            // Send progress update
+                            if (event.ports && event.ports[0]) {
+                                event.ports[0].postMessage({
+                                    type: 'CACHE_PROGRESS',
+                                    cached,
+                                    total: resourcesToCache.length
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Failed to cache ${url}:`, error);
+                        failed++;
+                    }
+                }
+
+                console.log(`✅ Cached ${cached}/${resourcesToCache.length} resources (${failed} failed)`);
+
+                // Send completion message
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'CACHE_COMPLETE',
+                        success: true,
+                        cached,
+                        failed,
+                        total: resourcesToCache.length
+                    });
+                }
+            } catch (error) {
+                console.error('Error caching book:', error);
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'CACHE_COMPLETE',
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+        }
+
+        // Check if book is cached
+        if (event.data && event.data.type === 'CHECK_BOOK_CACHED') {
+            const { bookId } = event.data;
+
+            try {
+                const summaryCache = await caches.open('summaries-cache');
+                const chaptersCache = await caches.open('chapters-cache');
+
+                // Check if at least the book summary is cached
+                const summaryResponse = await summaryCache.match(`/api/books/${bookId}/summary/medium`);
+                const isCached = !!summaryResponse;
+
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'BOOK_CACHE_STATUS',
+                        bookId,
+                        isCached
+                    });
+                }
+            } catch (error) {
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'BOOK_CACHE_STATUS',
+                        bookId,
+                        isCached: false
+                    });
+                }
+            }
         }
     });
+
+    // Helper function to determine cache name for URL
+    function getCacheNameForUrl(url) {
+        if (url.includes('/summary/')) return 'summaries-cache';
+        if (url.includes('/chapters/')) return 'chapters-cache';
+        if (url.includes('/books/')) return 'book-data-cache';
+        return 'pages-cache';
+    }
 
     console.log('Service Worker setup complete');
 } else {
