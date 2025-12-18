@@ -3872,9 +3872,9 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     left: 0;
     right: 0;
     z-index: 1000;
-    background: white !important;
-    border-bottom: 1px solid #bdc3c7;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: #000000 !important;
+    border-bottom: 1px solid #333333;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     transition: transform 0.3s ease;
     pointer-events: none;
 }
@@ -3901,7 +3901,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     margin: 0;
     font-size: 0.9rem;
     font-weight: 400;
-    color: #2c3e50 !important;
+    color: #ffffff !important;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -3912,13 +3912,13 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
 .sticky-header-title-separator {
     margin: 0 8px;
-    color: #7f8c8d;
+    color: #999999;
 }
 
 .sticky-settings-btn {
     background: transparent;
-    border: 1px solid #bdc3c7;
-    color: #2c3e50 !important;
+    border: 1px solid #666666;
+    color: #ffffff !important;
     border-radius: 8px;
     padding: 6px 12px;
     font-size: 1.1rem;
@@ -3929,8 +3929,8 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 .sticky-settings-btn:hover {
-    background: #ecf0f1;
-    border-color: #3498db;
+    background: #333333;
+    border-color: #999999;
 }
 
 
