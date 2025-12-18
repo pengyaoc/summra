@@ -89,14 +89,14 @@ Respond with a JSON object in this exact format:
 Only respond with valid JSON, no additional text."""
 
     print("\nAnalyzing books with Gemini API...")
-    print(f"Using model: {config.SUMMARY_CONFIGS['medium']['model']}")
+    print(f"Using model: {config.SUMMARY_CONFIGS['combined']['model']}")
 
     # Call Gemini API
     try:
         client = genai.Client(api_key=config.GEMINI_API_KEY)
 
         response = client.models.generate_content(
-            model=config.SUMMARY_CONFIGS['medium']['model'],
+            model=config.SUMMARY_CONFIGS['combined']['model'],
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3,

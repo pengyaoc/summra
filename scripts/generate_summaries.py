@@ -1928,7 +1928,7 @@ class SummaryGenerator:
         Note: This method does NOT include book content in the prompt - it relies on
         the LLM's training data knowledge of classic books.
         """
-        model_name = config.SUMMARY_CONFIGS['concise']['model']  # Use same model for both
+        model_name = config.SUMMARY_CONFIGS['combined']['model']
 
         # Estimate tokens for prompt only (no book content)
         estimated_tokens = 500 + 3000  # prompt + output
@@ -5884,7 +5884,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
 
     def generate_concise_summary(self, text: str, title: str, author: str, dry_run: bool = False) -> str:
         """Generate concise 500-word summary without spoilers for fiction"""
-        model_name = config.SUMMARY_CONFIGS['concise']['model']
+        model_name = config.SUMMARY_CONFIGS['combined']['model']
 
         # Note: We don't include book content in the prompt for concise summaries
         # The LLM should use its training data knowledge of the book
@@ -5962,7 +5962,7 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
 
     def generate_medium_summary(self, text: str, title: str, author: str, dry_run: bool = False) -> str:
         """Generate medium-length 2000-3000 word summary"""
-        model_name = config.SUMMARY_CONFIGS['medium']['model']
+        model_name = config.SUMMARY_CONFIGS['combined']['model']
 
         # Note: We don't include book content in the prompt for medium summaries
         # The LLM should use its training data knowledge of the book
@@ -7378,7 +7378,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             batch_requests.append(self.build_batch_request(overall_prompt))
             request_metadata.append({
                 'type': 'overall',
-                'model': config.SUMMARY_CONFIGS['concise']['model']
+                'model': config.SUMMARY_CONFIGS['combined']['model']
             })
         else:
             print(f"\n[Skipping overall summaries - regenerating chapters only]")
@@ -7464,7 +7464,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         print("Submitting batch job...")
         print(f"{'='*60}")
 
-        model_name = config.SUMMARY_CONFIGS['concise']['model']
+        model_name = config.SUMMARY_CONFIGS['combined']['model']
         job_name = self.submit_batch_job(
             requests=batch_requests,
             model_name=model_name,

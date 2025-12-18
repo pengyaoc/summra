@@ -63,7 +63,10 @@
       "Bash(awk:*)",
       "Bash(venv/bin/python:*)",
       "Bash(/Users/pengyao/Documents/dev/summra/venv/bin/python3:*)",
-      "Bash(/Users/pengyao/Documents/dev/summra/venv/bin/python:*)"
+      "Bash(/Users/pengyao/Documents/dev/summra/venv/bin/python:*)",
+      "Bash(/tmp/moby_dick_summary.txt)",
+      "Bash(/tmp/origin_of_species_summary.txt)",
+      "Bash(/tmp/war_and_peace_summary.txt)"
     ],
     "deny": [],
     "ask": []

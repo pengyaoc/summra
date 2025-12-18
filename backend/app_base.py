@@ -253,6 +253,21 @@ def robots():
     return send_from_directory(app.static_folder, 'robots.txt')
 
 
+@app.route('/service-worker.js')
+def service_worker():
+    """Serve service worker from static folder with correct MIME type"""
+    response = send_from_directory(app.static_folder, 'service-worker.js')
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+
+@app.route('/offline')
+def offline():
+    """Offline fallback page for PWA"""
+    return render_template('offline.html')
+
+
 @app.route('/sitemap.xml')
 def sitemap():
     """Generate dynamic XML sitemap for SEO"""
