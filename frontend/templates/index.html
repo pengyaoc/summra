@@ -391,34 +391,27 @@
             <!-- Sticky Reading Header (outside section to be edge-to-edge) -->
             <div class="sticky-reading-header hidden" id="sticky-reading-header">
                 <div class="sticky-header-content">
-                    <h3>
-                        <span id="sticky-chapter-title"></span>
-                        <span class="sticky-header-title-separator">—</span>
-                        <span id="sticky-book-title"></span>
-                    </h3>
-                    <button class="sticky-settings-btn" id="sticky-settings-btn" title="Reading Settings">⚙️</button>
+                    <div class="sticky-header-left">
+                        <button class="sticky-back-btn" id="sticky-back-btn" title="Back to book">←</button>
+                        <span class="sticky-chapter-title" id="sticky-chapter-title-display"></span>
+                    </div>
+                    <div class="sticky-header-center">
+                        <div class="unified-view-toggle hidden" id="unified-view-toggle">
+                            <button class="unified-view-btn hidden" data-mode="summary">Summary</button>
+                            <button class="unified-view-btn active" data-mode="original">Original</button>
+                            <button class="unified-view-btn hidden" data-mode="modern">Modern</button>
+                            <button class="unified-view-btn hidden" data-mode="side-by-side">Side×Side</button>
+                        </div>
+                    </div>
+                    <div class="sticky-header-right">
+                        <button class="tts-button-inline sticky-tts-btn hidden" id="sticky-fulltext-tts" title="Listen to full text">🔊</button>
+                        <button class="sticky-settings-btn" id="sticky-settings-btn" title="Reading Settings">⚙️</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Chapter Detail Section -->
             <section class="chapter-detail-section {% if not initial_data or initial_data.type != 'chapter' %}hidden{% endif %}" id="chapter-detail-section">
-                <div class="back-button-container">
-                    <nav class="breadcrumb-nav" id="breadcrumb-nav-chapter" aria-label="Breadcrumb">
-                        <ol class="breadcrumb-list" id="breadcrumb-list-chapter">
-                            <!-- Breadcrumbs will be dynamically loaded here -->
-                        </ol>
-                    </nav>
-                    <button class="reading-settings-toggle" id="reading-settings-toggle" title="Reading Settings">⚙️</button>
-                </div>
-
-                <div class="chapter-detail-header">
-                    <div>
-                        <h2 id="chapter-detail-title"></h2>
-                        <p class="chapter-detail-subtitle" id="chapter-detail-subtitle"></p>
-                    </div>
-                    <button class="admin-edit-btn hidden" id="admin-edit-chapter-btn" title="Edit Chapter (Admin)">✏️ Edit</button>
-                </div>
-
                 <div class="chapter-detail-content" id="chapter-detail-content">
                     <!-- Chapter Illustration -->
                     <div class="chapter-illustration-container hidden" id="chapter-illustration-container">
@@ -429,34 +422,13 @@
                         </picture>
                     </div>
 
-                    <!-- Summary (Collapsed by default) -->
-                    <div class="chapter-summary-box collapsed" id="chapter-summary-box">
-                        <div class="chapter-summary-header" id="chapter-summary-header">
-                            <h4>📝 Summary</h4>
-                            <div class="chapter-summary-actions">
-                                <button class="tts-button-inline" id="chapter-summary-tts-button">🔊 Listen</button>
-                                <button class="toggle-summary-btn" id="toggle-summary-btn">▼</button>
-                            </div>
-                        </div>
-                        <div class="chapter-summary-content hidden" id="chapter-summary-content">
-                            <div class="summary-text" id="chapter-summary-text"></div>
-                        </div>
+                    <!-- Chapter Summary (hidden by default) -->
+                    <div class="chapter-summary-content hidden" id="chapter-summary-content">
+                        <div class="summary-text" id="chapter-summary-text"></div>
                     </div>
 
-                    <!-- Full Text -->
+                    <!-- Full Text (no header - all controls moved to sticky header) -->
                     <div class="chapter-fulltext-section" id="chapter-fulltext-section">
-                        <div class="section-header">
-                            <h4>📖 Full Text</h4>
-                            <div class="header-controls">
-                                <!-- View Mode Toggle (only shown if modern English available) -->
-                                <div class="view-mode-toggle hidden" id="view-mode-toggle">
-                                    <button class="view-mode-btn active" data-mode="original">Original</button>
-                                    <button class="view-mode-btn" data-mode="modern">Modern English</button>
-                                    <button class="view-mode-btn" data-mode="side-by-side">Side-by-Side</button>
-                                </div>
-                                <button class="tts-button-inline" id="chapter-fulltext-tts-button">🔊 Listen</button>
-                            </div>
-                        </div>
                         <!-- Original Text (default view) -->
                         <div class="chapter-fulltext" id="chapter-fulltext"></div>
                         <!-- Modern English Text (hidden by default) -->
@@ -467,10 +439,6 @@
                         </div>
                     </div>
 
-                    <!-- Next Chapter Button -->
-                    <div class="next-chapter-container" id="next-chapter-container">
-                        <button class="next-chapter-btn hidden" id="next-chapter-btn">Next Chapter →</button>
-                    </div>
                 </div>
 
                 <!-- Reading Progress Indicator -->
@@ -681,6 +649,6 @@
     <script src="{{ url_for('static', filename='js/components/BlogIndex.js') }}"></script>
     <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}"></script>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=5.17"></script>
 </body>
 </html>

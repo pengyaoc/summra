@@ -41,18 +41,18 @@ if (workbox) {
         })
     );
 
-    // Cache JavaScript files - Cache First (long-lived, versioned in URL)
+    // Cache JavaScript files - Stale While Revalidate (check network, update cache)
     registerRoute(
         ({ request }) => request.destination === 'script',
-        new CacheFirst({
-            cacheName: 'js-cache',
+        new StaleWhileRevalidate({
+            cacheName: 'js-cache-v2',
             plugins: [
                 new CacheableResponsePlugin({
                     statuses: [0, 200],
                 }),
                 new ExpirationPlugin({
                     maxEntries: 20,
-                    maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                    maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
                 }),
             ],
         })

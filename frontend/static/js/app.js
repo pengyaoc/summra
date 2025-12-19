@@ -45,6 +45,19 @@ class SummraApp {
         // Track short summary expanded state
         this.conciseSummaryExpanded = false;
 
+        // Pagination state for chapter reading
+        this.pagination = {
+            enabled: true, // Pagination is enabled by default
+            currentPage: 0,
+            totalPages: 0,
+            pages: [], // Array of page content
+            containerHeight: 0,
+            isNavigating: false, // Prevent rapid page changes
+            touchStartX: 0,
+            touchStartY: 0,
+            currentViewMode: 'original' // Track current view mode for pagination
+        };
+
         // Centralized list of ALL content sections (single source of truth)
         // When adding a new page/section, add its ID here once
         this.ALL_SECTIONS = [
@@ -77,6 +90,7 @@ class SummraApp {
         this.loadReadingPreferences();
         this.registerServiceWorker();
         this.setupInstallPrompt();
+        this.setupPagination();
     }
 
     registerServiceWorker() {
@@ -376,6 +390,11 @@ class SummraApp {
     showOnlySections(sectionsToShow) {
         // Convert single string to array for uniform processing
         const showArray = Array.isArray(sectionsToShow) ? sectionsToShow : [sectionsToShow];
+
+        // Clear pagination when leaving chapter page
+        if (!showArray.includes('chapter-detail-section')) {
+            this.clearPagination();
+        }
 
         // Only modify sections if they're not already in the correct state
         // This prevents flash when server-side rendered page is already showing correct section
@@ -2080,9 +2099,52 @@ class SummraApp {
         this.updatePageTitle(`Summary of ${book.title} by ${book.author} | Summra`);
     }
 
+    /**
+     * Apply chapter view mode and return the container to paginate (DRY helper)
+     * @param {string} viewMode - 'summary', 'original', 'modern', or 'side-by-side'
+     * @returns {HTMLElement} - The container element to paginate
+     */
+    applyChapterViewMode(viewMode) {
+        const summaryContentEl = document.getElementById('chapter-summary-content');
+        const fulltextSectionEl = document.getElementById('chapter-fulltext-section');
+        const fullTextEl = document.getElementById('chapter-fulltext');
+        const modernEnglishEl = document.getElementById('chapter-modern-english');
+        const sideBySideEl = document.getElementById('chapter-side-by-side');
+
+        // Hide all containers first
+        summaryContentEl.classList.add('hidden');
+        fullTextEl.classList.add('hidden');
+        modernEnglishEl.classList.add('hidden');
+        sideBySideEl.classList.add('hidden');
+
+        // Show the appropriate section and container based on mode
+        if (viewMode === 'summary') {
+            summaryContentEl.classList.remove('hidden');
+            fulltextSectionEl.classList.add('hidden');
+            return document.getElementById('chapter-summary-text');
+        } else if (viewMode === 'modern') {
+            fulltextSectionEl.classList.remove('hidden');
+            modernEnglishEl.classList.remove('hidden');
+            return modernEnglishEl;
+        } else if (viewMode === 'side-by-side') {
+            fulltextSectionEl.classList.remove('hidden');
+            fullTextEl.classList.remove('hidden');
+            sideBySideEl.classList.remove('hidden');
+            return fullTextEl;
+        } else {
+            // original
+            fulltextSectionEl.classList.remove('hidden');
+            fullTextEl.classList.remove('hidden');
+            return fullTextEl;
+        }
+    }
+
     async showChapterDetail(book, chapterNum, restoreScroll = false) {
         this.currentBook = book;
         this.currentChapter = chapterNum;
+
+        // Clear all pagination data when navigating to a new chapter
+        this.clearAllPaginationData();
 
         // Save current scroll position before navigating
         this.saveScrollPosition();
@@ -2093,6 +2155,12 @@ class SummraApp {
 
         // Show only chapter detail section
         this.showOnlySections('chapter-detail-section');
+
+        // Hide chapter section content to prevent flash before pagination completes
+        const chapterSection = document.getElementById('chapter-detail-section');
+        if (chapterSection) {
+            chapterSection.style.visibility = 'hidden';
+        }
 
         // Fetch individual chapter data on demand (optimized - only fetches one chapter)
         let chapter = this.chapters.find(c => c.chapter_number === chapterNum);
@@ -2144,115 +2212,144 @@ class SummraApp {
             return;
         }
 
-        // Update header
+        // Update sticky header
         const chapterTitle = chapter.chapter_title || `Chapter ${chapterNum}`;
-        document.getElementById('chapter-detail-title').textContent = `${chapterNum}. ${chapterTitle}`;
-        document.getElementById('chapter-detail-subtitle').textContent = book.title;
 
-        // Show admin edit button only in development mode
-        const adminEditBtn = document.getElementById('admin-edit-chapter-btn');
-        if (adminEditBtn) {
-            if (window.__IS_DEVELOPMENT__) {
-                adminEditBtn.classList.remove('hidden');
-            } else {
-                adminEditBtn.classList.add('hidden');
-            }
+        // Prepare illustration data for pagination (will be used as page 0 if available)
+        // Hide the standalone illustration container - it will be shown in pagination instead
+        const illustrationContainer = document.getElementById('chapter-illustration-container');
+        if (illustrationContainer) {
+            illustrationContainer.classList.add('hidden');
         }
 
-        // Display illustration if available
-        const illustrationContainer = document.getElementById('chapter-illustration-container');
-        const illustrationImg = document.getElementById('chapter-illustration');
-        const illustrationWebp = document.getElementById('chapter-illustration-webp');
-        const illustrationJpg = document.getElementById('chapter-illustration-jpg');
-
+        // Store illustration data as instance property so it's accessible everywhere
+        this.currentIllustrationData = null;
         if (chapter.illustration_url && chapter.illustration_url.trim() !== '') {
-            // Illustration available - show it
             let illustrationUrl = chapter.illustration_url;
-            // Convert local path to URL if needed (similar to cover images)
+            // Convert local path to URL if needed
             if (!illustrationUrl.startsWith('http') && !illustrationUrl.startsWith('/static/')) {
                 illustrationUrl = `/static/${illustrationUrl}`;
             }
 
             // Generate optimized image URLs (WebP and JPG)
-            // Remove extension from URL and add .webp and .jpg
             const baseUrl = illustrationUrl.replace(/\.(png|jpg|jpeg)$/i, '');
             const webpUrl = `${baseUrl}.webp`;
             const jpgUrl = `${baseUrl}.jpg`;
 
-            // Set picture sources for WebP and JPG
-            illustrationWebp.srcset = webpUrl;
-            illustrationJpg.srcset = jpgUrl;
-            illustrationImg.src = jpgUrl; // Fallback for older browsers
-            illustrationImg.alt = `Illustration for ${chapterTitle}`;
-            illustrationContainer.classList.remove('hidden');
-
-            // Add click handler to open in lightbox - pass base URL for lightbox to handle formats
-            illustrationImg.onclick = () => {
-                if (this.openLightbox) {
-                    this.openLightbox(baseUrl, `Illustration for ${chapterTitle}`);
-                }
+            // Store illustration data to be used in pagination
+            this.currentIllustrationData = {
+                baseUrl,
+                webpUrl,
+                jpgUrl,
+                alt: `Illustration for ${chapterTitle}`
             };
-        } else {
-            // No illustration - hide the container
-            illustrationContainer.classList.add('hidden');
         }
 
-        // Load summary (collapsed by default) - hide if no summary available
-        const summaryBox = document.getElementById('chapter-summary-box');
-        const summaryText = document.getElementById('chapter-summary-text');
-
-        if (!chapter.summary || chapter.summary.trim() === '') {
-            // No summary available - hide the summary box (short chapters below MIN_CHAPTER_WORDS)
-            summaryBox.style.display = 'none';
-        } else {
-            // Summary available - show and populate
-            summaryBox.style.display = '';
-            summaryText.innerHTML = this.renderMarkdown(chapter.summary);
-
-            // Setup toggle - make entire summary box clickable
-            const toggleBtn = document.getElementById('toggle-summary-btn');
-            const summaryHeader = document.getElementById('chapter-summary-header');
-            const summaryContent = document.getElementById('chapter-summary-content');
-            let isSummaryExpanded = false;
-
-            const toggleSummary = (e) => {
-                // Don't toggle if clicking on TTS button
-                if (e && e.target.closest('.tts-button-inline')) {
-                    return;
-                }
-
-                if (isSummaryExpanded) {
-                    summaryContent.classList.add('hidden');
-                    toggleBtn.textContent = '▼';
-                    summaryBox.classList.add('collapsed');
-                    isSummaryExpanded = false;
-                } else {
-                    summaryContent.classList.remove('hidden');
-                    toggleBtn.textContent = '▲';
-                    summaryBox.classList.remove('collapsed');
-                    isSummaryExpanded = true;
-                }
-            };
-
-            // Make entire header clickable (including chevron area)
-            summaryHeader.style.cursor = 'pointer';
-            summaryHeader.onclick = toggleSummary;
-
-            // Remove separate onclick from button to prevent event conflicts
-            // The button will be toggled via the header click
-            toggleBtn.style.pointerEvents = 'none';
-
-            // Setup summary TTS button - only show if audio is available
-            const summaryTtsBtn = document.getElementById('chapter-summary-tts-button');
-            if (chapter.has_audio) {
-                summaryTtsBtn.classList.remove('hidden');
-                summaryTtsBtn.onclick = () => {
-                    this.generateChapterTTS(chapterNum, chapter.summary, summaryTtsBtn, 'summary');
+        // Wait for DOM to be ready before accessing elements
+        setTimeout(() => {
+            // Setup sticky back button
+            const stickyBackBtn = document.getElementById('sticky-back-btn');
+            if (stickyBackBtn) {
+                stickyBackBtn.onclick = () => {
+                    // Navigate back to book page with proper URL update
+                    window.history.pushState({
+                        type: 'book',
+                        bookId: book.id,
+                        bookSlug: book.slug
+                    }, '', `/books/${book.slug}`);
+                    this.handleRoute();
                 };
-            } else {
-                summaryTtsBtn.classList.add('hidden');
             }
-        }
+
+            // Update chapter title in sticky header
+            const stickyTitleDisplay = document.getElementById('sticky-chapter-title-display');
+            if (stickyTitleDisplay) {
+                stickyTitleDisplay.textContent = `${chapterNum}. ${chapterTitle}`;
+            }
+
+            // Setup unified view toggle (Summary/Original/Modern/Side×Side)
+            const unifiedToggle = document.getElementById('unified-view-toggle');
+            const summaryBtn = unifiedToggle?.querySelector('[data-mode="summary"]');
+            const originalBtn = unifiedToggle?.querySelector('[data-mode="original"]');
+            const modernBtn = unifiedToggle?.querySelector('[data-mode="modern"]');
+            const sideBySideBtn = unifiedToggle?.querySelector('[data-mode="side-by-side"]');
+
+            // Determine which buttons to show
+            const hasSummary = !!chapter.summary;
+            const hasModern = !!chapter.modern_english_text;
+
+            // Show/hide buttons based on available content
+            if (summaryBtn) {
+                summaryBtn.classList.toggle('hidden', !hasSummary);
+            }
+            if (modernBtn) {
+                modernBtn.classList.toggle('hidden', !hasModern);
+            }
+            if (sideBySideBtn) {
+                sideBySideBtn.classList.toggle('hidden', !hasModern);
+            }
+
+            // Calculate total visible buttons
+            const visibleButtons = [hasSummary, true, hasModern, hasModern].filter(Boolean).length;
+
+            // Hide entire toggle if only Original is available
+            if (unifiedToggle) {
+                if (visibleButtons === 1) {
+                    unifiedToggle.classList.add('hidden');
+                } else {
+                    unifiedToggle.classList.remove('hidden');
+                }
+            }
+
+            // Wire up unified toggle click handlers (must be inside setTimeout to ensure buttons are ready)
+            // Remove old listeners by cloning and replacing nodes to prevent stacking
+            const unifiedViewBtns = document.querySelectorAll('.unified-view-btn');
+            unifiedViewBtns.forEach(btn => {
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+            });
+
+            // Now add fresh event listeners to the new buttons
+            const freshUnifiedViewBtns = document.querySelectorAll('.unified-view-btn');
+            freshUnifiedViewBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.dataset.mode;
+                    const summaryContentEl = document.getElementById('chapter-summary-content');
+                    const fulltextSectionEl = document.getElementById('chapter-fulltext-section');
+                    const fullTextEl = document.getElementById('chapter-fulltext');
+                    const modernEnglishEl = document.getElementById('chapter-modern-english');
+                    const sideBySideEl = document.getElementById('chapter-side-by-side');
+
+                    // Check if trying to view side-by-side on narrow screen
+                    const isScreenTooNarrow = () => window.innerWidth < 1024;
+                    if (mode === 'side-by-side' && isScreenTooNarrow()) {
+                        alert('Side-by-side view requires a wider screen. Please expand your browser window or use a larger device.');
+                        return;
+                    }
+
+                    // Update active button - only one can be active
+                    freshUnifiedViewBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // Save view mode preference
+                    this.saveReadingPreference('chapterViewMode', mode);
+
+                    // Reinitialize pagination for the new view mode
+                    setTimeout(() => {
+                        this.clearPagination();
+
+                        // Set flag to reset to page 1 when switching tabs (don't load saved position)
+                        if (this.pagination) {
+                            this.pagination.shouldResetToPage1 = true;
+                        }
+
+                        // Apply view mode and get container to paginate (DRY - uses shared helper)
+                        const containerToPaginate = this.applyChapterViewMode(mode);
+                        this.initializePagination(containerToPaginate, mode, this.currentIllustrationData);
+                    }, 50);
+                });
+            });
+        }, 50);
 
         // Load full text
         const fullTextEl = document.getElementById('chapter-fulltext');
@@ -2262,16 +2359,32 @@ class SummraApp {
             fullTextEl.innerHTML = '<p class="error">Full text not available for this chapter</p>';
         }
 
-        // Handle modern English view mode toggle
-        const viewModeToggle = document.getElementById('view-mode-toggle');
+        // Populate chapter summary if available
+        const chapterSummaryContent = document.getElementById('chapter-summary-content');
+        const chapterSummaryTextEl = document.getElementById('chapter-summary-text');
+        if (chapterSummaryTextEl) {
+            if (chapter.summary) {
+                chapterSummaryTextEl.innerHTML = this.renderMarkdown(chapter.summary);
+            } else {
+                // Clear loading spinner if no summary available
+                chapterSummaryTextEl.innerHTML = '<p style="color: #999; text-align: center; padding: 2rem;">No summary available for this chapter</p>';
+            }
+        }
+
+        // Handle unified view toggle for all views
         const modernEnglishEl = document.getElementById('chapter-modern-english');
         const sideBySideEl = document.getElementById('chapter-side-by-side');
+        const summaryContentEl = document.getElementById('chapter-summary-content');
+        const fulltextSectionEl = document.getElementById('chapter-fulltext-section');
 
+        // Show TTS button in sticky header
+        const stickyTTSBtn = document.getElementById('sticky-fulltext-tts');
+        if (stickyTTSBtn) {
+            stickyTTSBtn.classList.remove('hidden');
+        }
+
+        // Populate modern English container if available
         if (chapter.modern_english_text) {
-            // Modern English is available - show view mode toggle
-            viewModeToggle.classList.remove('hidden');
-
-            // Populate modern English container
             modernEnglishEl.innerHTML = this.formatChapterText(chapter.modern_english_text);
 
             // Populate side-by-side container with aligned paragraph rows
@@ -2285,24 +2398,22 @@ class SummraApp {
             const isScreenTooNarrow = () => window.innerWidth < 1024;
 
             // Load saved view mode preference or default to original
-            const savedViewMode = localStorage.getItem('reading_chapterViewMode') || 'original';
+            let savedViewMode = localStorage.getItem('reading_chapterViewMode') || 'original';
 
-            // Apply saved view mode (unless it's side-by-side on narrow screen)
+            // Apply saved view mode (unless it's side-by-side on narrow screen or summary when no summary available)
             let viewModeToApply = savedViewMode;
             if (savedViewMode === 'side-by-side' && isScreenTooNarrow()) {
                 viewModeToApply = 'original';
             }
+            if (savedViewMode === 'summary' && !chapter.summary) {
+                viewModeToApply = 'original';
+            }
 
-            // Set initial view based on saved preference
-            fullTextEl.classList.toggle('hidden', viewModeToApply !== 'original');
-            modernEnglishEl.classList.toggle('hidden', viewModeToApply !== 'modern');
-            sideBySideEl.classList.toggle('hidden', viewModeToApply !== 'side-by-side');
-
-            // Setup view mode toggle event listeners
-            const viewModeBtns = document.querySelectorAll('.view-mode-btn');
+            // Setup unified view toggle event listeners
+            const unifiedViewBtns = document.querySelectorAll('.unified-view-btn');
 
             // Set active button based on applied view mode
-            viewModeBtns.forEach(btn => {
+            unifiedViewBtns.forEach(btn => {
                 if (btn.dataset.mode === viewModeToApply) {
                     btn.classList.add('active');
                 } else {
@@ -2312,17 +2423,19 @@ class SummraApp {
 
             // Function to update side-by-side button visibility based on screen width
             const updateSideBySideButtonVisibility = () => {
-                const sideBySideBtn = document.querySelector('.view-mode-btn[data-mode="side-by-side"]');
+                const sideBySideBtn = document.querySelector('.unified-view-btn[data-mode="side-by-side"]');
                 if (sideBySideBtn) {
                     if (isScreenTooNarrow()) {
                         sideBySideBtn.style.display = 'none';
 
                         // If currently viewing side-by-side, switch to original view
                         if (!sideBySideEl.classList.contains('hidden')) {
-                            const originalBtn = document.querySelector('.view-mode-btn[data-mode="original"]');
+                            const originalBtn = document.querySelector('.unified-view-btn[data-mode="original"]');
                             if (originalBtn) {
-                                viewModeBtns.forEach(b => b.classList.remove('active'));
+                                unifiedViewBtns.forEach(b => b.classList.remove('active'));
                                 originalBtn.classList.add('active');
+                                summaryContentEl.classList.add('hidden');
+                                fulltextSectionEl.classList.remove('hidden');
                                 fullTextEl.classList.remove('hidden');
                                 modernEnglishEl.classList.add('hidden');
                                 sideBySideEl.classList.add('hidden');
@@ -2340,53 +2453,63 @@ class SummraApp {
             // Update on resize
             window.addEventListener('resize', updateSideBySideButtonVisibility);
 
-            viewModeBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const mode = btn.dataset.mode;
-
-                    // Check if trying to view side-by-side on narrow screen
-                    if (mode === 'side-by-side' && isScreenTooNarrow()) {
-                        alert('Side-by-side view requires a wider screen. Please expand your browser window or use a larger device.');
-                        return;
-                    }
-
-                    // Update active button
-                    viewModeBtns.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-
-                    // Show/hide appropriate containers
-                    fullTextEl.classList.toggle('hidden', mode !== 'original');
-                    modernEnglishEl.classList.toggle('hidden', mode !== 'modern');
-                    sideBySideEl.classList.toggle('hidden', mode !== 'side-by-side');
-
-                    // Save view mode preference
-                    this.saveReadingPreference('chapterViewMode', mode);
-                });
-            });
         } else {
-            // No modern English - hide toggle and show only original text
-            viewModeToggle.classList.add('hidden');
+            // No modern English available
             fullTextEl.classList.remove('hidden');
             modernEnglishEl.classList.add('hidden');
             sideBySideEl.classList.add('hidden');
         }
 
-        // Setup fulltext TTS button - only show if audio is available
-        const fulltextTtsBtn = document.getElementById('chapter-fulltext-tts-button');
-        if (chapter.chapter_text && chapter.has_audio) {
-            fulltextTtsBtn.classList.remove('hidden');
-            fulltextTtsBtn.onclick = () => {
-                this.generateChapterTTS(chapterNum, chapter.chapter_text, fulltextTtsBtn, 'fulltext');
-            };
-        } else {
-            fulltextTtsBtn.classList.add('hidden');
+        // Setup fulltext TTS button in sticky header - only show if audio is available
+        const stickyFulltextTtsBtn = document.getElementById('sticky-fulltext-tts');
+        if (stickyFulltextTtsBtn) {
+            if (chapter.chapter_text && chapter.has_audio) {
+                stickyFulltextTtsBtn.classList.remove('hidden');
+                stickyFulltextTtsBtn.onclick = () => {
+                    this.generateChapterTTS(chapterNum, chapter.chapter_text, stickyFulltextTtsBtn, 'fulltext');
+                };
+            } else {
+                stickyFulltextTtsBtn.classList.add('hidden');
+            }
         }
-
-        // Setup next chapter button
-        this.setupNextChapterButton(chapterNum);
 
         // Update sticky header title with chapter and book name
         this.updateStickyHeaderTitle(book.title, chapterNum, chapterTitle);
+
+        // Initialize pagination for the active view mode
+        setTimeout(() => {
+            // Clear any existing pagination
+            this.clearPagination();
+
+            // Determine which view mode to use
+            let savedViewMode = localStorage.getItem('reading_chapterViewMode') || 'original';
+
+            // If saved view mode is 'summary' but no summary available, fall back to 'original'
+            if (savedViewMode === 'summary' && !chapter.summary) {
+                savedViewMode = 'original';
+            }
+
+            // If saved view mode is 'modern' but no modern English available, fall back to 'original'
+            if (savedViewMode === 'modern' && !chapter.modern_english_text) {
+                savedViewMode = 'original';
+            }
+
+            // If saved view mode is 'side-by-side' but no modern English available, fall back to 'original'
+            if (savedViewMode === 'side-by-side' && !chapter.modern_english_text) {
+                savedViewMode = 'original';
+            }
+
+            // Apply view mode and get container to paginate (DRY - uses same helper as view toggle)
+            const containerToPaginate = this.applyChapterViewMode(savedViewMode);
+
+            // Initialize pagination with illustration data
+            console.log('Initializing pagination for container:', containerToPaginate, 'viewMode:', savedViewMode);
+            if (containerToPaginate) {
+                this.initializePagination(containerToPaginate, savedViewMode, this.currentIllustrationData);
+            } else {
+                console.error('Container to paginate is null!');
+            }
+        }, 100);
 
         // Restore scroll position or scroll to top
         if (restoreScroll) {
@@ -2394,9 +2517,6 @@ class SummraApp {
         } else {
             window.scrollTo(0, 0);
         }
-
-        // Initialize reading progress
-        setTimeout(() => this.updateReadingProgress(), 100);
 
         // Update breadcrumbs
         this.updateBreadcrumbs('chapter');
@@ -3604,6 +3724,9 @@ class SummraApp {
             const summaryText = chapterSection.querySelector('.chapter-summary-text');
             const summaryContentText = chapterSection.querySelector('#chapter-summary-content .summary-text');
 
+            // Apply to pagination containers (when pagination is active)
+            const paginationContainers = chapterSection.querySelectorAll('.pagination-page-container');
+
             if (fulltext) fulltext.style.fontSize = `${size}px`;
             if (modernEnglish) modernEnglish.style.fontSize = `${size}px`;
             if (sideBySideCells.length > 0) {
@@ -3613,11 +3736,26 @@ class SummraApp {
             }
             if (summaryText) summaryText.style.fontSize = `${size}px`;
             if (summaryContentText) summaryContentText.style.fontSize = `${size}px`;
+
+            // Apply to paginated content
+            if (paginationContainers.length > 0) {
+                paginationContainers.forEach(container => {
+                    container.style.fontSize = `${size}px`;
+                });
+            }
         }
 
         if (mediumSection) {
             const mediumText = mediumSection.querySelector('.summary-text');
             if (mediumText) mediumText.style.fontSize = `${size}px`;
+
+            // Apply to pagination containers (when pagination is active)
+            const paginationContainers = mediumSection.querySelectorAll('.pagination-page-container');
+            if (paginationContainers.length > 0) {
+                paginationContainers.forEach(container => {
+                    container.style.fontSize = `${size}px`;
+                });
+            }
         }
     }
 
@@ -3635,6 +3773,15 @@ class SummraApp {
     saveReadingPreference(key, value) {
         try {
             localStorage.setItem(`reading_${key}`, value);
+
+            // Recalculate pagination when font or size changes affect layout
+            if (key === 'font' || key === 'fontSize') {
+                setTimeout(() => {
+                    if (this.pagination.totalPages > 0) {
+                        this.recalculatePagination();
+                    }
+                }, 100);
+            }
         } catch (error) {
             console.error('Error saving reading preference:', error);
         }
@@ -3676,6 +3823,11 @@ class SummraApp {
     }
 
     updateReadingProgress() {
+        // Skip if pagination is active - pagination has its own progress tracking
+        if (this.pagination && this.pagination.totalPages > 0) {
+            return;
+        }
+
         const chapterSection = document.getElementById('chapter-detail-section');
         if (!chapterSection || chapterSection.classList.contains('hidden')) {
             return;
@@ -3702,74 +3854,52 @@ class SummraApp {
         }
     }
 
-    setupNextChapterButton(currentChapterNum) {
-        const nextChapterBtn = document.getElementById('next-chapter-btn');
-        if (!nextChapterBtn) {
-            console.warn('Next chapter button element not found');
-            return;
-        }
-
-        // Find the next chapter
-        const nextChapter = this.chapters.find(ch => ch.chapter_number === currentChapterNum + 1);
-
-        console.log(`[Next Chapter Button] Current chapter: ${currentChapterNum}`);
-        console.log(`[Next Chapter Button] Total chapters loaded: ${this.chapters.length}`);
-        console.log(`[Next Chapter Button] Next chapter found:`, nextChapter ? nextChapter.chapter_number : 'none');
-        console.log(`[Next Chapter Button] Button element classes before:`, nextChapterBtn.className);
-
-        if (nextChapter) {
-            nextChapterBtn.classList.remove('hidden');
-            nextChapterBtn.onclick = () => {
-                this.showChapterDetailPage(nextChapter.chapter_number);
-            };
-            console.log(`[Next Chapter Button] Button element classes after (should be visible):`, nextChapterBtn.className);
-            console.log(`[Next Chapter Button] Button computed display:`, window.getComputedStyle(nextChapterBtn).display);
-        } else {
-            nextChapterBtn.classList.add('hidden');
-            console.log(`[Next Chapter Button] Button hidden (no next chapter)`);
-        }
-    }
-
     setupStickyHeader() {
-        let lastScrollTop = 0;
         const stickyHeader = document.getElementById('sticky-reading-header');
-        const chapterHeader = document.querySelector('.chapter-detail-header');
 
-        window.addEventListener('scroll', () => {
-            const chapterSection = document.getElementById('chapter-detail-section');
-            if (!chapterSection || chapterSection.classList.contains('hidden')) {
+        // Show sticky header when chapter section is visible
+        const observer = new MutationObserver(() => {
+            // Skip sticky header updates during chapter boundary navigation to prevent flicker
+            if (this.isChapterBoundaryNavigation) {
                 return;
             }
 
-            if (!chapterHeader || !stickyHeader) return;
-
-            const scrollTop = window.scrollY;
-            const headerBottom = chapterHeader.offsetTop + chapterHeader.offsetHeight;
-
-            // Show sticky header when scrolled past the main chapter header
-            if (scrollTop > headerBottom) {
-                stickyHeader.classList.remove('hidden');
+            const chapterSection = document.getElementById('chapter-detail-section');
+            if (chapterSection && !chapterSection.classList.contains('hidden')) {
+                // Chapter is visible - show sticky header immediately (no scroll needed)
+                if (stickyHeader) {
+                    stickyHeader.classList.remove('hidden');
+                }
             } else {
-                stickyHeader.classList.add('hidden');
+                // Chapter is hidden - hide sticky header
+                if (stickyHeader) {
+                    stickyHeader.classList.add('hidden');
+                }
             }
-
-            lastScrollTop = scrollTop;
         });
+
+        // Observe chapter section visibility changes
+        const chapterSection = document.getElementById('chapter-detail-section');
+        if (chapterSection) {
+            observer.observe(chapterSection, { attributes: true, attributeFilter: ['class'] });
+
+            // Initial check
+            if (!chapterSection.classList.contains('hidden') && stickyHeader) {
+                stickyHeader.classList.remove('hidden');
+            }
+        }
     }
 
     updateStickyHeaderTitle(bookTitle, chapterNum = null, chapterTitle = '') {
-        const stickyBookTitle = document.getElementById('sticky-book-title');
-        const stickyChapterTitle = document.getElementById('sticky-chapter-title');
+        // New sticky header uses dropdown - update the short title
+        const stickyShortTitle = document.getElementById('sticky-chapter-title-short');
 
-        if (stickyBookTitle) {
-            stickyBookTitle.textContent = bookTitle;
-        }
-        if (stickyChapterTitle) {
-            // Format as "X: Title" or just "X" if no title (without the word "Chapter")
-            const displayText = chapterNum
-                ? (chapterTitle ? `${chapterNum}: ${chapterTitle}` : `${chapterNum}`)
-                : chapterTitle;
-            stickyChapterTitle.textContent = displayText;
+        if (stickyShortTitle && chapterNum) {
+            // Format as "Chapter X: Title" or just "Chapter X"
+            const displayText = chapterTitle
+                ? `${chapterNum}. ${chapterTitle}`
+                : `Chapter ${chapterNum}`;
+            stickyShortTitle.textContent = displayText;
         }
     }
 
@@ -4334,6 +4464,765 @@ class SummraApp {
             }
         });
     }
+
+    // ========================================
+    // PAGINATION SYSTEM FOR CHAPTER READING
+    // ========================================
+
+    /**
+     * Setup pagination system for page-based reading experience
+     */
+    setupPagination() {
+        // Setup keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            // Only handle keyboard navigation when on chapter detail page
+            const chapterSection = document.getElementById('chapter-detail-section');
+            if (!chapterSection || chapterSection.classList.contains('hidden')) {
+                return;
+            }
+
+            // Ignore if user is typing in an input
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                this.navigateToPreviousPage();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                this.navigateToNextPage();
+            }
+        });
+
+        // Handle window resize - recalculate pages
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (this.pagination.totalPages > 0) {
+                    this.recalculatePagination();
+                }
+            }, 300);
+        });
+
+        // Handle wheel events for scroll-to-turn-page
+        const handleWheel = (e) => {
+            const chapterSection = document.getElementById('chapter-detail-section');
+            if (!chapterSection || chapterSection.classList.contains('hidden')) {
+                return;
+            }
+
+            // Only prevent default if we're actively paginating
+            if (this.pagination.totalPages > 0) {
+                e.preventDefault();
+
+                // Debounce rapid scroll events
+                clearTimeout(this.pagination.wheelTimeout);
+                this.pagination.wheelTimeout = setTimeout(() => {
+                    if (e.deltaY > 0) {
+                        // Scrolling down = next page
+                        this.navigateToNextPage();
+                    } else if (e.deltaY < 0) {
+                        // Scrolling up = previous page
+                        this.navigateToPreviousPage();
+                    }
+                }, 100);
+            }
+        };
+
+        // Attach with passive: false to allow preventDefault
+        document.addEventListener('wheel', handleWheel, { passive: false });
+        this.pagination.wheelHandler = handleWheel;
+    }
+
+    /**
+     * Initialize pagination for current chapter text
+     */
+    initializePagination(containerElement, viewMode = 'original', illustrationData = null) {
+        if (!containerElement || !this.pagination.enabled) {
+            return;
+        }
+
+        // Store current view mode and illustration data
+        this.pagination.currentViewMode = viewMode;
+        this.pagination.illustrationData = illustrationData;
+
+        // Get the actual text content before any wrapper manipulation
+        let textContent;
+        const existingWrapper = containerElement.querySelector('.pagination-wrapper');
+        if (existingWrapper) {
+            // Check if we have the original content stored
+            const containerId = containerElement.id;
+            if (this.pagination.originalContent && this.pagination.originalContent[containerId]) {
+                // Use stored original content
+                textContent = this.pagination.originalContent[containerId];
+            } else {
+                // Fallback: try to get from container (this shouldn't happen normally)
+                textContent = containerElement.innerHTML;
+            }
+            // Remove the old wrapper
+            existingWrapper.remove();
+        } else {
+            // No existing wrapper, get content directly and store it
+            textContent = containerElement.innerHTML;
+
+            // Store original content for this container
+            if (!this.pagination.originalContent) {
+                this.pagination.originalContent = {};
+            }
+            const containerId = containerElement.id;
+            this.pagination.originalContent[containerId] = textContent;
+        }
+
+        // Create new pagination wrapper
+        const paginationWrapper = document.createElement('div');
+        paginationWrapper.className = 'pagination-wrapper';
+        containerElement.innerHTML = '';
+        containerElement.appendChild(paginationWrapper);
+
+        // Create page container for measuring
+        const pageContainer = document.createElement('div');
+        pageContainer.className = 'pagination-page-container';
+        pageContainer.innerHTML = textContent;
+        paginationWrapper.appendChild(pageContainer);
+
+        // Store reference to current active wrapper
+        this.pagination.activeWrapper = paginationWrapper;
+
+        // Prevent body scrolling when pagination is active
+        document.body.classList.add('pagination-active');
+        document.body.style.overflow = 'hidden';
+
+        // Calculate pages based on viewport height (will prepend illustration if available)
+        this.calculatePages(pageContainer);
+
+        // Setup navigation zones
+        this.setupNavigationZones(paginationWrapper);
+
+        // Setup touch gestures
+        this.setupTouchGestures(paginationWrapper);
+
+        // Check if we should go to last page (when navigating from next chapter)
+        if (this.pagination.shouldGoToLastPage) {
+            console.log(`🔍 shouldGoToLastPage flag is true, totalPages: ${this.pagination.totalPages}`);
+            this.pagination.currentPage = this.pagination.totalPages - 1;
+            console.log(`📍 Set currentPage to last page: ${this.pagination.currentPage}`);
+            this.pagination.shouldGoToLastPage = false;
+        } else if (this.pagination.shouldResetToPage1) {
+            // Reset to page 1 when switching view modes
+            this.pagination.currentPage = 0;
+            this.pagination.shouldResetToPage1 = false;
+        } else {
+            // Load saved page position
+            const savedPage = this.loadPagePosition();
+            this.pagination.currentPage = savedPage;
+        }
+
+        // Display current page
+        this.displayCurrentPage();
+
+        // Update progress indicator
+        this.updatePaginationProgress();
+
+        // Reapply saved font size to pagination container (fixes font size not applying after pagination wraps content)
+        const savedFontSize = localStorage.getItem('reading_fontSize') || '16';
+        this.applyFontSize(savedFontSize);
+
+        // Show chapter section after pagination is complete (prevents flash of unpaginated content)
+        const chapterSection = document.getElementById('chapter-detail-section');
+        if (chapterSection) {
+            chapterSection.style.visibility = 'visible';
+        }
+    }
+
+    /**
+     * Calculate pages based on viewport height - breaks at line level for optimal fit
+     */
+    calculatePages(containerElement) {
+        // Get EXACT viewport height minus all fixed elements
+        const viewportHeight = window.innerHeight;
+        const stickyHeaderHeight = document.querySelector('.sticky-reading-header')?.offsetHeight || 51;
+        const progressBarHeight = document.querySelector('.reading-progress-bar')?.offsetHeight || 30;
+        const verticalPadding = 20; // Minimal padding - we use line-based calculation
+
+        this.pagination.containerHeight = viewportHeight - stickyHeaderHeight - progressBarHeight - verticalPadding;
+
+        // Set wrapper height to match calculated height
+        const wrapper = containerElement.closest('.pagination-wrapper');
+        if (wrapper) {
+            wrapper.style.height = `${this.pagination.containerHeight}px`;
+            wrapper.style.maxHeight = `${this.pagination.containerHeight}px`;
+        }
+
+        // Get computed line height from container to calculate lines per page
+        const computedStyle = window.getComputedStyle(containerElement);
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 28; // Default 1.75 * 16px
+
+        // Calculate EXACT number of lines that fit per page with 2-line safety buffer
+        const maxLinesPerPage = Math.floor(this.pagination.containerHeight / lineHeight);
+        const linesPerPage = Math.max(1, maxLinesPerPage - 2); // Reserve 2 lines as safety buffer
+
+
+        // Get all paragraphs and block elements
+        const blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol'));
+
+        if (blocks.length === 0) {
+            this.pagination.pages = [containerElement.innerHTML];
+            this.pagination.totalPages = 1;
+            return;
+        }
+
+        // Create temporary measuring div with matching styles
+        const measureDiv = document.createElement('div');
+        measureDiv.style.cssText = `
+            position: absolute;
+            visibility: hidden;
+            width: ${containerElement.offsetWidth}px;
+            font-family: ${computedStyle.fontFamily};
+            font-size: ${computedStyle.fontSize};
+            line-height: ${computedStyle.lineHeight};
+            left: -9999px;
+        `;
+        document.body.appendChild(measureDiv);
+
+        const pages = [];
+        let currentPageLines = 0;
+        let currentPageContent = [];
+
+        for (const block of blocks) {
+            // Measure how many lines this block takes INCLUDING margins
+            measureDiv.innerHTML = '';
+            const clone = block.cloneNode(true);
+            measureDiv.appendChild(clone);
+
+            const blockHeight = clone.offsetHeight;
+            const style = window.getComputedStyle(clone);
+            const marginTop = parseFloat(style.marginTop) || 0;
+            const marginBottom = parseFloat(style.marginBottom) || 0;
+            const totalBlockHeight = blockHeight + marginTop + marginBottom;
+            // Add 0.35 line safety margin for paragraph spacing to prevent cutoff
+            const blockLines = Math.ceil((totalBlockHeight / lineHeight) + 0.35);
+            const remainingLines = linesPerPage - currentPageLines;
+
+            // Check if block fits on current page
+            if (currentPageLines + blockLines <= linesPerPage) {
+                // Fits entirely
+                currentPageContent.push(block.outerHTML);
+                currentPageLines += blockLines;
+            } else if (block.tagName === 'P' && remainingLines >= 2) {
+                // Paragraph needs splitting - we have at least 2 lines to fill
+                const text = block.textContent.trim();
+                const words = text.split(/\s+/).filter(w => w.length > 0);
+
+                // Find how many words fit in remaining lines (including paragraph margins)
+                // Use small safety margin that accounts for paragraph ending but doesn't waste space
+                let bestFitWordCount = 0;
+
+                for (let i = 1; i <= words.length; i++) {
+                    const testText = words.slice(0, i).join(' ');
+                    measureDiv.innerHTML = `<p>${testText}</p>`;
+                    const testP = measureDiv.querySelector('p');
+                    const testStyle = window.getComputedStyle(testP);
+                    const testMarginTop = parseFloat(testStyle.marginTop) || 0;
+                    const testMarginBottom = parseFloat(testStyle.marginBottom) || 0;
+                    const testTotalHeight = testP.offsetHeight + testMarginTop + testMarginBottom;
+
+                    // Calculate lines needed, add small 0.2 line safety margin for paragraph ending
+                    // This accounts for margin rendering and subpixel rounding without being excessive
+                    const testLines = Math.ceil(testTotalHeight / lineHeight) + 0.2;
+
+                    if (testLines <= remainingLines) {
+                        bestFitWordCount = i;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (bestFitWordCount > 0) {
+                    // Split the paragraph
+                    const wordsForCurrentPage = words.slice(0, bestFitWordCount);
+                    const wordsForNextPage = words.slice(bestFitWordCount);
+
+                    // Add to current page and push
+                    currentPageContent.push(`<p>${wordsForCurrentPage.join(' ')}</p>`);
+                    pages.push(currentPageContent.join(''));
+
+                    // Start next page with remainder (include margins in calculation)
+                    currentPageContent = [`<p>${wordsForNextPage.join(' ')}</p>`];
+                    measureDiv.innerHTML = `<p>${wordsForNextPage.join(' ')}</p>`;
+                    const remainderP = measureDiv.querySelector('p');
+                    const remainderStyle = window.getComputedStyle(remainderP);
+                    const remainderMarginTop = parseFloat(remainderStyle.marginTop) || 0;
+                    const remainderMarginBottom = parseFloat(remainderStyle.marginBottom) || 0;
+                    const remainderTotalHeight = remainderP.offsetHeight + remainderMarginTop + remainderMarginBottom;
+                    // Use actual height without extra safety margin since this starts a new page
+                    currentPageLines = Math.ceil(remainderTotalHeight / lineHeight);
+                } else {
+                    // Can't split - move entire paragraph to next page
+                    if (currentPageContent.length > 0) {
+                        pages.push(currentPageContent.join(''));
+                    }
+                    currentPageContent = [block.outerHTML];
+                    currentPageLines = blockLines;
+                }
+            } else {
+                // Non-paragraph or not enough space - move to next page
+                if (currentPageContent.length > 0) {
+                    pages.push(currentPageContent.join(''));
+                }
+                currentPageContent = [block.outerHTML];
+                currentPageLines = blockLines;
+            }
+        }
+
+        // Add last page
+        if (currentPageContent.length > 0) {
+            pages.push(currentPageContent.join(''));
+        }
+
+        // Clean up
+        document.body.removeChild(measureDiv);
+
+        // Store pages
+        this.pagination.pages = pages.length > 0 ? pages : [containerElement.innerHTML];
+
+        // Prepend illustration as page 0 if available
+        if (this.pagination.illustrationData) {
+            const illustrationPage = this.createIllustrationPage(this.pagination.illustrationData);
+            this.pagination.pages.unshift(illustrationPage);
+        }
+
+        this.pagination.totalPages = this.pagination.pages.length;
+    }
+
+    /**
+     * Create illustration page HTML (page 0)
+     */
+    createIllustrationPage(illustrationData) {
+        return `
+            <div class="illustration-page" style="
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                position: relative;
+            ">
+                <!-- Loading skeleton -->
+                <div class="illustration-skeleton" style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 80%;
+                    height: 60%;
+                    background: linear-gradient(90deg, #f0f0f0 0px, #e8e8e8 40px, #f0f0f0 80px);
+                    background-size: 1000px 100%;
+                    animation: shimmer 2s infinite linear;
+                    border-radius: 8px;
+                    z-index: 1;
+                "></div>
+
+                <picture style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; z-index: 2;">
+                    <source srcset="${illustrationData.webpUrl}" type="image/webp" />
+                    <source srcset="${illustrationData.jpgUrl}" type="image/jpeg" />
+                    <img
+                        src="${illustrationData.jpgUrl}"
+                        alt="${illustrationData.alt}"
+                        style="
+                            max-width: 100%;
+                            max-height: 100%;
+                            width: auto;
+                            height: auto;
+                            object-fit: contain;
+                            cursor: pointer;
+                            opacity: 0;
+                            transition: opacity 0.3s ease-in;
+                        "
+                        onload="this.style.opacity='1'; this.closest('.illustration-page')?.querySelector('.illustration-skeleton')?.remove();"
+                        onclick="window.summraApp?.openLightbox?.('${illustrationData.baseUrl}', '${illustrationData.alt}')"
+                    />
+                </picture>
+            </div>
+        `;
+    }
+
+    /**
+     * Display the current page
+     */
+    displayCurrentPage() {
+        // Use the stored active wrapper reference to find the correct page container
+        if (!this.pagination.activeWrapper) {
+            return;
+        }
+
+        const pageContainer = this.pagination.activeWrapper.querySelector('.pagination-page-container');
+        if (!pageContainer || this.pagination.pages.length === 0) {
+            return;
+        }
+
+        // Ensure current page is within bounds
+        this.pagination.currentPage = Math.max(0, Math.min(this.pagination.currentPage, this.pagination.totalPages - 1));
+
+        // Update page content instantly (no animation as per user preference)
+        pageContainer.innerHTML = this.pagination.pages[this.pagination.currentPage];
+
+        // Set fixed height to prevent layout shift
+        pageContainer.style.height = `${this.pagination.containerHeight}px`;
+        pageContainer.style.overflow = 'hidden';
+
+        // Update progress indicator
+        this.updatePaginationProgress();
+
+        // Save page position
+        this.savePagePosition();
+
+        // Scroll to top of content area
+        const chapterSection = document.getElementById('chapter-detail-section');
+        if (chapterSection) {
+            const sectionTop = chapterSection.offsetTop;
+            window.scrollTo({ top: sectionTop, behavior: 'instant' });
+        }
+    }
+
+    /**
+     * Setup navigation zones for tap/click navigation
+     */
+    setupNavigationZones(wrapperElement) {
+        // Remove existing navigation zones
+        const existingZones = wrapperElement.querySelectorAll('.pagination-nav-zone, .pagination-nav-button');
+        existingZones.forEach(zone => zone.remove());
+
+        // Navigation zones removed to enable text selection
+        // Only create visible navigation buttons
+        const prevButton = document.createElement('button');
+        prevButton.className = 'pagination-nav-button pagination-nav-prev';
+        prevButton.innerHTML = '‹';
+        prevButton.setAttribute('aria-label', 'Previous page');
+        prevButton.addEventListener('click', () => this.navigateToPreviousPage());
+
+        const nextButton = document.createElement('button');
+        nextButton.className = 'pagination-nav-button pagination-nav-next';
+        nextButton.innerHTML = '›';
+        nextButton.setAttribute('aria-label', 'Next page');
+        nextButton.addEventListener('click', () => this.navigateToNextPage());
+
+        // Add buttons to wrapper
+        wrapperElement.appendChild(prevButton);
+        wrapperElement.appendChild(nextButton);
+
+        // Update button visibility
+        this.updateNavigationButtons();
+    }
+
+    /**
+     * Setup touch gestures for mobile navigation
+     */
+    setupTouchGestures(wrapperElement) {
+        wrapperElement.addEventListener('touchstart', (e) => {
+            this.pagination.touchStartX = e.touches[0].clientX;
+            this.pagination.touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        wrapperElement.addEventListener('touchend', (e) => {
+            if (!this.pagination.touchStartX || !this.pagination.touchStartY) {
+                return;
+            }
+
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+
+            const deltaX = touchEndX - this.pagination.touchStartX;
+            const deltaY = touchEndY - this.pagination.touchStartY;
+
+            // Only trigger if horizontal swipe is more significant than vertical
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                if (deltaX > 0) {
+                    // Swipe right - previous page
+                    this.navigateToPreviousPage();
+                } else {
+                    // Swipe left - next page
+                    this.navigateToNextPage();
+                }
+            }
+
+            // Reset touch positions
+            this.pagination.touchStartX = 0;
+            this.pagination.touchStartY = 0;
+        }, { passive: true });
+    }
+
+    /**
+     * Navigate to previous page
+     */
+    navigateToPreviousPage() {
+        if (this.pagination.isNavigating) {
+            return;
+        }
+
+        // Check if we're at the first page of the current chapter
+        if (this.pagination.currentPage <= 0) {
+            // Try to navigate to previous chapter (go to last page)
+            this.navigateToPreviousChapter();
+            return;
+        }
+
+        this.pagination.isNavigating = true;
+        this.pagination.currentPage--;
+        this.displayCurrentPage();
+
+        setTimeout(() => {
+            this.pagination.isNavigating = false;
+        }, 100);
+    }
+
+    /**
+     * Navigate to next page
+     */
+    navigateToNextPage() {
+        if (this.pagination.isNavigating) {
+            return;
+        }
+
+        // Check if we're at the last page of the current chapter
+        if (this.pagination.currentPage >= this.pagination.totalPages - 1) {
+            // Try to navigate to next chapter
+            this.navigateToNextChapter();
+            return;
+        }
+
+        this.pagination.isNavigating = true;
+        this.pagination.currentPage++;
+        this.displayCurrentPage();
+
+        setTimeout(() => {
+            this.pagination.isNavigating = false;
+        }, 100);
+    }
+
+    /**
+     * Navigate to next chapter (called when reaching end of current chapter)
+     */
+    navigateToNextChapter() {
+        if (!this.currentBook || this.currentChapter === null || this.currentChapter === undefined) {
+            return;
+        }
+
+        // Find the next chapter
+        const nextChapter = this.chapters.find(ch => ch.chapter_number === this.currentChapter + 1);
+
+        if (nextChapter) {
+            // Set flag to prevent sticky header flicker during chapter transition
+            this.isChapterBoundaryNavigation = true;
+
+            // Navigate to next chapter's first page
+            this.pagination.isNavigating = true;
+            this.showChapterDetail(this.currentBook, nextChapter.chapter_number, false);
+
+            // Update URL
+            const newUrl = `/books/${this.currentBook.slug}/chapters/${nextChapter.chapter_number}`;
+            window.history.pushState({
+                type: 'chapter',
+                bookId: this.currentBook.id,
+                bookSlug: this.currentBook.slug,
+                chapterNum: nextChapter.chapter_number
+            }, '', newUrl);
+
+            setTimeout(() => {
+                this.pagination.isNavigating = false;
+                this.isChapterBoundaryNavigation = false;
+            }, 300);
+        } else {
+            // No next chapter - we're at the end of the book
+            console.log('End of book reached');
+        }
+    }
+
+    /**
+     * Navigate to previous chapter (called when at beginning of current chapter)
+     */
+    navigateToPreviousChapter() {
+        if (!this.currentBook || this.currentChapter === null || this.currentChapter === undefined) {
+            return;
+        }
+
+        // Find the previous chapter
+        const prevChapter = this.chapters.find(ch => ch.chapter_number === this.currentChapter - 1);
+
+        if (prevChapter) {
+            // Set flag to prevent sticky header flicker during chapter transition
+            this.isChapterBoundaryNavigation = true;
+
+            // Navigate to previous chapter - will go to last page after pagination loads
+            this.pagination.isNavigating = true;
+            this.pagination.shouldGoToLastPage = true; // Flag to indicate we should go to last page
+            console.log('🔄 navigateToPreviousChapter: Set shouldGoToLastPage flag to true');
+            this.showChapterDetail(this.currentBook, prevChapter.chapter_number, false);
+
+            // Update URL
+            const newUrl = `/books/${this.currentBook.slug}/chapters/${prevChapter.chapter_number}`;
+            window.history.pushState({
+                type: 'chapter',
+                bookId: this.currentBook.id,
+                bookSlug: this.currentBook.slug,
+                chapterNum: prevChapter.chapter_number
+            }, '', newUrl);
+
+            setTimeout(() => {
+                this.pagination.isNavigating = false;
+                this.isChapterBoundaryNavigation = false;
+            }, 300);
+        } else {
+            // No previous chapter - we're at the beginning of the book
+            console.log('Beginning of book reached');
+        }
+    }
+
+    /**
+     * Update navigation button visibility
+     */
+    updateNavigationButtons() {
+        const prevButton = document.querySelector('.pagination-nav-prev');
+        const nextButton = document.querySelector('.pagination-nav-next');
+
+        // Check if there are previous/next chapters (handles preface at chapter 0)
+        const hasPrevChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter - 1);
+        const hasNextChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter + 1);
+
+        if (prevButton) {
+            // Show prev button if not on first page OR if there's a previous chapter
+            prevButton.style.display = (this.pagination.currentPage > 0 || hasPrevChapter) ? 'flex' : 'none';
+        }
+
+        if (nextButton) {
+            // Show next button if not on last page OR if there's a next chapter
+            nextButton.style.display = (this.pagination.currentPage < this.pagination.totalPages - 1 || hasNextChapter) ? 'flex' : 'none';
+        }
+    }
+
+    /**
+     * Update progress indicators with page numbers and percentage
+     */
+    updatePaginationProgress() {
+        const progressFill = document.getElementById('reading-progress-fill');
+        const progressText = document.getElementById('reading-progress-text');
+
+        if (!progressFill || !progressText) {
+            return;
+        }
+
+        // Calculate percentage
+        const percentage = this.pagination.totalPages > 0
+            ? Math.round(((this.pagination.currentPage + 1) / this.pagination.totalPages) * 100)
+            : 0;
+
+        // Update progress bar
+        progressFill.style.width = `${percentage}%`;
+
+        // Update text with page numbers and percentage
+        const pageText = `Page ${this.pagination.currentPage + 1} of ${this.pagination.totalPages} • ${percentage}%`;
+        progressText.textContent = pageText;
+
+        // Update navigation buttons
+        this.updateNavigationButtons();
+    }
+
+    /**
+     * Recalculate pagination when window resizes or settings change
+     */
+    recalculatePagination() {
+        // Use the stored active wrapper reference
+        if (!this.pagination.activeWrapper) {
+            return;
+        }
+
+        const containerElement = this.pagination.activeWrapper.querySelector('.pagination-page-container');
+        if (!containerElement) {
+            return;
+        }
+
+        // Save current progress as percentage
+        const progressPercentage = this.pagination.totalPages > 0
+            ? this.pagination.currentPage / this.pagination.totalPages
+            : 0;
+
+        // Get all original content
+        const allContent = this.pagination.pages.join('');
+
+        // Create temporary container with all content for recalculation
+        const tempContainer = document.createElement('div');
+        tempContainer.className = 'pagination-page-container';
+        tempContainer.innerHTML = allContent;
+        containerElement.parentElement.appendChild(tempContainer);
+
+        // Recalculate pages
+        this.calculatePages(tempContainer);
+
+        // Restore approximate position
+        this.pagination.currentPage = Math.floor(progressPercentage * this.pagination.totalPages);
+        this.pagination.currentPage = Math.max(0, Math.min(this.pagination.currentPage, this.pagination.totalPages - 1));
+
+        // Remove temporary container
+        tempContainer.remove();
+
+        // Display the new current page
+        this.displayCurrentPage();
+    }
+
+    /**
+     * Save current page position to localStorage
+     */
+    savePagePosition() {
+        if (!this.currentBook || !this.currentChapter) {
+            return;
+        }
+
+        const key = `pagination_${this.currentBook.id}_${this.currentChapter}`;
+        localStorage.setItem(key, this.pagination.currentPage.toString());
+    }
+
+    /**
+     * Load saved page position from localStorage
+     */
+    loadPagePosition() {
+        if (!this.currentBook || !this.currentChapter) {
+            return 0;
+        }
+
+        const key = `pagination_${this.currentBook.id}_${this.currentChapter}`;
+        const savedPage = localStorage.getItem(key);
+        return savedPage ? parseInt(savedPage, 10) : 0;
+    }
+
+    /**
+     * Clear pagination (used when switching view modes or chapters)
+     */
+    clearPagination() {
+        this.pagination.currentPage = 0;
+        this.pagination.totalPages = 0;
+        this.pagination.pages = [];
+        this.pagination.containerHeight = 0;
+
+        // Clear stored original content when switching chapters
+        // (but keep it when just switching view modes)
+        // We'll handle this by only clearing on chapter navigation
+
+        // Re-enable body scrolling
+        document.body.classList.remove('pagination-active');
+        document.body.style.overflow = '';
+    }
+
+    /**
+     * Clear all pagination data including stored original content (for chapter navigation)
+     */
+    clearAllPaginationData() {
+        this.clearPagination();
+        this.pagination.originalContent = {};
+    }
+
+    // Chapter dropdown removed - using simple summary button instead
 }
 
 // Hero Search Functionality
