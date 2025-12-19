@@ -16,6 +16,7 @@ This document provides in-depth technical documentation for the Summra project, 
 10. [Book Metadata Enrichment](#book-metadata-enrichment)
 11. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
 12. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
+13. [Pagination System](#pagination-system-added-2025-12-19)
 
 ---
 
@@ -9566,5 +9567,415 @@ const isInStandaloneMode = window.navigator.standalone;
 4. Taps "Add to Home Screen"
 5. App icon appears on home screen
 6. Tap icon → opens in standalone mode
+
+---
+
+## Pagination System (Added 2025-12-19)
+
+The pagination system transforms chapter reading from scroll-based to page-based navigation, providing a Kindle-like reading experience.
+
+### Architecture Overview
+
+**Core Components:**
+- **Pagination State Manager** (`this.pagination` object in app.js)
+- **Page Calculation Engine** (height-based algorithm)
+- **Navigation System** (tap zones, swipe, keyboard, buttons)
+- **Progress Tracker** (page numbers and percentage)
+- **Position Persistence** (localStorage per chapter)
+
+### State Management
+
+**Location:** `frontend/static/js/app.js` lines 48-59
+
+```javascript
+this.pagination = {
+    totalPages: 0,
+    currentPage: 1,
+    pages: [],              // Array of DOM elements (one per page)
+    initialized: false,
+    wheelTimeout: null,     // Debounce for scroll-to-turn
+    swipeStartX: 0,
+    swipeStartY: 0
+};
+```
+
+**State Lifecycle:**
+1. Reset on chapter load
+2. Initialized after DOM rendering
+3. Updated on page navigation
+4. Recalculated on viewport/font changes
+5. Cleared on chapter exit
+
+### Page Calculation Algorithm
+
+**Location:** `frontend/static/js/app.js` lines 4525-4801
+
+**Key Principle:** Break content only at paragraph boundaries to prevent mid-sentence splits.
+
+**Height Calculation:**
+```javascript
+// Calculate available height for content
+const viewportHeight = window.innerHeight;
+const stickyHeaderHeight = 50;
+const backButtonHeight = 40;
+const progressBarHeight = 24;
+const padding = 32;
+
+const availableHeight = viewportHeight - stickyHeaderHeight - backButtonHeight - progressBarHeight - padding;
+```
+
+**Algorithm Steps:**
+
+1. **Clone Content for Measurement**
+   - Create off-screen measurement container
+   - Preserve all styles (font-size, line-height, margins)
+   - Use same CSS classes as visible content
+
+2. **Iterate Through Paragraphs**
+   - Measure each paragraph's rendered height
+   - Include top/bottom margins in measurement
+   - Track cumulative height
+
+3. **Apply Safety Margin (Critical Fix - v5.10)**
+   ```javascript
+   // Calculate lines needed, add small 0.2 line safety margin for paragraph ending
+   // This accounts for margin rendering and subpixel rounding without being excessive
+   const testLines = Math.ceil(testTotalHeight / lineHeight) + 0.2;
+   ```
+
+   **Why AFTER Math.ceil():**
+   - Margins already included in `testTotalHeight` measurement
+   - Math.ceil() rounds up line calculations
+   - 0.2 line buffer accounts for rendering/rounding edge cases
+   - Applied only for paragraph endings, not every line
+
+4. **Word-Fitting for Split Paragraphs**
+   - If paragraph too large, split at word boundaries
+   - Measure progressively longer word sequences
+   - Find maximum words that fit in remaining space
+   - Create new paragraph elements for continuation
+
+5. **Build Page Array**
+   - Each page is a container div with assigned paragraphs
+   - Page containers receive inline font-size from reading settings
+   - Pages hidden/shown based on current position
+
+**Edge Cases Handled:**
+- Empty paragraphs (preserve spacing)
+- Very long words (allow overflow rather than break)
+- Margin collapse at page boundaries
+- Font size changes triggering recalculation
+- Window resize events
+
+### Navigation System
+
+**Methods Supported:**
+
+1. **Tap Zones (Removed in v5.17)**
+   - Originally 30% left/right zones
+   - Removed due to blocking text selection
+   - Replaced with scroll-to-turn
+
+2. **Scroll-to-Turn** (Added after layout redesign)
+   - Location: `app.js` lines 4438-4465
+   - Intercepts wheel events with `preventDefault()`
+   - 100ms debounce prevents rapid page flipping
+   - Scroll down → next page, scroll up → previous page
+
+3. **Keyboard Navigation**
+   - Arrow Right → next page
+   - Arrow Left → previous page
+   - Attached to document keydown event
+
+4. **On-Screen Buttons**
+   - Previous/Next buttons overlaid on content
+   - Fade in on desktop hover
+   - Always visible on mobile
+   - SVG chevron icons
+
+5. **Swipe Gestures**
+   - Touch event listeners for mobile
+   - Swipe left → next page
+   - Swipe right → previous page
+   - Minimum swipe distance threshold
+
+### Font Size Integration (Critical Fix - v5.3)
+
+**Problem:** Font size slider had no effect on paginated content.
+
+**Root Cause:**
+- CSS had hardcoded `font-size: 1.05rem` on pagination containers
+- Inline styles were being applied but overridden by CSS
+- `applyFontSize()` didn't target pagination elements
+
+**Solution (app.js lines 3721-3752):**
+
+```javascript
+applyFontSize(size) {
+    const chapterSection = document.getElementById('chapter-detail-section');
+    if (!chapterSection) return;
+
+    // Apply to pagination containers (when pagination is active)
+    const paginationContainers = chapterSection.querySelectorAll('.pagination-page-container');
+    if (paginationContainers.length > 0) {
+        paginationContainers.forEach(container => {
+            container.style.fontSize = `${size}px`;
+        });
+    }
+}
+```
+
+**CSS Changes (style.css lines 1708-2082):**
+- Removed hardcoded `font-size` from `.chapter-fulltext`
+- Removed hardcoded `font-size` from `.chapter-modern-english`
+- Removed hardcoded `font-size` from `.pagination-page-container`
+- Added comments explaining JavaScript control
+
+**Reapplication After Pagination (app.js lines 4622-4624):**
+```javascript
+// Reapply saved font size to pagination container
+const savedFontSize = localStorage.getItem('reading_fontSize') || '16';
+this.applyFontSize(savedFontSize);
+```
+
+### Flash Prevention (Fixed v5.14)
+
+**Problem:** Flash of unpaginated content when navigating between chapters.
+
+**Failed Approaches:**
+- v5.11: Complex loading container with spinner → broke entire layout
+- v5.12: Query-based container approach → still broken
+- v5.13: Simplified approach → partial fix
+
+**Final Solution:** Simple section-level visibility control
+
+**Hide on Chapter Load (app.js lines 2159-2163):**
+```javascript
+// In showChapterDetail()
+const chapterSection = document.getElementById('chapter-detail-section');
+if (chapterSection) {
+    chapterSection.style.visibility = 'hidden';
+}
+```
+
+**Show After Pagination Complete (app.js lines 4632-4636):**
+```javascript
+// In initializePagination()
+const chapterSection = document.getElementById('chapter-detail-section');
+if (chapterSection) {
+    chapterSection.style.visibility = 'visible';
+}
+```
+
+**Why This Works:**
+- `visibility: hidden` hides content but preserves layout
+- DOM remains accessible for measurement
+- No complex positioning or z-index issues
+- Clean transition with no flash
+
+### Progress Integration
+
+**Display Format:** "Page 5 of 24 • 21%"
+
+**Update Logic (app.js):**
+```javascript
+updateProgress() {
+    const progressText = document.getElementById('reading-progress-text');
+    const progressFill = document.getElementById('reading-progress-fill');
+
+    const percentage = Math.round((this.pagination.currentPage / this.pagination.totalPages) * 100);
+
+    progressText.textContent = `Page ${this.pagination.currentPage} of ${this.pagination.totalPages} • ${percentage}%`;
+    progressFill.style.width = `${percentage}%`;
+}
+```
+
+**Progress Bar Synchronization:**
+- Visual bar width matches percentage
+- Updates instantly on page change
+- Persists during font/theme changes
+
+### Position Persistence
+
+**localStorage Key Format:** `chapter_page_position_${bookId}_${chapterNumber}`
+
+**Save on Page Change:**
+```javascript
+localStorage.setItem(`chapter_page_position_${bookId}_${chapterNumber}`, currentPage);
+```
+
+**Restore on Chapter Load:**
+```javascript
+const savedPage = localStorage.getItem(`chapter_page_position_${bookId}_${chapterNumber}`);
+if (savedPage && savedPage <= totalPages) {
+    this.navigateToPage(parseInt(savedPage));
+}
+```
+
+**Recalculation Handling:**
+- If saved page > new total pages, navigate to last page
+- Maintains approximate reading position
+- Not character-perfect but good enough for UX
+
+### View Mode Integration
+
+**Supported Modes:**
+- Original Text
+- Modern English
+- Side-by-Side
+
+**Pagination Recalculation on Mode Change:**
+```javascript
+handleViewModeChange(mode) {
+    // Switch view mode
+    this.switchViewMode(mode);
+
+    // Recalculate pagination for new content
+    if (this.pagination.initialized) {
+        this.initializePagination();
+    }
+}
+```
+
+**Content-Specific Calculations:**
+- Original text uses `.chapter-fulltext` elements
+- Modern English uses `.chapter-modern-english` elements
+- Side-by-side uses `.chapter-side-by-side` rows
+- Each mode measures its own DOM structure
+
+### Responsive Recalculation
+
+**Triggers:**
+1. Window resize (debounced 300ms)
+2. Font size change (immediate)
+3. Theme change (immediate)
+4. View mode change (immediate)
+5. Orientation change on mobile (immediate)
+
+**Recalculation Flow:**
+```javascript
+// Save current position
+const currentElement = getCurrentParagraphElement();
+
+// Clear existing pagination
+this.clearPagination();
+
+// Rebuild pages with new dimensions
+this.calculatePages();
+
+// Restore approximate position
+this.restorePositionToElement(currentElement);
+```
+
+### Performance Optimizations
+
+**Measurement Container Reuse:**
+- Single off-screen div created once
+- Reused for all paragraph measurements
+- Destroyed after calculation complete
+
+**Debouncing:**
+- Scroll-to-turn: 100ms debounce
+- Window resize: 300ms debounce
+- Prevents excessive recalculations
+
+**DOM Minimization:**
+- Only current page rendered in DOM
+- Previous/next pages hidden with `display: none`
+- Reduces paint/reflow operations
+
+### Chapter Navigation Integration (Fixed v5.15-v5.17)
+
+**Problem:** Navigation buttons didn't work from preface (chapter 0) to Chapter 1.
+
+**Root Cause:**
+```javascript
+// WRONG - assumes chapters start at 1
+const hasPrevChapter = this.currentChapter > 1;
+const hasNextChapter = this.currentChapter < this.chapters.length;
+```
+
+**Solution (app.js lines 5091-5092):**
+```javascript
+// Explicit existence checking handles chapter 0 (preface)
+const hasPrevChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter - 1);
+const hasNextChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter + 1);
+```
+
+**Why This Works:**
+- `.some()` explicitly checks if chapter exists
+- Works for any chapter numbering scheme (0-based, 1-based, gaps)
+- No assumptions about continuous numbering
+
+### CSS Classes
+
+**Location:** `frontend/static/css/style.css` lines 4971-5220
+
+**Key Classes:**
+- `.pagination-wrapper` - Container for all pages (height set by JS)
+- `.pagination-page-container` - Individual page (receives inline font-size)
+- `.pagination-nav-btn` - Previous/Next buttons
+- `.pagination-progress` - Page counter display
+- `.pagination-active` - Applied to body to disable normal scrolling
+
+**Non-Scrollable Implementation:**
+```css
+body.pagination-active {
+    overflow: hidden;
+}
+
+.pagination-wrapper {
+    overflow: hidden;
+    overscroll-behavior: contain;
+}
+```
+
+### Files Involved
+
+**JavaScript:**
+- `frontend/static/js/app.js`:
+  - Lines 48-59: State initialization
+  - Lines 2159-2163: Flash prevention (hide)
+  - Lines 3721-3752: Font size application
+  - Lines 4438-4465: Scroll-to-turn handler
+  - Lines 4498-4499: Body overflow management
+  - Lines 4525-4801: Complete pagination system
+  - Lines 4845-4846: Cleanup on exit
+  - Lines 5091-5092: Chapter navigation fix
+
+**CSS:**
+- `frontend/static/css/style.css`:
+  - Lines 1708-1710: Removed hardcoded font-size from `.chapter-fulltext`
+  - Lines 1709: Removed hardcoded font-size from `.chapter-modern-english`
+  - Lines 2082: Removed hardcoded font-size from `.pagination-page-container`
+  - Lines 4971-5220: Complete pagination styling
+
+**HTML:**
+- `frontend/templates/index.html`:
+  - Line 652: Version v5.17
+
+### Version History
+
+| Version | Key Changes |
+|---------|-------------|
+| v5.3 | Font size controls fix |
+| v5.4-v5.10 | Safety margin iterations (final: 0.2 after Math.ceil) |
+| v5.11-v5.14 | Flash prevention fixes (final: section visibility) |
+| v5.15-v5.17 | Chapter navigation fix (explicit existence check) |
+
+### Known Limitations
+
+1. **Not Character-Perfect:** Position restoration after recalculation is approximate (page-level, not character-level)
+2. **No Mid-Paragraph Breaks:** Very long paragraphs may result in taller pages
+3. **Font Loading:** System must wait for fonts to load before accurate measurement
+4. **Print Mode:** Pagination disabled for printing (uses normal scroll)
+
+### Future Enhancements
+
+1. **Character-Level Position:** Track exact character offset for perfect position restoration
+2. **Page Turn Animations:** Optional subtle transitions between pages
+3. **Keyboard Shortcuts:** Additional shortcuts (Home, End, Page Up/Down)
+4. **Touch Gestures:** More sophisticated gesture recognition
+5. **Reading Statistics:** Track pages read, time per page, total reading time
 
 ---

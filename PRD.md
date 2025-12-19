@@ -1795,13 +1795,162 @@ Blog posts feature visually engaging header images automatically sourced from Un
 
 ---
 
-**Document Version:** 1.9
-**Last Updated:** 2025-12-12
+### 12. Page-Based Reading Experience (Pagination)
+
+**Feature Description:**
+Transform chapter reading from traditional scroll-based navigation to a page-based experience, mimicking Kindle's e-ink reading interface where users "turn pages" instead of scrolling.
+
+**Added:** 2025-12-18
+**Updated:** 2025-12-19 (v5.3-v5.17 bug fixes)
+
+**User Stories:**
+- As a reader, I want to navigate chapters by turning pages instead of scrolling so I get a more book-like reading experience
+- As a reader on mobile, I want to swipe to turn pages so the interaction feels natural like a physical book
+- As a reader, I want to see my progress as page numbers (e.g., "Page 5 of 24") so I know exactly how much I've read
+- As a reader using a trackpad, I want to scroll to turn pages so navigation feels intuitive
+- As a reader, I want the text to fit perfectly on each page so I never see partial sentences or awkward breaks
+
+**Specifications:**
+
+#### Page Calculation
+- **Algorithm:** Height-based calculation that breaks content only at paragraph boundaries
+- **Viewport Awareness:** Pages dynamically calculated based on window height minus fixed UI elements
+- **Safety Margin:** 0.2 line buffer applied AFTER Math.ceil() to prevent text cutoff at paragraph endings
+- **Responsive:** Automatic recalculation on window resize, font change, theme change, view mode change
+- **Word Fitting:** When paragraphs exceed page height, split at word boundaries (never mid-word)
+
+#### Navigation Methods (All Supported)
+1. **Scroll-to-Turn** (Desktop)
+   - Mouse wheel scroll down → next page
+   - Mouse wheel scroll up → previous page
+   - Trackpad scroll gestures supported
+   - 100ms debounce to prevent rapid page flipping
+
+2. **Swipe Gestures** (Mobile)
+   - Swipe left → next page
+   - Swipe right → previous page
+   - Minimum swipe distance threshold
+
+3. **Keyboard Shortcuts**
+   - Arrow Right → next page
+   - Arrow Left → previous page
+
+4. **On-Screen Buttons**
+   - Previous/Next buttons overlaid on content
+   - Fade in on hover (desktop)
+   - Always visible (mobile)
+   - SVG chevron icons
+
+#### Progress Display
+- **Format:** "Page X of Y • Z%"
+- **Location:** Bottom progress bar
+- **Updates:** Instant on page change
+- **Synchronization:** Progress bar width matches percentage
+- **Example:** "Page 5 of 24 • 21%"
+
+#### Reading Settings Integration
+- **Font Size:** Slider controls text size (12-24px)
+  - Triggers immediate pagination recalculation
+  - Inline styles applied to pagination containers
+  - No hardcoded CSS overrides
+
+- **Font Family:** Georgia, System, Open Sans
+  - Affects line height and word wrapping
+  - Triggers recalculation on change
+
+- **Theme:** Light, Dark, Sepia
+  - Theme switching maintains pagination
+  - Colors updated without recalculation
+
+#### View Mode Support
+- **Original Text:** Pagination of classic text
+- **Modern English:** Pagination of simplified text
+- **Side-by-Side:** Pagination of parallel columns
+- **Mode switching:** Triggers automatic recalculation for new content
+
+#### Position Persistence
+- **Storage:** localStorage per chapter (`chapter_page_position_${bookId}_${chapterNumber}`)
+- **Save Trigger:** Every page change
+- **Restore:** On chapter load
+- **Recalculation:** Maintains approximate position (page-level, not character-level)
+
+#### Flash Prevention
+- **Problem:** Unpaginated content briefly visible before pagination completes
+- **Solution:** Section-level visibility control
+  - Hide: `visibility: hidden` on chapter load
+  - Show: `visibility: visible` after pagination complete
+  - Preserves DOM layout for measurement
+  - No complex positioning or z-index issues
+
+#### Chapter Navigation Integration
+- **Between Chapters:** "Previous Chapter" / "Next Chapter" buttons
+- **Preface Support:** Handles chapter 0 (preface) correctly
+- **Explicit Existence Checking:** Uses `.some()` to verify adjacent chapters exist
+- **Works with:** Any chapter numbering scheme (0-based, 1-based, gaps)
+
+#### Non-Scrollable Pages
+- **Implementation:** `body.pagination-active { overflow: hidden }`
+- **Wrapper:** Fixed height set by JavaScript
+- **Overscroll:** `overscroll-behavior: contain` prevents bounce
+- **Result:** Page never scrolls, content always fits viewport exactly
+
+**UI Requirements:**
+- Pages must fit exactly in viewport (no scrolling)
+- Text selection must work everywhere (no blocking zones)
+- Progress indicator updates instantly on page change
+- Page turns must be instant (no animations as per user preference)
+- Reading settings must apply immediately to paginated content
+- Visual buttons must be accessible but not intrusive
+
+**Acceptance Criteria:**
+- [✅] Pages calculated based on viewport height
+- [✅] Content breaks only at paragraph boundaries (no mid-sentence splits)
+- [✅] All 4 navigation methods work (scroll, swipe, keyboard, buttons)
+- [✅] Progress displayed as "Page X of Y • Z%"
+- [✅] Page transitions are instant (no animations)
+- [✅] Font size controls work with pagination (v5.3 fix)
+- [✅] No text cutoff at page boundaries (v5.10 safety margin fix)
+- [✅] No flash of unpaginated content during navigation (v5.14 fix)
+- [✅] Navigation works from preface to Chapter 1 (v5.17 fix)
+- [✅] Text selection works everywhere (tap zones removed)
+- [✅] Pages never scroll (body overflow hidden)
+- [✅] Position persists when returning to chapter
+- [✅] Responsive: recalculates on window resize
+- [✅] Theme/font changes trigger recalculation
+- [✅] Works with all view modes (Original, Modern, Side-by-Side)
+
+**Known Limitations:**
+1. Position restoration after recalculation is approximate (page-level, not character-level)
+2. Very long paragraphs may result in taller pages
+3. Font loading must complete before accurate measurement
+4. Pagination disabled for printing (uses normal scroll)
+
+**Version History:**
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v5.3 | 2025-12-19 | Font size controls fix - removed CSS overrides, target pagination containers |
+| v5.4-v5.10 | 2025-12-19 | Safety margin iterations - final: 0.2 line AFTER Math.ceil() |
+| v5.11-v5.14 | 2025-12-19 | Flash prevention fixes - final: section visibility control |
+| v5.15-v5.17 | 2025-12-19 | Chapter navigation fix - explicit existence checking for chapter 0 |
+
+**Future Enhancements:**
+- Character-level position tracking for perfect restoration after recalculation
+- Optional subtle page turn animations (user preference toggle)
+- Additional keyboard shortcuts (Home, End, Page Up/Down)
+- More sophisticated touch gesture recognition
+- Reading statistics tracking (pages read, time per page, total reading time)
+- Book progress persistence across chapters ("You're on page 145 of 520 total")
+
+---
+
+**Document Version:** 2.0
+**Last Updated:** 2025-12-19
 **Author:** Summra Team
 **Status:** Living Document
 
 
-## 12. Data Quality & Integrity
+## 13. Data Quality & Integrity
 
 ### Database Audit System
 

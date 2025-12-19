@@ -4,6 +4,164 @@
 
 ---
 
+## 2025-12-19
+
+### Pagination System Fixes and Improvements (v5.3-v5.17) - COMPLETED
+**Status:** ✅ Completed
+**Started:** 2025-12-19
+**Completed:** 2025-12-19
+
+**Objective:** Fix multiple pagination issues including font size controls, text cutoff, excessive whitespace, flash during navigation, and chapter navigation between preface and Chapter 1.
+
+#### Problems and Solutions
+
+**1. Font Size Controls Not Working (v5.3)**
+- **Problem:** Text size slider had no effect on paginated content
+- **Root Cause:**
+  - `applyFontSize()` only targeted original content elements
+  - Pagination wrapped content in `.pagination-page-container` elements
+  - CSS had hardcoded `font-size: 1.05rem` overriding inline styles
+- **Solution:**
+  - Updated `applyFontSize()` to target pagination containers
+  - Removed hardcoded font-size from CSS for `.chapter-fulltext`, `.chapter-modern-english`, `.pagination-page-container`
+  - Added reapply call after pagination initialization
+- **Files:** `frontend/static/js/app.js:3721-3752,4622-4624`, `frontend/static/css/style.css:1708-1710,1709,2082`
+
+**2. Safety Margin Placement Issues (v5.4-v5.10)**
+- **User Insight (Critical):** "0.15 is added in the wrong spot. Think deeply about this. We only need to add additional space if there is a new paragraph. It doesn't have to be on every line."
+- **Root Cause:** Safety margin was being multiplied into line calculations instead of accounting for paragraph endings
+- **Solution Evolution:**
+  - v5.4: Added 0.75 line safety margin → excessive whitespace
+  - v5.6: Reduced to 0.35 lines → better but still too conservative
+  - v5.7: Removed from word-fitting loop → caused cutoff
+  - v5.8: Added 0.15 back → still in wrong place
+  - v5.9: Changed to 3-pixel buffer → insufficient for long paragraphs
+  - v5.10: **Final Fix** - 0.2 line safety margin applied AFTER Math.ceil(), not before
+- **Final Implementation:**
+  ```javascript
+  // Calculate lines needed, add small 0.2 line safety margin for paragraph ending
+  // This accounts for margin rendering and subpixel rounding without being excessive
+  const testLines = Math.ceil(testTotalHeight / lineHeight) + 0.2;
+  ```
+- **Files:** `frontend/static/js/app.js:4706-4728`
+
+**3. Flash During Chapter Navigation (v5.11-v5.14)**
+- **Problem:** Flash of unpaginated content when moving between chapters
+- **Failed Attempts:**
+  - v5.11: Added loading container with spinner → broke entire layout
+  - v5.12: Changed to query for container → still broken
+  - v5.13: Removed complex loading approach → still had issues
+- **Final Solution (v5.14):**
+  - Hide entire chapter section at section level in `showChapterDetail()`
+  - Show after pagination completes in `initializePagination()`
+  - Simple, clean visibility control
+- **Implementation:**
+  ```javascript
+  // In showChapterDetail() - hide at start
+  if (chapterSection) {
+      chapterSection.style.visibility = 'hidden';
+  }
+
+  // In initializePagination() - show after completion
+  if (chapterSection) {
+      chapterSection.style.visibility = 'visible';
+  }
+  ```
+- **Files:** `frontend/static/js/app.js:2159-2163,4632-4636`
+
+**4. Navigation Between Preface and Chapter 1 (v5.15-v5.17)**
+- **Problem:** Go left/right buttons didn't work from preface (chapter 0) to Chapter 1
+- **Root Cause:** `hasPrevChapter = this.currentChapter > 1` assumed chapters start at 1, but prefaces are numbered as chapter 0
+- **Solution:**
+  - Changed to explicit existence checking: `this.chapters.some(ch => ch.chapter_number === this.currentChapter - 1)`
+  - Added logging for debugging (v5.16)
+  - Removed logging after fix verified (v5.17)
+- **Files:** `frontend/static/js/app.js:5091-5092`
+
+#### Version History
+
+| Version | Changes |
+|---------|---------|
+| v5.3 | Font size controls fix |
+| v5.4 | 0.75 line safety margin (too much) |
+| v5.5 | Removed safety margin from remainder |
+| v5.6 | Reduced to 0.35 lines |
+| v5.7 | Removed from word-fitting loop |
+| v5.8 | Added 0.15 back |
+| v5.9 | Changed to 3-pixel buffer |
+| v5.10 | **Final fix** - 0.2 line margin AFTER Math.ceil() |
+| v5.11 | Loading container (broke layout) |
+| v5.12 | Query fix (still broken) |
+| v5.13 | Simplified approach (partial fix) |
+| v5.14 | **Flash fix** - section-level visibility |
+| v5.15 | Chapter navigation fix |
+| v5.16 | Added debug logging |
+| v5.17 | Removed debug logging (final clean version) |
+
+#### Key Technical Insights
+
+**Safety Margin Placement:**
+- **Wrong:** Multiply margin into every line calculation
+- **Right:** Add margin AFTER rounding to account for paragraph ending
+- **Why:** Margins are already included in totalHeight measurement, just need small buffer for rendering/rounding
+
+**Flash Prevention:**
+- **Wrong:** Complex loading containers with absolute positioning
+- **Right:** Simple visibility toggle at section level
+- **Why:** Preserve DOM structure, avoid layout calculations during loading
+
+**Chapter Navigation:**
+- **Wrong:** Numerical comparison assuming chapters start at 1
+- **Right:** Explicit existence checking using `.some()`
+- **Why:** Prefaces are numbered as chapter 0, need to handle edge cases
+
+#### Files Modified
+
+**JavaScript:**
+- `frontend/static/js/app.js`:
+  - Lines 2159-2163: Flash prevention in showChapterDetail()
+  - Lines 3721-3752: Font size application to pagination
+  - Lines 4622-4624: Reapply font size after pagination
+  - Lines 4632-4636: Flash prevention in initializePagination()
+  - Lines 4706-4728: Safety margin placement fix
+  - Lines 5091-5092: Chapter navigation fix
+
+**CSS:**
+- `frontend/static/css/style.css`:
+  - Lines 1700, 1705: Margin alignment fix
+  - Lines 1708-1710, 1709, 2082: Removed hardcoded font sizes
+
+**HTML:**
+- `frontend/templates/index.html`:
+  - Line 652: Version updated to v5.17
+
+#### Testing Results
+
+All issues resolved:
+- ✅ Font size controls work with pagination
+- ✅ Text cutoff prevented without excessive whitespace
+- ✅ Consistent page density after paragraph splits
+- ✅ Optimal word-fitting in split paragraphs
+- ✅ No flash during chapter navigation
+- ✅ Navigation works between preface and Chapter 1
+
+#### User Feedback
+
+- v5.3: "Font size works now"
+- v5.10: "Works good"
+- v5.14: "Works perfectly!"
+- v5.17: "Works now" (chapter navigation)
+
+#### Lessons Learned
+
+1. **User Insights Are Critical:** The user's explanation about safety margins being for paragraph boundaries, not every line, was the breakthrough insight
+2. **Simplicity Wins:** Simple visibility control beat complex loading containers
+3. **Edge Cases Matter:** Chapter 0 (preface) is a valid edge case that needs explicit handling
+4. **Iterative Refinement:** Sometimes multiple iterations are needed to find the right balance (safety margin)
+5. **Testing with Real Content:** Long paragraphs exposed issues that short paragraphs didn't
+
+---
+
 ## 2025-12-14 (Continued)
 
 ### Database Chapter Text Audit - COMPLETED
@@ -3102,5 +3260,340 @@ Added iOS banner close button handler:
 6. **LocalStorage for Dismissal:** Simple, effective way to remember user preferences
 7. **Delayed Banner:** 2-second delay makes banner less intrusive
 8. **Offline Fallback:** Beautiful fallback page turns network error into positive UX
+
+---
+
+## 2025-12-18 (Continued)
+
+### Page-Based Reading Experience for Chapter Pages - COMPLETED
+**Status:** ✅ Completed
+**Started:** 2025-12-18
+**Completed:** 2025-12-18
+
+**Objective:** Transform the chapter reading experience from scroll-based to page-based navigation, mimicking Kindle's e-ink reading experience with page turns instead of scrolling.
+
+#### User Requirements
+
+User requested a reading experience similar to Kindle devices where:
+- Content is displayed one page at a time
+- Users navigate by "turning pages" instead of scrolling
+- Progress is shown in page numbers (e.g., "Page 5 of 24")
+
+**Specific Navigation Preferences:**
+- Tap/click left/right sides of screen for previous/next page
+- Swipe gestures on mobile devices
+- On-screen prev/next navigation buttons
+- Keyboard arrow key support
+
+**Page Layout Requirements:**
+- Pages calculated dynamically based on viewport height
+- Instant page transitions (no animations)
+- Progress shown as: "Page 5 of 24 • 21%"
+
+#### Implementation Summary
+
+**Core Components:**
+1. **Pagination State Management** - Comprehensive state tracking in app.js
+2. **Page Calculation Engine** - Height-based algorithm splits content at paragraph boundaries
+3. **Navigation System** - Tap zones, swipe gestures, keyboard, and visual buttons
+4. **Progress Integration** - Updated progress bar with page numbers and percentage
+5. **Responsive Recalculation** - Handles window resize and font size changes
+6. **Position Persistence** - localStorage saves current page per chapter
+7. **View Mode Integration** - Works with Original/Modern English/Side-by-Side views
+
+**Code Statistics:**
+- JavaScript: 430 lines (11 new methods in app.js)
+- CSS: 250 lines (complete pagination styling)
+- Total Implementation: ~680 lines
+
+#### Key Technical Features
+
+**Page Calculation:**
+- Measures actual rendered heights of paragraphs
+- Breaks only at element boundaries (no mid-sentence splits)
+- Accounts for viewport height, headers, padding
+- Responsive to font size, line height, and theme changes
+
+**Navigation Methods (all 4 requested):**
+1. Tap/click left/right zones (30% width each)
+2. Swipe gestures (left/right on mobile)
+3. Keyboard arrow keys (left/right)
+4. On-screen prev/next buttons (fade in on hover, always visible on mobile)
+
+**Progress Display:**
+- Format: "Page 5 of 24 • 21%"
+- Updates instantly on page change
+- Synchronized with visual progress bar
+
+**Persistence:**
+- Saves page position per chapter in localStorage
+- Restores position when returning to chapter
+- Maintains approximate position after recalculation
+
+#### Files Modified
+
+**JavaScript:**
+- `frontend/static/js/app.js`:
+  - Lines 48-59: Pagination state in constructor
+  - Line 93: Setup call from init()
+  - Lines 2379-2394, 2405-2432: View mode and chapter loading integration
+  - Lines 3689-3696: Reading settings integration
+  - Lines 4359-4788: Complete pagination system (430 lines)
+
+**CSS:**
+- `frontend/static/css/style.css`:
+  - Lines 4971-5220: Pagination styles (250 lines)
+
+**Documentation:**
+- `WORK_LOG.md` - This entry
+
+#### Testing Results
+
+All acceptance criteria met:
+- ✅ All 4 navigation methods working
+- ✅ Pages calculated based on viewport height
+- ✅ Instant page transitions (no animations)
+- ✅ Progress shown as "Page X of Y • Z%"
+- ✅ Responsive across all viewport sizes
+- ✅ Position persistence working
+- ✅ View mode switching supported
+- ✅ Font and theme changes trigger recalculation
+
+#### User Impact
+
+Users now have a Kindle-like reading experience with:
+- Familiar page-based navigation
+- Multiple navigation methods (tap, swipe, keyboard, buttons)
+- Clear progress indicators
+- Fast, instant page transitions
+- Persistent reading position
+- Fully responsive design
+
+---
+
+## 2025-12-18 (Continued)
+
+### Chapter Page Redesign & Pagination Fixes - COMPLETED
+**Status:** ✅ Completed  
+**Started:** 2025-12-18  
+**Completed:** 2025-12-18
+
+**Objective:** Redesign chapter page layout to maximize reading space and fix pagination issues (text selection blocked, page scrolling, missing scroll-to-turn).
+
+#### User Requirements
+
+1. **Maximize Reading Space (~300px)** - Remove/relocate UI elements to give more space for text
+2. **Fix Text Selection** - Large navigation zones (30% left/right) prevented text selection  
+3. **Enable Scroll-to-Turn** - Mouse wheel/trackpad scroll should turn pages, not scroll content
+4. **Make Page Non-Scrollable** - Content must fit viewport entirely, no scrolling within page
+5. **Match Kindle Cloud Reader** - Exact behavior like read.amazon.com on desktop
+
+#### Design Decisions
+
+**Title/Summary Relocation:** Sticky header dropdown/accordion  
+**UI Aggressiveness:** Aggressive (~300px removed)  
+**Illustration:** Keep inline (optimized spacing)  
+**View Mode Toggle:** Move to sticky header  
+
+#### Implementation Summary
+
+### Part 1: Chapter Page Layout Redesign
+
+**Removed Elements (330px saved):**
+1. Static chapter header (80px) → Moved to sticky dropdown
+2. Full breadcrumb navigation (40px) → Replaced with "← [Book Title]" button  
+3. Static summary box (70px) → Moved to sticky dropdown
+4. "📖 Full Text" section header (90px) → Removed entirely
+5. Static settings button (40px) → Only in sticky header now
+6. All margins reduced by 60% (50px)
+
+**Enhanced Sticky Header:**
+- **Left:** Chapter dropdown button (click to show title + summary)
+- **Center:** View mode toggle (Original | Modern | Side×Side)  
+- **Right:** TTS button + Settings button
+- **Dropdown:** Expands below header with chapter title, book title, summary (markdown), and TTS button
+
+### Part 2: Pagination Fixes
+
+**Navigation Zones Removed:**
+- Deleted 30% width invisible click zones (lines 4604-4624 in app.js)
+- Deleted all zone CSS (lines 5145-5178 in style.css)
+- **Result:** Users can now freely select and copy text everywhere
+
+**Scroll-to-Turn Added:**
+- Wheel event handler intercepts scroll events (lines 4438-4465 in app.js)
+- Scroll down = next page, scroll up = previous page
+- 100ms debounce to prevent rapid page flipping
+- Uses `passive: false` to allow `preventDefault()`
+
+**Page Non-Scrollable:**
+- Body overflow hidden when pagination active (lines 4498-4499, 4845-4846)
+- Pagination wrapper height set to viewport (line 4537)
+- CSS: `overflow: hidden` + `overscroll-behavior: contain` (lines 5123-5143)
+- **Result:** Page never scrolls, content always fits viewport
+
+**Height Calculation Updated:**
+- Uses exact viewport height minus fixed elements (lines 4525-4538)
+- Accounts for: sticky header (50px) + back button + progress bar (24px) + padding (32px)
+- Sets wrapper height explicitly in JavaScript
+
+#### Files Modified
+
+**HTML (frontend/templates/index.html):**
+- Lines 392-420: Enhanced sticky header with dropdown structure
+- Lines 424-428: Simplified breadcrumb to back button  
+- Lines 440-441: Removed summary box and section header
+
+**CSS (frontend/static/css/style.css):**
+- Lines 706-723: Back button styles + reduced margins  
+- Lines 1618: Illustration margin 32px → 16px
+- Lines 1700-1707: Fulltext section margins reduced
+- Lines 3891-4067: Complete sticky header redesign (~180 lines)
+  - Three-column layout (left/center/right)
+  - Dropdown toggle button + content panel
+  - View mode toggle integration  
+  - TTS and settings buttons
+- Lines 5119-5143: Pagination wrapper/container updates
+  - Added `overflow: hidden` and `overscroll-behavior: contain`
+  - Added `body.pagination-active` overflow hidden
+- Lines 5145: Removed navigation zone CSS (~35 lines)
+
+**JavaScript (frontend/static/js/app.js):**
+- Line 94: Call `setupChapterDropdown()` from init()
+- Lines 2162-2180: Update back button and populate dropdown in showChapterDetail()
+- Lines 2291-2302: Show sticky view mode toggle and TTS button
+- Lines 4438-4465: Wheel event handler for scroll-to-turn
+- Lines 4498-4499: Add body overflow management in initializePagination()
+- Lines 4525-4538: Updated calculatePages() with exact viewport height
+- Lines 4604-4620: Removed navigation zone creation (kept only buttons)
+- Lines 4845-4846: Remove body overflow in clearPagination()
+- Lines 4855-4958: Complete dropdown system (~100 lines)
+  - `setupChapterDropdown()` - Event listeners
+  - `toggleChapterDropdown()` - Toggle open/closed
+  - `closeChapterDropdown()` - Close dropdown
+  - `populateChapterDropdown()` - Fill with chapter data
+
+#### Technical Details
+
+**Sticky Header Dropdown:**
+```javascript
+// Button shows short title
+<button class="chapter-dropdown-toggle">
+    <span>Chapter 5: The Great Discovery</span>
+    <span class="dropdown-icon">▼</span>
+</button>
+
+// Dropdown expands below with full info
+<div class="chapter-dropdown-content">
+    <h3>Chapter 5: The Great Discovery</h3>
+    <p>Pride and Prejudice</p>
+    <div>[Summary markdown rendered]</div>
+    <button>🔊 Listen to Summary</button>
+</div>
+```
+
+**Scroll-to-Turn Implementation:**
+```javascript
+const handleWheel = (e) => {
+    if (this.pagination.totalPages > 0) {
+        e.preventDefault(); // Stop normal scrolling
+        
+        clearTimeout(this.pagination.wheelTimeout);
+        this.pagination.wheelTimeout = setTimeout(() => {
+            if (e.deltaY > 0) {
+                this.navigateToNextPage(); // Scroll down → next
+            } else if (e.deltaY < 0) {
+                this.navigateToPreviousPage(); // Scroll up → previous
+            }
+        }, 100); // 100ms debounce
+    }
+};
+
+document.addEventListener('wheel', handleWheel, { passive: false });
+```
+
+**Non-Scrollable Pages:**
+```javascript
+// On init
+document.body.classList.add('pagination-active');
+document.body.style.overflow = 'hidden';
+
+// CSS
+body.pagination-active {
+    overflow: hidden;
+}
+
+.pagination-wrapper {
+    height: [calculated]px; // Set by JS
+    overflow: hidden;
+    overscroll-behavior: contain;
+}
+```
+
+#### Testing Results
+
+**Layout Changes:**
+- ✅ ~330px vertical space saved
+- ✅ Back button shows book title, navigates correctly
+- ✅ Sticky dropdown shows chapter title, summary, TTS button
+- ✅ Dropdown opens/closes on click
+- ✅ View mode toggle visible in sticky header
+- ✅ All controls accessible in sticky header
+
+**Pagination Fixes:**
+- ✅ Text selection works everywhere (no blocking zones)
+- ✅ Mouse wheel scroll turns pages (no page scrolling)
+- ✅ Trackpad scroll turns pages  
+- ✅ Page content never overflows viewport
+- ✅ No scroll bars appear on page
+- ✅ Body scroll disabled during reading
+
+**Navigation:**
+- ✅ Scroll down → next page
+- ✅ Scroll up → previous page
+- ✅ Arrow keys work (left/right)
+- ✅ Visible buttons work (prev/next)
+- ✅ Swipe gestures work (mobile)
+- ✅ 100ms debounce prevents rapid flipping
+
+**Responsive:**
+- ✅ Desktop layout clean and spacious
+- ✅ Mobile dropdown adjusts width
+- ✅ View mode toggle responsive
+- ✅ All themes supported (light/dark/sepia)
+
+#### User Impact
+
+**Space Gains:**
+- Before: ~320px before main text
+- After: ~40px before main text (back button only)
+- **Gain: 280px more reading space**
+
+**Reading Experience:**
+- **More Content Per Page:** Larger viewport height = fewer pages per chapter
+- **Better Text Interaction:** Can select, copy, and highlight freely
+- **Natural Navigation:** Scroll gesture feels intuitive (like Kindle)
+- **No Distractions:** Page never scrolls unexpectedly
+- **Cleaner UI:** All controls hidden in sticky header until needed
+
+**Example User Flow:**
+1. User opens chapter → Back button + text visible immediately
+2. Sticky header appears on scroll → Shows chapter title, view mode, TTS, settings
+3. User clicks chapter title → Dropdown shows full title, book, and summary
+4. User scrolls with wheel → Pages turn instantly (no scrolling)
+5. User selects text → Works perfectly (no zone interference)
+6. User changes font size → Page recalculates, stays non-scrollable
+
+#### Code Statistics
+
+**Lines Added:** ~400 lines  
+**Lines Removed:** ~150 lines  
+**Net Change:** ~250 lines  
+
+**Breakdown:**
+- CSS: +180 lines (sticky header + pagination fixes)
+- JavaScript: +100 lines (dropdown + wheel handler)
+- HTML: +30 lines (sticky header structure)
+- Removed: -150 lines (zones, old header, summary box)
 
 ---
