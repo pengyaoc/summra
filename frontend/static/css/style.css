@@ -4052,6 +4052,25 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     font-family: 'Open Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* Font family for pagination containers */
+.pagination-page-container[data-font="georgia"],
+.pagination-page-container[data-font="georgia"] .side-by-side-cell,
+.pagination-page-container[data-font="georgia"] p {
+    font-family: Georgia, serif;
+}
+
+.pagination-page-container[data-font="system"],
+.pagination-page-container[data-font="system"] .side-by-side-cell,
+.pagination-page-container[data-font="system"] p {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.pagination-page-container[data-font="opensans"],
+.pagination-page-container[data-font="opensans"] .side-by-side-cell,
+.pagination-page-container[data-font="opensans"] p {
+    font-family: 'Open Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
 @media (max-width: 768px) {
     .reading-settings-panel {
         width: 100%;
@@ -5125,8 +5144,12 @@ body.pagination-active {
     -webkit-backdrop-filter: blur(4px);
 }
 
-/* Show buttons on hover of wrapper or when they're the only way to navigate */
-.pagination-wrapper:hover .pagination-nav-button,
+/* Show buttons when wrapper has buttons-visible class (touch/click/hover activated) */
+.pagination-wrapper.buttons-visible .pagination-nav-button {
+    opacity: 0.7;
+}
+
+/* Keep button focus state for accessibility */
 .pagination-nav-button:focus {
     opacity: 0.7;
 }
@@ -5171,17 +5194,36 @@ body.pagination-active {
     background-color: rgba(95, 75, 50, 0.25);
 }
 
-/* Mobile: Always show navigation buttons with reduced opacity */
+/* Wide screens: Position buttons OUTSIDE text container */
+@media (min-width: 600px) {
+    .pagination-wrapper {
+        overflow: visible; /* Allow buttons to extend outside */
+        max-width: calc(100% - 140px); /* Reserve 70px on each side for buttons (60px offset + 10px margin) */
+        margin: 0 auto; /* Center the text container */
+    }
+
+    .pagination-nav-prev {
+        left: -60px; /* Outside left edge */
+    }
+
+    .pagination-nav-next {
+        right: -60px; /* Outside right edge */
+    }
+}
+
+/* Wider screens: Allow more width for text container */
+@media (min-width: 900px) {
+    .pagination-wrapper {
+        max-width: 800px; /* Comfortable reading width */
+    }
+}
+
+/* Mobile: Smaller button size */
 @media (max-width: 768px) {
     .pagination-nav-button {
-        opacity: 0.5;
         width: 40px;
         height: 40px;
         font-size: 28px;
-    }
-
-    .pagination-nav-button:hover {
-        opacity: 0.8 !important;
     }
 
     .pagination-nav-prev {
@@ -5193,10 +5235,10 @@ body.pagination-active {
     }
 }
 
-/* Touch device adjustments */
+/* Touch device adjustments - remove always-visible behavior */
 @media (hover: none) and (pointer: coarse) {
     .pagination-nav-button {
-        opacity: 0.6;
+        /* Removed opacity: 0.6 - buttons now hidden by default */
     }
 }
 
@@ -5244,8 +5286,30 @@ body.pagination-active {
     font-size: 0.9em;
 }
 
+[data-theme="dark"] .pagination-page-container {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .pagination-page-container p,
+[data-theme="dark"] .pagination-page-container .side-by-side-cell {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .pagination-page-container h1,
+[data-theme="dark"] .pagination-page-container h2,
+[data-theme="dark"] .pagination-page-container h3,
+[data-theme="dark"] .pagination-page-container h4,
+[data-theme="dark"] .pagination-page-container h5,
+[data-theme="dark"] .pagination-page-container h6 {
+    color: #e0e0e0;
+}
+
 [data-theme="dark"] .pagination-page-container code {
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .pagination-page-container .side-by-side-cell.original {
+    border-right-color: #444 !important;
 }
 
 [data-theme="sepia"] .pagination-page-container code {
@@ -5279,5 +5343,41 @@ body.pagination-active {
 /* Ensure smooth page transitions */
 .pagination-page-container * {
     transition: none;
+}
+
+/* Preserve side-by-side grid layout inside pagination */
+/* Use !important to override mobile breakpoint since side-by-side is only available on wide screens */
+.pagination-page-container .side-by-side-headers {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.pagination-page-container .side-by-side-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+    align-items: start;
+    margin-bottom: 0;
+}
+
+.pagination-page-container .side-by-side-cell {
+    min-width: 0;
+    line-height: 1.75;
+}
+
+.pagination-page-container .side-by-side-cell.original {
+    padding-right: 1rem !important;
+    border-right: 1px solid #e0e0e0 !important;
+    border-bottom: none !important;
+    padding-bottom: 0 !important;
+}
+
+.pagination-page-container .side-by-side-cell.modern {
+    padding-left: 1rem !important;
+    padding-top: 0 !important;
 }
 

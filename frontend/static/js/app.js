@@ -55,7 +55,8 @@ class SummraApp {
             isNavigating: false, // Prevent rapid page changes
             touchStartX: 0,
             touchStartY: 0,
-            currentViewMode: 'original' // Track current view mode for pagination
+            currentViewMode: 'original', // Track current view mode for pagination
+            buttonTimers: [] // Store timer references for cleanup
         };
 
         // Centralized list of ALL content sections (single source of truth)
@@ -2100,6 +2101,19 @@ class SummraApp {
     }
 
     /**
+     * Get the current active view mode
+     * @returns {string} - 'summary' | 'original' | 'modern' | 'side-by-side'
+     */
+    getCurrentViewMode() {
+        const activeBtn = document.querySelector('.unified-view-btn.active');
+        if (activeBtn) {
+            return activeBtn.dataset.mode;
+        }
+        // Default to original if no active button found
+        return 'original';
+    }
+
+    /**
      * Apply chapter view mode and return the container to paginate (DRY helper)
      * @param {string} viewMode - 'summary', 'original', 'modern', or 'side-by-side'
      * @returns {HTMLElement} - The container element to paginate
@@ -2128,9 +2142,8 @@ class SummraApp {
             return modernEnglishEl;
         } else if (viewMode === 'side-by-side') {
             fulltextSectionEl.classList.remove('hidden');
-            fullTextEl.classList.remove('hidden');
             sideBySideEl.classList.remove('hidden');
-            return fullTextEl;
+            return sideBySideEl;
         } else {
             // original
             fulltextSectionEl.classList.remove('hidden');
@@ -2424,24 +2437,36 @@ class SummraApp {
             // Function to update side-by-side button visibility based on screen width
             const updateSideBySideButtonVisibility = () => {
                 const sideBySideBtn = document.querySelector('.unified-view-btn[data-mode="side-by-side"]');
+
                 if (sideBySideBtn) {
                     if (isScreenTooNarrow()) {
                         sideBySideBtn.style.display = 'none';
 
                         // If currently viewing side-by-side, switch to original view
                         if (!sideBySideEl.classList.contains('hidden')) {
+                            console.log('[Resize] Screen too narrow, switching from side-by-side to original');
+
+                            // Query for current buttons (don't use stale reference)
+                            const allBtns = document.querySelectorAll('.unified-view-btn');
                             const originalBtn = document.querySelector('.unified-view-btn[data-mode="original"]');
                             if (originalBtn) {
-                                unifiedViewBtns.forEach(b => b.classList.remove('active'));
+                                allBtns.forEach(b => b.classList.remove('active'));
                                 originalBtn.classList.add('active');
                                 summaryContentEl.classList.add('hidden');
                                 fulltextSectionEl.classList.remove('hidden');
                                 fullTextEl.classList.remove('hidden');
                                 modernEnglishEl.classList.add('hidden');
                                 sideBySideEl.classList.add('hidden');
+
+                                // Reinitialize pagination for original view
+                                this.clearPagination();
+                                const containerToPaginate = this.applyChapterViewMode('original');
+                                this.initializePagination(containerToPaginate, 'original', this.currentIllustrationData);
                             }
                         }
                     } else {
+                        // Just show the button when screen is wide enough
+                        // Stay on current view (don't auto-switch back to side-by-side)
                         sideBySideBtn.style.display = '';
                     }
                 }
@@ -2450,8 +2475,12 @@ class SummraApp {
             // Initial check
             updateSideBySideButtonVisibility();
 
-            // Update on resize
-            window.addEventListener('resize', updateSideBySideButtonVisibility);
+            // Update on resize with debouncing to prevent excessive calls
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(updateSideBySideButtonVisibility, 150);
+            });
 
         } else {
             // No modern English available
@@ -3711,6 +3740,113 @@ class SummraApp {
         if (mediumSection) {
             mediumSection.setAttribute('data-font', font);
         }
+
+        // Reinitialize pagination if active (check for pagination wrapper existence)
+        const paginationWrapper = document.querySelector('.pagination-wrapper');
+        if (paginationWrapper) {
+            console.log('[Font] Pagination wrapper found, reinitializing...');
+            const currentViewMode = this.getCurrentViewMode();
+            console.log('[Font] Current view mode:', currentViewMode);
+
+            // Get the parent container that has the pagination wrapper
+            const parentContainer = paginationWrapper.parentElement;
+            console.log('[Font] Parent container:', parentContainer?.id, parentContainer?.className);
+
+            if (parentContainer) {
+                this.clearPagination();
+
+                // IMPORTANT: We need to restore ALL the view containers, not just the current one
+                // Because pagination wrapper is inside one container, but we need all containers fresh
+                const fullTextEl = document.getElementById('chapter-fulltext');
+                const modernEnglishEl = document.getElementById('chapter-modern-english');
+                const sideBySideEl = document.getElementById('chapter-side-by-side');
+
+                console.log('[Font] Restoring all view containers from originalContent...');
+
+                // Restore each container individually
+                if (this.pagination.originalContent) {
+                    if (this.pagination.originalContent['chapter-fulltext'] && fullTextEl) {
+                        fullTextEl.innerHTML = this.pagination.originalContent['chapter-fulltext'];
+                        console.log('[Font] Restored chapter-fulltext');
+                    }
+                    if (this.pagination.originalContent['chapter-modern-english'] && modernEnglishEl) {
+                        modernEnglishEl.innerHTML = this.pagination.originalContent['chapter-modern-english'];
+                        console.log('[Font] Restored chapter-modern-english');
+                    }
+                    if (this.pagination.originalContent['chapter-side-by-side'] && sideBySideEl) {
+                        sideBySideEl.innerHTML = this.pagination.originalContent['chapter-side-by-side'];
+                        console.log('[Font] Restored chapter-side-by-side');
+                    }
+                } else {
+                    console.log('[Font] No original content stored');
+                }
+
+                // Regenerate side-by-side content if needed (it's dynamically generated, not stored)
+                if (currentViewMode === 'side-by-side') {
+                    console.log('[Font] Current view mode is side-by-side, regenerating...');
+                    const sideBySideEl = document.getElementById('chapter-side-by-side');
+                    const fullTextEl = document.getElementById('chapter-fulltext');
+                    const modernEnglishEl = document.getElementById('chapter-modern-english');
+
+                    console.log('[Font] Elements found:', {
+                        sideBySideEl: !!sideBySideEl,
+                        fullTextEl: !!fullTextEl,
+                        modernEnglishEl: !!modernEnglishEl
+                    });
+
+                    // Get the raw text from the already-populated containers
+                    const originalText = fullTextEl?.textContent || '';
+                    const modernText = modernEnglishEl?.textContent || '';
+
+                    console.log('[Font] Text lengths:', {
+                        original: originalText.length,
+                        modern: modernText.length
+                    });
+
+                    console.log('[Font] Calling formatSideBySideText...');
+                    const sideBySideFormatted = this.formatSideBySideText(originalText, modernText);
+                    console.log('[Font] Formatted HTML length:', sideBySideFormatted.length);
+
+                    console.log('[Font] Setting innerHTML...');
+                    sideBySideEl.innerHTML = sideBySideFormatted;
+                    console.log('[Font] innerHTML set complete');
+
+                    // Check if side-by-side structure was preserved
+                    const headers = sideBySideEl.querySelectorAll('.side-by-side-headers');
+                    const rows = sideBySideEl.querySelectorAll('.side-by-side-row');
+                    console.log('[Font] Side-by-side structure check:', {
+                        headers: headers.length,
+                        rows: rows.length,
+                        firstRowHTML: rows[0]?.outerHTML.substring(0, 200)
+                    });
+                }
+
+                // Get fresh container after restoration
+                console.log('[Font] Applying chapter view mode...');
+                const containerToPaginate = this.applyChapterViewMode(currentViewMode);
+                console.log('[Font] Container to paginate:', containerToPaginate?.id, containerToPaginate?.className);
+                console.log('[Font] Container HTML length:', containerToPaginate?.innerHTML?.length);
+
+                // Verify side-by-side structure in container
+                if (currentViewMode === 'side-by-side' && containerToPaginate) {
+                    const headers = containerToPaginate.querySelectorAll('.side-by-side-headers');
+                    const rows = containerToPaginate.querySelectorAll('.side-by-side-row');
+                    console.log('[Font] Container side-by-side structure:', {
+                        headers: headers.length,
+                        rows: rows.length,
+                        containerClasses: containerToPaginate.className
+                    });
+                }
+
+                if (containerToPaginate) {
+                    console.log('[Font] Calling initializePagination...');
+                    this.initializePagination(containerToPaginate, currentViewMode, this.currentIllustrationData);
+                    console.log('[Font] initializePagination complete');
+                }
+            }
+        } else {
+            console.log('[Font] No pagination wrapper found');
+        }
     }
 
     applyFontSize(size) {
@@ -4196,12 +4332,26 @@ class SummraApp {
     setupSaveOfflineButton() {
         /**
          * Setup "Save for Offline" button for PWA offline book caching
-         * Only shows when service worker is available (PWA-only feature)
+         * Only shows on mobile devices in PWA standalone mode
          */
         const saveOfflineBtn = document.getElementById('save-offline-btn');
         const saveOfflineText = document.getElementById('save-offline-text');
 
         if (!saveOfflineBtn || !this.currentBook) {
+            return;
+        }
+
+        // Check if running in standalone PWA mode (installed app)
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                           window.navigator.standalone || // iOS Safari
+                           document.referrer.includes('android-app://'); // Android TWA
+
+        // Check if mobile device
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // Only show on mobile devices in standalone PWA mode
+        if (!isMobile || !isStandalone) {
+            saveOfflineBtn.classList.add('hidden');
             return;
         }
 
@@ -4544,6 +4694,15 @@ class SummraApp {
             return;
         }
 
+        // Prevent re-entry while pagination is initializing
+        if (this.pagination.isInitializing) {
+            console.log('[Pagination] Already initializing, skipping...');
+            return;
+        }
+
+        this.pagination.isInitializing = true;
+        console.log('[Pagination] Starting initialization...');
+
         // Store current view mode and illustration data
         this.pagination.currentViewMode = viewMode;
         this.pagination.illustrationData = illustrationData;
@@ -4584,6 +4743,15 @@ class SummraApp {
         // Create page container for measuring
         const pageContainer = document.createElement('div');
         pageContainer.className = 'pagination-page-container';
+        // Copy original container's classes to preserve side-by-side detection
+        if (containerElement.classList.contains('chapter-side-by-side')) {
+            pageContainer.classList.add('chapter-side-by-side');
+        }
+        // Copy data-font attribute from chapter section for font styling
+        const chapterSectionEl = document.getElementById('chapter-detail-section');
+        if (chapterSectionEl && chapterSectionEl.hasAttribute('data-font')) {
+            pageContainer.setAttribute('data-font', chapterSectionEl.getAttribute('data-font'));
+        }
         pageContainer.innerHTML = textContent;
         paginationWrapper.appendChild(pageContainer);
 
@@ -4634,19 +4802,28 @@ class SummraApp {
         if (chapterSection) {
             chapterSection.style.visibility = 'visible';
         }
+
+        // Clear initialization flag
+        this.pagination.isInitializing = false;
+        console.log('[Pagination] Initialization complete');
     }
 
     /**
-     * Calculate pages based on viewport height - breaks at line level for optimal fit
+     * Calculate pages using incremental DOM algorithm (Amazon/ebook-paginator style)
+     * No measurements, no safety margins - uses browser's native scrollHeight detection
      */
     calculatePages(containerElement) {
+        console.log('[calculatePages] Starting...');
+        console.log('[calculatePages] Container element:', containerElement?.id, containerElement?.className);
+
         // Get EXACT viewport height minus all fixed elements
         const viewportHeight = window.innerHeight;
         const stickyHeaderHeight = document.querySelector('.sticky-reading-header')?.offsetHeight || 51;
         const progressBarHeight = document.querySelector('.reading-progress-bar')?.offsetHeight || 30;
-        const verticalPadding = 20; // Minimal padding - we use line-based calculation
+        const verticalPadding = 20;
 
         this.pagination.containerHeight = viewportHeight - stickyHeaderHeight - progressBarHeight - verticalPadding;
+        console.log('[calculatePages] Container height:', this.pagination.containerHeight);
 
         // Set wrapper height to match calculated height
         const wrapper = containerElement.closest('.pagination-wrapper');
@@ -4655,134 +4832,185 @@ class SummraApp {
             wrapper.style.maxHeight = `${this.pagination.containerHeight}px`;
         }
 
-        // Get computed line height from container to calculate lines per page
-        const computedStyle = window.getComputedStyle(containerElement);
-        const lineHeight = parseFloat(computedStyle.lineHeight) || 28; // Default 1.75 * 16px
-
-        // Calculate EXACT number of lines that fit per page with 2-line safety buffer
-        const maxLinesPerPage = Math.floor(this.pagination.containerHeight / lineHeight);
-        const linesPerPage = Math.max(1, maxLinesPerPage - 2); // Reserve 2 lines as safety buffer
-
-
-        // Get all paragraphs and block elements
-        const blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol'));
+        // Get all block elements (paragraphs, headings, lists, etc.)
+        // For side-by-side view, treat each row as an atomic block
+        let blocks;
+        if (containerElement.classList.contains('chapter-side-by-side')) {
+            // For side-by-side view: use headers and rows as blocks (don't break apart grid structure)
+            blocks = Array.from(containerElement.querySelectorAll('.side-by-side-headers, .side-by-side-row'));
+            console.log('[calculatePages] Side-by-side mode, found blocks:', blocks.length);
+            console.log('[calculatePages] First block class:', blocks[0]?.className);
+            console.log('[calculatePages] First block HTML (first 200 chars):', blocks[0]?.outerHTML.substring(0, 200));
+        } else {
+            // For regular views: use paragraphs and headings as blocks
+            blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol'));
+            console.log('[calculatePages] Regular mode, found blocks:', blocks.length);
+        }
 
         if (blocks.length === 0) {
+            console.log('[calculatePages] No blocks found, using entire content as one page');
             this.pagination.pages = [containerElement.innerHTML];
             this.pagination.totalPages = 1;
             return;
         }
 
-        // Create temporary measuring div with matching styles
-        const measureDiv = document.createElement('div');
-        measureDiv.style.cssText = `
-            position: absolute;
-            visibility: hidden;
-            width: ${containerElement.offsetWidth}px;
-            font-family: ${computedStyle.fontFamily};
-            font-size: ${computedStyle.fontSize};
-            line-height: ${computedStyle.lineHeight};
-            left: -9999px;
-        `;
-        document.body.appendChild(measureDiv);
+        console.log('[calculatePages] Starting page calculation loop...');
+
+        // Get computed styles from the container being measured
+        const computedStyle = window.getComputedStyle(containerElement);
+
+        // Create page container with EXACT same styles as the real container
+        // This ensures scrollHeight measurements are accurate
+        const createPageContainer = () => {
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'pagination-page-container';
+            // Copy chapter-side-by-side class if present (needed for grid CSS)
+            if (containerElement.classList.contains('chapter-side-by-side')) {
+                pageDiv.classList.add('chapter-side-by-side');
+            }
+            // Copy data-font attribute from chapter section for font styling
+            const chapterSectionEl = document.getElementById('chapter-detail-section');
+            if (chapterSectionEl && chapterSectionEl.hasAttribute('data-font')) {
+                pageDiv.setAttribute('data-font', chapterSectionEl.getAttribute('data-font'));
+            }
+            pageDiv.style.cssText = `
+                position: absolute;
+                visibility: hidden;
+                left: -9999px;
+                width: ${containerElement.offsetWidth}px;
+                height: ${this.pagination.containerHeight}px;
+                max-height: ${this.pagination.containerHeight}px;
+                overflow: hidden;
+                font-family: ${computedStyle.fontFamily};
+                font-size: ${computedStyle.fontSize};
+                line-height: ${computedStyle.lineHeight};
+                padding: ${computedStyle.padding};
+                box-sizing: ${computedStyle.boxSizing};
+            `;
+            document.body.appendChild(pageDiv);
+            return pageDiv;
+        };
 
         const pages = [];
-        let currentPageLines = 0;
-        let currentPageContent = [];
+        let blockIndex = 0;
+        let safetyCounter = 0;
+        const maxIterations = blocks.length * 3; // Safety: no more than 3x the number of blocks
 
-        for (const block of blocks) {
-            // Measure how many lines this block takes INCLUDING margins
-            measureDiv.innerHTML = '';
-            const clone = block.cloneNode(true);
-            measureDiv.appendChild(clone);
+        // Incremental algorithm: Build one page at a time
+        while (blockIndex < blocks.length) {
+            safetyCounter++;
+            if (safetyCounter > maxIterations) {
+                console.error('[calculatePages] INFINITE LOOP DETECTED! Breaking out. blockIndex:', blockIndex, 'blocks.length:', blocks.length);
+                break;
+            }
 
-            const blockHeight = clone.offsetHeight;
-            const style = window.getComputedStyle(clone);
-            const marginTop = parseFloat(style.marginTop) || 0;
-            const marginBottom = parseFloat(style.marginBottom) || 0;
-            const totalBlockHeight = blockHeight + marginTop + marginBottom;
-            // Add 0.35 line safety margin for paragraph spacing to prevent cutoff
-            const blockLines = Math.ceil((totalBlockHeight / lineHeight) + 0.35);
-            const remainingLines = linesPerPage - currentPageLines;
+            if (safetyCounter % 10 === 0) {
+                console.log('[calculatePages] Progress:', safetyCounter, 'pages created:', pages.length, 'blockIndex:', blockIndex, '/', blocks.length);
+            }
 
-            // Check if block fits on current page
-            if (currentPageLines + blockLines <= linesPerPage) {
-                // Fits entirely
-                currentPageContent.push(block.outerHTML);
-                currentPageLines += blockLines;
-            } else if (block.tagName === 'P' && remainingLines >= 2) {
-                // Paragraph needs splitting - we have at least 2 lines to fill
-                const text = block.textContent.trim();
-                const words = text.split(/\s+/).filter(w => w.length > 0);
+            const pageDiv = createPageContainer();
+            const pageBlocks = [];
 
-                // Find how many words fit in remaining lines (including paragraph margins)
-                // Use small safety margin that accounts for paragraph ending but doesn't waste space
-                let bestFitWordCount = 0;
+            // Add blocks until overflow
+            let innerSafetyCounter = 0;
+            while (blockIndex < blocks.length) {
+                innerSafetyCounter++;
+                if (innerSafetyCounter > blocks.length) {
+                    console.error('[calculatePages] INNER LOOP INFINITE! Breaking out.');
+                    break;
+                }
+                const block = blocks[blockIndex];
+                const clone = block.cloneNode(true);
+                pageDiv.appendChild(clone);
 
-                for (let i = 1; i <= words.length; i++) {
-                    const testText = words.slice(0, i).join(' ');
-                    measureDiv.innerHTML = `<p>${testText}</p>`;
-                    const testP = measureDiv.querySelector('p');
-                    const testStyle = window.getComputedStyle(testP);
-                    const testMarginTop = parseFloat(testStyle.marginTop) || 0;
-                    const testMarginBottom = parseFloat(testStyle.marginBottom) || 0;
-                    const testTotalHeight = testP.offsetHeight + testMarginTop + testMarginBottom;
+                // Check for overflow using native scrollHeight (pixel-perfect!)
+                if (pageDiv.scrollHeight > this.pagination.containerHeight) {
+                    // Overflow detected - remove last block
+                    pageDiv.removeChild(clone);
 
-                    // Calculate lines needed, add small 0.2 line safety margin for paragraph ending
-                    // This accounts for margin rendering and subpixel rounding without being excessive
-                    const testLines = Math.ceil(testTotalHeight / lineHeight) + 0.2;
+                    // Handle side-by-side rows - try to split them when needed
+                    if (block.classList && block.classList.contains('side-by-side-row')) {
+                        // If page is empty and row doesn't fit, try to split it
+                        if (pageBlocks.length === 0) {
+                            const splitResult = this.splitSideBySideRowToFit(block, pageDiv, this.pagination.containerHeight);
 
-                    if (testLines <= remainingLines) {
-                        bestFitWordCount = i;
-                    } else {
+                            if (splitResult.firstRow) {
+                                // Successfully split - add first part to current page
+                                pageDiv.appendChild(splitResult.firstRow);
+                                pageBlocks.push(splitResult.firstRow.outerHTML);
+
+                                // Create remainder row for next page
+                                const remainderRow = block.cloneNode(true);
+                                remainderRow.querySelector('.side-by-side-cell.original p').innerHTML = splitResult.remainder.leftText;
+                                remainderRow.querySelector('.side-by-side-cell.modern p').innerHTML = splitResult.remainder.rightText;
+
+                                // Insert remainder as next block to process
+                                blocks.splice(blockIndex + 1, 0, remainderRow);
+                                blockIndex++;
+                                break;
+                            } else {
+                                // Can't split - force entire row anyway
+                                console.log('[calculatePages] Side-by-side row too large for page, forcing it');
+                                pageDiv.appendChild(clone);
+                                pageBlocks.push(block.outerHTML);
+                                blockIndex++;
+                                break;
+                            }
+                        }
+
+                        // Otherwise, move entire row to next page
+                        console.log('[calculatePages] Side-by-side row does not fit, moving to next page');
                         break;
                     }
-                }
 
-                if (bestFitWordCount > 0) {
-                    // Split the paragraph
-                    const wordsForCurrentPage = words.slice(0, bestFitWordCount);
-                    const wordsForNextPage = words.slice(bestFitWordCount);
-
-                    // Add to current page and push
-                    currentPageContent.push(`<p>${wordsForCurrentPage.join(' ')}</p>`);
-                    pages.push(currentPageContent.join(''));
-
-                    // Start next page with remainder (include margins in calculation)
-                    currentPageContent = [`<p>${wordsForNextPage.join(' ')}</p>`];
-                    measureDiv.innerHTML = `<p>${wordsForNextPage.join(' ')}</p>`;
-                    const remainderP = measureDiv.querySelector('p');
-                    const remainderStyle = window.getComputedStyle(remainderP);
-                    const remainderMarginTop = parseFloat(remainderStyle.marginTop) || 0;
-                    const remainderMarginBottom = parseFloat(remainderStyle.marginBottom) || 0;
-                    const remainderTotalHeight = remainderP.offsetHeight + remainderMarginTop + remainderMarginBottom;
-                    // Use actual height without extra safety margin since this starts a new page
-                    currentPageLines = Math.ceil(remainderTotalHeight / lineHeight);
-                } else {
-                    // Can't split - move entire paragraph to next page
-                    if (currentPageContent.length > 0) {
-                        pages.push(currentPageContent.join(''));
+                    // If page is empty and block doesn't fit, we have to force it
+                    if (pageBlocks.length === 0) {
+                        console.log('[calculatePages] Block too large for page, forcing it anyway:', block.tagName);
+                        pageDiv.appendChild(clone);
+                        pageBlocks.push(block.outerHTML);
+                        blockIndex++;
+                        break;
                     }
-                    currentPageContent = [block.outerHTML];
-                    currentPageLines = blockLines;
+
+                    // Try to split if it's a paragraph and page isn't empty
+                    if (block.tagName === 'P' && pageBlocks.length > 0) {
+                        const splitResult = this.splitParagraphToFit(block, pageDiv, this.pagination.containerHeight);
+
+                        if (splitResult.firstPart) {
+                            // Successfully split - add first part to current page
+                            pageDiv.appendChild(splitResult.firstPart);
+                            pageBlocks.push(splitResult.firstPart.outerHTML);
+
+                            // Create a new paragraph with the remainder for next page
+                            const remainderP = document.createElement('p');
+                            remainderP.innerHTML = splitResult.remainder;
+                            // Copy attributes from original
+                            for (const attr of block.attributes) {
+                                remainderP.setAttribute(attr.name, attr.value);
+                            }
+
+                            // Insert remainder as next block to process
+                            blocks.splice(blockIndex + 1, 0, remainderP);
+                            blockIndex++; // Move past the remainder
+                        }
+                    }
+
+                    break; // Page is full
                 }
-            } else {
-                // Non-paragraph or not enough space - move to next page
-                if (currentPageContent.length > 0) {
-                    pages.push(currentPageContent.join(''));
-                }
-                currentPageContent = [block.outerHTML];
-                currentPageLines = blockLines;
+
+                // No overflow - keep this block
+                pageBlocks.push(block.outerHTML);
+                blockIndex++;
             }
-        }
 
-        // Add last page
-        if (currentPageContent.length > 0) {
-            pages.push(currentPageContent.join(''));
-        }
+            // Save page content
+            if (pageBlocks.length > 0) {
+                pages.push(pageBlocks.join(''));
+            }
 
-        // Clean up
-        document.body.removeChild(measureDiv);
+            // Clean up page container
+            document.body.removeChild(pageDiv);
+        }
 
         // Store pages
         this.pagination.pages = pages.length > 0 ? pages : [containerElement.innerHTML];
@@ -4794,6 +5022,151 @@ class SummraApp {
         }
 
         this.pagination.totalPages = this.pagination.pages.length;
+    }
+
+    /**
+     * Split paragraph to fit remaining space using binary search (O(log n))
+     * Returns {firstPart: Element, remainder: String} or {firstPart: null}
+     */
+    splitParagraphToFit(paragraph, pageDiv, pageHeight) {
+        const text = paragraph.textContent.trim();
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+
+        if (words.length <= 1) {
+            return { firstPart: null, remainder: null };
+        }
+
+        // Binary search for maximum words that fit
+        let left = 1;
+        let right = words.length - 1;
+        let bestFit = 0;
+
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const testText = words.slice(0, mid).join(' ');
+
+            // Create test paragraph with same attributes
+            const testP = document.createElement('p');
+            testP.innerHTML = testText;
+            for (const attr of paragraph.attributes) {
+                testP.setAttribute(attr.name, attr.value);
+            }
+
+            // Test if it fits
+            pageDiv.appendChild(testP);
+            const fits = pageDiv.scrollHeight <= pageHeight;
+            pageDiv.removeChild(testP);
+
+            if (fits) {
+                bestFit = mid;
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        if (bestFit === 0) {
+            return { firstPart: null, remainder: null };
+        }
+
+        // Create the split result
+        const firstPart = document.createElement('p');
+        firstPart.innerHTML = words.slice(0, bestFit).join(' ');
+        for (const attr of paragraph.attributes) {
+            firstPart.setAttribute(attr.name, attr.value);
+        }
+
+        const remainder = words.slice(bestFit).join(' ');
+
+        return { firstPart, remainder };
+    }
+
+    /**
+     * Split side-by-side row to fit remaining space using dual binary search
+     * Each column is measured independently, then uses minimum of both word counts
+     * Returns {firstRow: Element, remainder: Object} or {firstRow: null}
+     */
+    splitSideBySideRowToFit(row, pageDiv, pageHeight) {
+        const leftCell = row.querySelector('.side-by-side-cell.original p');
+        const rightCell = row.querySelector('.side-by-side-cell.modern p');
+
+        if (!leftCell || !rightCell) {
+            return { firstRow: null, remainder: null };
+        }
+
+        const leftText = leftCell.textContent.trim();
+        const rightText = rightCell.textContent.trim();
+        const leftWords = leftText.split(/\s+/).filter(w => w.length > 0);
+        const rightWords = rightText.split(/\s+/).filter(w => w.length > 0);
+
+        if (leftWords.length <= 1 && rightWords.length <= 1) {
+            return { firstRow: null, remainder: null };
+        }
+
+        // Binary search for each column independently
+        const leftFit = this.binarySearchColumnFit(leftWords, rightWords, row, pageDiv, pageHeight, 'left');
+        const rightFit = this.binarySearchColumnFit(rightWords, leftWords, row, pageDiv, pageHeight, 'right');
+
+        // Use MINIMUM of both - stop where taller column would overflow
+        const minFit = Math.min(leftFit, rightFit);
+
+        if (minFit === 0) {
+            return { firstRow: null, remainder: null };
+        }
+
+        // Create split row with first parts
+        const firstRow = row.cloneNode(true);
+        firstRow.querySelector('.side-by-side-cell.original p').innerHTML = leftWords.slice(0, minFit).join(' ');
+        firstRow.querySelector('.side-by-side-cell.modern p').innerHTML = rightWords.slice(0, minFit).join(' ');
+
+        // Create remainder data
+        const remainder = {
+            leftText: leftWords.slice(minFit).join(' '),
+            rightText: rightWords.slice(minFit).join(' ')
+        };
+
+        return { firstRow, remainder };
+    }
+
+    /**
+     * Binary search for max words that fit in ONE column of a side-by-side row
+     * Tests with test text in target column and full text in other column
+     */
+    binarySearchColumnFit(targetWords, otherWords, row, pageDiv, pageHeight, side) {
+        let left = 1;
+        let right = targetWords.length;
+        let bestFit = 0;
+
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const testText = targetWords.slice(0, mid).join(' ');
+            const fullText = otherWords.join(' ');
+
+            // Create test row
+            const testRow = row.cloneNode(true);
+
+            if (side === 'left') {
+                testRow.querySelector('.side-by-side-cell.original p').innerHTML = testText;
+                testRow.querySelector('.side-by-side-cell.modern p').innerHTML = fullText;
+            } else {
+                testRow.querySelector('.side-by-side-cell.original p').innerHTML = fullText;
+                testRow.querySelector('.side-by-side-cell.modern p').innerHTML = testText;
+            }
+
+            // Test if it fits
+            pageDiv.appendChild(testRow);
+            const fits = pageDiv.scrollHeight <= pageHeight;
+            pageDiv.removeChild(testRow);
+
+            if (fits) {
+                bestFit = mid;
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        return bestFit;
     }
 
     /**
@@ -4912,6 +5285,50 @@ class SummraApp {
         // Add buttons to wrapper
         wrapperElement.appendChild(prevButton);
         wrapperElement.appendChild(nextButton);
+
+        // Auto-hide timer for mobile/touch devices
+        let buttonHideTimer = null;
+
+        const showButtonsTemporarily = () => {
+            wrapperElement.classList.add('buttons-visible');
+
+            // Clear existing timer
+            if (buttonHideTimer) {
+                clearTimeout(buttonHideTimer);
+            }
+
+            // Hide after 5 seconds
+            buttonHideTimer = setTimeout(() => {
+                wrapperElement.classList.remove('buttons-visible');
+            }, 5000);
+        };
+
+        // Show buttons on touch (mobile)
+        wrapperElement.addEventListener('touchstart', (e) => {
+            // Don't trigger if touching a button directly
+            if (!e.target.classList.contains('pagination-nav-button')) {
+                showButtonsTemporarily();
+            }
+        }, { passive: true });
+
+        // Show buttons on click (fallback for devices without hover)
+        wrapperElement.addEventListener('click', (e) => {
+            // Only trigger on wrapper or content click, not button clicks
+            if (!e.target.classList.contains('pagination-nav-button')) {
+                showButtonsTemporarily();
+            }
+        });
+
+        // Show buttons on hover (desktop) - also uses 5s auto-hide timer
+        wrapperElement.addEventListener('mouseenter', (e) => {
+            showButtonsTemporarily();
+        });
+
+        // Store timer reference for cleanup
+        if (!this.pagination.buttonTimers) {
+            this.pagination.buttonTimers = [];
+        }
+        this.pagination.buttonTimers.push(buttonHideTimer);
 
         // Update button visibility
         this.updateNavigationButtons();
@@ -5093,12 +5510,16 @@ class SummraApp {
 
         if (prevButton) {
             // Show prev button if not on first page OR if there's a previous chapter
-            prevButton.style.display = (this.pagination.currentPage > 0 || hasPrevChapter) ? 'flex' : 'none';
+            // Use visibility instead of display to preserve opacity-based auto-hide
+            prevButton.style.visibility = (this.pagination.currentPage > 0 || hasPrevChapter) ? 'visible' : 'hidden';
+            prevButton.style.pointerEvents = (this.pagination.currentPage > 0 || hasPrevChapter) ? 'auto' : 'none';
         }
 
         if (nextButton) {
             // Show next button if not on last page OR if there's a next chapter
-            nextButton.style.display = (this.pagination.currentPage < this.pagination.totalPages - 1 || hasNextChapter) ? 'flex' : 'none';
+            // Use visibility instead of display to preserve opacity-based auto-hide
+            nextButton.style.visibility = (this.pagination.currentPage < this.pagination.totalPages - 1 || hasNextChapter) ? 'visible' : 'hidden';
+            nextButton.style.pointerEvents = (this.pagination.currentPage < this.pagination.totalPages - 1 || hasNextChapter) ? 'auto' : 'none';
         }
     }
 
@@ -5148,16 +5569,66 @@ class SummraApp {
             ? this.pagination.currentPage / this.pagination.totalPages
             : 0;
 
-        // Get all original content
-        const allContent = this.pagination.pages.join('');
+        // Get ALL computed styles from current container (including inline fontSize!)
+        const currentStyle = window.getComputedStyle(containerElement);
 
-        // Create temporary container with all content for recalculation
+        // CRITICAL: Use original content from storage, NOT paginated content
+        // The paginated content (this.pagination.pages) has been split across pages and lost structure
+        // We need the original unpaginated content to recalculate properly
+        let allContent;
+        const viewMode = this.pagination.currentViewMode;
+
+        // Determine which container ID to use based on view mode
+        let containerIdToRestore;
+        if (viewMode === 'side-by-side') {
+            containerIdToRestore = 'chapter-side-by-side';
+        } else if (viewMode === 'modern') {
+            containerIdToRestore = 'chapter-modern-english';
+        } else if (viewMode === 'summary') {
+            containerIdToRestore = 'chapter-summary-text';
+        } else {
+            containerIdToRestore = 'chapter-fulltext';
+        }
+
+        console.log('[recalculatePagination] View mode:', viewMode, 'Container ID:', containerIdToRestore);
+
+        // Try to get original content from storage
+        if (this.pagination.originalContent && this.pagination.originalContent[containerIdToRestore]) {
+            allContent = this.pagination.originalContent[containerIdToRestore];
+            console.log('[recalculatePagination] Using original content from storage, length:', allContent.length);
+        } else {
+            // Fallback to joined pages (may lose structure for side-by-side)
+            allContent = this.pagination.pages.join('');
+            console.log('[recalculatePagination] WARNING: No original content found, using joined pages, length:', allContent.length);
+        }
+
+        console.log('[recalculatePagination] First 300 chars:', allContent.substring(0, 300));
+
+        // Create temporary container with EXACT same styles
         const tempContainer = document.createElement('div');
-        tempContainer.className = 'pagination-page-container';
+        // CRITICAL: Copy the entire className to preserve classes like 'chapter-side-by-side'
+        tempContainer.className = containerElement.className;
+        console.log('[recalculatePagination] Temp container className:', tempContainer.className);
+
+        // CRITICAL: Copy ALL styles that affect layout, especially fontSize
+        tempContainer.style.fontSize = currentStyle.fontSize;
+        tempContainer.style.fontFamily = currentStyle.fontFamily;
+        tempContainer.style.lineHeight = currentStyle.lineHeight;
+        tempContainer.style.padding = currentStyle.padding;
+        tempContainer.style.boxSizing = currentStyle.boxSizing;
+
         tempContainer.innerHTML = allContent;
+        console.log('[recalculatePagination] After setting innerHTML, checking structure...');
+        const headers = tempContainer.querySelectorAll('.side-by-side-headers');
+        const rows = tempContainer.querySelectorAll('.side-by-side-row');
+        console.log('[recalculatePagination] Structure in temp container:', {
+            headers: headers.length,
+            rows: rows.length
+        });
+
         containerElement.parentElement.appendChild(tempContainer);
 
-        // Recalculate pages
+        // Recalculate pages with correct styles
         this.calculatePages(tempContainer);
 
         // Restore approximate position
@@ -5204,6 +5675,14 @@ class SummraApp {
         this.pagination.totalPages = 0;
         this.pagination.pages = [];
         this.pagination.containerHeight = 0;
+
+        // Clear button auto-hide timers
+        if (this.pagination.buttonTimers && this.pagination.buttonTimers.length > 0) {
+            this.pagination.buttonTimers.forEach(timer => {
+                if (timer) clearTimeout(timer);
+            });
+            this.pagination.buttonTimers = [];
+        }
 
         // Clear stored original content when switching chapters
         // (but keep it when just switching view modes)
