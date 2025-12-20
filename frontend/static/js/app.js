@@ -647,6 +647,8 @@ class SummraApp {
                 // Convert _text_ to <em>text</em> for italic emphasis
                 // Match underscores that wrap words (not at word boundaries with spaces)
                 escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+                // Convert *text* to <em>text</em> for italic emphasis (markdown syntax)
+                escaped = escaped.replace(/\*([^*]+?)\*/g, '<em>$1</em>');
                 return `<p>${escaped}</p>`;
             })
             .join('');
@@ -681,6 +683,7 @@ class SummraApp {
             if (originalPara) {
                 let escaped = this.escapeHtml(originalPara.trim());
                 escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+                escaped = escaped.replace(/\*([^*]+?)\*/g, '<em>$1</em>');
                 originalFormatted = escaped;
             } else {
                 originalFormatted = '&nbsp;';
@@ -691,6 +694,7 @@ class SummraApp {
             if (modernPara) {
                 let escaped = this.escapeHtml(modernPara.trim());
                 escaped = escaped.replace(/\b_([^_]+?)_\b/g, '<em>$1</em>');
+                escaped = escaped.replace(/\*([^*]+?)\*/g, '<em>$1</em>');
                 modernFormatted = escaped;
             } else {
                 modernFormatted = '&nbsp;';
@@ -1325,6 +1329,9 @@ class SummraApp {
             this.loadRelatedBooks()
         ]);
 
+        // Show resume reading button if user has progress
+        await this.showResumeReadingButton();
+
         // Update URL
         this.updateURL(book);
 
@@ -1762,6 +1769,12 @@ class SummraApp {
             `;
         }
 
+        // Fetch completed chapters for styling
+        let completedChapters = [];
+        if (window.authModule && this.currentBook) {
+            completedChapters = await window.authModule.getCompletedChaptersForBook(this.currentBook.id);
+        }
+
         try {
             const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/chapters`);
             const data = await response.json();
@@ -1824,7 +1837,8 @@ class SummraApp {
                         if (hasChapters) {
                             section.chapters.forEach(chapter => {
                                 const box = document.createElement('div');
-                                box.className = 'chapter-box indented';
+                                const isCompleted = completedChapters.includes(chapter.chapter_number);
+                                box.className = 'chapter-box indented' + (isCompleted ? ' completed' : '');
 
                                 const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
                                 const titleEl = document.createElement('h4');
@@ -1854,7 +1868,8 @@ class SummraApp {
                     } else {
                         this.chapters.forEach(chapter => {
                             const box = document.createElement('div');
-                            box.className = 'chapter-box';
+                            const isCompleted = completedChapters.includes(chapter.chapter_number);
+                            box.className = 'chapter-box' + (isCompleted ? ' completed' : '');
 
                             const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
                             const titleEl = document.createElement('h4');
@@ -2000,6 +2015,56 @@ class SummraApp {
     showChapterDetailPage(chapterNum) {
         this.updateURL(this.currentBook, chapterNum);
         this.showChapterDetail(this.currentBook, chapterNum);
+    }
+
+    async showResumeReadingButton() {
+        if (!this.currentBook || !window.authModule) return;
+
+        // Get reading progress
+        const progress = await window.authModule.getReadingProgress(this.currentBook.id);
+
+        // Find the book-detail-info section where we'll add the button
+        const bookDetailInfo = document.querySelector('.book-detail-info');
+        if (!bookDetailInfo) return;
+
+        // Remove existing resume button if any
+        const existingButton = document.getElementById('resume-reading-btn');
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        // Only show if there's progress
+        if (progress && progress.chapter_number !== null) {
+            // Get chapter title for better display
+            const chapterName = progress.chapter_number === 0 ? 'Preface' : `Chapter ${progress.chapter_number}`;
+
+            // Create resume reading button
+            const resumeBtn = document.createElement('button');
+            resumeBtn.id = 'resume-reading-btn';
+            resumeBtn.className = 'resume-reading-btn';
+            resumeBtn.innerHTML = `
+                <span class="resume-icon">📖</span>
+                <span class="resume-text">Continue Reading: ${chapterName}, Page ${progress.page_number + 1}</span>
+            `;
+
+            // Add click handler to navigate to last read chapter and page
+            resumeBtn.addEventListener('click', async () => {
+                await this.showChapterDetailPage(progress.chapter_number);
+
+                // After chapter loads, navigate to the saved page
+                if (progress.page_number && progress.page_number > 0) {
+                    setTimeout(() => {
+                        if (this.pagination && this.pagination.totalPages > progress.page_number) {
+                            this.pagination.currentPage = progress.page_number;
+                            this.displayCurrentPage();
+                        }
+                    }, 100);
+                }
+            });
+
+            // Insert after the Save for Offline button in book-detail-info section
+            bookDetailInfo.appendChild(resumeBtn);
+        }
     }
 
     async showMediumDetail(book, restoreScroll = false) {
@@ -2552,6 +2617,11 @@ class SummraApp {
 
         // Update page title
         this.updatePageTitle(`Full Text of ${chapterTitle} - ${book.title} | Summra`);
+
+        // Track chapter view for reading progress
+        if (window.authModule && book.id) {
+            await window.authModule.trackChapterView(book.id, chapterNum, 0);
+        }
     }
 
     async generateTTS(text, type, buttonElement) {
@@ -5252,6 +5322,24 @@ class SummraApp {
         // Save page position
         this.savePagePosition();
 
+        // Track page change for reading progress
+        if (window.authModule && this.currentBook && this.currentChapter !== null) {
+            window.authModule.trackPageChange(
+                this.currentBook.id,
+                this.currentChapter,
+                this.pagination.currentPage
+            );
+
+            // Mark chapter as complete if on last page
+            const isLastPage = this.pagination.currentPage === this.pagination.totalPages - 1;
+            if (isLastPage) {
+                window.authModule.onChapterComplete(
+                    this.currentBook.id,
+                    this.currentChapter
+                );
+            }
+        }
+
         // Scroll to top of content area
         const chapterSection = document.getElementById('chapter-detail-section');
         if (chapterSection) {
@@ -5297,10 +5385,10 @@ class SummraApp {
                 clearTimeout(buttonHideTimer);
             }
 
-            // Hide after 5 seconds
+            // Hide after 1 second
             buttonHideTimer = setTimeout(() => {
                 wrapperElement.classList.remove('buttons-visible');
-            }, 5000);
+            }, 1000);
         };
 
         // Show buttons on touch (mobile)

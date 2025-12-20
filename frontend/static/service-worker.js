@@ -92,6 +92,24 @@ if (workbox) {
         })
     );
 
+    // Cache auth check endpoint - Network First with fast fallback
+    registerRoute(
+        ({ url }) => url.pathname === '/api/auth/check',
+        new NetworkFirst({
+            cacheName: 'auth-cache',
+            plugins: [
+                new CacheableResponsePlugin({
+                    statuses: [0, 200],
+                }),
+                new ExpirationPlugin({
+                    maxEntries: 1,
+                    maxAgeSeconds: 60 * 60, // 1 hour cache
+                }),
+            ],
+            networkTimeoutSeconds: 3, // Fast fallback to cache after 3s
+        })
+    );
+
     // Cache book data API - Network First (fresh when online, cached fallback)
     registerRoute(
         ({ url }) => url.pathname.startsWith('/api/books/') && url.pathname.match(/\/api\/books\/\d+$/),

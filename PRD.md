@@ -644,7 +644,128 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - Minimal, unobtrusive UI elements during reading
 - Professional typography and spacing
 
-### 7. Breadcrumb Navigation (Added 2025-12-02)
+### 7. User Authentication & Reading Progress (Added 2025-12-20)
+
+**Feature Description:**
+User authentication system with reading progress tracking that persists across devices and works offline in PWA mode.
+
+**User Stories:**
+- As a reader, I want to create an account so my reading progress is saved and synced across devices
+- As a returning user, I want to stay logged in on my device so I don't have to re-enter credentials
+- As a PWA user, I want to stay logged in when offline so I can continue reading without interruption
+- As a reader, I want to resume where I left off so I don't lose my place in a book
+- As a reader, I want to see which chapters I've completed so I can track my progress through a book
+
+**Specifications:**
+
+**7a. User Registration & Login:**
+- **Username/Password Authentication:** Simple username and password login (no email required)
+- **Password Security:** SHA-256 hashing with random salt per user
+- **Session Management:**
+  - Flask session-based authentication
+  - Permanent sessions (30-day duration)
+  - Session cookies persist across browser sessions
+- **Account Modal:**
+  - Accessible via Account button in header
+  - Three views: Login, Register, Account Info
+  - Switch between login/register with inline links
+  - Form validation with clear error messages
+- **Account Button:**
+  - Shows "Account" when logged out
+  - Shows username when logged in
+  - Visual indicator (background color) when logged in
+  - Always pinned to right side of header
+
+**7b. Reading Progress Tracking:**
+- **Granular Progress Storage:**
+  - Book ID
+  - Chapter number (0 for preface)
+  - Page number (for paginated reading)
+  - Scroll position (for non-paginated views)
+  - Timestamp of last update
+- **Auto-Tracking:**
+  - Progress saved automatically when viewing chapters
+  - Updates on page navigation
+  - No manual save action required
+- **Chapter Completion:**
+  - Auto-marked complete when user reaches last page
+  - Visual indicator: greyed out with checkmark
+  - Persists across sessions
+
+**7c. Continue Reading Button:**
+- **Location:** Top of book detail page in book-detail-info section
+- **Positioning:** Near Save for Offline button for easy access
+- **Display Logic:** Only shown when user has reading progress for the book
+- **Button Text:** "Continue Reading: [Chapter Name], Page [Number]"
+  - Example: "Continue Reading: Chapter 5, Page 3"
+  - Preface displayed as "Preface" instead of "Chapter 0"
+- **Functionality:**
+  - Clicking navigates directly to saved chapter
+  - Auto-scrolls to saved page after chapter loads
+  - Purple gradient styling consistent with Save for Offline button
+- **Icon:** 📖 book emoji for visual recognition
+
+**7d. Offline Support (PWA Mode):**
+- **Session Persistence:**
+  - Sessions marked as permanent (30-day lifetime)
+  - User data cached in localStorage for offline access
+  - Auth status cached for offline validation
+- **Offline Progress Tracking:**
+  - Progress saved to localStorage when offline
+  - Auto-sync to server when connection restored
+  - Merge strategy: server takes precedence for conflicts
+- **Service Worker Caching:**
+  - Auth check endpoint cached (1-hour TTL)
+  - NetworkFirst strategy with 3-second timeout
+  - Graceful fallback to cached auth state offline
+
+**7e. Reading History & Statistics:**
+- **Account View:**
+  - Books started count
+  - Chapters completed count
+  - Member since date
+  - Last login timestamp
+- **Future Enhancement:** Detailed reading statistics dashboard
+
+**Database Schema:**
+- **Separate Database:** `summra.db` (not `database.db`)
+- **Tables:**
+  - `users`: User credentials and metadata
+  - `reading_progress`: Chapter and page tracking
+  - `chapter_completion`: Completion tracking per chapter
+
+**UI Requirements:**
+- Account modal with clean, modern design
+- Form validation with inline error messages
+- Loading states for async operations
+- Mobile-responsive design
+- Clear visual feedback for logged-in state
+- Completed chapters marked with checkmark and grey styling
+- Continue Reading button prominent and easily accessible
+
+**Acceptance Criteria:**
+- [✅] Users can register with username and password
+- [✅] Users can login and stay logged in across sessions
+- [✅] Sessions persist for 30 days
+- [✅] PWA mode maintains login when offline
+- [✅] Reading progress auto-saves on chapter view
+- [✅] Chapter completion auto-marked on last page
+- [✅] Completed chapters show visual indicator (grey + checkmark)
+- [✅] Continue Reading button appears on book page when progress exists
+- [✅] Continue Reading button positioned near Save for Offline
+- [✅] Clicking Continue Reading navigates to saved chapter and page
+- [✅] Offline progress syncs to server when online
+- [✅] Account stats show books started and chapters completed
+- [✅] User can logout and clear session
+- [✅] Password hashing prevents plaintext storage
+
+**Design Inspiration:**
+- Goodreads for reading progress tracking
+- Kindle for seamless reading continuation
+- Notion for clean modal design
+- Standard web app authentication patterns
+
+### 8. Breadcrumb Navigation (Added 2025-12-02)
 
 **Feature Description:**
 Context-aware breadcrumb navigation replaces traditional back buttons, showing users their location in the site hierarchy and providing quick access to parent pages.
@@ -1457,7 +1578,7 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 
 ### User Accounts
 - Q: Do we need user accounts?
-- A: Phase 4 feature; start with local bookmarks/favorites using localStorage
+- A: ✅ Implemented (2025-12-20) - Full user authentication with reading progress tracking
 
 ## Dependencies
 

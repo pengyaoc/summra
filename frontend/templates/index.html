@@ -104,6 +104,10 @@
                     <a href="/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
                     <a href="/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
                 </div>
+                <button class="header-nav-btn user-account-btn" id="user-account-btn">
+                    <span class="user-icon">👤</span>
+                    <span class="user-name" id="header-user-name">Account</span>
+                </button>
             </div>
         </header>
 
@@ -643,6 +647,103 @@
         </div>
     </div>
 
+    <!-- User Account Modal -->
+    <div class="user-modal hidden" id="user-modal">
+        <div class="user-modal-overlay" id="user-modal-overlay"></div>
+        <div class="user-modal-content">
+            <button class="user-modal-close" id="user-modal-close" aria-label="Close">✕</button>
+
+            <!-- Logged Out View -->
+            <div class="user-modal-view" id="login-view">
+                <h2 class="user-modal-title">Sign in to Summra</h2>
+                <p class="user-modal-subtitle">Track your reading progress across devices</p>
+
+                <form id="login-form" class="user-form">
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" name="username" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" name="password" required autocomplete="current-password">
+                    </div>
+                    <div class="form-error hidden" id="login-error"></div>
+                    <button type="submit" class="btn-primary">Sign In</button>
+                </form>
+
+                <div class="user-modal-footer">
+                    <p>Don't have an account? <button class="link-btn" id="show-register">Create one</button></p>
+                </div>
+            </div>
+
+            <!-- Register View -->
+            <div class="user-modal-view hidden" id="register-view">
+                <h2 class="user-modal-title">Create Account</h2>
+                <p class="user-modal-subtitle">Start tracking your reading journey</p>
+
+                <form id="register-form" class="user-form">
+                    <div class="form-group">
+                        <label for="register-username">Username</label>
+                        <input type="text" id="register-username" name="username" required autocomplete="username" minlength="3">
+                        <small>At least 3 characters</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" name="password" required autocomplete="new-password" minlength="6">
+                        <small>At least 6 characters</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password-confirm">Confirm Password</label>
+                        <input type="password" id="register-password-confirm" name="password-confirm" required autocomplete="new-password">
+                    </div>
+                    <div class="form-error hidden" id="register-error"></div>
+                    <button type="submit" class="btn-primary">Create Account</button>
+                </form>
+
+                <div class="user-modal-footer">
+                    <p>Already have an account? <button class="link-btn" id="show-login">Sign in</button></p>
+                </div>
+            </div>
+
+            <!-- Logged In View -->
+            <div class="user-modal-view hidden" id="account-view">
+                <h2 class="user-modal-title">My Account</h2>
+
+                <div class="account-info">
+                    <div class="account-item">
+                        <span class="account-label">Username:</span>
+                        <span class="account-value" id="account-username"></span>
+                    </div>
+                    <div class="account-item">
+                        <span class="account-label">Member since:</span>
+                        <span class="account-value" id="account-created"></span>
+                    </div>
+                    <div class="account-item">
+                        <span class="account-label">Last login:</span>
+                        <span class="account-value" id="account-last-login"></span>
+                    </div>
+                </div>
+
+                <div class="account-stats">
+                    <h3>Reading Progress</h3>
+                    <p class="account-stats-description">Your reading history is tracked across all your devices.</p>
+                    <div class="account-stat-item">
+                        <span class="stat-label">Books started:</span>
+                        <span class="stat-value" id="books-started-count">0</span>
+                    </div>
+                    <div class="account-stat-item">
+                        <span class="stat-label">Chapters completed:</span>
+                        <span class="stat-value" id="chapters-completed-count">0</span>
+                    </div>
+                </div>
+
+                <div class="user-modal-footer">
+                    <button class="btn-secondary" id="logout-btn">Sign Out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Markdown parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 
@@ -650,6 +751,25 @@
     <script src="{{ url_for('static', filename='js/components/BlogIndex.js') }}"></script>
     <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}"></script>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=6.1.44"></script>
+    <!-- Authentication module -->
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=6.1.52"></script>
+
+    <!-- Initialize authentication -->
+    <script>
+        // Initialize auth system when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (window.authModule) {
+                    window.authModule.initAuth();
+                }
+            });
+        } else {
+            if (window.authModule) {
+                window.authModule.initAuth();
+            }
+        }
+    </script>
 </body>
 </html>
