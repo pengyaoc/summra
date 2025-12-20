@@ -5,10 +5,12 @@ This module is imported by both app.py (development) and app_prod.py (production
 from flask import Flask, jsonify, request, send_from_directory, render_template
 from flask_cors import CORS
 from pathlib import Path
+from datetime import timedelta
 import os
 import sys
 import logging
 import json
+import secrets
 
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,9 +19,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from . import config
     from . import models
+    from . import user_models
+    from . import auth_routes
+    from . import progress_routes
 except ImportError:
     import config
     import models
+    import user_models
+    import auth_routes
+    import progress_routes
 
 # Configure logging
 logging.basicConfig(
@@ -32,10 +40,28 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__,
             static_folder='../frontend/static',
             template_folder='../frontend/templates')
-CORS(app)
 
-# Initialize database
+# Configure session
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+# In production, set SESSION_COOKIE_SECURE = True (requires HTTPS)
+
+CORS(app, supports_credentials=True)
+
+# Initialize databases
 db = models.Database()
+user_db = user_models.UserDatabase()
+
+# Set user_db in auth and progress routes
+auth_routes.user_db = user_db
+progress_routes.user_db = user_db
+
+# Register blueprints
+app.register_blueprint(auth_routes.auth_bp)
+app.register_blueprint(progress_routes.progress_bp)
 
 # Set environment flag (will be overridden by app.py or app_prod.py)
 app.config['IS_DEVELOPMENT'] = False

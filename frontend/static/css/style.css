@@ -71,6 +71,7 @@ body:has(.medium-detail-section:not(.hidden)) .header {
     text-decoration: none;
     cursor: pointer;
     transition: opacity 0.2s ease;
+    flex-shrink: 0; /* Logo never shrinks */
 }
 
 .header-link:hover {
@@ -81,6 +82,17 @@ body:has(.medium-detail-section:not(.hidden)) .header {
     display: flex;
     gap: 20px;
     margin-left: 20px;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+    align-items: center;
+}
+
+/* Hide scrollbar for Chrome, Safari, Opera */
+.header-nav-buttons::-webkit-scrollbar {
+    display: none;
 }
 
 .header-nav-btn {
@@ -93,6 +105,8 @@ body:has(.medium-detail-section:not(.hidden)) .header {
     transition: opacity 0.2s;
     text-decoration: none;
     font-weight: 400;
+    white-space: nowrap; /* Prevent wrapping */
+    flex-shrink: 0; /* Don't shrink nav items */
 }
 
 .header-nav-btn:hover {
@@ -5381,3 +5395,500 @@ body.pagination-active {
     padding-top: 0 !important;
 }
 
+
+/* ===== User Account Modal ===== */
+
+/* User account button */
+.user-account-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: auto; /* Push to right */
+    flex-shrink: 0; /* Never shrink */
+}
+
+.user-account-btn:hover {
+    background: rgba(52, 152, 219, 0.1);
+    border-color: var(--primary-color);
+    text-decoration: none; /* Override header-nav-btn hover */
+}
+
+.user-account-btn.logged-in {
+    background: rgba(52, 152, 219, 0.1);
+}
+
+.user-icon {
+    font-size: 1.2rem;
+}
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Modal container */
+.user-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.user-modal.hidden {
+    display: none;
+}
+
+/* Modal overlay */
+.user-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+/* Modal content */
+.user-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 450px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 2rem;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Close button */
+.user-modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #95a5a6;
+    transition: color 0.2s ease;
+    padding: 0.25rem;
+    line-height: 1;
+}
+
+.user-modal-close:hover {
+    color: #2c3e50;
+}
+
+/* Modal title */
+.user-modal-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.75rem;
+    color: #2c3e50;
+}
+
+.user-modal-subtitle {
+    margin: 0 0 2rem 0;
+    color: #7f8c8d;
+    font-size: 0.95rem;
+}
+
+/* Form styles */
+.user-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #2c3e50;
+}
+
+.form-group input {
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.2s ease;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-group small {
+    font-size: 0.85rem;
+    color: #95a5a6;
+}
+
+/* Error message */
+.form-error {
+    background: #fee;
+    border: 1px solid #fcc;
+    color: #c33;
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.form-error.hidden {
+    display: none;
+}
+
+/* Buttons */
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: #2980b9;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.btn-secondary {
+    background: #ecf0f1;
+    color: #2c3e50;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.btn-secondary:hover {
+    background: #bdc3c7;
+}
+
+/* Modal footer */
+.user-modal-footer {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #ecf0f1;
+    text-align: center;
+}
+
+.user-modal-footer p {
+    margin: 0;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    font-weight: 500;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.link-btn:hover {
+    color: #2980b9;
+}
+
+/* View switching */
+.user-modal-view.hidden {
+    display: none;
+}
+
+/* Account view */
+.account-info {
+    margin-bottom: 2rem;
+}
+
+.account-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.account-item:last-child {
+    border-bottom: none;
+}
+
+.account-label {
+    font-weight: 500;
+    color: #7f8c8d;
+}
+
+.account-value {
+    color: #2c3e50;
+}
+
+/* Account stats */
+.account-stats {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.account-stats h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    color: #2c3e50;
+}
+
+.account-stats-description {
+    margin: 0 0 1rem 0;
+    font-size: 0.9rem;
+    color: #7f8c8d;
+}
+
+.account-stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+}
+
+.stat-label {
+    color: #7f8c8d;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .user-modal-content {
+        padding: 1.5rem;
+    }
+
+    .user-modal-title {
+        font-size: 1.5rem;
+    }
+
+    .user-name {
+        display: none;
+    }
+
+    .user-account-btn {
+        padding: 0.5rem;
+        min-width: 44px;
+    }
+}
+
+/* ===== Completed Chapter Styling ===== */
+
+/* Completed chapter indicator */
+.chapter-box.completed {
+    opacity: 0.7;
+    position: relative;
+}
+
+.chapter-box.completed::before {
+    content: '✓';
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5rem;
+    color: #27ae60;
+    font-weight: bold;
+}
+
+.chapter-box.completed .chapter-title {
+    color: #95a5a6;
+}
+
+.chapter-box.completed:hover {
+    opacity: 0.85;
+}
+
+/* Completed chapter header styling in chapter view */
+.chapter-header.completed {
+    opacity: 0.8;
+}
+
+.chapter-header.completed h1,
+.chapter-header.completed h2 {
+    color: #95a5a6;
+}
+
+/* Progress indicator badge */
+.chapter-progress-badge {
+    display: inline-block;
+    background: #27ae60;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-left: 0.75rem;
+}
+
+/* Reading progress summary */
+.reading-progress-summary {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.progress-summary-icon {
+    font-size: 2rem;
+}
+
+.progress-summary-text {
+    flex: 1;
+}
+
+.progress-summary-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 0.25rem 0;
+}
+
+.progress-summary-detail {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db 0%, #2ecc71 100%);
+    transition: width 0.3s ease;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .chapter-box.completed::before {
+        font-size: 1.25rem;
+        right: 0.75rem;
+    }
+
+    .chapter-progress-badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+    }
+
+    .reading-progress-summary {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .progress-summary-icon {
+        font-size: 1.5rem;
+    }
+}
+
+/* ===== Resume Reading Button ===== */
+
+.resume-reading-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    margin: 1rem 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    width: 100%;
+    justify-content: center;
+}
+
+.resume-reading-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.resume-reading-btn:active {
+    transform: translateY(0);
+}
+
+.resume-icon {
+    font-size: 1.5rem;
+}
+
+.resume-text {
+    font-size: 1rem;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .resume-reading-btn {
+        padding: 0.875rem 1.25rem;
+        font-size: 0.95rem;
+    }
+
+    .resume-icon {
+        font-size: 1.25rem;
+    }
+
+    .resume-text {
+        font-size: 0.95rem;
+    }
+}

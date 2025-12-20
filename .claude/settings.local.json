@@ -67,7 +67,9 @@
       "Bash(/tmp/moby_dick_summary.txt)",
       "Bash(/tmp/origin_of_species_summary.txt)",
       "Bash(/tmp/war_and_peace_summary.txt)",
-      "WebFetch(domain:read.amazon.com)"
+      "WebFetch(domain:read.amazon.com)",
+      "Bash(column -t -s '|':*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

@@ -461,6 +461,364 @@ def get_book_by_filename(self, filename) -> dict
 
 ---
 
+## User Authentication & Progress Tracking (Added 2025-12-20)
+
+### Overview
+
+User authentication system with reading progress tracking stored in a separate database (`summra.db`). Supports offline operation with localStorage sync and provides persistent login sessions for PWA users.
+
+### Database: summra.db
+
+**Location:** `summra.db` (root directory, separate from content database)
+
+**Purpose:** Store user accounts, authentication data, and reading progress. Separation from `database.db` keeps user data isolated from book content.
+
+### Entity Relationship Diagram
+
+```
+┌─────────────────────────┐
+│       users             │
+├─────────────────────────┤
+│ id (PK)                 │
+│ username (UNIQUE)       │
+│ password_hash           │
+│ salt                    │
+│ created_at              │
+│ last_login              │
+└─────────────────────────┘
+         │
+         │ 1:N
+         ├──────────────────────────┬──────────────────────────┐
+         │                          │                          │
+         ▼                          ▼                          ▼
+┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│  reading_progress   │    │ chapter_completion  │    │  (future tables)    │
+├─────────────────────┤    ├─────────────────────┤    │                     │
+│ id (PK)             │    │ id (PK)             │    │ - bookmarks         │
+│ user_id (FK)        │    │ user_id (FK)        │    │ - notes             │
+│ book_id             │    │ book_id             │    │ - highlights        │
+│ chapter_number      │    │ chapter_number      │    └─────────────────────┘
+│ page_number         │    │ completed           │
+│ scroll_position     │    │ completed_at        │
+│ updated_at          │    │ created_at          │
+└─────────────────────┘    └─────────────────────┘
+
+UNIQUE(user_id, book_id)   UNIQUE(user_id, book_id, chapter_number)
+```
+
+### Database Schema
+
+#### users table
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
+)
+```
+
+**Fields:**
+- `id`: Auto-incrementing primary key
+- `username`: Unique username (min 3 characters, case-sensitive)
+- `password_hash`: SHA-256 hash of (password + salt)
+- `salt`: Random 32-byte salt (hex-encoded, unique per user)
+- `created_at`: Account creation timestamp
+- `last_login`: Last successful login timestamp
+
+**Security:**
+- Password never stored in plaintext
+- Each user has unique random salt
+- Hash algorithm: SHA-256 (password + salt)
+- No password recovery (reset only)
+
+#### reading_progress table
+
+```sql
+CREATE TABLE reading_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    book_id INTEGER NOT NULL,
+    chapter_number INTEGER,
+    page_number INTEGER DEFAULT 0,
+    scroll_position REAL DEFAULT 0.0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, book_id)
+)
+```
+
+**Fields:**
+- `id`: Auto-incrementing primary key
+- `user_id`: Foreign key to users table (cascading delete)
+- `book_id`: Book ID (references books.id in database.db conceptually)
+- `chapter_number`: Current chapter (0 = preface, NULL = no progress)
+- `page_number`: Current page in paginated view (0-indexed)
+- `scroll_position`: Scroll position in non-paginated view (0.0-1.0)
+- `updated_at`: Last update timestamp
+
+**Constraints:**
+- UNIQUE(user_id, book_id): One progress record per user per book
+- Uses `INSERT OR REPLACE` to update existing progress
+
+#### chapter_completion table
+
+```sql
+CREATE TABLE chapter_completion (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    book_id INTEGER NOT NULL,
+    chapter_number INTEGER NOT NULL,
+    completed INTEGER DEFAULT 1,
+    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, book_id, chapter_number)
+)
+```
+
+**Fields:**
+- `id`: Auto-incrementing primary key
+- `user_id`: Foreign key to users table (cascading delete)
+- `book_id`: Book ID (references books.id conceptually)
+- `chapter_number`: Completed chapter number
+- `completed`: Boolean flag (1 = completed, 0 = reset)
+- `completed_at`: Completion timestamp
+- `created_at`: First completion timestamp
+
+**Constraints:**
+- UNIQUE(user_id, book_id, chapter_number): One completion record per chapter per user
+- Uses `INSERT OR REPLACE` to toggle completion status
+
+### UserDatabase Class
+
+**Location:** `backend/user_models.py`
+
+**Purpose:** Abstraction layer for all user and progress operations.
+
+#### Key Methods
+
+**Authentication:**
+```python
+def create_user(self, username: str, password: str) -> Optional[int]
+    """Create new user with hashed password. Returns user_id or None if username exists."""
+
+def authenticate_user(self, username: str, password: str) -> Optional[Dict]
+    """Verify credentials. Returns user dict or None if invalid."""
+
+def update_last_login(self, user_id: int) -> None
+    """Update last_login timestamp."""
+```
+
+**Reading Progress:**
+```python
+def save_reading_progress(self, user_id: int, book_id: int,
+                         chapter_number: int, page_number: int = 0,
+                         scroll_position: float = 0.0) -> None
+    """Save or update reading position."""
+
+def get_reading_progress(self, user_id: int, book_id: int) -> Optional[Dict]
+    """Get current reading position."""
+
+def mark_chapter_complete(self, user_id: int, book_id: int,
+                         chapter_number: int, completed: bool = True) -> None
+    """Mark chapter as completed or reset."""
+
+def get_completed_chapters(self, user_id: int, book_id: int) -> List[int]
+    """Get list of completed chapter numbers."""
+```
+
+**Statistics:**
+```python
+def get_user_stats(self, user_id: int) -> Dict
+    """Get reading statistics:
+    - books_started: Count of books with progress
+    - chapters_completed: Total completed chapters
+    """
+```
+
+### Authentication Flow
+
+#### Registration
+1. User submits username and password (min 3 chars each)
+2. Backend validates username doesn't exist
+3. Generate random 32-byte salt
+4. Hash password: SHA-256(password + salt)
+5. Store username, password_hash, salt, created_at
+6. Create Flask session with user_id
+7. Mark session as permanent (30-day duration)
+
+#### Login
+1. User submits username and password
+2. Backend retrieves user record by username
+3. Hash submitted password with stored salt
+4. Compare hashes (constant-time comparison)
+5. If match: create Flask session, update last_login
+6. Return user data (excluding password_hash and salt)
+
+#### Session Management
+- Flask server-side sessions
+- SESSION_PERMANENT = True
+- PERMANENT_SESSION_LIFETIME = 30 days
+- Session data stored in signed cookie
+- Auto-cleanup on expiration
+
+### Progress Tracking Flow
+
+#### Auto-Save Reading Position
+1. User views chapter → `showChapterDetail()` called
+2. Track initial view: `trackChapterView(book_id, chapter_num, page=0)`
+3. User navigates pages → `displayCurrentPage()` called
+4. Track page change: `trackPageChange(book_id, chapter_num, page_num)`
+5. On last page: Auto-mark complete via `onChapterComplete()`
+
+**Debouncing:** Progress saves are debounced (500ms) to avoid excessive API calls.
+
+#### Chapter Completion Logic
+```javascript
+// In displayCurrentPage()
+const isLastPage = this.pagination.currentPage === this.pagination.totalPages - 1;
+if (isLastPage) {
+    window.authModule.onChapterComplete(this.currentBook.id, this.currentChapter);
+}
+```
+
+**Backend:** Uses `INSERT OR REPLACE` to handle completion toggle.
+
+### Offline Support (PWA)
+
+#### localStorage Keys
+```javascript
+STORAGE_KEYS = {
+    OFFLINE_PROGRESS: 'summra_offline_progress',     // Array of progress updates
+    OFFLINE_COMPLETED: 'summra_offline_completed',   // Array of completions
+    LAST_SYNC: 'summra_last_sync',                   // Last sync timestamp
+    CURRENT_USER: 'summra_current_user'              // Cached user object
+}
+```
+
+#### Offline Flow
+1. **Online:** Save to server + localStorage cache
+2. **Offline:** Save to localStorage arrays
+3. **Back Online:** Auto-sync localStorage to server
+4. **Conflict Resolution:** Server data takes precedence
+
+#### Service Worker Caching
+```javascript
+registerRoute(
+    ({ url }) => url.pathname === '/api/auth/check',
+    new NetworkFirst({
+        cacheName: 'auth-cache',
+        networkTimeoutSeconds: 3,
+        plugins: [
+            new ExpirationPlugin({ maxAgeSeconds: 60 * 60 }) // 1 hour
+        ]
+    })
+);
+```
+
+**Behavior:**
+- Try network first with 3-second timeout
+- Fallback to cached auth status if offline
+- Cache expires after 1 hour
+
+### Frontend Integration
+
+#### auth.js Module
+**Location:** `frontend/static/js/auth.js`
+
+**Initialization:**
+```javascript
+window.authModule = {
+    initAuth(),                                    // Initialize on page load
+    checkAuthStatus(),                             // Verify login status
+    login(username, password),                     // Login user
+    register(username, password),                  // Register user
+    logout(),                                      // Logout and clear session
+    trackChapterView(book_id, chapter_num, page),  // Save progress
+    trackPageChange(book_id, chapter_num, page),   // Update page position
+    onChapterComplete(book_id, chapter_num),       // Mark complete
+    getCompletedChaptersForBook(book_id),          // Fetch completions
+    getReadingProgress(book_id)                    // Fetch current position
+}
+```
+
+#### UI Integration Points
+
+**Header Account Button:** (`index.html:107-110`)
+```html
+<button class="header-nav-btn user-account-btn" id="user-account-btn">
+    <span class="user-icon">👤</span>
+    <span class="user-name" id="header-user-name">Account</span>
+</button>
+```
+- Shows username when logged in
+- Opens modal on click
+
+**Continue Reading Button:** (`app.js:showResumeReadingButton()`)
+- Created dynamically in `book-detail-info` section
+- Only shown when user has progress for book
+- Button text: "Continue Reading: Chapter X, Page Y"
+- Positioned near Save for Offline button
+
+**Completed Chapters:** (`app.js:loadChapters()`)
+```javascript
+const completedChapters = await window.authModule.getCompletedChaptersForBook(book_id);
+// Apply .completed class to chapter boxes
+box.className = 'chapter-box' + (isCompleted ? ' completed' : '');
+```
+- Chapters marked with grey styling + checkmark
+- Visual indicator persists across sessions
+
+### API Endpoints
+
+#### Authentication
+- `POST /api/auth/register` - Create new account
+- `POST /api/auth/login` - Login with credentials
+- `POST /api/auth/logout` - Logout and clear session
+- `GET /api/auth/check` - Verify authentication status
+- `GET /api/auth/me` - Get current user info
+
+#### Progress Tracking
+- `POST /api/progress/save` - Save reading position
+- `GET /api/progress/get/<book_id>` - Get reading position
+- `POST /api/progress/chapter/complete` - Mark chapter complete
+- `POST /api/progress/sync` - Sync offline progress
+- `GET /api/progress/stats` - Get user statistics
+
+**Authentication Required:** All progress endpoints require valid session.
+
+### Security Considerations
+
+**Password Security:**
+- SHA-256 hashing (not plaintext)
+- Unique salt per user
+- Salt stored separately from hash
+- No password recovery (reset only)
+
+**Session Security:**
+- HTTPOnly cookies (JavaScript can't access)
+- SameSite=Lax (CSRF protection)
+- Signed session data (tamper-proof)
+- 30-day expiration
+
+**CSRF Protection:**
+- SameSite cookie policy
+- Session-based authentication
+- No third-party cookie sharing
+
+**Future Enhancements:**
+- HTTPS enforcement
+- Rate limiting on login attempts
+- Password strength requirements
+- Two-factor authentication
+- Email verification
+
+---
+
 ## SEO Architecture
 
 ### Overview
