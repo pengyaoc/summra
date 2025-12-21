@@ -6,6 +6,95 @@
 
 ## 2025-12-20
 
+### Pagination Paragraph Continuation Fix (v6.1.53) - COMPLETED
+**Status:** ✅ Completed
+**Started:** 2025-12-20
+**Completed:** 2025-12-20
+
+**Objective:** Fix pagination regression where new pages were forcing paragraph breaks, causing chapters to be cut off.
+
+#### Problem
+
+**User Feedback:** "There is a regression that pagination logic is forcing a new paragraph on each new page. This is causing cut off for some chapter."
+
+**Root Cause:**
+- When a paragraph was split across pages, the remainder text was being wrapped in a **new `<p>` element** with default top margin/padding
+- This created visual separation that made it look like a new paragraph was starting on each page
+- Text flow was interrupted, making it appear as if chapters were being cut off
+
+**Current Behavior:**
+- Paragraph splits at page boundaries looked like new paragraphs starting
+- Visual gap between split paragraph parts
+- Choppy reading experience
+
+**Desired Behavior:**
+- Text should flow seamlessly across page boundaries
+- No visual indication that a paragraph was split
+- Smooth, continuous reading experience
+
+#### Solution
+
+**Modified Paragraph Continuation Styling:**
+
+**JavaScript Changes** (`frontend/static/js/app.js`, `calculatePages()` function, lines 5054-5068):
+
+**Before:**
+```javascript
+// Create a new paragraph with the remainder for next page
+const remainderP = document.createElement('p');
+remainderP.innerHTML = splitResult.remainder;
+// Copy attributes from original
+for (const attr of block.attributes) {
+    remainderP.setAttribute(attr.name, attr.value);
+}
+```
+
+**After:**
+```javascript
+// Create remainder paragraph WITHOUT forcing visual separation
+// The remainder will continue naturally on the next page
+const remainderP = document.createElement('p');
+remainderP.innerHTML = splitResult.remainder;
+// Copy attributes from original to maintain styling
+for (const attr of block.attributes) {
+    remainderP.setAttribute(attr.name, attr.value);
+}
+// Mark as continuation to remove top spacing (CSS handles this)
+remainderP.classList.add('paragraph-continuation');
+```
+
+**CSS Changes** (`frontend/static/css/style.css`, lines 5264-5268):
+
+**Added:**
+```css
+/* Allow seamless text continuation across pages */
+.pagination-page-container p.paragraph-continuation {
+    margin-top: 0;
+    padding-top: 0;
+}
+```
+
+#### Technical Details
+
+**Fix Strategy:**
+1. **JavaScript**: Added `paragraph-continuation` class to remainder paragraphs that flow onto next pages
+2. **CSS**: Created rule to remove top margin/padding from continuation paragraphs
+3. **Result**: Seamless text flow across page boundaries without visual breaks
+
+**Benefits:**
+- ✅ No more forced paragraph breaks at page boundaries
+- ✅ Smooth, continuous reading experience
+- ✅ Chapters no longer appear cut off
+- ✅ Maintains original paragraph styling (fonts, colors, etc.)
+
+**Files Modified:**
+- `frontend/static/js/app.js` (pagination logic)
+- `frontend/static/css/style.css` (continuation paragraph styling)
+
+---
+
+## 2025-12-20 (Earlier)
+
 ### Continue Reading Button Position Update (v6.1.52) - COMPLETED
 **Status:** ✅ Completed
 **Started:** 2025-12-20

@@ -5261,6 +5261,12 @@ body.pagination-active {
     margin-bottom: 1em;
 }
 
+/* Allow seamless text continuation across pages */
+.pagination-page-container p.paragraph-continuation {
+    margin-top: 0;
+    padding-top: 0;
+}
+
 .pagination-page-container h1,
 .pagination-page-container h2,
 .pagination-page-container h3,
