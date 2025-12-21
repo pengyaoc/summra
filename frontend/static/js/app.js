@@ -5033,17 +5033,8 @@ class SummraApp {
                         break;
                     }
 
-                    // If page is empty and block doesn't fit, we have to force it
-                    if (pageBlocks.length === 0) {
-                        console.log('[calculatePages] Block too large for page, forcing it anyway:', block.tagName);
-                        pageDiv.appendChild(clone);
-                        pageBlocks.push(block.outerHTML);
-                        blockIndex++;
-                        break;
-                    }
-
-                    // Try to split if it's a paragraph and page isn't empty
-                    if (block.tagName === 'P' && pageBlocks.length > 0) {
+                    // Try to split if it's a paragraph (regardless of page being empty or not)
+                    if (block.tagName === 'P') {
                         const splitResult = this.splitParagraphToFit(block, pageDiv, this.pagination.containerHeight);
 
                         if (splitResult.firstPart) {
@@ -5065,7 +5056,17 @@ class SummraApp {
                             // Insert remainder as next block to process
                             blocks.splice(blockIndex + 1, 0, remainderP);
                             blockIndex++; // Move past the original block (remainder will be processed next)
+                            break;
                         }
+                    }
+
+                    // If page is empty and block doesn't fit (and we couldn't split it), we have to force it
+                    if (pageBlocks.length === 0) {
+                        console.log('[calculatePages] Block too large for page, forcing it anyway:', block.tagName);
+                        pageDiv.appendChild(clone);
+                        pageBlocks.push(block.outerHTML);
+                        blockIndex++;
+                        break;
                     }
 
                     break; // Page is full
