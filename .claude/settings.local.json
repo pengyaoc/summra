@@ -69,7 +69,8 @@
       "Bash(/tmp/war_and_peace_summary.txt)",
       "WebFetch(domain:read.amazon.com)",
       "Bash(column -t -s '|':*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.sitepoint.com)"
     ],
     "deny": [],
     "ask": []

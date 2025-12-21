@@ -6,6 +6,116 @@
 
 ## 2025-12-20
 
+### Pagination Long Paragraph Split Fix (v6.1.54) - COMPLETED
+**Status:** ✅ Completed
+**Started:** 2025-12-20
+**Completed:** 2025-12-20
+
+**Objective:** Fix pagination bug where paragraphs longer than one page were being cut off instead of wrapping to the next page.
+
+#### Problem
+
+**User Feedback:** "I am still seeing issue with long paragraphs. If it's longer than 1 page, the text would be cut off by the pagination algorithm and not wrap to the next page."
+
+**Root Cause:**
+- The paragraph splitting logic only ran when `pageBlocks.length > 0` (page not empty)
+- When a paragraph was longer than one full page:
+  1. Page starts empty (`pageBlocks.length === 0`)
+  2. Paragraph doesn't fit
+  3. Code forced the entire unsplit paragraph onto the page
+  4. Text got cut off at page boundary without continuing to next page
+
+**Current Behavior:**
+- Very long paragraphs (longer than 1 page) were truncated
+- Text simply stopped at page boundary
+- Remainder of paragraph was lost
+
+**Desired Behavior:**
+- Long paragraphs should split across multiple pages
+- Text should flow continuously until entire paragraph is displayed
+- No text should be lost
+
+#### Solution
+
+**Modified Paragraph Split Logic to Work on Empty Pages:**
+
+**JavaScript Changes** (`frontend/static/js/app.js`, `calculatePages()` function, lines 5036-5072):
+
+**Before:**
+```javascript
+// If page is empty and block doesn't fit, we have to force it
+if (pageBlocks.length === 0) {
+    console.log('[calculatePages] Block too large for page, forcing it anyway:', block.tagName);
+    pageDiv.appendChild(clone);
+    pageBlocks.push(block.outerHTML);
+    blockIndex++;
+    break;
+}
+
+// Try to split if it's a paragraph and page isn't empty
+if (block.tagName === 'P' && pageBlocks.length > 0) {
+    const splitResult = this.splitParagraphToFit(block, pageDiv, this.pagination.containerHeight);
+    // ... split logic
+}
+```
+
+**After:**
+```javascript
+// Try to split if it's a paragraph (regardless of page being empty or not)
+if (block.tagName === 'P') {
+    const splitResult = this.splitParagraphToFit(block, pageDiv, this.pagination.containerHeight);
+
+    if (splitResult.firstPart) {
+        // Successfully split - add first part to current page
+        pageDiv.appendChild(splitResult.firstPart);
+        pageBlocks.push(splitResult.firstPart.outerHTML);
+
+        // Create remainder paragraph and queue for next page
+        const remainderP = document.createElement('p');
+        remainderP.innerHTML = splitResult.remainder;
+        // ... copy attributes and mark as continuation
+
+        blocks.splice(blockIndex + 1, 0, remainderP);
+        blockIndex++;
+        break;
+    }
+}
+
+// If page is empty and block doesn't fit (and we couldn't split it), we have to force it
+if (pageBlocks.length === 0) {
+    console.log('[calculatePages] Block too large for page, forcing it anyway:', block.tagName);
+    // ... force logic
+}
+```
+
+#### Technical Details
+
+**Fix Strategy:**
+1. **Removed the `pageBlocks.length > 0` condition** from paragraph splitting
+2. Paragraph splitting now **always attempts** for `<p>` tags, regardless of page state
+3. The "force unsplit block" fallback now only runs **after** attempting to split
+4. Long paragraphs can now span 2, 3, or more pages as needed
+
+**How it Works:**
+- For a 3-page paragraph:
+  - Page 1: First part fills the page, remainder queued
+  - Page 2: Remainder (still too long) fills the page, new remainder queued
+  - Page 3: Final remainder fits completely
+- Each continuation uses `paragraph-continuation` class to maintain seamless flow
+
+**Benefits:**
+- ✅ Paragraphs of any length now paginate correctly
+- ✅ No text loss or truncation
+- ✅ Seamless visual continuation across pages (from v6.1.53)
+- ✅ Works for extremely long paragraphs (multi-page)
+
+**Files Modified:**
+- `frontend/static/js/app.js` (pagination logic order)
+
+---
+
+## 2025-12-20 (Earlier)
+
 ### Pagination Paragraph Continuation Fix (v6.1.53) - COMPLETED
 **Status:** ✅ Completed
 **Started:** 2025-12-20
