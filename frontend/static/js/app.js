@@ -5051,17 +5051,20 @@ class SummraApp {
                             pageDiv.appendChild(splitResult.firstPart);
                             pageBlocks.push(splitResult.firstPart.outerHTML);
 
-                            // Create a new paragraph with the remainder for next page
+                            // Create remainder paragraph WITHOUT forcing visual separation
+                            // The remainder will continue naturally on the next page
                             const remainderP = document.createElement('p');
                             remainderP.innerHTML = splitResult.remainder;
-                            // Copy attributes from original
+                            // Copy attributes from original to maintain styling
                             for (const attr of block.attributes) {
                                 remainderP.setAttribute(attr.name, attr.value);
                             }
+                            // Mark as continuation to remove top spacing (CSS handles this)
+                            remainderP.classList.add('paragraph-continuation');
 
                             // Insert remainder as next block to process
                             blocks.splice(blockIndex + 1, 0, remainderP);
-                            blockIndex++; // Move past the remainder
+                            blockIndex++; // Move past the original block (remainder will be processed next)
                         }
                     }
 
