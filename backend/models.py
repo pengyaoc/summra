@@ -54,7 +54,19 @@ class Database:
                 full_text TEXT,
                 word_count INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                cover_image_url TEXT,
+                gutenberg_id INTEGER,
+                cover_source TEXT DEFAULT 'unknown',
+                slug TEXT UNIQUE,
+                author_id INTEGER,
+                about_text TEXT,
+                relevance_now TEXT,
+                is_poetry INTEGER DEFAULT 0,
+                character_guide_url TEXT,
+                timeline_url TEXT,
+                themes_url TEXT,
+                cefr_level TEXT
             )
         ''')
 
@@ -83,6 +95,9 @@ class Database:
                 summary TEXT NOT NULL,
                 word_count INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                section_id INTEGER REFERENCES book_sections(id),
+                illustration_url TEXT,
+                modern_english_text TEXT,
                 FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
                 UNIQUE(book_id, chapter_number)
             )
@@ -121,11 +136,19 @@ class Database:
             pass
 
         # Add slug column for SEO-friendly URLs (migration for existing databases)
+        # Note: SQLite ALTER TABLE ADD COLUMN does not support UNIQUE constraint,
+        # so we add the column first, then create a unique index separately.
         try:
-            cursor.execute("ALTER TABLE books ADD COLUMN slug TEXT UNIQUE")
+            cursor.execute("ALTER TABLE books ADD COLUMN slug TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             # Column already exists
+            pass
+        try:
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_books_slug ON books(slug)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Index already exists
             pass
 
         # Add author_id column for foreign key relationship (migration for existing databases)
