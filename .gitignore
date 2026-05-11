@@ -67,3 +67,6 @@ tmp/
 htmlcov/
 coverage.json
 tests/fixtures/
+
+# Claude Code
+.claude/
