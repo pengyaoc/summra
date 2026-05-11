@@ -80,8 +80,10 @@ async function checkAuthStatus() {
         console.error('Error checking auth status:', error);
 
         // Don't clear currentUser if we're offline and have cached state
-        if (navigator.onLine === false && currentUser) {
-            console.log('Offline: Using cached auth state');
+        // This supports extended offline PWA usage
+        if (currentUser) {
+            console.log('Offline: Using cached auth state from localStorage');
+            // Keep existing currentUser - don't overwrite
         } else {
             setCurrentUser(null);
         }

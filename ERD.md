@@ -17,6 +17,7 @@ This document provides in-depth technical documentation for the Summra project, 
 11. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
 12. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
 13. [Pagination System](#pagination-system-added-2025-12-19)
+14. [PWA Offline Support & Caching](#pwa-offline-support--caching-added-2025-12-31)
 
 ---
 
@@ -10007,13 +10008,84 @@ const availableHeight = viewportHeight - stickyHeaderHeight - backButtonHeight -
    - 0.2 line buffer accounts for rendering/rounding edge cases
    - Applied only for paragraph endings, not every line
 
-4. **Word-Fitting for Split Paragraphs**
-   - If paragraph too large, split at word boundaries
-   - Measure progressively longer word sequences
-   - Find maximum words that fit in remaining space
-   - Create new paragraph elements for continuation
+4. **Word-Fitting for Split Paragraphs (Enhanced in v6.1.53-54)**
 
-5. **Build Page Array**
+   **Binary Search Algorithm** (`splitParagraphToFit()` - lines 5105-5155):
+   ```javascript
+   // Split paragraph text into words
+   const words = text.split(/\s+/).filter(w => w.length > 0);
+
+   // Binary search for maximum words that fit
+   let left = 1, right = words.length - 1;
+   let bestFit = 0;
+
+   while (left <= right) {
+       const mid = Math.floor((left + right) / 2);
+       const testText = words.slice(0, mid).join(' ');
+
+       // Test if words fit by measuring actual DOM height
+       const testP = document.createElement('p');
+       testP.innerHTML = testText;
+       pageDiv.appendChild(testP);
+       const fits = pageDiv.scrollHeight <= pageHeight;
+       pageDiv.removeChild(testP);
+
+       if (fits) {
+           bestFit = mid;
+           left = mid + 1;
+       } else {
+           right = mid - 1;
+       }
+   }
+
+   // Split at bestFit position
+   const firstPart = words.slice(0, bestFit).join(' ');
+   const remainder = words.slice(bestFit).join(' ');
+   ```
+
+   **Time Complexity:** O(log n) where n = number of words
+
+   **Key Features:**
+   - Preserves word boundaries (no mid-word breaks)
+   - Uses actual DOM rendering for accurate measurements
+   - Copies all paragraph attributes to maintain styling
+   - Returns both parts for continuation
+
+5. **Seamless Paragraph Continuation** (v6.1.53-54)
+
+   **Critical Fixes:**
+
+   **v6.1.53 - Visual Continuity:**
+   - Added `paragraph-continuation` CSS class to remainder paragraphs
+   - Removes top margin/padding to eliminate visual gaps
+   - CSS: `.pagination-page-container p.paragraph-continuation { margin-top: 0; padding-top: 0; }`
+   - Result: Text flows seamlessly across page boundaries
+
+   **v6.1.54 - Multi-Page Paragraph Support:**
+   - **Problem:** Paragraphs longer than one full page were truncated
+   - **Root Cause:** Splitting only occurred when `pageBlocks.length > 0`
+   - **Fix:** Removed condition - now always attempts to split paragraphs first
+   - **Logic Order Change:**
+     ```javascript
+     // NEW ORDER (v6.1.54):
+     if (block.tagName === 'P') {
+         // Try to split (even on empty page)
+         const splitResult = this.splitParagraphToFit(...);
+         if (splitResult.firstPart) {
+             // Add first part, queue remainder
+             blocks.splice(blockIndex + 1, 0, remainderP);
+         }
+     }
+
+     // Only force if couldn't split
+     if (pageBlocks.length === 0) {
+         // Force unsplit block as last resort
+     }
+     ```
+   - **Result:** Paragraphs of any length correctly span 2, 3, or more pages
+   - **User Verification:** "The pagination now works perfectly"
+
+6. **Build Page Array**
    - Each page is a container div with assigned paragraphs
    - Page containers receive inline font-size from reading settings
    - Pages hidden/shown based on current position
@@ -10021,9 +10093,18 @@ const availableHeight = viewportHeight - stickyHeaderHeight - backButtonHeight -
 **Edge Cases Handled:**
 - Empty paragraphs (preserve spacing)
 - Very long words (allow overflow rather than break)
+- **Multi-page paragraphs** (v6.1.54 - paragraphs spanning 3+ pages)
+- **Seamless continuation** (v6.1.53 - no visual gaps)
 - Margin collapse at page boundaries
 - Font size changes triggering recalculation
 - Window resize events
+
+**Algorithm Comparison:**
+Our implementation compared to industry standards:
+- **Our approach:** Word-level binary search (O(log n), precise control)
+- **ebook-paginator:** DOM node-level splitting (simpler, less precise)
+- **CSS columns:** Browser-dependent, cross-platform inconsistencies
+- **Advantage:** More precise word-boundary control, consistent behavior, efficient performance
 
 ### Navigation System
 
@@ -10335,5 +10416,614 @@ body.pagination-active {
 3. **Keyboard Shortcuts:** Additional shortcuts (Home, End, Page Up/Down)
 4. **Touch Gestures:** More sophisticated gesture recognition
 5. **Reading Statistics:** Track pages read, time per page, total reading time
+
+---
+
+## PWA Offline Support & Caching (Added 2025-12-31)
+
+The Progressive Web App (PWA) implementation provides robust offline support, allowing users to download books and read them without internet connection for extended periods.
+
+### Architecture Overview
+
+**Core Components:**
+- **Service Worker** (`frontend/static/service-worker.js`) - Workbox-based caching strategies
+- **Auth Persistence** (`frontend/static/js/auth.js`) - localStorage-backed authentication
+- **Offline Storage** (IndexedDB via service worker + localStorage for auth/progress)
+- **Cache Management** (Strategic caching by content type with expiration)
+
+### Service Worker Caching Strategies
+
+**Location:** `frontend/static/service-worker.js`
+
+Implemented using **Workbox 7.0.0** with different strategies for different content types:
+
+#### 1. Cache-First Strategy (Long-Lived Assets)
+
+**Usage:** Static assets that rarely change
+- **CSS files** - 30 days (`maxAgeSeconds: 30 * 24 * 60 * 60`)
+- **Images** (book covers, icons, illustrations) - 30 days, max 100 entries
+- **Fonts** - 1 year (`maxAgeSeconds: 365 * 24 * 60 * 60`)
+
+```javascript
+registerRoute(
+    ({ request }) => request.destination === 'image',
+    new CacheFirst({
+        cacheName: 'images-cache',
+        plugins: [
+            new ExpirationPlugin({
+                maxEntries: 100,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+            }),
+        ],
+    })
+);
+```
+
+**Behavior:**
+1. Check cache first
+2. Return cached response if available and not expired
+3. Fetch from network only if cache miss
+4. Update cache with network response
+
+#### 2. Network-First Strategy (Dynamic Content)
+
+**Usage:** Content that should be fresh when online
+- **Book data** (`/api/books/{id}`) - 7 days cache, 5s timeout
+- **Summaries** (`/api/books/{id}/summary/*`) - 7 days cache, 5s timeout
+- **Chapters** (`/api/books/{id}/chapters/*`) - 7 days cache, 5s timeout
+- **Auth check** (`/api/auth/check`) - **30 days cache** (extended in v6.2.0), 3s timeout
+
+```javascript
+registerRoute(
+    ({ url }) => url.pathname === '/api/auth/check',
+    new NetworkFirst({
+        cacheName: 'auth-cache',
+        plugins: [
+            new ExpirationPlugin({
+                maxEntries: 1,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days (matches session)
+            }),
+        ],
+        networkTimeoutSeconds: 3, // Fast fallback to cache
+    })
+);
+```
+
+**Behavior:**
+1. Try network first with timeout
+2. If network succeeds, update cache and return response
+3. If network fails or times out, fallback to cache
+4. If cache also missing, return error
+
+**Critical Fix (v6.2.0):** Extended auth cache from 1 hour to 30 days to match session lifetime, enabling extended offline PWA usage.
+
+#### 3. Stale-While-Revalidate Strategy (Fast + Fresh)
+
+**Usage:** Content that should be fast but eventually fresh
+- **JavaScript files** - 7 days cache
+- **Book lists** (`/api/books`, `/api/categories`, `/api/discover`) - 1 day cache
+- **Author data** - 7 days cache
+- **Blog posts** - 7 days cache
+
+```javascript
+registerRoute(
+    ({ request }) => request.destination === 'script',
+    new StaleWhileRevalidate({
+        cacheName: 'js-cache-v2',
+        plugins: [
+            new ExpirationPlugin({
+                maxEntries: 20,
+                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+            }),
+        ],
+    })
+);
+```
+
+**Behavior:**
+1. Return cached response immediately
+2. Simultaneously fetch from network in background
+3. Update cache with fresh response for next time
+4. Best of both worlds: speed + freshness
+
+#### 4. Network-Only Strategy (Never Cache)
+
+**Usage:** Endpoints that must never be cached
+- **TTS generation** (`/api/tts/*`) - Real-time audio generation
+- **Admin endpoints** (`/api/admin/*`) - Security and freshness critical
+
+```javascript
+registerRoute(
+    ({ url }) => url.pathname.startsWith('/api/tts/'),
+    new NetworkOnly()
+);
+```
+
+### Authentication Persistence
+
+**Location:** `frontend/static/js/auth.js` lines 22-91
+
+**Key Principles:**
+1. Store user state in localStorage for instant offline access
+2. Verify with server when online
+3. Trust cached state when offline
+4. Sync offline progress when reconnected
+
+**localStorage Keys:**
+```javascript
+const STORAGE_KEYS = {
+    OFFLINE_PROGRESS: 'summra_offline_progress',
+    OFFLINE_COMPLETED: 'summra_offline_completed',
+    LAST_SYNC: 'summra_last_sync',
+    CURRENT_USER: 'summra_current_user'
+};
+```
+
+**Auth Check Flow:**
+
+```javascript
+async function checkAuthStatus() {
+    try {
+        // Attempt server verification
+        const response = await fetch('/api/auth/check', {
+            credentials: 'include'
+        });
+
+        if (data.authenticated) {
+            setCurrentUser(data.user);
+            await syncOfflineProgress();
+        } else {
+            setCurrentUser(null);
+        }
+    } catch (error) {
+        // Network failure (offline) - preserve cached state
+        if (currentUser) {
+            console.log('Offline: Using cached auth state from localStorage');
+            // Keep existing currentUser - don't overwrite
+        } else {
+            setCurrentUser(null);
+        }
+    }
+}
+```
+
+**Critical Fix (v6.2.0):** Removed dependency on `navigator.onLine` (unreliable in PWA) and always preserve cached user state when network unavailable.
+
+### Offline Book Caching
+
+**Location:** `frontend/static/service-worker.js` lines 277-382
+
+**"Save for Offline" Feature:**
+
+When user clicks "Save for Offline" button:
+
+1. **Message to Service Worker:**
+   ```javascript
+   navigator.serviceWorker.controller.postMessage({
+       type: 'CACHE_BOOK',
+       bookId: bookId,
+       bookSlug: bookSlug
+   });
+   ```
+
+2. **Service Worker Caches All Book Resources:**
+   - Book metadata (`/api/books/{id}`)
+   - All 3 summary types (concise, medium, comprehensive)
+   - Chapter list
+   - Individual chapter content for all chapters
+
+3. **Progress Tracking:**
+   - Service worker sends progress messages via MessageChannel
+   - UI shows loading indicator with count
+   - Final success/failure message
+
+4. **Offline Marker Creation:**
+   ```javascript
+   // Mark book as explicitly downloaded for offline
+   const offlineCache = await caches.open('offline-books-cache');
+   const markerResponse = new Response(JSON.stringify({
+       bookId,
+       bookSlug,
+       cachedAt: new Date().toISOString(),
+       resourceCount: cached
+   }));
+   await offlineCache.put(`/offline-book-marker/${bookId}`, markerResponse);
+   ```
+
+**Distinction:**
+- **Automatically cached:** Books browsed normally (via Network-First strategy)
+- **Explicitly offline:** Books marked via "Save for Offline" button
+- Marker system distinguishes between the two for UI purposes
+
+### Session Configuration
+
+**Location:** `backend/app_base.py` lines 44-49
+
+```python
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+```
+
+**Session Lifetime:**
+- **30 days** - Matches auth cache duration
+- Supports extended offline usage
+- Session stored in secure HTTP-only cookie
+- Automatically renewed on activity
+
+### Offline Progress Sync
+
+**Location:** `frontend/static/js/auth.js` lines 593-629
+
+**How it Works:**
+
+1. **Offline Mode:** Progress saved to localStorage
+   ```javascript
+   function saveProgressOffline(progress) {
+       const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.OFFLINE_PROGRESS) || '[]');
+       // Update or add progress entry
+       stored.push(progress);
+       localStorage.setItem(STORAGE_KEYS.OFFLINE_PROGRESS, JSON.stringify(stored));
+   }
+   ```
+
+2. **Online Mode:** Progress synced to server
+   ```javascript
+   async function syncOfflineProgress() {
+       const offlineProgress = JSON.parse(localStorage.getItem(STORAGE_KEYS.OFFLINE_PROGRESS) || '[]');
+
+       await fetch('/api/progress/sync', {
+           method: 'POST',
+           body: JSON.stringify({
+               progress: offlineProgress,
+               completed_chapters: offlineCompleted
+           })
+       });
+
+       // Clear offline storage after successful sync
+       localStorage.removeItem(STORAGE_KEYS.OFFLINE_PROGRESS);
+   }
+   ```
+
+3. **Trigger Points:**
+   - On login/registration
+   - When coming back online (detected via auth check success)
+   - Before saving new progress (if online)
+
+### Testing Offline Mode
+
+**Manual Test Procedure:**
+
+1. **Setup:**
+   - Open app in browser/PWA
+   - Login with account
+   - Navigate to book page
+   - Click "Save for Offline"
+   - Wait for cache completion
+
+2. **Offline Test:**
+   - Enable airplane mode / disable network
+   - Close and reopen PWA
+   - Verify user still logged in
+   - Navigate to cached book
+   - Read chapters and change pages
+   - Verify all content loads from cache
+
+3. **Extended Offline Test (3+ days):**
+   - Keep device offline for 72+ hours
+   - Periodically open and close PWA
+   - Verify content remains accessible
+   - Verify auth state persists
+
+4. **Reconnection Test:**
+   - Re-enable network
+   - Open PWA
+   - Verify offline progress syncs to server
+   - Verify reading position preserved
+
+### Cache Debugging
+
+**Browser DevTools:**
+
+1. **Application > Service Workers**
+   - View service worker status
+   - Force update or unregister
+
+2. **Application > Cache Storage**
+   - View all cache buckets
+   - Inspect cached requests
+   - Manually delete caches
+
+3. **Application > Local Storage**
+   - View auth state (`summra_current_user`)
+   - View offline progress (`summra_offline_progress`)
+   - Check sync timestamp (`summra_last_sync`)
+
+### Cache Size Limits
+
+**Estimated Cache Usage per Book:**
+- Metadata: ~5 KB
+- Summaries (3 types): ~30 KB
+- Chapters: ~100-500 KB (depending on book length)
+- **Total per book:** ~150-550 KB
+
+**Browser Storage Quotas:**
+- Chrome/Safari: ~50-100 MB (varies by device)
+- Estimated capacity: **100-600 books** depending on book size
+
+### iOS-Specific Behavior & Mitigations
+
+**Critical for iOS PWA Success:**
+
+iOS Safari/WebKit has aggressive cache eviction policies that require special handling:
+
+#### iOS Storage Eviction Policy
+
+**Timeline:**
+- **Official cap:** 7 days of no user interaction
+- **Reality:** Can clear cache sooner (users reported ~3 days)
+- **Factors:** Storage pressure, perceived inactivity, app not in home screen
+
+**What Gets Cleared:**
+- Script-writable storage (Cache API, IndexedDB, localStorage)
+- Service Worker cache
+- All app data if not granted persistent storage
+
+**What's Exempt:**
+- Server-set cookies
+- Origins with persistent storage granted
+
+#### Mitigation 1: Request Persistent Storage
+
+**Implementation:** `frontend/static/js/app.js:132-162`
+
+```javascript
+async requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        if (isPersisted) {
+            console.log('✅ Persistent storage granted');
+        }
+    }
+}
+```
+
+**How It Works:**
+- iOS 17+ supports Storage API
+- Request is evaluated by WebKit heuristics
+- Home screen PWAs more likely to be granted persistence
+- Significantly reduces cache eviction likelihood
+
+**Grant Heuristics (iOS):**
+- ✅ App added to home screen (strongest signal)
+- ✅ Frequent user interaction
+- ✅ Active page at eviction time
+- ❌ Only used in Safari browser
+- ❌ Infrequent usage
+
+#### Mitigation 2: Track User Interactions
+
+**Implementation:** `frontend/static/js/app.js:792-810`
+
+```javascript
+setupIOSInteractionTracking() {
+    const updateLastInteraction = () => {
+        localStorage.setItem('summra_last_interaction', new Date().toISOString());
+    };
+
+    const interactionEvents = ['click', 'scroll', 'touchstart', 'keydown'];
+    interactionEvents.forEach(eventType => {
+        document.addEventListener(eventType, updateLastInteraction, { passive: true });
+    });
+}
+```
+
+**Purpose:**
+- Signals to iOS that app is actively used
+- Provides debugging info for developers
+- Helps avoid "inactive app" classification
+
+#### iOS Storage Quotas
+
+| iOS Version | Cache API Limit | IndexedDB Limit | Total Quota |
+|-------------|-----------------|-----------------|-------------|
+| iOS 16 and earlier | ~50 MB | 500 MB | Limited |
+| iOS 17+ | Up to 60% disk space | 500 MB | Significantly increased |
+
+**Recommendation:** Target <50MB cache for compatibility with iOS 16
+
+#### Debugging iOS Cache Issues
+
+**Check persistence status:**
+```javascript
+const persisted = await navigator.storage.persisted();
+console.log('Persistent:', persisted);  // true or false
+```
+
+**Check storage usage:**
+```javascript
+const estimate = await navigator.storage.estimate();
+console.log(`Using ${estimate.usage} of ${estimate.quota} bytes`);
+```
+
+**Check last interaction (debugging):**
+```javascript
+const lastInteraction = localStorage.getItem('summra_last_interaction');
+console.log('Last interaction:', new Date(lastInteraction));
+```
+
+#### Best Practices for iOS PWA
+
+1. **Always request persistent storage** - Call `navigator.storage.persist()` on app load
+2. **Encourage home screen installation** - Show banner/instructions for iOS users
+3. **Track interactions** - Log user activity to signal active usage
+4. **Keep cache lean** - Target <50MB for broader compatibility
+5. **Test on real devices** - iOS simulator behaves differently than real devices
+6. **Test multi-day offline** - Verify 3-7 day offline periods work
+7. **Monitor console logs** - Check persistence grant status
+
+### Known Issues & Limitations
+
+1. **iOS Cache Eviction:** iOS may still clear cache after extended inactivity
+   - Mitigation: Persistent storage request + interaction tracking
+   - Reality: Significantly reduces but doesn't eliminate eviction risk
+   - User action: Add to home screen for best persistence
+
+2. **Service Worker Updates:** Updates require page refresh
+   - Current: Auto-activate on install
+   - Future: Show "Update Available" prompt
+
+3. **Sync Conflicts:** If progress saved offline and online simultaneously
+   - Current: Last write wins
+   - Future: Implement conflict resolution
+
+4. **iOS IndexedDB Instability:** Known data loss and corruption issues
+   - Current: Using Cache API primarily, localStorage for critical data
+   - Avoid: Heavy reliance on IndexedDB for iOS
+
+### Cache Verification & Eviction Detection
+
+**Problem:** When iOS evicts cache, orphaned marker files remain, causing the app to show "Saved ✓" for books that aren't actually cached.
+
+**Solution:** Verify actual content exists, not just marker files.
+
+#### How Cache State is Tracked
+
+**Before v6.2.1 (Marker-Only Check):**
+```javascript
+// Only checked if marker file exists
+const offlineMarker = await offlineCache.match('/offline-book-marker/123');
+const isCached = !!offlineMarker;
+
+// Problem: Returns TRUE even if iOS evicted the actual book content!
+```
+
+**After v6.2.1 (Content Verification):**
+```javascript
+// Check marker AND verify actual content exists
+const offlineMarker = await offlineCache.match('/offline-book-marker/123');
+const bookData = await bookDataCache.match('/api/books/123');
+const chaptersList = await chaptersCache.match('/api/books/123/chapters');
+
+// Only consider cached if BOTH marker and content exist
+const isCached = !!(offlineMarker && bookData && chaptersList);
+
+// Clean up stale marker if content was evicted
+if (offlineMarker && !isCached) {
+    await offlineCache.delete('/offline-book-marker/123');
+}
+```
+
+#### Automatic Cache Health Checks
+
+**When:** Runs automatically on app load (after requesting persistent storage)
+
+**What it does:**
+1. Queries all offline book markers
+2. Verifies actual content exists for each
+3. Identifies evicted books (marker exists, content gone)
+4. Cleans up stale markers
+5. Logs warnings for debugging
+6. Stores eviction info in localStorage
+
+**Implementation:** `frontend/static/js/app.js:167-188`
+
+```javascript
+async performCacheHealthCheck() {
+    const offlineBooks = await this.getOfflineBooks();
+
+    if (offlineBooks.evictedBookIds && offlineBooks.evictedBookIds.length > 0) {
+        console.warn(`⚠️  Cache eviction detected! ${offlineBooks.evictedBookIds.length} book(s) lost`);
+
+        // Store for user notification
+        localStorage.setItem('summra_cache_evicted', JSON.stringify({
+            bookIds: offlineBooks.evictedBookIds,
+            detectedAt: new Date().toISOString()
+        }));
+    }
+}
+```
+
+#### User Experience Flow
+
+**Scenario: Book was cached, then iOS evicts it**
+
+1. **User downloads book**
+   - Marker created: `/offline-book-marker/123`
+   - Content cached: book data + chapters
+   - Button shows: "Saved ✓"
+
+2. **iOS evicts cache** (after inactivity)
+   - Content deleted: book data + chapters gone
+   - Marker remains: `/offline-book-marker/123` still exists
+
+3. **User reopens app**
+   - Health check runs automatically
+   - Detects marker but no content
+   - Cleans up stale marker
+   - Logs: "Cache eviction detected! 1 book(s) lost"
+
+4. **User views book page**
+   - `checkBookCached()` returns `{ isCached: false, evicted: true }`
+   - Button shows: "Re-download for Offline"
+   - Console: "Cache was cleared by iOS. Re-download this book to read offline."
+
+#### Debugging Cache State
+
+**Check persistence status:**
+```javascript
+const persisted = await navigator.storage.persisted();
+console.log('Persistent:', persisted);  // true = protected, false = at risk
+```
+
+**Check if specific book is cached:**
+```javascript
+const status = await app.checkBookCached(123);
+console.log(status);
+// { isCached: true, evicted: false }  = Still cached
+// { isCached: false, evicted: true }  = Was cached, now evicted
+// { isCached: false, evicted: false } = Never cached
+```
+
+**Check all offline books:**
+```javascript
+const books = await app.getOfflineBooks();
+console.log(books);
+// { bookIds: [1, 5, 12], evictedBookIds: [3, 8] }
+// Books 1, 5, 12 are cached
+// Books 3, 8 were evicted
+```
+
+**Check eviction history:**
+```javascript
+const eviction = localStorage.getItem('summra_cache_evicted');
+console.log(JSON.parse(eviction));
+// { bookIds: [3, 8], detectedAt: "2025-12-31T12:00:00Z" }
+```
+
+### Version History
+
+| Version | Change |
+|---------|--------|
+| v6.0.0 | Initial PWA implementation with offline support |
+| v6.1.0 | Added "Save for Offline" feature |
+| v6.2.0 | **Extended auth cache from 1 hour to 30 days** |
+| v6.2.0 | **Improved offline auth persistence (removed navigator.onLine check)** |
+| v6.2.0 | **Added persistent storage request (iOS cache eviction fix)** |
+| v6.2.0 | **Added interaction tracking to signal active usage to iOS** |
+| v6.2.1 | **Added cache verification system (detect and handle eviction)** |
+| v6.2.1 | **Automatic cache health checks on app load** |
+| v6.2.1 | **Clean up stale markers when content evicted** |
+
+### Future Enhancements
+
+1. **Storage Management UI:** Show users their cached books and storage usage
+2. **Background Sync:** Sync progress even when app is closed
+3. **Offline Notifications:** Show indicator when offline/online status changes
+4. **Cache Management UI:** Let users view and manage cached books
+5. **Selective Chapter Caching:** Only cache specific chapters instead of entire book
+6. **Service Worker Update Prompts:** Notify user of available updates
 
 ---

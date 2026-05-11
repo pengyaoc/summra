@@ -92,7 +92,8 @@ if (workbox) {
         })
     );
 
-    // Cache auth check endpoint - Network First with fast fallback
+    // Cache auth check endpoint - Network First with long-lived cache for offline support
+    // Extended cache duration to support extended offline PWA usage (30 days)
     registerRoute(
         ({ url }) => url.pathname === '/api/auth/check',
         new NetworkFirst({
@@ -103,7 +104,7 @@ if (workbox) {
                 }),
                 new ExpirationPlugin({
                     maxEntries: 1,
-                    maxAgeSeconds: 60 * 60, // 1 hour cache
+                    maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days cache (matches session lifetime)
                 }),
             ],
             networkTimeoutSeconds: 3, // Fast fallback to cache after 3s
@@ -390,14 +391,44 @@ if (workbox) {
                 // We use a special cache to track offline downloads
                 const offlineCache = await caches.open('offline-books-cache');
                 const offlineMarker = await offlineCache.match(`/offline-book-marker/${bookId}`);
-                const isCached = !!offlineMarker;
 
-                if (event.ports && event.ports[0]) {
-                    event.ports[0].postMessage({
-                        type: 'BOOK_CACHE_STATUS',
-                        bookId,
-                        isCached
-                    });
+                // Marker exists, but verify actual content is still available
+                if (offlineMarker) {
+                    // Verify critical book data is actually cached
+                    const bookDataCache = await caches.open('book-data-cache');
+                    const chaptersCache = await caches.open('chapters-cache');
+
+                    // Check if book metadata is cached
+                    const bookData = await bookDataCache.match(`/api/books/${bookId}`);
+                    // Check if chapters list is cached
+                    const chaptersList = await chaptersCache.match(`/api/books/${bookId}/chapters`);
+
+                    // Book is only "cached" if both marker AND actual content exist
+                    const isCached = !!(bookData && chaptersList);
+
+                    // If marker exists but content is gone (cache eviction), clean up marker
+                    if (!isCached) {
+                        console.warn(`Book ${bookId} marker found but content missing - cache was evicted`);
+                        await offlineCache.delete(`/offline-book-marker/${bookId}`);
+                    }
+
+                    if (event.ports && event.ports[0]) {
+                        event.ports[0].postMessage({
+                            type: 'BOOK_CACHE_STATUS',
+                            bookId,
+                            isCached,
+                            evicted: !isCached // Signal if cache was evicted
+                        });
+                    }
+                } else {
+                    // No marker found
+                    if (event.ports && event.ports[0]) {
+                        event.ports[0].postMessage({
+                            type: 'BOOK_CACHE_STATUS',
+                            bookId,
+                            isCached: false
+                        });
+                    }
                 }
             } catch (error) {
                 if (event.ports && event.ports[0]) {
@@ -410,32 +441,53 @@ if (workbox) {
             }
         }
 
-        // Get list of all offline-saved books
+        // Get list of all offline-saved books (with verification)
         if (event.data && event.data.type === 'GET_OFFLINE_BOOKS') {
             try {
                 const offlineCache = await caches.open('offline-books-cache');
+                const bookDataCache = await caches.open('book-data-cache');
+                const chaptersCache = await caches.open('chapters-cache');
                 const requests = await offlineCache.keys();
 
-                // Extract book IDs from marker URLs
+                // Extract book IDs from marker URLs and verify content still exists
                 const offlineBookIds = [];
+                const evictedBookIds = [];
+
                 for (const request of requests) {
                     const match = request.url.match(/\/offline-book-marker\/(\d+)/);
                     if (match) {
-                        offlineBookIds.push(parseInt(match[1]));
+                        const bookId = parseInt(match[1]);
+
+                        // Verify actual content is cached
+                        const bookData = await bookDataCache.match(`/api/books/${bookId}`);
+                        const chaptersList = await chaptersCache.match(`/api/books/${bookId}/chapters`);
+
+                        if (bookData && chaptersList) {
+                            // Content exists - book is truly cached
+                            offlineBookIds.push(bookId);
+                        } else {
+                            // Marker exists but content is gone - cache was evicted
+                            console.warn(`Book ${bookId} marker found but content evicted`);
+                            evictedBookIds.push(bookId);
+                            // Clean up stale marker
+                            await offlineCache.delete(`/offline-book-marker/${bookId}`);
+                        }
                     }
                 }
 
                 if (event.ports && event.ports[0]) {
                     event.ports[0].postMessage({
                         type: 'OFFLINE_BOOKS_LIST',
-                        bookIds: offlineBookIds
+                        bookIds: offlineBookIds,
+                        evictedBookIds: evictedBookIds // Report which books were evicted
                     });
                 }
             } catch (error) {
                 if (event.ports && event.ports[0]) {
                     event.ports[0].postMessage({
                         type: 'OFFLINE_BOOKS_LIST',
-                        bookIds: []
+                        bookIds: [],
+                        evictedBookIds: []
                     });
                 }
             }

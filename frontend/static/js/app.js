@@ -115,6 +115,10 @@ class SummraApp {
                                 }
                             });
                         });
+
+                        // Request persistent storage (critical for iOS PWA)
+                        // This helps prevent iOS from clearing cache after inactivity
+                        this.requestPersistentStorage();
                     })
                     .catch((error) => {
                         console.log('❌ Service Worker registration failed:', error);
@@ -122,6 +126,64 @@ class SummraApp {
             });
         } else {
             console.log('⚠️  Service Workers not supported in this browser');
+        }
+    }
+
+    async requestPersistentStorage() {
+        // Request persistent storage to prevent iOS from clearing cache
+        // iOS 17+ supports this API and may grant persistence for home screen PWAs
+        if (navigator.storage && navigator.storage.persist) {
+            try {
+                const isPersisted = await navigator.storage.persist();
+                if (isPersisted) {
+                    console.log('✅ Persistent storage granted - cache protected from eviction');
+                } else {
+                    console.log('⚠️  Persistent storage denied - cache may be cleared after inactivity');
+                    console.log('💡 Tip: Add this app to your home screen for better persistence');
+                }
+
+                // Check current persistence status
+                const persisted = await navigator.storage.persisted();
+                console.log('Storage persistence status:', persisted ? 'PERSISTENT' : 'BEST-EFFORT');
+
+                // Check storage quota (helpful for debugging iOS limits)
+                if (navigator.storage.estimate) {
+                    const estimate = await navigator.storage.estimate();
+                    const usedMB = (estimate.usage / (1024 * 1024)).toFixed(2);
+                    const quotaMB = (estimate.quota / (1024 * 1024)).toFixed(2);
+                    console.log(`Storage used: ${usedMB} MB / ${quotaMB} MB (${((estimate.usage / estimate.quota) * 100).toFixed(1)}%)`);
+                }
+
+                // Run periodic cache health check
+                this.performCacheHealthCheck();
+            } catch (error) {
+                console.log('Storage API error:', error);
+            }
+        } else {
+            console.log('⚠️  Storage API not supported - persistence not available');
+        }
+    }
+
+    async performCacheHealthCheck() {
+        // Verify cached books still have their content
+        // This detects iOS cache eviction and cleans up stale markers
+        try {
+            const offlineBooks = await this.getOfflineBooks();
+
+            if (offlineBooks.evictedBookIds && offlineBooks.evictedBookIds.length > 0) {
+                console.warn(`⚠️  Cache eviction detected! ${offlineBooks.evictedBookIds.length} book(s) lost:`, offlineBooks.evictedBookIds);
+                console.log('💡 Books need to be re-downloaded for offline access');
+
+                // Store eviction info for user notification
+                localStorage.setItem('summra_cache_evicted', JSON.stringify({
+                    bookIds: offlineBooks.evictedBookIds,
+                    detectedAt: new Date().toISOString()
+                }));
+            } else if (offlineBooks.bookIds && offlineBooks.bookIds.length > 0) {
+                console.log(`✅ Cache health check passed - ${offlineBooks.bookIds.length} book(s) still cached`);
+            }
+        } catch (error) {
+            console.error('Cache health check failed:', error);
         }
     }
 
@@ -747,6 +809,30 @@ class SummraApp {
 
         // Setup reading guide tab switching
         this.setupGuideTabs();
+
+        // Track user interaction to help iOS recognize active usage
+        // This helps prevent cache eviction on iOS by showing the app is actively used
+        this.setupIOSInteractionTracking();
+    }
+
+    setupIOSInteractionTracking() {
+        // Track user interactions to signal app is actively used
+        // iOS uses interaction history to determine if PWA should keep its cache
+        const updateLastInteraction = () => {
+            localStorage.setItem('summra_last_interaction', new Date().toISOString());
+        };
+
+        // Track various user interactions
+        const interactionEvents = ['click', 'scroll', 'touchstart', 'keydown'];
+        interactionEvents.forEach(eventType => {
+            document.addEventListener(eventType, updateLastInteraction, { passive: true });
+        });
+
+        // Log interaction tracking start (helpful for debugging)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+            console.log('📱 iOS interaction tracking enabled - helps prevent cache eviction');
+        }
     }
 
     setupGuideTabs() {
@@ -3267,8 +3353,8 @@ class SummraApp {
             `${this.allBooks.length} book${this.allBooks.length !== 1 ? 's' : ''}`;
 
         // Get list of offline-saved books to sort and mark them
-        const offlineBookIds = await this.getOfflineBooks();
-        const offlineBookIdsSet = new Set(offlineBookIds);
+        const offlineBooks = await this.getOfflineBooks();
+        const offlineBookIdsSet = new Set(offlineBooks.bookIds || []);
 
         // Sort books: offline-saved books first, then alphabetically by title
         const sortedBooks = [...this.allBooks].sort((a, b) => {
@@ -4436,9 +4522,9 @@ class SummraApp {
             saveOfflineBtn.classList.remove('hidden');
 
             // Check if this book is already cached
-            const isCached = await this.checkBookCached(this.currentBook.id);
+            const cacheStatus = await this.checkBookCached(this.currentBook.id);
 
-            if (isCached) {
+            if (cacheStatus.isCached) {
                 saveOfflineBtn.classList.add('saved');
                 saveOfflineText.textContent = 'Saved ✓';
                 saveOfflineBtn.disabled = true;
@@ -4446,6 +4532,19 @@ class SummraApp {
                 saveOfflineBtn.classList.remove('saved');
                 saveOfflineText.textContent = 'Save for Offline';
                 saveOfflineBtn.disabled = false;
+
+                // Check if cache was evicted (marker existed but content gone)
+                if (cacheStatus.evicted) {
+                    console.warn('Book was previously saved but cache was evicted by iOS');
+
+                    // Show user-friendly notification
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                    if (isIOS) {
+                        console.log('💡 Cache was cleared by iOS. Re-download this book to read offline.');
+                        // Update button text to indicate re-download needed
+                        saveOfflineText.textContent = 'Re-download for Offline';
+                    }
+                }
 
                 // Setup click handler
                 saveOfflineBtn.onclick = async () => {
@@ -4461,11 +4560,12 @@ class SummraApp {
     async checkBookCached(bookId) {
         /**
          * Check if a book is already cached in the service worker
+         * Now verifies actual content exists, not just marker
          * @param {number} bookId - The book ID to check
-         * @returns {Promise<boolean>} - True if book is cached
+         * @returns {Promise<{isCached: boolean, evicted: boolean}>} - Cache status
          */
         if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-            return false;
+            return { isCached: false, evicted: false };
         }
 
         return new Promise((resolve) => {
@@ -4473,7 +4573,10 @@ class SummraApp {
 
             messageChannel.port1.onmessage = (event) => {
                 if (event.data.type === 'BOOK_CACHE_STATUS') {
-                    resolve(event.data.isCached || false);
+                    resolve({
+                        isCached: event.data.isCached || false,
+                        evicted: event.data.evicted || false
+                    });
                 }
             };
 
@@ -4483,17 +4586,18 @@ class SummraApp {
             }, [messageChannel.port2]);
 
             // Timeout after 2 seconds
-            setTimeout(() => resolve(false), 2000);
+            setTimeout(() => resolve({ isCached: false, evicted: false }), 2000);
         });
     }
 
     async getOfflineBooks() {
         /**
          * Get list of all offline-saved book IDs from service worker
-         * @returns {Promise<number[]>} - Array of book IDs that are saved offline
+         * Now includes verification and eviction detection
+         * @returns {Promise<{bookIds: number[], evictedBookIds: number[]}>} - Cached and evicted book IDs
          */
         if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-            return [];
+            return { bookIds: [], evictedBookIds: [] };
         }
 
         return new Promise((resolve) => {
@@ -4501,7 +4605,10 @@ class SummraApp {
 
             messageChannel.port1.onmessage = (event) => {
                 if (event.data.type === 'OFFLINE_BOOKS_LIST') {
-                    resolve(event.data.bookIds || []);
+                    resolve({
+                        bookIds: event.data.bookIds || [],
+                        evictedBookIds: event.data.evictedBookIds || []
+                    });
                 }
             };
 
@@ -4510,7 +4617,7 @@ class SummraApp {
             }, [messageChannel.port2]);
 
             // Timeout after 2 seconds
-            setTimeout(() => resolve([]), 2000);
+            setTimeout(() => resolve({ bookIds: [], evictedBookIds: [] }), 2000);
         });
     }
 
