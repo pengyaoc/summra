@@ -48,9 +48,9 @@ class TestEpilogueFrontmatterDetection:
         test_text = """
 CONTENTS
  AUTHOR'S PREFACE
- Chapter I. THE THREE PRESENTS
- Chapter II. THE ANTECHAMBER
- Chapter III. THE AUDIENCE
+ CHAPTER I. THE THREE PRESENTS
+ CHAPTER II. THE ANTECHAMBER
+ CHAPTER III. THE AUDIENCE
  EPILOGUE
 
 EPILOGUE
@@ -68,7 +68,7 @@ Additional context helps readers understand the historical period in which the
 story is set and the creative choices made in adapting historical events into
 a compelling narrative that captures the spirit of adventure and intrigue.
 
-CHAPTER I: THE THREE PRESENTS
+CHAPTER I. THE THREE PRESENTS
 
 On the first Monday of the month of April, 1625, the market town of Meung
 appeared to be in as perfect a state of revolution as if the Huguenots had
@@ -82,7 +82,7 @@ the king. His journey begins with a series of misadventures that test his
 courage and resourcefulness. More content is added to build up the chapter
 length and provide the narrative substance expected in a real chapter.
 
-CHAPTER II: THE ANTECHAMBER
+CHAPTER II. THE ANTECHAMBER
 
 D'Artagnan finds himself in the antechamber of Monsieur de Tréville, captain
 of the King's Musketeers. This chapter continues the narrative with more
@@ -94,7 +94,7 @@ reveal both the opportunities and challenges that await our young hero. Addition
 paragraphs of exposition and dialogue ensure this chapter has adequate length
 and substance for proper validation and chapter boundary detection throughout.
 
-CHAPTER III: THE AUDIENCE
+CHAPTER III. THE AUDIENCE
 
 D'Artagnan finally meets Monsieur de Tréville and seeks to join the musketeers.
 This pivotal chapter includes important dialogue and character interactions that
@@ -136,7 +136,7 @@ finality while leaving room for readers' imaginations about future adventures.
         for num, title, text in chapters:
             # Titles should not be all uppercase (except for Roman numerals and acronyms)
             # Remove Roman numerals and common patterns to check if the rest is title cased
-            title_words = title.replace('I:', '').replace('II:', '').replace('III:', '').split()
+            title_words = title.replace('I.', '').replace('II.', '').replace('III.', '').split()
             for word in title_words:
                 if len(word) > 2:  # Skip short words like "of", "a", etc.
                     # Word should not be all caps (unless it's an acronym)

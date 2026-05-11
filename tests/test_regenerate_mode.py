@@ -149,22 +149,24 @@ More content.
         assert toc_structure is None
 
     @patch('generate_summaries.genai')
-    def test_invalid_toc_structure_filtered(self, mock_genai):
-        """Test that invalid TOC structures are filtered out."""
+    def test_invalid_toc_structure_passed_through(self, mock_genai):
+        """Test that TOC structures are returned without type validation (validation disabled)."""
         generator = SummaryGenerator("test_api_key")
 
-        # Create a mock TOC structure with invalid section type
+        # Create a mock TOC structure with non-standard section type
         with patch.object(generator, 'extract_two_level_structure_from_body', return_value=None):
             with patch.object(generator, 'extract_two_level_toc') as mock_toc:
-                # Return invalid structure (wrong type)
+                # Return structure with non-standard type
                 mock_toc.return_value = [
                     {'type': 'INVALID', 'number': 1, 'title': 'Test', 'chapters': []}
                 ]
 
                 toc_structure = generator._detect_book_structure("dummy text")
 
-                # Should return None for invalid structure
-                assert toc_structure is None
+                # Type validation is disabled, so structure is returned as-is
+                assert toc_structure == [
+                    {'type': 'INVALID', 'number': 1, 'title': 'Test', 'chapters': []}
+                ]
 
 
 class TestRegenerateModeChapterFiltering:

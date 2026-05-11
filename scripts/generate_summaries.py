@@ -4654,10 +4654,10 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             r'^(Introduction)$',  # Standalone "Introduction"
             r'^(PREFACE)(?:\s+.*)?$',  # "PREFACE" or "PREFACE By The Editor" etc.
             r'^(Preface)(?:\s+.*)?$',  # "Preface" or "Preface Of The Author" etc.
-            r"^TRANSLATOR'S PREFACE$",  # "TRANSLATOR'S PREFACE"
-            r"^Translator's Preface$",  # "Translator's Preface"
-            r"^AUTHOR'S PREFACE$",  # "AUTHOR'S PREFACE"
-            r"^Author's Preface$",  # "Author's Preface"
+            r"^(TRANSLATOR'S PREFACE)$",  # "TRANSLATOR'S PREFACE"
+            r"^(Translator's Preface)$",  # "Translator's Preface"
+            r"^(AUTHOR'S PREFACE)$",  # "AUTHOR'S PREFACE"
+            r"^(Author's Preface)$",  # "Author's Preface"
         ]
 
         lines = text.split('\n')
