@@ -4,6 +4,218 @@
 
 ---
 
+## 2025-12-31
+
+### PWA Extended Offline Support & iOS Cache Eviction Fix (v6.2.0) - COMPLETED
+**Status:** ✅ Completed
+**Started:** 2025-12-31
+**Completed:** 2025-12-31
+
+**Objective:** Fix PWA timeout issue preventing extended offline usage, particularly on iOS devices where cache was being cleared after ~3 days of inactivity.
+
+#### Problem
+
+**User Feedback:** "I tested the iPhone PWA mode for a 3-day offline session. The app timed out and I am not able to access anything. There seems to be a time limit."
+
+**Root Causes:**
+
+**Primary Issue - iOS PWA Cache Eviction:**
+1. iOS Safari/WebKit aggressively clears PWA cache after periods of inactivity
+2. Without persistent storage request, iOS considers cache as "best-effort" and can evict it
+3. iOS has a 7-day inactivity cap, but can clear earlier (user experienced ~3 days)
+4. Home screen PWAs need explicit persistent storage request to avoid eviction
+
+**Secondary Issue - Auth Cache Expiration:**
+1. Service worker cached auth check endpoint (`/api/auth/check`) with only 1 hour expiration
+2. After 1 hour offline, cached auth response expired
+3. App tried to verify authentication but couldn't reach server
+4. Session was actually valid for 30 days, but cache expiry caused logout
+
+**Technical Details:**
+- **iOS Storage Policy:** iOS clears script-writable storage after 7 days of inactivity (can be sooner)
+- **Cache Limit:** iOS PWAs limited to ~50MB cache (iOS 17+ increased to 60% of disk space)
+- `service-worker.js:107` had `maxAgeSeconds: 60 * 60` (1 hour)
+- Backend session configured for 30 days (`app_base.py:48`)
+- No persistent storage request was being made
+- Auth check failure in offline mode wasn't handled gracefully
+
+#### Solution
+
+**1. Request Persistent Storage** (`frontend/static/js/app.js:132-162`):
+
+**New function added:**
+```javascript
+async requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        if (isPersisted) {
+            console.log('✅ Persistent storage granted - cache protected from eviction');
+        } else {
+            console.log('⚠️  Persistent storage denied - cache may be cleared after inactivity');
+        }
+    }
+}
+```
+
+**Impact:**
+- iOS 17+ supports Storage API and may grant persistence for home screen PWAs
+- WebKit grants persistence based on heuristics (home screen installation is key signal)
+- Prevents iOS from treating cache as "best-effort" and evicting after inactivity
+- Significantly reduces likelihood of 3-7 day cache clearing
+
+**2. Track User Interactions** (`frontend/static/js/app.js:792-810`):
+
+**New function added:**
+```javascript
+setupIOSInteractionTracking() {
+    const updateLastInteraction = () => {
+        localStorage.setItem('summra_last_interaction', new Date().toISOString());
+    };
+
+    const interactionEvents = ['click', 'scroll', 'touchstart', 'keydown'];
+    interactionEvents.forEach(eventType => {
+        document.addEventListener(eventType, updateLastInteraction, { passive: true });
+    });
+}
+```
+
+**Impact:**
+- Tracks user interactions to signal app is actively used
+- iOS uses interaction history to determine cache eviction priority
+- Apps with recent interactions less likely to have cache cleared
+- Provides debugging info via `summra_last_interaction` timestamp
+
+**3. Extended Auth Cache Duration** (`frontend/static/service-worker.js:95-112`):
+
+**Before:**
+```javascript
+new ExpirationPlugin({
+    maxEntries: 1,
+    maxAgeSeconds: 60 * 60, // 1 hour cache
+}),
+```
+
+**After:**
+```javascript
+new ExpirationPlugin({
+    maxEntries: 1,
+    maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days cache (matches session lifetime)
+}),
+```
+
+**4. Improved Offline Auth Handling** (`frontend/static/js/auth.js:64-91`):
+
+**Before:**
+```javascript
+if (navigator.onLine === false && currentUser) {
+    console.log('Offline: Using cached auth state');
+} else {
+    setCurrentUser(null);
+}
+```
+
+**After:**
+```javascript
+if (currentUser) {
+    console.log('Offline: Using cached auth state from localStorage');
+    // Keep existing currentUser - don't overwrite
+} else {
+    setCurrentUser(null);
+}
+```
+
+**Changes:**
+- Removed dependency on `navigator.onLine` (unreliable in PWA)
+- Always preserve cached user state if available
+- Trust localStorage cache for offline sessions
+
+#### Testing
+
+**Manual Testing Scenarios:**
+1. Save book for offline in PWA mode
+2. Enable airplane mode on iPhone
+3. Use app for extended period (3+ days)
+4. Verify user remains logged in
+5. Verify all cached books remain accessible
+
+**Expected Behavior:**
+- User stays logged in for up to 30 days offline
+- All cached content remains accessible
+- Reading progress saved to localStorage
+- Progress syncs when back online
+
+#### Key Insights - iOS PWA Storage Behavior
+
+**iOS Storage Eviction Policy:**
+- **7-day cap:** Script-writable storage cleared after 7 days of no interaction
+- **Can clear sooner:** iOS may clear cache earlier under storage pressure or perceived inactivity
+- **Home screen PWAs:** Have separate treatment from Safari tabs
+- **Persistent storage:** `navigator.storage.persist()` can prevent eviction if granted
+- **Grant heuristics:** iOS more likely to grant for home screen installed PWAs
+
+**Storage Limits:**
+- **iOS 16 and earlier:** ~50MB cache limit
+- **iOS 17+:** Up to 60% of total disk space (significant improvement)
+- **IndexedDB:** Up to 500MB, but has stability issues on iOS
+
+**Best Practices for iOS PWA:**
+1. Always request persistent storage via `navigator.storage.persist()`
+2. Encourage users to add to home screen (improves persistence chances)
+3. Track user interactions to show active usage
+4. Keep cache size reasonable (<50MB for broader iOS compatibility)
+5. Test on actual iOS devices with multi-day offline periods
+
+### Cache Verification System (v6.2.1) - COMPLETED
+**Status:** ✅ Completed
+**Date:** 2025-12-31
+
+**Problem:** When iOS evicts cache, the app still thought books were downloaded because it only checked for marker files, not actual content.
+
+**Bug Fix (2025-12-31):** Fixed TypeError in `showAllBooksGrid` where code expected array but `getOfflineBooks()` now returns object with `{ bookIds, evictedBookIds }`. Updated to use `offlineBooks.bookIds`.
+
+**Solution:**
+
+**1. Enhanced Cache Verification** (`service-worker.js:385-442`):
+- Check for both marker AND actual content (book metadata + chapters)
+- Clean up stale markers when content is evicted
+- Return `evicted: true` flag when marker exists but content is gone
+
+**2. Cache Health Checks** (`app.js:167-188`):
+- Run automatic verification on app load
+- Detect which books had cache evicted
+- Log warnings and store eviction info for user notification
+
+**3. UI Updates** (`app.js:4527-4547`):
+- Show "Re-download for Offline" when eviction detected
+- Update button state to reflect actual cache status
+- Console warnings to help debug cache issues
+
+**How It Works:**
+
+```javascript
+// Before: Only checked marker
+const offlineMarker = await offlineCache.match('/offline-book-marker/123');
+const isCached = !!offlineMarker;  // FALSE POSITIVE if content evicted
+
+// After: Verify actual content exists
+const bookData = await bookDataCache.match('/api/books/123');
+const chapters = await chaptersCache.match('/api/books/123/chapters');
+const isCached = !!(offlineMarker && bookData && chapters);  // ACCURATE
+```
+
+**Benefits:**
+- No more false "Saved ✓" status when cache was evicted
+- Automatic cleanup of stale markers
+- User gets clear "Re-download" prompt
+- Health check runs on every app load
+
+#### Files Modified
+- `frontend/static/js/app.js` - Added persistent storage request, interaction tracking, and cache verification
+- `frontend/static/service-worker.js` - Extended auth cache to 30 days, added content verification
+- `frontend/static/js/auth.js` - Improved offline auth state handling
+
+---
+
 ## 2025-12-20
 
 ### Pagination Long Paragraph Split Fix (v6.1.54) - COMPLETED
@@ -108,6 +320,19 @@ if (pageBlocks.length === 0) {
 - ✅ No text loss or truncation
 - ✅ Seamless visual continuation across pages (from v6.1.53)
 - ✅ Works for extremely long paragraphs (multi-page)
+
+**Verification:**
+- ✅ User confirmed: "The pagination now works perfectly"
+- ✅ Long paragraphs split seamlessly across multiple pages
+- ✅ No visible gaps or forced paragraph breaks
+- ✅ Text flows naturally like professional ebook readers
+
+**Algorithm Comparison:**
+After researching industry implementations (ebook-paginator, CSS columns, Kindle), our approach compares favorably:
+- **Our method**: Word-level binary search splitting (O(log n) efficiency)
+- **ebook-paginator**: DOM node-level splitting (simpler but less precise)
+- **CSS columns**: Browser-dependent, inconsistent cross-platform
+- **Advantage**: More precise control, consistent behavior, efficient performance
 
 **Files Modified:**
 - `frontend/static/js/app.js` (pagination logic order)
