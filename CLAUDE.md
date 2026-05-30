@@ -128,6 +128,37 @@ cd tests/e2e && npm install && npx playwright install chromium
 
 Exit code is non-zero on any non-200, console error, or failed first-party request (third-party analytics is filtered as noise). See `tests/e2e/README.md` for details.
 
+## Parallel Sessions (Git Worktrees)
+
+Run multiple Claude sessions on this repo by giving each its own git worktree. **Never share a working directory** — sessions will silently overwrite each other's edits.
+
+**Setup (one-time):**
+```sh
+echo ".claude/worktrees/" >> .gitignore   # if not already present
+```
+
+**Create a worktree per session:**
+```sh
+git worktree add .claude/worktrees/<name> -b <branch>
+git worktree list                          # see all
+git worktree remove .claude/worktrees/<name>   # cleanup
+```
+
+**Per-session isolation (required):**
+- **Flask port** — only one session can bind `:5001`. Others must use `PORT=5002 python backend/app.py` etc., and run smoke tests with `BASE_URL=http://localhost:5002 node smoke.mjs`.
+- **Python venv** — each worktree needs its own `venv/` (or symlink a shared one, accepting that dep changes affect all).
+- **`node_modules`** under `tests/e2e/` — reinstall per worktree or symlink.
+- **SQLite DB at `data/summra.db`** — each worktree has its own copy; ingestion in one worktree is invisible to others.
+
+**Practical limits:** 2–4 parallel sessions is the sweet spot. Beyond that, you lose the ability to review output and hit API rate limits.
+
+**Scope discipline:** Give each session a non-overlapping slice (e.g., one on `scripts/content/`, one on `frontend/`, one on `scripts/audits/`). Two sessions editing the same file will produce merge conflicts at PR time.
+
+**Git hygiene:**
+- Commit at session boundaries — uncommitted state is the only thing that doesn't survive a reset.
+- Prefer rebase over merge when integrating between worktrees (keeps history linear, easier for Claude to reason about).
+- Clean up stale worktrees weekly — they accumulate uncommitted state and waste disk.
+
 ## Book Ingestion Workflow (always dry-run first)
 
 When asked to ingest a new book file (typically a `data/books/pg<id>.txt` from Project Gutenberg), follow this 3-step workflow. Do NOT skip the dry-run.
