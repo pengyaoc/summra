@@ -5,11 +5,27 @@ All test artifacts (databases, images, audio, batch jobs) are created in tests/f
 and automatically cleaned up after test completion.
 """
 
+import sys
 import pytest
 import shutil
 import uuid
 from pathlib import Path
 from unittest.mock import patch
+
+# Make every scripts/<group>/ folder importable as a top-level module so tests
+# can still do `from generate_summaries import ...` after the scripts/ reorg.
+# Also expose backend/ so scripts that do `import config` resolve backend/config.py.
+_REPO_ROOT = Path(__file__).parent.parent
+_BACKEND = _REPO_ROOT / "backend"
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
+
+_SCRIPTS_ROOT = _REPO_ROOT / "scripts"
+for _sub in _SCRIPTS_ROOT.iterdir():
+    if _sub.is_dir() and not _sub.name.startswith((".", "_")):
+        _p = str(_sub)
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
 
 # Test fixtures root directory
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -118,7 +134,7 @@ def mock_config_paths(test_illustrations_dir, test_audio_dir, test_batch_jobs_di
     """
     with patch('config.ILLUSTRATIONS_DIR', test_illustrations_dir), \
          patch('config.TTS_OUTPUT_DIR', test_audio_dir), \
-         patch('scripts.generate_gemini_illustrations.BATCH_JOBS_DIR', test_batch_jobs_dir):
+         patch('scripts.images.generate_gemini_illustrations.BATCH_JOBS_DIR', test_batch_jobs_dir):
         yield {
             'illustrations': test_illustrations_dir,
             'audio': test_audio_dir,

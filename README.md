@@ -26,7 +26,13 @@ summra/
 │   ├── tts_handler.py      # Text-to-speech handler
 │   └── requirements.txt    # Python dependencies
 ├── scripts/
-│   └── generate_summaries.py  # Book summary generation script
+│   ├── content/             # generate_summaries.py and other content scripts
+│   ├── audio/               # TTS generation scripts
+│   ├── images/              # cover / illustration scripts
+│   ├── migrations/, backfills/, audits/, book_fixes/, blog/, archive/
+│   └── README.md            # Index of every subfolder
+├── docs/                    # PRD.md, ERD.md, USAGE.md, marketing/, archive/
+├── deploy/                  # systemd + nginx + gunicorn configs
 ├── frontend/
 │   ├── static/
 │   │   ├── css/
@@ -111,19 +117,19 @@ Before using the web interface, you need to generate summaries for your books.
 
 2. **Generate summaries for a single book:**
    ```bash
-   python scripts/generate_summaries.py data/books/your_book.txt
+   python scripts/content/generate_summaries.py data/books/your_book.txt
    ```
 
    With custom title and author:
    ```bash
-   python scripts/generate_summaries.py data/books/your_book.txt \
+   python scripts/content/generate_summaries.py data/books/your_book.txt \
        --title "The Great Gatsby" \
        --author "F. Scott Fitzgerald"
    ```
 
 3. **Batch process multiple books:**
    ```bash
-   python scripts/generate_summaries.py data/books/ --batch
+   python scripts/content/generate_summaries.py data/books/ --batch
    ```
 
 The script will:
