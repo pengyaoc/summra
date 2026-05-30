@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-05-30: Switch image generation from Gemini to Imagen 4 with provider abstraction
+
+**Why:** `gemini-3-pro-image-preview` and `gemini-2.5-flash-image` are no longer available on the Gemini API free tier; the existing script could not run.
+
+**What changed:**
+- Renamed `scripts/images/generate_gemini_illustrations.py` → `scripts/images/generate_illustrations.py`. Same for the test file.
+- Added `ImageGeneratorBase` abstract class. Existing Gemini logic refactored into `GeminiImageGenerator` (subclass, zero behavior change). New `ImagenImageGenerator` subclass added.
+- New `--provider {imagen,gemini}` CLI flag, default `imagen`.
+- Imagen path uses the fallback chain `imagen-4.0-ultra-generate-001` → `imagen-4.0-generate-001` → `imagen-4.0-fast-generate-001`. Per-image fallback, only on retryable errors (429, 500, 503, "quota", "rate limit", "unavailable", "resource_exhausted"). Non-retryable errors (content policy, INVALID_ARGUMENT, auth) surface immediately without retrying lower tiers.
+- Aspect ratio for Imagen is `"3:4"` (closest portrait Imagen 4 supports; was `"2:3"` for Gemini). Existing covers/illustrations on disk are unchanged.
+- Cross-chapter character consistency for Imagen: one-time `gemini-2.5-flash` text call per book extracts a "character brief" (art style, color palette, recurring characters, setting). Cached at `data/character_briefs/{book_id}.txt`. Brief is injected into every chapter prompt under a `=== VISUAL STYLE GUIDE ===` header. LLM failures fall back to an empty brief; chapters still generate.
+- Gemini batch helpers (~600 lines: `create_batch_job`, `poll_batch_job`, `retrieve_batch_results`, `generate_chapter_illustrations_batch`, `generate_book_covers_batch`, `resume_batch_job`, batch state helpers, `list_pending_batch_jobs`) are kept in place with `⚠️ DORMANT` header comments. CLI flags `--sync-mode`, `--resume`, `--list-jobs`, and non-default `--batch-poll-interval` work only under `--provider gemini`; they error out cleanly under `--provider imagen`.
+- The legacy `--model` flag is now Gemini-only; ignored with a warning under `--provider imagen`.
+
+**How to roll back:**
+```
+python scripts/images/generate_illustrations.py --provider gemini ...
+```
+Behaves identically to the old script (subject to Gemini free-tier availability).
+
+**Files:**
+- `scripts/images/generate_illustrations.py` (renamed from `generate_gemini_illustrations.py`)
+- `tests/test_illustrations.py` (renamed from `test_gemini_illustrations.py`)
+- `tests/conftest.py` (patch path updated)
+- `data/character_briefs/.gitkeep` (new)
+- `docs/ERD.md` (image-generation section updated)
+- `docs/superpowers/specs/2026-05-30-imagen-fallback-design.md`
+- `docs/superpowers/plans/2026-05-30-imagen-fallback-impl.md`
+
+**Tests:** 59 passed in `tests/test_illustrations.py` (was 14 before this work; +45 new tests across 7 new test classes covering provider selection, Imagen retry classification, Imagen fallback chain, Imagen cover + chapter generation, prompt builder character_brief injection, chapter-loop character_brief wiring, and character-brief cache helper).
+
+---
+
 ## 2026-05-30
 
 ### Trim site to focus on Plain English as the headline product - COMPLETED
