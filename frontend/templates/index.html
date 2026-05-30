@@ -361,7 +361,7 @@
 
                     <!-- Chapters List -->
                     <div class="chapters-section" id="chapters-section">
-                        <h3>Chapter Full Text & Summary</h3>
+                        <h3>Chapters in Plain English</h3>
                         <div class="chapters-list" id="chapters-list"></div>
                     </div>
 
@@ -604,12 +604,14 @@
             </section>
         </main>
 
-        <!-- Footer -->
+        <!-- Footer (hidden on chapter pages — focused reading view) -->
+        {% if not initial_data or initial_data.type != 'chapter' %}
         <footer class="footer">
-            <p>Summra - Free summaries and full text of classic literature</p>
-            <p class="small">Comprehensive book summaries, chapter-by-chapter analysis, and complete texts</p>
-            <p class="small">© 2025 Summra. All rights reserved.</p>
+            <p>Summra — the classics, rewritten into plain English.</p>
+            <p class="small">Every sentence rewritten into modern prose. Read free, side by side with the original.</p>
+            <p class="small">© 2026 Summra. Plain English rewrites of classic literature.</p>
         </footer>
+        {% endif %}
     </div>
 
     <!-- Persistent Audio Player (Fixed at Bottom) -->
@@ -785,7 +787,7 @@
     <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
     {% endif %}
 
-    <script src="{{ url_for('static', filename='js/app.min.js') }}?v=6.1.54"></script>
+    <script src="{{ url_for('static', filename='js/app.min.js') }}?v=6.1.55"></script>
 
     <!-- Initialize authentication -->
     {% if feature_auth %}
