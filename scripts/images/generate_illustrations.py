@@ -564,6 +564,66 @@ Generate ONE high-quality, professional book cover."""
             return results
 
 
+# === Imagen 4 backend =========================================================
+
+IMAGEN_MODEL_CHAIN = [
+    "imagen-4.0-ultra-generate-001",   # tier 1: highest quality
+    "imagen-4.0-generate-001",         # tier 2: standard
+    "imagen-4.0-fast-generate-001",    # tier 3: cheapest, lowest latency
+]
+
+IMAGEN_ASPECT_RATIO = "3:4"  # closest portrait Imagen 4 supports (was "2:3" on Gemini)
+
+# Errors that mean "try the next tier"; everything else surfaces immediately.
+IMAGEN_RETRYABLE_STATUS_CODES = {429, 500, 503}
+IMAGEN_RETRYABLE_SUBSTRINGS = (
+    "quota",
+    "rate limit",
+    "unavailable",
+    "resource_exhausted",
+)
+
+
+class ImagenImageGenerator(ImageGeneratorBase):
+    """Imagen 4 backend with Ultra → Standard → Fast fallback chain.
+
+    Each generation call walks IMAGEN_MODEL_CHAIN top-down. If a tier raises
+    a retryable error (quota, rate limit, 5xx), the next tier is tried.
+    Non-retryable errors (content policy, INVALID_ARGUMENT, auth) surface
+    immediately without burning two more API calls.
+
+    Does not support reference images. Cross-chapter character consistency
+    is handled by injecting a per-book character_brief into the prompt;
+    see get_or_build_character_brief().
+    """
+
+    name = "imagen"
+    supports_batch = False
+    supports_reference_image = False
+
+    def __init__(self, api_key: str):
+        self.client = genai.Client(api_key=api_key)
+        self.last_request_time = 0
+
+    def _wait_for_rate_limit(self):
+        """Respect the same MAX_REQUESTS_PER_MINUTE budget as GeminiImageGenerator."""
+        current_time = time.time()
+        elapsed = current_time - self.last_request_time
+        if elapsed < SECONDS_BETWEEN_REQUESTS:
+            wait_time = SECONDS_BETWEEN_REQUESTS - elapsed
+            print(f"  ⏳ Rate limit: waiting {wait_time:.1f} seconds...")
+            time.sleep(wait_time)
+        self.last_request_time = time.time()
+
+    def _is_retryable(self, exc: Exception) -> bool:
+        """True if exc looks like a quota/availability problem worth retrying on the next tier."""
+        code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+        if code in IMAGEN_RETRYABLE_STATUS_CODES:
+            return True
+        msg = str(exc).lower()
+        return any(s in msg for s in IMAGEN_RETRYABLE_SUBSTRINGS)
+
+
 def save_image(image_data: bytes, output_path: Path, optimize: bool = True) -> bool:
     """Save image data to a file and optionally optimize size
 
