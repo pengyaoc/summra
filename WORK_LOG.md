@@ -4,6 +4,56 @@
 
 ---
 
+## 2026-05-30: Fix empty-medium-summary parser bug; persist raw Gemini responses
+
+**Why:** Six newly added books (IDs 107–112) had empty medium summaries (`word_count=0` in the `summaries` table) after running the summary pipeline. Investigation by dumping the raw Gemini response showed the model returned a complete 2,500-word medium summary; the parser was dropping it.
+
+**Root cause:** `parse_combined_summaries_response()` at `scripts/content/generate_summaries.py:1965-1986` used the lookahead `(?=### NEXT SECTION|###|$)` to terminate each section capture. The `###` branch matched the first 3 chars of `####` (h4) subheadings the model puts inside the medium summary (e.g. `#### Part I: The Reminiscences...`). Captured group → empty string → DB stored 0 words. The same flaw was latent in the other three sections (about/concise/relevance) but didn't trigger because the model didn't use `####` inside those.
+
+**What changed:**
+- `parse_combined_summaries_response()`: tightened all four section regexes to use `(?=^###(?!#)\s|\Z)` with `re.MULTILINE`. The negative lookahead `(?!#)` rejects `####`. Single `section_terminator` constant applied to all four sections (DRY).
+- `_generate_content_with_fallback()` (sync-path choke point): added `_persist_raw_llm_response()` helper that writes every successful Gemini response to `data/llm_responses/{timestamp}_{slug}.json` with `log_label`, `used_model`, `finish_reason`, full `prompt`, full `raw_text`, and lengths. Default-on, no flag required. Write failures are logged but don't break the call.
+- Removed the temporary `/tmp/summra_combined_raw.json` debug block in `generate_combined_summaries()` — the permanent helper supersedes it.
+- Captured the real Gemini response (4,455 words, A Study in Scarlet) as `tests/fixtures/combined_response_pg244.txt` for regression testing without re-spending on the API.
+
+**Backfill:** Book 107's medium summary was restored to 2,704 words via direct DB UPDATE using the captured response re-parsed with the fixed parser. Zero API cost.
+
+**Books 108–112:** Still missing summaries. User explicitly scoped this work to fix the parser only; regenerating those books is a separate decision pending operator approval.
+
+**Tests:** 8 new tests in `tests/test_parse_combined_summaries.py` (all passing):
+1. `test_pg244_medium_summary_is_extracted` — regression on the captured real response, asserts medium > 1,500 words and contains "Part I:" and "Part II:".
+2. `test_pg244_concise_summary_is_extracted`, `..._about_..._is_extracted`, `..._relevance_now_is_extracted` — guard against regression in the unaffected sections.
+3. `test_clean_response_parses_all_four_sections` — clean `###`-only response still works.
+4. `test_subheadings_inside_concise_dont_truncate` — `####` inside concise (synthetic) parses correctly, no bleed into medium.
+5. `test_medium_terminates_before_relevance_not_at_bonus_section` — extra `### LITERARY STYLE` / `### THEMATIC EXPLORATION` sections (which the model sometimes emits) don't pollute medium or relevance.
+6. `test_horizontal_rules_dont_break_parsing` — `***` separators between sections (which the model emits) are tolerated.
+
+Full project suite: 341 passed (4 pre-existing illustration-test failures from test-order-induced module-mock interference, unrelated to this change — pass when run in isolation).
+
+**Files:**
+- `scripts/content/generate_summaries.py` — parser regex fix (lines 1958–1995), `_persist_raw_llm_response()` helper, hook in `_generate_content_with_fallback()`.
+- `tests/test_parse_combined_summaries.py` (new)
+- `tests/fixtures/combined_response_pg244.txt` (new, 28.7 KB)
+- `data/llm_responses/` — output directory (gitignored via existing `data/**/*` rule).
+
+### Audit-and-replay gaps in LLM response persistence
+
+User principle: **every LLM call log should have both input and output that can be audited and replayed.**
+
+**Sync text path: CLOSED in this session.** `_persist_raw_llm_response()` (success) and `_persist_raw_llm_error()` (failure) now capture:
+- Input: `prompt` (faithful for str/list/dict, no `str()` collapse for multimodal), `gen_config` (dict pass-through; SDK pydantic via `model_dump()`), `config_key`.
+- Output (success): `raw_text`, `finish_reason`, `safety_ratings`, `usage_metadata`, `used_model`, char/word counts.
+- Output (error): `error_class`, `error_message`, `attempted_models` (the full fallback chain that was tried before giving up).
+- `status` field ("ok" / "error") for easy filtering; error files get `_ERROR.json` suffix.
+
+Failed-call logging is wired into both branches of `_generate_content_with_fallback`: non-retriable errors are logged before re-raise; retriable errors are logged once the chain is exhausted. Tests: `tests/test_llm_audit_log.py` (8 tests, all passing).
+
+**Remaining gaps (not in scope this session):**
+
+1. **Async batch path is NOT captured.** `submit_batch_job()` (`scripts/content/generate_summaries.py:1768`) and `retrieve_batch_results()` (line 1826) use `self.client.batches.create(...)` / `self.client.batches.get(...)` directly. They do not go through `_generate_content_with_fallback`, so no response (or per-request input) is written to `data/llm_responses/`. When `--sync` is off (the default), failures of any kind in batch mode are not auditable. Fix: at `submit_batch_job`, write all `requests` (the inputs) keyed by `batch_job.name`; at `retrieve_batch_results`, write every per-request response into the same directory, joined to its input by a stable request id. Include `display_name`, `state`, `error`, `model_name`.
+
+2. **Imagen image generation is NOT captured.** `scripts/images/generate_illustrations.py` (both `GeminiImageGenerator` and `ImagenImageGenerator`) has its own client and call sites; no input prompt or output bytes/URL/error is persisted. Image generation is at least as expensive as text and just as worth auditing — particularly for replay when a prompt produces an unexpected image. Fix: add an analogous `_persist_raw_image_response()` helper in `ImageGeneratorBase` (or as a free function) that writes `{timestamp}_{book_id}_{chapter_id_or_cover}_{provider}_{model}.json` containing the full prompt, aspect ratio, response metadata, and a reference to (or base64 of) the generated image bytes. Decision needed on whether to persist the raw image bytes or just a hash/path reference, given disk footprint.
+
 ## 2026-05-30: Switch image generation from Gemini to Imagen 4 with provider abstraction
 
 **Why:** `gemini-3-pro-image-preview` and `gemini-2.5-flash-image` are no longer available on the Gemini API free tier; the existing script could not run.

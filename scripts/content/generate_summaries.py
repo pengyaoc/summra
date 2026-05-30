@@ -1740,29 +1740,156 @@ class SummaryGenerator:
                     print(f"  ❌ Max retries exceeded on {model_name}")
                 raise
 
+    def _llm_log_dir(self) -> Path:
+        """Directory where LLM call audit logs are written. Overridable in
+        tests via monkeypatch."""
+        project_root = Path(__file__).resolve().parents[2]
+        return project_root / "data" / "llm_responses"
+
+    def _serialize_contents(self, contents) -> object:
+        """Make `contents` faithfully inspectable in the audit log.
+        Strings pass through; lists/dicts (multimodal) are kept as-is so
+        json.dump renders nested structure; other objects fall back to repr."""
+        if isinstance(contents, (str, list, dict, int, float, bool)) or contents is None:
+            return contents
+        return repr(contents)
+
+    def _serialize_gen_config(self, gen_config) -> object:
+        """Render gen_config for the audit log. dict passes through; SDK
+        config objects (google.genai.types.GenerateContentConfig) are
+        converted via model_dump() when available, else repr()."""
+        return self._serialize_sdk_obj(gen_config)
+
+    def _serialize_sdk_obj(self, obj) -> object:
+        """Best-effort: convert a google-genai SDK pydantic object to a dict
+        for json.dump. Pass through primitives and None."""
+        if obj is None or isinstance(obj, (str, dict, list, int, float, bool)):
+            return obj
+        dump = getattr(obj, "model_dump", None)
+        if callable(dump):
+            try:
+                return dump()
+            except Exception:
+                pass
+        return repr(obj)
+
+    def _persist_raw_llm_response(self, response, *, used_model: str, contents,
+                                  log_label: str, gen_config=None,
+                                  config_key: str = None) -> None:
+        """Write a successful Gemini call to data/llm_responses/. Captures
+        input (prompt + gen_config + config_key) and output (raw text +
+        finish_reason + safety + token usage) so the call can be audited
+        and replayed without re-spending on the API.
+
+        Best-effort: any persistence failure is logged but does not raise."""
+        try:
+            out_dir = self._llm_log_dir()
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            slug = re.sub(r'[^\w-]+', '_', log_label).strip('_') or "llm"
+            ts = datetime.now().strftime("%Y%m%dT%H%M%S_%f")
+            out_path = out_dir / f"{ts}_{slug}.json"
+
+            finish_reason = None
+            safety_ratings = None
+            if getattr(response, "candidates", None):
+                cand = response.candidates[0]
+                finish_reason = getattr(cand, "finish_reason", None)
+                safety_ratings = getattr(cand, "safety_ratings", None)
+
+            usage = getattr(response, "usage_metadata", None)
+
+            payload = {
+                "timestamp": datetime.now().isoformat(),
+                "status": "ok",
+                "log_label": log_label,
+                "config_key": config_key,
+                "used_model": used_model,
+                "gen_config": self._serialize_gen_config(gen_config),
+                "prompt": self._serialize_contents(contents),
+                "raw_text": getattr(response, "text", None),
+                "raw_len_chars": len(getattr(response, "text", "") or ""),
+                "raw_len_words": len((getattr(response, "text", "") or "").split()),
+                "finish_reason": str(finish_reason) if finish_reason is not None else None,
+                "safety_ratings": self._serialize_sdk_obj(safety_ratings),
+                "usage_metadata": self._serialize_sdk_obj(usage),
+            }
+            out_path.write_text(json.dumps(payload, indent=2, default=str))
+        except Exception as e:
+            print(f"  ⚠ Failed to persist raw LLM response: {e}")
+
+    def _persist_raw_llm_error(self, error, *, attempted_models, contents,
+                               log_label: str, gen_config=None,
+                               config_key: str = None) -> None:
+        """Write a failed Gemini call to data/llm_responses/. Captures the
+        same input metadata as the success path plus exception details and
+        the list of models tried before giving up — so failures are auditable
+        and replayable."""
+        try:
+            out_dir = self._llm_log_dir()
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            slug = re.sub(r'[^\w-]+', '_', log_label).strip('_') or "llm"
+            ts = datetime.now().strftime("%Y%m%dT%H%M%S_%f")
+            out_path = out_dir / f"{ts}_{slug}_ERROR.json"
+
+            payload = {
+                "timestamp": datetime.now().isoformat(),
+                "status": "error",
+                "log_label": log_label,
+                "config_key": config_key,
+                "attempted_models": list(attempted_models),
+                "gen_config": self._serialize_gen_config(gen_config),
+                "prompt": self._serialize_contents(contents),
+                "error_class": type(error).__name__,
+                "error_message": str(error),
+            }
+            out_path.write_text(json.dumps(payload, indent=2, default=str))
+        except Exception as e:
+            print(f"  ⚠ Failed to persist LLM error: {e}")
+
     def _generate_content_with_fallback(self, config_key: str, contents, *,
                                         gen_config=None, log_label: str = "API call"):
         """Try the primary model for `config_key`, then each fallback in order,
         on retriable failure. Non-retriable errors propagate immediately so we
-        don't waste fallback budget on prompt/auth bugs."""
+        don't waste fallback budget on prompt/auth bugs.
+
+        Every call — success or failure — is persisted to
+        data/llm_responses/ for audit and replay."""
         cfg = config.SUMMARY_CONFIGS[config_key]
         chain = [cfg['model']] + list(cfg.get('model_fallbacks', []))
+        attempted = []
         last_error = None
         for idx, model_name in enumerate(chain):
+            attempted.append(model_name)
             try:
                 response = self._generate_with_retries(
                     model_name, contents, gen_config=gen_config, log_label=log_label
                 )
                 if idx > 0:
                     print(f"  ✓ Succeeded on fallback model: {model_name}")
+                self._persist_raw_llm_response(
+                    response, used_model=model_name, contents=contents,
+                    log_label=log_label, gen_config=gen_config,
+                    config_key=config_key,
+                )
                 return response, model_name
             except Exception as e:
                 last_error = e
                 if not self._is_retriable_error(str(e)):
+                    self._persist_raw_llm_error(
+                        e, attempted_models=attempted, contents=contents,
+                        log_label=log_label, gen_config=gen_config,
+                        config_key=config_key,
+                    )
                     raise
                 if idx < len(chain) - 1:
                     next_model = chain[idx + 1]
                     print(f"  ⤳ Falling back from {model_name} to {next_model}")
+        self._persist_raw_llm_error(
+            last_error, attempted_models=attempted, contents=contents,
+            log_label=log_label, gen_config=gen_config, config_key=config_key,
+        )
         raise last_error
 
     def submit_batch_job(self, requests: List[Dict], model_name: str, display_name: str) -> str:
@@ -1961,26 +2088,34 @@ class SummaryGenerator:
         medium_summary = ""
         relevance_now = ""
 
+        # Section terminator: start-of-line "### " (exactly three #'s, NOT ####),
+        # or end of string. The negative lookahead `(?!#)` prevents matching
+        # `####` (h4) subheadings the model uses inside the medium summary
+        # (e.g. "#### Part I: ..."), which previously caused the section
+        # capture to collapse to empty.
+        section_terminator = r'(?=^###(?!#)\s|\Z)'
+        flags = re.DOTALL | re.IGNORECASE | re.MULTILINE
+
         # About the Book (75-100 words)
-        about_match = re.search(r'### ABOUT THE BOOK.*?\n(.*?)(?=### CONCISE SUMMARY|###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        about_match = re.search(r'### ABOUT THE BOOK.*?\n(.*?)' + section_terminator, response_text, flags)
         if about_match:
             about_text = about_match.group(1).strip()
             about_text = re.sub(r'^\[.*?\]', '', about_text).strip()  # Remove template text
 
         # Concise Summary (500 words)
-        concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)(?=### MEDIUM SUMMARY|###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        concise_match = re.search(r'### CONCISE SUMMARY.*?\n(.*?)' + section_terminator, response_text, flags)
         if concise_match:
             concise_summary = concise_match.group(1).strip()
             concise_summary = re.sub(r'^\[.*?\]', '', concise_summary).strip()
 
         # Medium Summary (2000-3000 words)
-        medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)(?=### RELEVANCE NOW|###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        medium_match = re.search(r'### MEDIUM SUMMARY.*?\n(.*?)' + section_terminator, response_text, flags)
         if medium_match:
             medium_summary = medium_match.group(1).strip()
             medium_summary = re.sub(r'^\[.*?\]', '', medium_summary).strip()
 
         # Relevance Now (75-100 words)
-        relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)(?=###|$)', response_text, re.DOTALL | re.IGNORECASE)
+        relevance_match = re.search(r'### RELEVANCE NOW.*?\n(.*?)' + section_terminator, response_text, flags)
         if relevance_match:
             relevance_now = relevance_match.group(1).strip()
             relevance_now = re.sub(r'^\[.*?\]', '', relevance_now).strip()
