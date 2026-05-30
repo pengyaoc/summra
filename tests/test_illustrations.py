@@ -526,5 +526,58 @@ class TestImageGeneratorBaseInterface:
         assert "character_brief" in sig.parameters
 
 
+class TestImagenIsRetryable:
+    """ImagenImageGenerator._is_retryable: per-error-type fallback decisions."""
+
+    @pytest.fixture
+    def generator(self):
+        from scripts.images.generate_illustrations import ImagenImageGenerator
+        return ImagenImageGenerator(api_key="fake-key")
+
+    def test_status_code_429_is_retryable(self, generator):
+        exc = Exception("rate limited")
+        exc.status_code = 429
+        assert generator._is_retryable(exc) is True
+
+    def test_status_code_500_is_retryable(self, generator):
+        exc = Exception("server error")
+        exc.status_code = 500
+        assert generator._is_retryable(exc) is True
+
+    def test_status_code_503_is_retryable(self, generator):
+        exc = Exception("service unavailable")
+        exc.status_code = 503
+        assert generator._is_retryable(exc) is True
+
+    def test_code_attribute_429_is_retryable(self, generator):
+        exc = Exception("rate limited")
+        exc.code = 429
+        assert generator._is_retryable(exc) is True
+
+    @pytest.mark.parametrize("substring", [
+        "quota exceeded",
+        "rate limit reached",
+        "service unavailable",
+        "RESOURCE_EXHAUSTED for project",
+    ])
+    def test_substring_match_is_retryable(self, generator, substring):
+        assert generator._is_retryable(Exception(substring)) is True
+
+    def test_invalid_argument_is_not_retryable(self, generator):
+        exc = Exception("INVALID_ARGUMENT: bad prompt")
+        exc.status_code = 400
+        assert generator._is_retryable(exc) is False
+
+    def test_content_policy_is_not_retryable(self, generator):
+        assert generator._is_retryable(
+            Exception("Image generation blocked by safety policy")
+        ) is False
+
+    def test_auth_error_is_not_retryable(self, generator):
+        exc = Exception("PERMISSION_DENIED")
+        exc.status_code = 403
+        assert generator._is_retryable(exc) is False
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
