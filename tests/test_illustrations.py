@@ -762,5 +762,70 @@ class TestBuildChapterPromptCharacterBrief:
         assert brief_idx < summary_idx
 
 
+class TestImagenChapterGeneration:
+    """ImagenImageGenerator.generate_chapter_illustration: prompt + brief + ignore reference."""
+
+    @pytest.fixture
+    def generator(self):
+        from scripts.images.generate_illustrations import ImagenImageGenerator
+        gen = ImagenImageGenerator(api_key="fake-key")
+        gen._generate_with_fallback = MagicMock(
+            return_value=(b"chapter-bytes", "imagen-4.0-generate-001")
+        )
+        return gen
+
+    def _chapter(self):
+        return {
+            "chapter_number": 5,
+            "chapter_title": "The Reckoning",
+            "summary": "The protagonist confronts the villain.",
+            "word_count": 1500,
+        }
+
+    def test_chapter_returns_bytes_on_success(self, generator):
+        image, model = generator.generate_chapter_illustration(
+            book_title="Test Book", book_author="Test Author",
+            medium_summary="A summary.",
+            chapter=self._chapter(),
+        )
+        assert image == b"chapter-bytes"
+        assert model == "imagen-4.0-generate-001"
+
+    def test_chapter_uses_3_4_aspect_ratio(self, generator):
+        generator.generate_chapter_illustration(
+            book_title="Test", book_author="Test",
+            medium_summary="...", chapter=self._chapter(),
+        )
+        assert generator._generate_with_fallback.call_args.kwargs["aspect_ratio"] == "3:4"
+
+    def test_chapter_brief_injected_into_prompt(self, generator):
+        generator.generate_chapter_illustration(
+            book_title="Test", book_author="Test",
+            medium_summary="A summary.", chapter=self._chapter(),
+            character_brief="ART STYLE: charcoal sketch",
+        )
+        prompt = generator._generate_with_fallback.call_args.kwargs["prompt"]
+        assert "VISUAL STYLE GUIDE" in prompt
+        assert "charcoal sketch" in prompt
+
+    def test_chapter_ignores_reference_image_without_crashing(self, generator):
+        # Should not raise, should still produce output
+        image, _ = generator.generate_chapter_illustration(
+            book_title="Test", book_author="Test",
+            medium_summary="A summary.", chapter=self._chapter(),
+            reference_image=b"some_image_bytes",
+        )
+        assert image == b"chapter-bytes"
+
+    def test_chapter_dry_run_does_not_call_api(self, generator):
+        image, _ = generator.generate_chapter_illustration(
+            book_title="Test", book_author="Test",
+            medium_summary="...", chapter=self._chapter(),
+            dry_run=True,
+        )
+        assert image is None
+        generator._generate_with_fallback.assert_not_called()
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

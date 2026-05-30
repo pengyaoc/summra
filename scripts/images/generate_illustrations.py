@@ -697,6 +697,39 @@ Generate ONE high-quality, professional book cover."""
 
         return self._generate_with_fallback(prompt=prompt, aspect_ratio=IMAGEN_ASPECT_RATIO)
 
+    def generate_chapter_illustration(
+        self,
+        book_title: str,
+        book_author: str,
+        medium_summary: str,
+        chapter: Dict,
+        previous_chapter_summary: Optional[str] = None,
+        reference_image: Optional[bytes] = None,
+        character_brief: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Tuple[Optional[bytes], str]:
+        chapter_num = chapter['chapter_number']
+
+        if reference_image is not None:
+            print(f"  ℹ️  Imagen does not support reference images; ignoring (chapter {chapter_num})")
+
+        prompt = build_chapter_illustration_prompt(
+            book_title=book_title,
+            book_author=book_author,
+            medium_summary=medium_summary,
+            chapter=chapter,
+            previous_chapter_summary=previous_chapter_summary,
+            character_brief=character_brief,
+        )
+
+        print(f"\n{'='*80}\nCHAPTER ILLUSTRATION PROMPT (Imagen, Chapter {chapter_num}):\n{'='*80}\n{prompt}\n{'='*80}\n")
+
+        if dry_run:
+            print(f"  [DRY RUN] Skipping actual image generation")
+            return (None, "")
+
+        return self._generate_with_fallback(prompt=prompt, aspect_ratio=IMAGEN_ASPECT_RATIO)
+
 
 def save_image(image_data: bytes, output_path: Path, optimize: bool = True) -> bool:
     """Save image data to a file and optionally optimize size
