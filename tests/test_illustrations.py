@@ -698,5 +698,69 @@ class TestImagenCoverGeneration:
         generator._generate_with_fallback.assert_not_called()
 
 
+class TestBuildChapterPromptCharacterBrief:
+    """build_chapter_illustration_prompt: optional character_brief injection."""
+
+    def _chapter(self):
+        return {
+            "chapter_number": 3,
+            "chapter_title": "The Storm",
+            "summary": "The crew battles a hurricane.",
+            "word_count": 1200,
+        }
+
+    def test_brief_none_omits_style_guide_header(self):
+        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        prompt = build_chapter_illustration_prompt(
+            book_title="Moby-Dick",
+            book_author="Herman Melville",
+            medium_summary="A whaling voyage...",
+            chapter=self._chapter(),
+            previous_chapter_summary=None,
+            character_brief=None,
+        )
+        assert "VISUAL STYLE GUIDE" not in prompt
+
+    def test_brief_empty_string_omits_header(self):
+        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        prompt = build_chapter_illustration_prompt(
+            book_title="Moby-Dick",
+            book_author="Herman Melville",
+            medium_summary="A whaling voyage...",
+            chapter=self._chapter(),
+            character_brief="",
+        )
+        assert "VISUAL STYLE GUIDE" not in prompt
+
+    def test_brief_present_includes_header_and_brief_text(self):
+        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        brief = "ART STYLE: moody oil painting.\nCHARACTERS: Ahab — peg-legged captain..."
+        prompt = build_chapter_illustration_prompt(
+            book_title="Moby-Dick",
+            book_author="Herman Melville",
+            medium_summary="A whaling voyage...",
+            chapter=self._chapter(),
+            character_brief=brief,
+        )
+        assert "=== VISUAL STYLE GUIDE (apply to every illustration in this book) ===" in prompt
+        assert "moody oil painting" in prompt
+        assert "peg-legged captain" in prompt
+
+    def test_brief_is_inserted_before_overall_summary(self):
+        """Style guide should come before the per-book summary so the model
+        weighs visual style ahead of plot context."""
+        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        brief = "ART STYLE: watercolor"
+        prompt = build_chapter_illustration_prompt(
+            book_title="A", book_author="B",
+            medium_summary="OVERALL_BOOK_SUMMARY_MARKER",
+            chapter=self._chapter(),
+            character_brief=brief,
+        )
+        brief_idx = prompt.index("VISUAL STYLE GUIDE")
+        summary_idx = prompt.index("OVERALL_BOOK_SUMMARY_MARKER")
+        assert brief_idx < summary_idx
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
