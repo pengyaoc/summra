@@ -4,6 +4,58 @@
 
 ---
 
+## 2026-05-29
+
+### Gemini Model Upgrade + Fallback Chain - COMPLETED
+**Status:** Completed
+**Started:** 2026-05-29
+**Completed:** 2026-05-29
+
+**Objective:** Move summary generation to the newest stable Gemini Flash with automatic fallback if the primary is unavailable, and switch bulk plain-text rewrites to Flash-Lite.
+
+#### Changes
+- `backend/config.py` — `SUMMARY_CONFIGS['combined' / 'comprehensive'].model` now `gemini-3.5-flash` (stable, free tier). Added `model_fallbacks: ['gemini-3-flash-preview', 'gemini-2.5-flash']`. New `PLAIN_TEXT_MODEL = 'gemini-3.1-flash-lite'`.
+- `scripts/generate_summaries.py` — extracted DRY helpers on `SummaryGenerator`: `_is_retriable_error`, `_retry_wait_seconds_from_error`, `_generate_with_retries(model_name, ...)`, `_generate_content_with_fallback(config_key, ...)`. Refactored all 4 sync API call sites (`generate_combined_summaries`, `generate_concise_summary`, `generate_medium_summary`, `generate_bulk_chapter_summaries`) to use `_generate_content_with_fallback` — collapses ~150 lines of duplicated retry boilerplate and adds automatic model fallback on retriable 503/UNAVAILABLE/429/RESOURCE_EXHAUSTED errors. Batch-mode call sites (lines 7434, 7504) intentionally left on the single primary — batch API submits one model name.
+- `scripts/populate_author_bios.py` — moved off hardcoded `gemini-2.5-flash` to the same `combined` fallback chain (3.5 → 3 → 2.5). Retry loop now iterates the chain: parsing errors retry on the same model, retriable API errors advance to the next model and reset the per-model attempt counter.
+- `scripts/generate_modern_english.py` — default model now `config.PLAIN_TEXT_MODEL` (`gemini-3.1-flash-lite`) for bulk rewrites. `--model` CLI default + help updated.
+
+#### Verification
+- `pytest -q` → **245 passed, 1 deselected**.
+- All scripts parse + import cleanly; `config.SUMMARY_CONFIGS` and `config.PLAIN_TEXT_MODEL` populated as expected.
+- `SummaryGenerator._is_retriable_error / _generate_with_retries / _generate_content_with_fallback` bound on the class.
+
+---
+
+## 2026-05-10
+
+### SSL Certificate Renewal & Deployment Docs Consolidation - COMPLETED
+**Status:** Completed
+**Started:** 2026-05-10
+**Completed:** 2026-05-11
+
+**Objective:** Fix expired SSL certificate on summrabook.com and set up reliable auto-renewal.
+
+#### Problem
+- SSL certificate expired 2026-03-01 (71 days overdue)
+- Site completely inaccessible — all resources failing with `ERR_CERT_AUTHORITY_INVALID`
+- `certbot renew` failing due to: (1) standalone authenticator conflicting with nginx on port 80, (2) dead `summra.pengyaochen.com` cert with deleted DNS blocking renewal
+- No nginx reload hook — even successful renewals wouldn't take effect
+
+#### Fix
+1. Force-renewed cert using nginx plugin: `sudo certbot certonly --nginx -d summrabook.com -d www.summrabook.com --force-renewal`
+2. Deleted dead `summra.pengyaochen.com` cert: `sudo certbot delete --cert-name summra.pengyaochen.com`
+3. Added nginx reload hook at `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh`
+4. Verified auto-renewal: `sudo certbot renew --dry-run` — all simulated renewals succeeded
+
+#### Deployment Docs Consolidation
+- Consolidated `DEPLOY.md`, `DEPLOYMENT.md`, `DEPLOYMENT_E2SMALL.md`, `QUICKSTART_E2MICRO.md` into single `deploy/DEPLOY.md`
+- Added SSL auto-renewal troubleshooting section with lessons learned
+- Added incident log with root cause and prevention details
+- Added Quick Reference section with actual production VM details (instance name, project, zone, IP)
+- Deleted 3 redundant files
+
+---
+
 ## 2025-12-31
 
 ### PWA Extended Offline Support & iOS Cache Eviction Fix (v6.2.0) - COMPLETED
