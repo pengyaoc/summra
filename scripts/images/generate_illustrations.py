@@ -2079,6 +2079,15 @@ Generate ONE high-quality, professional book cover."""
     return all_success
 
 
+def build_generator(provider: str, api_key: str, model: Optional[str]) -> ImageGeneratorBase:
+    """Construct the requested image generation backend."""
+    if provider == "imagen":
+        return ImagenImageGenerator(api_key)
+    if provider == "gemini":
+        return GeminiImageGenerator(api_key, model=model or DEFAULT_IMAGE_MODEL)
+    raise ValueError(f"Unknown provider: {provider}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Generate book covers and chapter illustrations using Gemini image models'
@@ -2122,8 +2131,35 @@ def main():
         action='store_true',
         help='List all pending batch jobs and exit'
     )
+    parser.add_argument(
+        "--provider",
+        choices=["imagen", "gemini"],
+        default="imagen",
+        help="Image generation backend. 'imagen' (default) uses Imagen 4 "
+             "fallback chain (Ultra → Standard → Fast). 'gemini' uses the "
+             "legacy Gemini 3 Pro / 2.5 Flash Image path (kept for rollback).",
+    )
 
     args = parser.parse_args()
+
+    # Guard: Imagen does not support batch / sync-mode / resume / list-jobs.
+    if args.provider == "imagen":
+        batch_flag_used = (
+            args.sync_mode or args.resume or args.list_jobs
+            or args.batch_poll_interval != BATCH_POLL_INTERVAL_SECONDS
+        )
+        if batch_flag_used:
+            print(
+                "❌ --provider imagen does not support batch/sync-mode/resume/"
+                "list-jobs (Imagen 4 has no Files-based Batch API). "
+                "Use --provider gemini for the legacy batch path."
+            )
+            return 1
+        if args.model and args.model != DEFAULT_IMAGE_MODEL:
+            print(
+                f"⚠️  --model {args.model} is ignored under --provider imagen "
+                "(Imagen picks its tier via fallback chain)."
+            )
 
     # Handle list-jobs command
     if args.list_jobs:
@@ -2197,13 +2233,17 @@ def main():
 
     # Initialize
     db = Database()
-    generator = GeminiImageGenerator(config.GEMINI_API_KEY, model=args.model)
+    generator = build_generator(args.provider, config.GEMINI_API_KEY, args.model)
 
-    print(f"Using model: {args.model}")
-    if "gemini-3-pro-image" in args.model:
-        print(f"Resolution: {COVER_IMAGE_SIZE} for covers, {IMAGE_SIZE} for chapters at {ASPECT_RATIO} aspect ratio")
+    print(f"Using provider: {args.provider}")
+    if args.provider == "gemini":
+        print(f"Using model: {args.model}")
+        if "gemini-3-pro-image" in args.model:
+            print(f"Resolution: {COVER_IMAGE_SIZE} for covers, {IMAGE_SIZE} for chapters at {ASPECT_RATIO} aspect ratio")
+        else:
+            print(f"Aspect ratio: {ASPECT_RATIO} (resolution auto-determined by model)")
     else:
-        print(f"Aspect ratio: {ASPECT_RATIO} (resolution auto-determined by model)")
+        print(f"Imagen aspect ratio: {IMAGEN_ASPECT_RATIO}; model chain: {IMAGEN_MODEL_CHAIN}")
 
     # Process single book
     if args.book_id:
@@ -2211,7 +2251,7 @@ def main():
 
         if not args.chapters_only:
             # Generate cover using async mode by default
-            if args.sync_mode:
+            if args.sync_mode or args.provider == "imagen":
                 success = generate_book_cover(db, generator, args.book_id, args.dry_run) and success
             else:
                 # Use async batch API for cover (default)
@@ -2222,7 +2262,7 @@ def main():
                 ) and success
 
         if args.with_chapters or args.chapters_only:
-            if args.sync_mode:
+            if args.sync_mode or args.provider == "imagen":
                 # Use synchronous API
                 success = generate_chapter_illustrations_for_book(
                     db, generator, args.book_id, chapter_range, args.dry_run
@@ -2247,7 +2287,7 @@ def main():
 
         print(f"Processing covers for {len(book_ids)} books: {book_ids}")
 
-        if args.sync_mode:
+        if args.sync_mode or args.provider == "imagen":
             # Generate covers one at a time synchronously
             success = True
             for i, book_id in enumerate(book_ids, 1):
@@ -2291,7 +2331,7 @@ def main():
             print(f"\n{'='*80}")
             print(f"Book {i}/{len(books_for_chapters)}")
             print(f"{'='*80}")
-            if args.sync_mode:
+            if args.sync_mode or args.provider == "imagen":
                 generate_chapter_illustrations_for_book(db, generator, book['id'], None, args.dry_run)
             else:
                 generate_chapter_illustrations_batch(
