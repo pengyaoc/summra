@@ -244,6 +244,22 @@ consectetur adipiscing elit.
         assert generator.normalize_chapter_title("a short story") == "A Short Story"
         assert generator.normalize_chapter_title("THE OLD MAN AND THE SEA") == "The Old Man and the Sea"
 
+    def test_chapter_title_preserves_dotted_abbreviations(self, generator):
+        """Dotted abbreviations like M.D., Ph.D., U.S.A. must keep their uppercase letters.
+
+        Bug case from pg244 (A Study in Scarlet) ch 13:
+          source: 'A CONTINUATION OF THE REMINISCENCES OF JOHN WATSON, M.D.'
+          before fix: 'A Continuation of the Reminiscences of John Watson, M.d.'
+        """
+        assert generator.normalize_chapter_title(
+            "A CONTINUATION OF THE REMINISCENCES OF JOHN WATSON, M.D."
+        ) == "A Continuation of the Reminiscences of John Watson, M.D."
+        # Other common dotted abbreviations
+        assert generator.normalize_chapter_title("DR. SMITH, PH.D.") == "Dr. Smith, Ph.D."
+        assert generator.normalize_chapter_title("GREETINGS FROM THE U.S.A.") == "Greetings from the U.S.A."
+        # Single-letter sentence-end period should NOT be promoted to all-caps
+        assert generator.normalize_chapter_title("a tale.") == "A Tale."
+
 
 class TestTwoLevelStructureWithChapterNames:
     """Test two-level BOOK/Chapter structure with chapter names"""

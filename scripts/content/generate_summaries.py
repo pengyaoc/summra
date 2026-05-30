@@ -2360,6 +2360,51 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         }
         return word_map.get(s.upper(), word_map.get(s, 0))
 
+    def _int_to_roman(self, num: int) -> str:
+        """Convert positive integer to a Roman numeral string."""
+        if num <= 0:
+            return ""
+        val = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+        syms = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I']
+        roman = ''
+        i = 0
+        while num > 0:
+            for _ in range(num // val[i]):
+                roman += syms[i]
+                num -= val[i]
+            i += 1
+        return roman
+
+    def _build_numeral_alternation(self, number: int, observed_numeral: str = "") -> str:
+        """Build a regex alternation of all equivalent numeral forms for a given integer.
+
+        Used when matching section/chapter markers where the TOC and body may use
+        different numeral systems (e.g. TOC 'VOLUME I' but body 'VOLUME 1'). The
+        alternation accepts any equivalent form: Arabic ('1'), Roman ('I'), and the
+        original observed string from the TOC.
+
+        Args:
+            number: Integer value of the numeral (e.g. 1, 2, 14).
+            observed_numeral: The original numeral string from the TOC (kept as
+                a fallback so spelled-out forms like 'ONE' still match).
+
+        Returns:
+            Regex alternation string like '14|XIV' suitable for embedding in
+            an `f`-string regex. Forms are sorted by length descending to avoid
+            shorter prefixes shadowing longer ones (e.g. 'I' shadowing 'II').
+        """
+        forms = set()
+        if number > 0:
+            forms.add(str(number))
+            roman = self._int_to_roman(number)
+            if roman:
+                forms.add(roman)
+        if observed_numeral:
+            forms.add(observed_numeral)
+        forms = {f for f in forms if f}
+        sorted_forms = sorted(forms, key=lambda s: -len(s))
+        return '|'.join(re.escape(f) for f in sorted_forms)
+
     def extract_gutenberg_content(self, text: str) -> str:
         """
         Extract the actual book content, removing Gutenberg headers/footers if present.
@@ -2425,6 +2470,7 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         - Words after em-dashes (—) are capitalized
         - Words after colons (:) are capitalized
         - Words after periods (.) are capitalized
+        - Dotted abbreviations (M.D., Ph.D., U.S.A.) keep their uppercase letters
         """
         import re
 
@@ -2437,6 +2483,23 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
             'up', 'with', 'yet'
         }
+
+        # Dotted abbreviations like 'M.D.', 'Ph.D.', 'U.S.A.' — at least 2 internal dots
+        # separating short alpha runs. These should never be lowercased by .capitalize().
+        dotted_abbrev_pattern = re.compile(r'^(?:[A-Za-z]{1,3}\.){2,}$')
+
+        def smart_capitalize(word: str) -> str:
+            """Like str.capitalize() but title-cases each dotted segment in abbreviations.
+
+            'M.D.'  -> 'M.D.'
+            'PH.D.' -> 'Ph.D.'
+            'U.S.A.'-> 'U.S.A.'
+            'hello' -> 'Hello'
+            """
+            if dotted_abbrev_pattern.match(word):
+                # Title-case each dot-separated segment: 'PH.D.' -> 'Ph.D.'
+                return '.'.join(seg.capitalize() for seg in word.split('.'))
+            return word.capitalize()
 
         # First, handle em-dashes by adding spaces around them
         # This ensures "Huck.—miss" becomes "Huck.— miss" so we can capitalize properly
@@ -2501,14 +2564,14 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 in_quotes = True  # We're now inside quotes
             elif capitalize_next or in_quotes:
                 # Capitalize this word
-                result.append(word.capitalize())
+                result.append(smart_capitalize(word))
                 capitalize_next = False
             elif word.lower() in lowercase_words:
                 # Keep as lowercase
                 result.append(word.lower())
             else:
                 # Default: capitalize
-                result.append(word.capitalize())
+                result.append(smart_capitalize(word))
 
             # Check if we should capitalize the NEXT word
             # This happens after colon (:) or period (.)
@@ -2621,8 +2684,13 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
             line_stripped = line.strip()
 
             # Start of TOC
-            # Match either "CONTENTS" or a standalone "CHAPTER" line (which indicates TOC header)
-            if re.match(r'^\s*(CONTENTS|CHAPTER)\.?\s*$', line_stripped, re.IGNORECASE):
+            # Match either "CONTENTS", "TABLE OF CONTENTS", "LIST OF CHAPTERS",
+            # or a standalone "CHAPTER" line (which indicates TOC header).
+            if re.match(
+                r'^\s*(CONTENTS|TABLE\s+OF\s+CONTENTS|LIST\s+OF\s+CHAPTERS|CHAPTER)\.?\s*$',
+                line_stripped,
+                re.IGNORECASE,
+            ):
                 in_toc = True
                 toc_start_line = i
                 continue
@@ -3094,6 +3162,16 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     if volume_number == 0:
                         volume_number = self.roman_to_int(volume_numeral)
 
+                # Check if this VOLUME number was already captured (e.g., TOC has
+                # 'VOLUME I' and body has 'VOLUME 1' — both parse to number 1).
+                # If duplicate, TOC has ended and body section markers are starting.
+                existing_volume_numbers = [s['number'] for s in toc_structure if s['type'] == 'VOLUME']
+                if current_section and current_section.get('type') == 'VOLUME':
+                    existing_volume_numbers.append(current_section['number'])
+                if volume_number in existing_volume_numbers:
+                    # Duplicate detected - stop TOC parsing
+                    break
+
                 # Save previous section if exists
                 if current_section and len(current_section['chapters']) > 0:
                     toc_structure.append(current_section)
@@ -3139,6 +3217,10 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     section_type = section_match.group(1).upper()
                     section_numeral = section_match.group(2)
                     section_title = section_match.group(3).strip() if section_match.group(3) else ""
+                    # If the optional title regex captured a stray separator
+                    # (e.g. bare 'PART I.' captures '.' as the title), discard it.
+                    if section_title and not re.search(r'[A-Za-z0-9]', section_title):
+                        section_title = ""
 
                 # If we've already detected VOLUME sections, and now we hit a BOOK/PART/ACT,
                 # it means the TOC has ended and we're in content (these section types don't mix)
@@ -3413,6 +3495,9 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                         section_title = section_match.group(3).strip()
                     elif section_match.group(4):
                         section_title = section_match.group(4).strip()
+                    # Discard captures that are pure separator chars (e.g. bare 'PART I.' yields '.').
+                    if section_title and not re.search(r'[A-Za-z0-9]', section_title):
+                        section_title = ""
 
                     # If not on same line, check next few lines for section title
                     # Skip empty lines and collect multi-line titles (e.g., Tom Jones)
@@ -3658,11 +3743,13 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         consumed_line_indices = set()
 
         # For two-level structures, start searching after TOC (if detected) to avoid finding TOC entries
-        # When toc_end_line is available, use it as the starting point to skip the TOC section
-        # Otherwise start from the beginning and rely on duplicate detection
-        # EXCEPTION: For VOLUME-based structures, the VOLUME markers are IN the TOC, so search from 0
+        # When toc_end_line is available, use it as the starting point to skip the TOC section.
+        # Even for VOLUME-based structures: if the body also contains the VOLUME markers
+        # (possibly with a different numeral system), we must search past the TOC to find
+        # the real body markers (pg3268 Mysteries of Udolpho has TOC 'VOLUME I' but body
+        # 'VOLUME 1'). The numeral alternation built below matches both forms.
         is_volume_structure = len(toc_structure) > 0 and toc_structure[0]['type'] == 'VOLUME'
-        search_start_line = 0 if is_volume_structure else (toc_end_line if toc_end_line > 0 else 0)
+        search_start_line = toc_end_line if toc_end_line > 0 else 0
 
         # Sequential chapter counter across all sections (1, 2, 3, ...)
         sequential_chapter_num = 1
@@ -3685,8 +3772,9 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                 # Special handling for VOLUME structures: search for first CHAPTER instead of VOLUME marker
                 # The VOLUME marker is just a heading, actual content starts at first chapter
                 if first_section['type'] == 'VOLUME' and len(first_section.get('chapters', [])) > 0:
-                    # Search for "CHAPTER I." or "CHAPTER 1." pattern
-                    first_chapter_pattern = r'^\s*CHAPTER\s+(I\.|1\.)\s*'
+                    # Search for the first body CHAPTER marker. Accept Roman or Arabic '1/I',
+                    # with optional trailing period. pg3268's body uses 'CHAPTER I' (no period).
+                    first_chapter_pattern = r'^\s*CHAPTER\s+(?:I|1)\.?\s*$'
                     for i in range(section_search_start, len(lines)):
                         if re.match(first_chapter_pattern, lines[i], re.IGNORECASE):
                             first_section_line = i
@@ -3717,13 +3805,20 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # Also matches reversed format: "FIRST ACT", etc.
                     # IMPORTANT: Always try without title first, as title may be on a separate line
                     # Match just "TYPE NUMERAL" (no title), with optional "the" between
-                    first_section_pattern = rf'^\s*{first_section["type"]}\s+(?:the\s+)?{first_section["numeral"]}\.?\s*$'
-                    reversed_section_pattern = rf'^\s*{first_section["numeral"]}\s+{first_section["type"]}\.?\s*$'
+                    # IMPORTANT: Match BOTH the numeral form from TOC AND any equivalent
+                    # numeral form. The TOC might list "VOLUME I" (Roman) while body has
+                    # "VOLUME 1" (Arabic) — pg3268 case. Build an alternation that accepts
+                    # any equivalent representation of first_section['number'].
+                    numeral_alt = self._build_numeral_alternation(
+                        first_section.get("number", 0), first_section.get("numeral", "")
+                    )
+                    first_section_pattern = rf'^\s*{first_section["type"]}\s+(?:the\s+)?(?:{numeral_alt})\.?\s*$'
+                    reversed_section_pattern = rf'^\s*(?:{numeral_alt})\s+{first_section["type"]}\.?\s*$'
                     # Also create pattern WITH title for exact matching (as fallback)
                     if first_section['title']:
                         title_escaped = re.escape(first_section['title'])
-                        first_section_pattern_with_title = rf'^\s*{first_section["type"]}\s+(?:the\s+)?{first_section["numeral"]}\.?\s*[:—-]?\s*{title_escaped}\s*$'
-                        reversed_section_pattern_with_title = rf'^\s*{first_section["numeral"]}\s+{first_section["type"]}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                        first_section_pattern_with_title = rf'^\s*{first_section["type"]}\s+(?:the\s+)?(?:{numeral_alt})\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                        reversed_section_pattern_with_title = rf'^\s*(?:{numeral_alt})\s+{first_section["type"]}\.?\s*[:—-]?\s*{title_escaped}\s*$'
                     else:
                         first_section_pattern_with_title = None
                         reversed_section_pattern_with_title = None
@@ -3838,21 +3933,26 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # Also matches: "Book the First", "Book the Second" (A Tale of Two Cities)
                     # Also support reversed format for plays: "FIRST ACT", "SECOND ACT", etc.
                     # IMPORTANT: Always try without title first, as title may be on a separate line
+                    # IMPORTANT: Match BOTH the TOC numeral and any equivalent representation
+                    # (Roman/Arabic) — TOC may use 'VOLUME I' but body uses 'VOLUME 1' (pg3268).
+                    numeral_alt = self._build_numeral_alternation(
+                        section.get('number', 0), section_numeral
+                    )
                     # Match just "TYPE NUMERAL" (no title) with optional trailing period, with optional "the" between
-                    section_pattern = rf'^\s*{section_type}\s+(?:the\s+)?{section_numeral}\.?\s*$'
+                    section_pattern = rf'^\s*{section_type}\s+(?:the\s+)?(?:{numeral_alt})\.?\s*$'
                     # Alternative: "NUMERAL TYPE" (for plays like "FIRST ACT")
-                    reversed_pattern = rf'^\s*{section_numeral}\s+{section_type}\.?\s*$'
+                    reversed_pattern = rf'^\s*(?:{numeral_alt})\s+{section_type}\.?\s*$'
                     # Also create pattern WITH title for exact matching (as fallback)
                     if section_title:
                         title_escaped = re.escape(section_title)
-                        section_pattern_with_title = rf'^\s*{section_type}\s+(?:the\s+)?{section_numeral}\.?\s*[:—-]?\s*{title_escaped}\s*$'
-                        reversed_pattern_with_title = rf'^\s*{section_numeral}\s+{section_type}\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                        section_pattern_with_title = rf'^\s*{section_type}\s+(?:the\s+)?(?:{numeral_alt})\.?\s*[:—-]?\s*{title_escaped}\s*$'
+                        reversed_pattern_with_title = rf'^\s*(?:{numeral_alt})\s+{section_type}\.?\s*[:—-]?\s*{title_escaped}\s*$'
                     else:
                         section_pattern_with_title = None
                         reversed_pattern_with_title = None
 
                     # Also try decorative pattern (e.g., "— I —")
-                    decorative_pattern = rf'^\s*—+\s*{section_numeral}\s*—+\s*$'
+                    decorative_pattern = rf'^\s*—+\s*(?:{numeral_alt})\s*—+\s*$'
 
                 section_start_line = None
                 for i in range(search_start_line, len(lines)):
@@ -3965,17 +4065,21 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # Also matches: "Book the Second", "Book the Third" (A Tale of Two Cities)
                     # Also support reversed format for plays: "SECOND ACT", etc.
                     # IMPORTANT: Always try without title first, as title may be on a separate line
-                    next_section_pattern = rf'^\s*{next_section["type"]}\s+(?:the\s+)?{next_section["numeral"]}\.?\s*$'
-                    next_reversed_pattern = rf'^\s*{next_section["numeral"]}\s+{next_section["type"]}\.?\s*$'
+                    # IMPORTANT: Match Roman/Arabic equivalent numerals (pg3268: TOC 'VOLUME II' but body 'VOLUME 2').
+                    next_numeral_alt = self._build_numeral_alternation(
+                        next_section.get('number', 0), next_section.get('numeral', '')
+                    )
+                    next_section_pattern = rf'^\s*{next_section["type"]}\s+(?:the\s+)?(?:{next_numeral_alt})\.?\s*$'
+                    next_reversed_pattern = rf'^\s*(?:{next_numeral_alt})\s+{next_section["type"]}\.?\s*$'
                     # Also create pattern WITH title for exact matching (as fallback)
                     if next_section['title']:
                         next_title_escaped = re.escape(next_section['title'])
-                        next_section_pattern_with_title = rf'^\s*{next_section["type"]}\s+(?:the\s+)?{next_section["numeral"]}\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
-                        next_reversed_pattern_with_title = rf'^\s*{next_section["numeral"]}\s+{next_section["type"]}\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
+                        next_section_pattern_with_title = rf'^\s*{next_section["type"]}\s+(?:the\s+)?(?:{next_numeral_alt})\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
+                        next_reversed_pattern_with_title = rf'^\s*(?:{next_numeral_alt})\s+{next_section["type"]}\.?\s*[:—-]?\s*{next_title_escaped}\s*$'
                     else:
                         next_section_pattern_with_title = None
                         next_reversed_pattern_with_title = None
-                    next_decorative_pattern = rf'^\s*—+\s*{next_section["numeral"]}\s*—+\s*$'
+                    next_decorative_pattern = rf'^\s*—+\s*(?:{next_numeral_alt})\s*—+\s*$'
 
                 # Start searching after TOC to avoid finding section markers in the TOC
                 # (Skip this search if we already found section_end_line for STORY type)
@@ -5319,9 +5423,35 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
                     # TOC-based validation (if TOC exists and has content)
                     # Skip TOC validation if TOC entries are empty (e.g., Frankenstein's simple TOC)
                     if toc:
+                        # Numeric equivalence helper: TOC may use Roman numerals while body
+                        # uses Arabic (or vice-versa) — e.g. pg245 (Life on the Mississippi)
+                        # has TOC "CHAPTER I, II, III…" but body "CHAPTER 1, 2, 3…".
+                        # Match by integer value, not string equality.
+                        def _toc_lookup(marker):
+                            if marker in toc:
+                                return marker
+                            # Convert marker to int via Roman / spelled-out / Arabic
+                            n = 0
+                            if marker.isdigit():
+                                n = int(marker)
+                            else:
+                                n = self.word_to_int(marker) or self.roman_to_int(marker)
+                            if n <= 0:
+                                return None
+                            for toc_key in toc.keys():
+                                tk_n = 0
+                                if toc_key.isdigit():
+                                    tk_n = int(toc_key)
+                                else:
+                                    tk_n = self.word_to_int(toc_key) or self.roman_to_int(toc_key)
+                                if tk_n == n:
+                                    return toc_key
+                            return None
+
+                        matched_toc_key = _toc_lookup(chapter_marker)
                         # Check if this chapter marker is in the TOC
-                        if chapter_marker in toc:
-                            toc_title = toc[chapter_marker]
+                        if matched_toc_key is not None:
+                            toc_title = toc[matched_toc_key]
                             # Only use TOC validation if the TOC title is not empty
                             # Empty TOC titles indicate a simple TOC format that shouldn't override detection
                             if toc_title and toc_title.strip():
@@ -6530,6 +6660,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
         # Read book
         text = self.read_book(file_path)
+        raw_file_text = text  # Preserve original for --dry-run line-number anchors
         print(f"Book loaded: {len(text)} characters, ~{len(text.split())} words")
 
         # Extract metadata if not provided
@@ -7217,10 +7348,19 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             print(f"\n{'='*60}")
             print("CHAPTER BREAKDOWN")
             print(f"{'='*60}\n")
+            line_ranges = derive_chapter_line_ranges(raw_file_text, chapters)
+            ranges_by_num = {ch_num: (s, e) for ch_num, s, e in line_ranges}
             for ch_num, ch_title, ch_text in chapters:
                 ch_words = len(ch_text.split())
+                s, e = ranges_by_num.get(ch_num, (-1, -1))
+                if s == -1:
+                    line_info = "lines: (anchor not found in raw file)"
+                else:
+                    line_info = f"lines: {s}-{e}  ({e - s + 1} raw lines)"
                 print(f"  Chapter {ch_num}: {ch_title}")
-                print(f"    Length: {len(ch_text):,} chars (~{ch_words:,} words)")
+                print(f"    Length: {len(ch_text):,} chars (~{ch_words:,} words)  |  {line_info}")
+            print()
+            print("  (Line numbers refer to the RAW source file; use to spot-check boundaries.)")
             print()
 
         # Generate comprehensive summary
@@ -7513,6 +7653,104 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
             'success': all_success,
             'state_file': state_file
         }
+
+
+def derive_chapter_line_ranges(raw_text, chapters):
+    """Derive 1-indexed (start, end) line ranges in raw_text for each detected chapter.
+
+    Used by --dry-run to print line anchors so an LLM reviewer can spot
+    boundary bugs against the source file.
+
+    Strategy:
+      1. Build a per-chapter anchor: the first ~6 distinct words of the
+         normalized chapter text (skipping the chapter title if it appears
+         at the start).
+      2. Walk raw lines from the previous match cursor; find the first
+         non-blank line whose normalized text contains the anchor.
+      3. End line = (start of next chapter) - 1, or EOF for the last chapter.
+      4. If an anchor can't be located, emit (-1, -1) for it.
+
+    Args:
+        raw_text: The original source file contents (str).
+        chapters: List of (chapter_number, chapter_title, chapter_text) tuples
+                  from SummaryGenerator.detect_chapters().
+
+    Returns:
+        List of (chapter_number, start_line, end_line) — 1-indexed, inclusive.
+        Same length and order as chapters.
+    """
+    if not chapters:
+        return []
+
+    def _norm(s):
+        s = re.sub(r"[^a-z0-9 ]+", " ", s.lower())
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    raw_lines = raw_text.split("\n")
+    normalized_lines = [_norm(line) for line in raw_lines]
+    total_lines = len(raw_lines)
+
+    ANCHOR_WORDS = 6
+
+    def _anchor_for(ch_title, ch_text):
+        """First ANCHOR_WORDS distinct words of chapter prose, after skipping
+        any leading repetition of the chapter title — but only if doing so
+        still leaves enough words to anchor against."""
+        norm_text = _norm(ch_text)
+        if not norm_text:
+            return None
+        norm_title = _norm(ch_title) if ch_title else ""
+        if norm_title and norm_text.startswith(norm_title):
+            stripped = norm_text[len(norm_title):].strip()
+            if len(stripped.split()) >= ANCHOR_WORDS:
+                norm_text = stripped
+            # else: keep title in the anchor — better than no anchor at all
+        words = norm_text.split()
+        if not words:
+            return None
+        return " ".join(words[:ANCHOR_WORDS])
+
+    anchors = [_anchor_for(t, txt) for (_n, t, txt) in chapters]
+
+    starts = []
+    cursor = 0
+    for anchor in anchors:
+        if anchor is None:
+            starts.append(-1)
+            continue
+        start = -1
+        for i in range(cursor, total_lines):
+            line = normalized_lines[i]
+            if not line:
+                continue
+            if anchor in line:
+                start = i + 1  # 1-indexed
+                cursor = i + 1
+                break
+            # Anchor may span this line + the next (handles soft-wrapped prose)
+            if i + 1 < total_lines:
+                joined = (line + " " + normalized_lines[i + 1]).strip()
+                if anchor in joined:
+                    start = i + 1
+                    cursor = i + 1
+                    break
+        starts.append(start)
+
+    # End line = (next found start) - 1, or EOF for the last chapter.
+    ends = []
+    for idx, start in enumerate(starts):
+        if start == -1:
+            ends.append(-1)
+            continue
+        next_start = -1
+        for follow in starts[idx + 1 :]:
+            if follow > 0:
+                next_start = follow
+                break
+        ends.append(next_start - 1 if next_start > 0 else total_lines)
+
+    return [(chapters[i][0], starts[i], ends[i]) for i in range(len(chapters))]
 
 
 def main():
