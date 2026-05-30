@@ -11,12 +11,18 @@
       gtag('config', 'G-6XGTPLPMG0');
     </script>
 
+    <!-- Feature flags -->
+    <script>
+        window.FEATURE_AUTH = {{ (feature_auth | default(false)) | tojson }};
+        window.FEATURE_BLOG = {{ (feature_blog | default(false)) | tojson }};
+    </script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Primary Meta Tags -->
-    <title>{{ meta_title|default('Summra - AI-Powered Classic Book Summaries') }}</title>
-    <meta name="description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries. Get concise overviews, comprehensive analyses, and chapter-by-chapter breakdowns of public domain books.') }}">
+    <title>{{ meta_title|default('Summra — Read the Classics in Plain English') }}</title>
+    <meta name="description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free.') }}">
     <meta name="keywords" content="classic books, book summaries, literature summaries, AI summaries, public domain books, chapter summaries, {{ meta_keywords|default('') }}">
     <meta name="author" content="Summra">
     <meta name="robots" content="index, follow">
@@ -25,16 +31,16 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{{ og_type|default('website') }}">
     <meta property="og:url" content="{{ canonical_url|default('https://summra.com/') }}">
-    <meta property="og:title" content="{{ meta_title|default('Summra - AI-Powered Classic Book Summaries') }}">
-    <meta property="og:description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries. Get concise overviews, comprehensive analyses, and chapter-by-chapter breakdowns of public domain books.') }}">
+    <meta property="og:title" content="{{ meta_title|default('Summra — Read the Classics in Plain English') }}">
+    <meta property="og:description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free.') }}">
     <meta property="og:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
     <meta property="og:site_name" content="Summra">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="{{ canonical_url|default('https://summra.com/') }}">
-    <meta name="twitter:title" content="{{ meta_title|default('Summra - AI-Powered Classic Book Summaries') }}">
-    <meta name="twitter:description" content="{{ meta_description|default('Explore classic literature with AI-generated summaries.') }}">
+    <meta name="twitter:title" content="{{ meta_title|default('Summra — Read the Classics in Plain English') }}">
+    <meta name="twitter:description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English.') }}">
     <meta name="twitter:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
 
     <!-- Favicons -->
@@ -102,12 +108,16 @@
                     <a href="/discover" class="header-nav-btn" id="discover-nav-btn">Discover</a>
                     <a href="/books" class="header-nav-btn" id="books-nav-btn">Books</a>
                     <a href="/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
+                    {% if feature_blog %}
                     <a href="/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
+                    {% endif %}
                 </div>
+                {% if feature_auth %}
                 <button class="header-nav-btn user-account-btn" id="user-account-btn">
                     <span class="user-icon">👤</span>
                     <span class="user-name" id="header-user-name">Account</span>
                 </button>
+                {% endif %}
             </div>
         </header>
 
@@ -119,8 +129,8 @@
                 <!-- Main Hero Banner -->
                 <section class="hero-banner hero-main">
                     <div class="hero-banner-content">
-                        <h1 class="hero-banner-title">Classic Literature, Made&nbsp;Easy</h1>
-                        <p class="hero-banner-subtitle">Reading companion that makes you enjoy reading.</p>
+                        <h1 class="hero-banner-title">Read the Classics in Plain&nbsp;English</h1>
+                        <p class="hero-banner-subtitle">Every sentence rewritten — no abbreviation, no shortcuts, no fear.</p>
                         <div class="hero-search-container">
                             <div class="hero-search-wrapper">
                                 <input type="text"
@@ -139,7 +149,7 @@
                 <!-- Discover Banner -->
                 <section class="hero-banner hero-discover">
                     <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Discover Classics the&nbsp;Modern&nbsp;Way</h2>
+                        <h2 class="hero-banner-heading">Where Most Readers&nbsp;Start</h2>
                     </div>
 
                     <!-- Top 10 Books Carousel (direct child of section, breaks out on mobile) -->
@@ -182,47 +192,47 @@
                 <!-- Learn Banner -->
                 <section class="hero-banner hero-learn">
                     <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Literature, Beautifully&nbsp;Explained</h2>
+                        <h2 class="hero-banner-heading">Classic Literature, Made&nbsp;Easy</h2>
 
                         <!-- 3-Column Features Grid -->
                         <div class="learn-features-grid">
-                            <!-- Column 1: Beautiful Illustrations -->
+                            <!-- Column 1: Plain English Rewrites -->
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
                                         <source srcset="{{ url_for('static', filename='images/infographic.webp') }}" type="image/webp">
                                         <source srcset="{{ url_for('static', filename='images/infographic.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/infographic.jpg') }}" alt="Visual guides with color and interactivity" class="learn-feature-image" loading="lazy" decoding="async">
+                                        <img src="{{ url_for('static', filename='images/infographic.jpg') }}" alt="Plain English rewrites of every classic" class="learn-feature-image" loading="lazy" decoding="async">
                                     </picture>
                                 </div>
-                                <h3 class="learn-feature-title">Beautiful Illustrations</h3>
-                                <p class="learn-feature-description">Make sense of complex plots and symbolism with beautifully illustrated character maps, timelines, and theme guides.</p>
+                                <h3 class="learn-feature-title">Plain English Rewrites</h3>
+                                <p class="learn-feature-description">Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no abbreviation, no shortcuts.</p>
                             </div>
 
-                            <!-- Column 2: Audio Summary -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="{{ url_for('static', filename='images/summary.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/summary.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/summary.jpg') }}" alt="Comprehensive book summaries" class="learn-feature-image" loading="lazy" decoding="async">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">Audio Summary</h3>
-                                <p class="learn-feature-description">Help you preview, understand, and enjoy classics at your own pace.</p>
-                            </div>
-
-                            <!-- Column 3: For Every Reader -->
+                            <!-- Column 2: Side-by-Side Reading -->
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
                                         <source srcset="{{ url_for('static', filename='images/chapter_view.webp') }}" type="image/webp">
                                         <source srcset="{{ url_for('static', filename='images/chapter_view.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/chapter_view.jpg') }}" alt="Accessible reading experience" class="learn-feature-image" loading="lazy" decoding="async">
+                                        <img src="{{ url_for('static', filename='images/chapter_view.jpg') }}" alt="Original and plain English side by side" class="learn-feature-image" loading="lazy" decoding="async">
                                     </picture>
                                 </div>
-                                <h3 class="learn-feature-title">For Every Reader</h3>
-                                <p class="learn-feature-description">Kindle-like reading experience enhanced with chapter illustrations, summaries and plain-English version for English learners.</p>
+                                <h3 class="learn-feature-title">Side-by-Side Reading</h3>
+                                <p class="learn-feature-description">See the original and the plain English version next to each other. Read the way that works for you.</p>
+                            </div>
+
+                            <!-- Column 3: Built for Real Reading -->
+                            <div class="learn-feature-card">
+                                <div class="learn-feature-icon">
+                                    <picture>
+                                        <source srcset="{{ url_for('static', filename='images/summary.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/summary.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/summary.jpg') }}" alt="Kindle-style reading experience with themes and font controls" class="learn-feature-image" loading="lazy" decoding="async">
+                                    </picture>
+                                </div>
+                                <h3 class="learn-feature-title">Built for Real Reading</h3>
+                                <p class="learn-feature-description">Kindle-style pages, themes, and font controls. Plus summaries and visual guides when you want to go deeper.</p>
                             </div>
                         </div>
 
@@ -261,6 +271,7 @@
                     <div class="book-detail-info">
                         <h2 id="book-title"></h2>
                         <p class="book-author" id="book-author"></p>
+                        {% if feature_auth %}
                         <button class="save-offline-btn hidden" id="save-offline-btn">
                             <svg class="offline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -269,6 +280,7 @@
                             </svg>
                             <span id="save-offline-text">Save for Offline</span>
                         </button>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -415,7 +427,7 @@
                         <div class="unified-view-toggle hidden" id="unified-view-toggle">
                             <button class="unified-view-btn hidden" data-mode="summary">Summary</button>
                             <button class="unified-view-btn active" data-mode="original">Original</button>
-                            <button class="unified-view-btn hidden" data-mode="modern">Modern</button>
+                            <button class="unified-view-btn hidden" data-mode="modern">Plain English</button>
                             <button class="unified-view-btn hidden" data-mode="side-by-side">Side×Side</button>
                         </div>
                     </div>
@@ -544,6 +556,7 @@
             </section>
 
             <!-- Blog Index Section -->
+            {% if feature_blog %}
             <section class="blog-index-section {% if not initial_data or initial_data.type != 'blog' %}hidden{% endif %}" id="blog-index-section">
                 <nav class="breadcrumb-nav" id="breadcrumb-nav-blog" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list" id="breadcrumb-list-blog">
@@ -564,6 +577,7 @@
 
                 <div id="blog-post-container"></div>
             </section>
+            {% endif %}
 
             <!-- Author Detail Section -->
             <section class="author-detail-section {% if not initial_data or initial_data.type != 'author' %}hidden{% endif %}" id="author-detail-section">
@@ -659,6 +673,7 @@
     </div>
 
     <!-- User Account Modal -->
+    {% if feature_auth %}
     <div class="user-modal hidden" id="user-modal">
         <div class="user-modal-overlay" id="user-modal-overlay"></div>
         <div class="user-modal-content">
@@ -754,20 +769,26 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Markdown parser -->
     <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}" defer></script>
 
     <!-- Blog Components -->
+    {% if feature_blog %}
     <script src="{{ url_for('static', filename='js/components/BlogIndex.js') }}"></script>
     <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}"></script>
+    {% endif %}
 
     <!-- Authentication module -->
+    {% if feature_auth %}
     <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    {% endif %}
 
-    <script src="{{ url_for('static', filename='js/app.min.js') }}?v=6.1.53"></script>
+    <script src="{{ url_for('static', filename='js/app.min.js') }}?v=6.1.54"></script>
 
     <!-- Initialize authentication -->
+    {% if feature_auth %}
     <script>
         // Initialize auth system when DOM is ready
         if (document.readyState === 'loading') {
@@ -782,5 +803,6 @@
             }
         }
     </script>
+    {% endif %}
 </body>
 </html>

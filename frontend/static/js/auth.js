@@ -2,7 +2,13 @@
  * User Authentication and Reading Progress Module
  *
  * Handles user login, registration, session management, and reading progress tracking.
+ *
+ * Gated by window.FEATURE_AUTH. When the flag is off this module is a no-op:
+ * window.authModule is never assigned, so every `if (window.authModule)` check
+ * in app.js naturally skips. No /api/auth/* or /api/progress/* fetches fire.
  */
+
+if (window.FEATURE_AUTH) {
 
 // Auth state
 let currentUser = null;
@@ -710,4 +716,6 @@ window.authModule.scrollToLastPosition = function(scrollPosition) {
         }, 100);
     }
 };
+
+} // end if (window.FEATURE_AUTH)
 

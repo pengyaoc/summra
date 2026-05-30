@@ -10,7 +10,7 @@ This directory contains all the necessary configuration files for deploying Summ
 |------|---------|
 | `DEPLOYMENT_E2SMALL.md` | **Complete deployment guide** - Start here! |
 | `setup-e2small.sh` | **Automated setup script** - Run on VM |
-| `requirements-prod-tts.txt` | Python dependencies with TTS |
+| `requirements-prod.txt` | Python dependencies |
 | `gunicorn_config_e2small.py` | Gunicorn config (2 workers) |
 | `systemd-summra-e2small.service` | Systemd service file |
 | `nginx-summra-standalone.conf` | Main nginx config |
@@ -114,7 +114,6 @@ Follow `DEPLOYMENT.md` for detailed instructions.
 **Setup Script (`setup-e2small.sh`)**
 - Automated installation of all dependencies
 - Python environment setup
-- TTS model download
 - Nginx configuration
 - Systemd service setup
 - Firewall configuration
@@ -122,7 +121,7 @@ Follow `DEPLOYMENT.md` for detailed instructions.
 
 ### Requirements Files
 
-**Production with TTS (`requirements-prod-tts.txt`)**
+**Production (`requirements-prod.txt`)**
 ```
 Flask==3.0.0
 Flask-CORS==4.0.0
@@ -178,7 +177,6 @@ Nginx (Port 80/443)
   - Application: ~500 MB
   - Database: ~50 MB
   - Audio files: ~300 MB (grows over time)
-  - TTS models: ~200 MB
   - Free space: ~44 GB
 
 ### e2-micro (Budget)
@@ -238,10 +236,6 @@ sudo tail -f /var/log/nginx/error.log
 2. Enable swap: See `DEPLOYMENT_E2SMALL.md`
 3. Reduce workers: `sudo nano /etc/systemd/system/summra.service`
 
-### TTS Fails
-1. Check model: `ls -lh ~/.local/share/tts/`
-2. Test manually: `python3 -c "from TTS.api import TTS; TTS('tts_models/en/vctk/vits')"`
-
 ### Nginx Errors
 1. Test config: `sudo nginx -t`
 2. Check logs: `sudo tail -100 /var/log/nginx/error.log`
@@ -273,7 +267,7 @@ See `DEPLOYMENT_E2SMALL.md` for backup configuration.
 cd /var/www/summra
 git pull
 source venv/bin/activate
-pip install -r requirements-prod-tts.txt
+pip install -r requirements-prod.txt
 sudo systemctl restart summra
 ```
 

@@ -4,6 +4,155 @@
 
 ---
 
+## 2026-05-30
+
+### Trim site to focus on Plain English as the headline product - COMPLETED
+**Status:** Completed
+**Started:** 2026-05-30
+**Completed:** 2026-05-30
+
+**Objective:** Surgical trim of the site to sharpen the value proposition around "Plain English" (no-fear / plain-English rewrites of classic books, every sentence preserved). Three feature gates + local TTS removal + homepage copy pass + chapter tab rename. No pages cut, no structural changes — only the four surgical changes the user approved.
+
+Plan: `/Users/pengyao/.claude/plans/i-need-to-trim-kind-peach.md`
+
+#### Changes shipped
+
+1. **Homepage copy pass** — `frontend/templates/index.html` only. Structure preserved per user direction; only visible strings changed. Full before/after table below.
+2. **`FEATURE_AUTH` flag** in `backend/config.py` (default `False`) — gates auth blueprint, progress blueprint, and Save-for-Offline UI. When off, all `/api/auth/*` and `/api/progress/*` return 404; account modal, account button, Continue Reading button, and Save-for-Offline button are not in the DOM (not just hidden). DB tables (`users`, `reading_progress`, `chapter_completion`) stay in place.
+3. **`FEATURE_BLOG` flag** in `backend/config.py` (default `False`) — gates blog routes (`/blog`, `/blog/<slug>`, `/api/blog`, `/api/blog/<slug>`) and excludes blog URLs from `sitemap.xml`. Blog nav link, blog-index-section, and blog-post-section markup not in DOM when off. `blog_posts` table stays.
+4. **Local TTS removed.** Deleted `backend/tts_handler.py` (Coqui/VITS) and `requirements-prod-tts.txt`. `/api/tts/generate` now always routes to `GeminiTTSHandler`. Removed `TTS>=0.22.0` from `backend/requirements.txt`. Gemini TTS, Listen buttons, audio cache, persistent player, and `audio_files` table all kept — user-visible behavior identical, click Listen → audio plays.
+5. **Chapter tab rename** "Modern English" → "Plain English" (user-facing label only). DB column `modern_english_text`, CSS class `chapter-modern-english`, JS mode identifier `'modern'`, and `scripts/generate_modern_english.py` all unchanged.
+
+#### Homepage copy — full before/after
+
+**`<title>`** (and OG / Twitter title)
+- BEFORE: `Summra - AI-Powered Classic Book Summaries`
+- AFTER:  `Summra — Read the Classics in Plain English`
+
+**`<meta name="description">`** (and OG / Twitter description)
+- BEFORE: `Explore classic literature with AI-generated summaries. Get concise overviews, comprehensive analyses, and chapter-by-chapter breakdowns of public domain books.`
+- AFTER:  `Every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free.`
+
+**Hero banner headline** (`hero-banner-title`)
+- BEFORE: `Classic Literature, Made Easy`
+- AFTER:  `Read the Classics in Plain English`
+
+**Hero banner subtitle** (`hero-banner-subtitle`)
+- BEFORE: `Reading companion that makes you enjoy reading.`
+- AFTER:  `Every sentence rewritten — no summaries, no shortcuts, no fear.`
+
+**Top-10 carousel section heading** (`hero-discover` → `hero-banner-heading`)
+- BEFORE: `Discover Classics the Modern Way`
+- AFTER:  `Popular Classics — Now in Plain English`
+
+**"Literature, Beautifully Explained" section heading**
+- BEFORE: `Literature, Beautifully Explained`
+- AFTER:  `Literature, Beautifully Explained` *(heading kept per user choice; only the 3 cards below it were rewritten)*
+
+**Card 1** (`learn-feature-title` + `learn-feature-description`)
+- BEFORE title:  `Beautiful Illustrations`
+- AFTER title:   `Plain English Rewrites`
+- BEFORE desc:   `Make sense of complex plots and symbolism with beautifully illustrated character maps, timelines, and theme guides.`
+- AFTER desc:    `Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no summaries, no shortcuts.`
+
+**Card 2**
+- BEFORE title:  `Audio Summary`
+- AFTER title:   `Side-by-Side Reading`
+- BEFORE desc:   `Help you preview, understand, and enjoy classics at your own pace.`
+- AFTER desc:    `See the original and the plain English version next to each other. Read the way that works for you.`
+
+**Card 3**
+- BEFORE title:  `For Every Reader`
+- AFTER title:   `Built for Real Reading`
+- BEFORE desc:   `Kindle-like reading experience enhanced with chapter illustrations, summaries and plain-English version for English learners.`
+- AFTER desc:    `Kindle-style pages, themes, and font controls. Plus summaries and visual guides when you want to go deeper.`
+
+**Image alt-text on the 3 cards** also updated to match the new card titles.
+
+#### Note on what was NOT restructured
+
+The plan described a "3-card stack" with 📖/🔍/📚 emoji cards. The actual template has three full-width hero banners (Main / Discover / Learn) with different inner structure. Per the "structure is preserved" directive, copy was rewritten in place rather than restructuring into the planned card stack. If a future pass wants the actual card-stack rebuild, it's a separate change.
+
+#### Files changed
+
+**Backend:**
+- `backend/config.py` — added `FEATURE_AUTH = False`, `FEATURE_BLOG = False`
+- `backend/app_base.py` — gated blueprint registration, blog routes, sitemap blog-URL block; added flags to context processor; `/` route updated to pass new `meta_title`
+- `backend/app.py` — `/api/tts/generate` now imports `GeminiTTSHandler` instead of `TTSHandler`
+- `backend/tts_handler.py` — **deleted**
+- `backend/requirements.txt` — removed `TTS>=0.22.0`
+- `requirements-prod-tts.txt` — **deleted** (whole purpose was the TTS variant)
+
+**Frontend:**
+- `frontend/templates/index.html` — all copy changes above, plus `{% if feature_auth %}` and `{% if feature_blog %}` wrappers around gated UI, inline `window.FEATURE_AUTH` / `window.FEATURE_BLOG` script, "Modern English" → "Plain English" chapter tab label
+- `frontend/static/js/auth.js` — entire body wrapped in `if (window.FEATURE_AUTH)` early-return
+- `frontend/static/js/app.js` — `if (!window.FEATURE_AUTH) return;` guards in `setupSaveOfflineButton()` and `getOfflineBooks()`; "Modern English" string changed to "Plain English" in side-by-side header; bumped `?v=6.1.53` → `?v=6.1.54`
+- `frontend/static/js/app.min.js` — rebuilt via esbuild (110.9 KB)
+
+**Deploy:**
+- `deploy/setup-e2small.sh` — step 5 now installs `requirements-prod.txt`; removed step 6 TTS model download; removed stray `TTS_MODEL_NAME` env var
+- `deploy/README.md` — 5 refs to the deleted `requirements-prod-tts.txt` updated; "TTS model download" bullet, "TTS models: ~200 MB" line, and "TTS Fails" troubleshooting section removed
+
+**Tests:**
+- `tests/test_feature_flags.py` — **new**, 8 tests covering flag-off 404s, flag-on 200s, sitemap blog exclusion, context processor, and `tts_handler` ModuleNotFoundError
+
+#### Verification
+
+- `pytest tests/ -q` → **286 passed, 1 deselected** (was 278 → +8 new feature-flag tests). No regressions.
+- Playwright smoke (`tests/e2e/smoke.mjs`) on `/`, `/books/jane-eyre`, `/books/jane-eyre/chapters/1`, `/books/romeo-and-juliet` → all PASS, exit 0.
+- Flag-off curl checks: `/api/auth/check`, `/api/progress/all`, `/blog`, `/api/blog` → all 404. Sitemap contains zero `/blog` URLs. Account button / blog link / Save-for-Offline button absent from DOM. `window.FEATURE_AUTH = false` and `window.FEATURE_BLOG = false` rendered inline.
+- Flag-on (both flipped True at runtime): routes return 200, gated UI reappears in DOM, `window.FEATURE_AUTH = true` inline. Toggle works in both directions.
+- Visual screenshots confirm new hero copy, "Popular Classics — Now in Plain English" carousel section, new 3 cards under "Literature, Beautifully Explained", chapter sticky header tab strip reading **Summary | Original | Plain English | Side×Side**.
+
+#### Known caveat at deploy time
+
+Service worker cache invalidation: users with the existing PWA installed or with the SW registered will see a stale homepage / broken book pages on first visit after deploy until they hard reload once. User chose to ship as-is and accept the one-time stale hit rather than bump the cache version.
+
+#### Process notes
+
+Work split across two parallel teammates (backend track + frontend track) coordinated via the team task list at `~/.claude/tasks/summra-trim/`. Two issues caught in cross-track verification and fixed by lead: (1) the `/` route's `meta_title` override in `app_base.py:269` was masking the new template default; (2) the deploy script still referenced the deleted `requirements-prod-tts.txt`.
+
+#### Follow-up: "no summaries" → "no abbreviation"
+
+After the initial copy pass, the phrase "no summaries" felt off — it reads as anti-summary, which contradicts the rest of the site where summaries are positioned as the on-ramp / preview path. Swapped to "no abbreviation," which is a positive claim about what Plain English actually is (a complete rewrite, nothing abridged) rather than a negative claim about a parallel feature on the same site.
+
+**Hero banner subtitle**
+- BEFORE: `Every sentence rewritten — no summaries, no shortcuts, no fear.`
+- AFTER:  `Every sentence rewritten — no abbreviation, no shortcuts, no fear.`
+
+**Card 1 description ("Plain English Rewrites")**
+- BEFORE: `Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no summaries, no shortcuts.`
+- AFTER:  `Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no abbreviation, no shortcuts.`
+
+#### Follow-up: carousel heading — drop the "Plain English" echo
+
+The carousel section heading ("Popular Classics — Now in Plain English") repeated "Plain English" within 100px of the hero headline ("Read the Classics in Plain English"). On a single screen, the slogan landed twice and read like we were hammering it. The carousel's actual job is to point at specific books, not re-pitch the product the hero already pitched.
+
+**Top-10 carousel section heading**
+- BEFORE: `Popular Classics — Now in Plain English`
+- AFTER:  `Where Most Readers Start`
+
+Social-proof framing. Tells visitors these are the entry points other readers picked, and trusts the hero above to have already done the product pitch.
+
+#### Follow-up: "Literature, Beautifully Explained" → "Classic Literature, Made Easy"
+
+The third section heading was changed to the original hero copy (which had been replaced by the new Plain English hero). Reusing it here gives the section a clearer, plainer label.
+
+**"Literature, Beautifully Explained" section heading**
+- BEFORE: `Literature, Beautifully Explained`
+- AFTER:  `Classic Literature, Made Easy`
+
+#### Follow-up: swap images on Card 2 and Card 3
+
+`chapter_view.*` (showing a reading view) is a better visual fit for "Side-by-Side Reading" than `summary.*` (an open-book illustration). `summary.*` works fine above "Built for Real Reading" since reading-experience features pair naturally with a book illustration. Swapped the image filenames between Card 2 and Card 3; titles, descriptions, and alt text stayed in place.
+
+- Card 2 ("Side-by-Side Reading") image:  `summary.{webp,jpg}` → `chapter_view.{webp,jpg}`
+- Card 3 ("Built for Real Reading") image: `chapter_view.{webp,jpg}` → `summary.{webp,jpg}`
+
+---
+
+## 2026-05-30
+
 ## 2026-05-29
 
 ### Folder Structure Reorganization - COMPLETED

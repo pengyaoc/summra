@@ -730,7 +730,7 @@ class SummraApp {
         let html = `
             <div class="side-by-side-headers">
                 <div class="side-by-side-header">Original</div>
-                <div class="side-by-side-header">Modern English</div>
+                <div class="side-by-side-header">Plain English</div>
             </div>
         `;
 
@@ -4488,8 +4488,12 @@ class SummraApp {
     setupSaveOfflineButton() {
         /**
          * Setup "Save for Offline" button for PWA offline book caching
-         * Only shows on mobile devices in PWA standalone mode
+         * Only shows on mobile devices in PWA standalone mode.
+         * Gated by FEATURE_AUTH — the button markup is server-stripped when off.
          */
+        if (!window.FEATURE_AUTH) {
+            return;
+        }
         const saveOfflineBtn = document.getElementById('save-offline-btn');
         const saveOfflineText = document.getElementById('save-offline-text');
 
@@ -4594,8 +4598,12 @@ class SummraApp {
         /**
          * Get list of all offline-saved book IDs from service worker
          * Now includes verification and eviction detection
+         * Gated by FEATURE_AUTH — Save-for-Offline is part of the auth bundle.
          * @returns {Promise<{bookIds: number[], evictedBookIds: number[]}>} - Cached and evicted book IDs
          */
+        if (!window.FEATURE_AUTH) {
+            return { bookIds: [], evictedBookIds: [] };
+        }
         if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
             return { bookIds: [], evictedBookIds: [] };
         }
