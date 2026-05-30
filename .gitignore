@@ -70,3 +70,8 @@ tests/fixtures/
 
 # Claude Code
 .claude/
+
+# Playwright / e2e harness
+tests/e2e/node_modules/
+tests/e2e/screenshots/
+tests/e2e/package-lock.json
