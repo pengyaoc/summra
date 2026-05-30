@@ -658,6 +658,45 @@ class ImagenImageGenerator(ImageGeneratorBase):
         print(f"  ❌ All Imagen tiers failed. Last error: {last_error_msg}")
         return None, last_model_attempted
 
+    def generate_cover_image(
+        self,
+        book_title: str,
+        book_author: str,
+        medium_summary: str,
+        dry_run: bool = False,
+    ) -> Tuple[Optional[bytes], str]:
+        clean_title = clean_title_for_prompt(book_title)
+        prompt = f"""Generate book cover art for "{clean_title}" by {book_author}. Your main focus is accurate visual storytelling — the cover should vividly capture the essence, tone, and meaning of the book's content.
+
+Your process:
+1. Interpret the book summary below to understand its mood, symbolism, and key imagery.
+2. Ensure the cover adheres to the following layout rules:
+   - The title "{clean_title}" must appear at the top, complete and correctly spelled.
+   - The author name "{book_author}" must appear at the bottom.
+   - The illustration must cover the full page, edge-to-edge, with no borders.
+   - The art must visually reflect the book's actual story and tone, not just literal elements from the title.
+3. Create a composition with appropriate lighting, color palette, artistic style, and mood — all tied to the story's themes.
+4. Place the title at the top and author at the bottom, with art that has no visible borders or frames.
+
+Guidelines:
+- Prioritize storytelling accuracy: symbolism, color, and imagery should represent the narrative truth of the book.
+- Avoid generic visuals or irrelevant symbolism.
+- Use appropriate artwork and color scheme for the genre and time period.
+- Professional, publishable quality suitable for a book cover.
+
+Book Summary:
+{medium_summary}
+
+Generate ONE high-quality, professional book cover."""
+
+        print(f"\n{'='*80}\nCOVER IMAGE PROMPT (Imagen):\n{'='*80}\n{prompt}\n{'='*80}\n")
+
+        if dry_run:
+            print(f"  [DRY RUN] Skipping actual image generation")
+            return (None, "")
+
+        return self._generate_with_fallback(prompt=prompt, aspect_ratio=IMAGEN_ASPECT_RATIO)
+
 
 def save_image(image_data: bytes, output_path: Path, optimize: bool = True) -> bool:
     """Save image data to a file and optionally optimize size

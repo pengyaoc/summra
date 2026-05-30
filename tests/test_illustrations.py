@@ -652,5 +652,51 @@ class TestImagenFallbackChain:
         assert call_kwargs["config"].number_of_images == 1
 
 
+class TestImagenCoverGeneration:
+    """ImagenImageGenerator.generate_cover_image: prompt building + delegate to fallback."""
+
+    @pytest.fixture
+    def generator(self):
+        from scripts.images.generate_illustrations import ImagenImageGenerator
+        gen = ImagenImageGenerator(api_key="fake-key")
+        gen._generate_with_fallback = MagicMock(
+            return_value=(b"cover-bytes", "imagen-4.0-ultra-generate-001")
+        )
+        return gen
+
+    def test_cover_returns_image_bytes_on_success(self, generator):
+        image, model = generator.generate_cover_image(
+            book_title="The Trial",
+            book_author="Franz Kafka",
+            medium_summary="Josef K. is arrested without explanation...",
+        )
+        assert image == b"cover-bytes"
+        assert model == "imagen-4.0-ultra-generate-001"
+
+    def test_cover_prompt_includes_title_and_author(self, generator):
+        generator.generate_cover_image(
+            book_title="The Trial",
+            book_author="Franz Kafka",
+            medium_summary="Josef K. is arrested without explanation...",
+        )
+        prompt_arg = generator._generate_with_fallback.call_args.kwargs["prompt"]
+        assert "The Trial" in prompt_arg
+        assert "Franz Kafka" in prompt_arg
+
+    def test_cover_uses_3_4_aspect_ratio(self, generator):
+        generator.generate_cover_image(
+            book_title="Test", book_author="Test", medium_summary="...",
+        )
+        assert generator._generate_with_fallback.call_args.kwargs["aspect_ratio"] == "3:4"
+
+    def test_cover_dry_run_does_not_call_api(self, generator):
+        image, _ = generator.generate_cover_image(
+            book_title="Test", book_author="Test", medium_summary="...",
+            dry_run=True,
+        )
+        assert image is None
+        generator._generate_with_fallback.assert_not_called()
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
