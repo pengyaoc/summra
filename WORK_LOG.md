@@ -4,6 +4,128 @@
 
 ---
 
+## 2026-05-30: Ingest 7 of 10 new Gutenberg books; fix multiple parser bugs
+
+### Dry-run-first ingestion workflow + line-range helper - COMPLETED
+
+User requested: enhance `--dry-run` so each chapter prints start/end line numbers, letting an LLM reviewer spot-check boundaries against the raw source *before* committing to DB.
+
+**New: `derive_chapter_line_ranges(raw_text, chapters)` helper** in `scripts/content/generate_summaries.py`. Builds a per-chapter anchor (first 6 words of normalized chapter prose, optionally skipping a repeated title prefix), walks the raw source forward from the previous match position. Tolerates blank lines and 2-line joined window (header + first prose line).
+
+Hooked into the `--dry-run` "CHAPTER BREAKDOWN" output:
+```
+Chapter 1: Mr. Sherlock Holmes.
+  Length: 15,278 chars (~2,761 words)  |  lines: 82-410  (329 raw lines)
+```
+
+Captured `raw_file_text` in `process_book` BEFORE Gutenberg header stripping so line numbers refer to the user's actual file.
+
+Tests: `tests/test_derive_chapter_line_ranges.py` — 5 tests (simple flat books, two-level PART/CHAPTER, punctuation drift, empty input, graceful `(-1, -1)` for unfindable anchors).
+
+### Two parser bugs surfaced by pg244 validation - COMPLETED
+
+**Bug 1 — bare `PART I.` yielded `section_title='.'`** (pg244 PART I has no subtitle in source). The optional title regex in `extract_two_level_toc` and `extract_two_level_structure_from_body` captured the trailing `.` as group 3. Fix: after `.strip()`, discard captured title if it has no letters/digits. Two call sites in `scripts/content/generate_summaries.py`.
+
+**Bug 2 — `normalize_chapter_title` turned `M.D.` into `M.d.`** because `word.capitalize()` lowercases everything after the first letter. Added `smart_capitalize(word)` helper: if `word` matches `^([A-Za-z]{1,3}\.){2,}$` (dotted abbreviation like M.D., Ph.D., U.S.A.), title-case each dot-separated segment instead of the whole word. So `M.D.` → `M.D.`, `PH.D.` → `Ph.D.`, `U.S.A.` → `U.S.A.`. Wired into the 2 outer `.capitalize()` call sites (lines 2504, 2511); left the inside-quotes call alone (surgical).
+
+DB direct-fix for book 107 (pg244): updated `book_sections.section_title='' WHERE id=140` and `chapters.chapter_title='A Continuation of the Reminiscences of John Watson, M.D.' WHERE book_id=107 AND chapter_number=13`.
+
+Tests added in `tests/test_part_section_title.py` (1 test) and `tests/test_book_chapter_name_detection.py::test_chapter_title_preserves_dotted_abbreviations`.
+
+### Hybrid validator: `scripts/audits/validate_chapter_split.py` - COMPLETED
+
+New script with 7 deterministic checks for post-ingest validation:
+1. `count_matches_toc` — chapter count vs TOC entries (with multi-section variance allowance for books like pg3268 where each volume has different chapter counts)
+2. `monotone_ordering` — strict-increasing chapter_number; handles two-level encoding (101..N0X per part) and preface=chapter 0
+3. `no_duplicate_titles` — within section; same title across sections OK
+4. `min_text_length` — every chapter ≥100 chars
+5. `total_chars` — sum vs `normalize_chapter_text(extract_gutenberg_content(raw))`, ±5% (configurable)
+6. `first_chapter_opens_body` — first numbered chapter's opening words must appear somewhere in source body
+7. `no_adjacent_overlap` — shrink-search the largest shared run between tail of N and head of N+1 down to 150-char minimum
+8. `section_subtitle_quality` — empty subtitle is OK (some PARTs have none); punctuation-only is WARN
+
+`--llm-digest` flag prints compact digest (sections, source TOC, per-chapter title + first/last 200 chars) for Claude to read inline. No Gemini API calls; LLM step happens in-conversation.
+
+Tests: `tests/test_validate_chapter_split.py` — 31 unit tests.
+
+### Ingested 6 of 9 new books (round 1)
+
+Per user direction ("long tail — OK to add some to CLAUDE.md"), ran `--dry-run` on all 9 books, deferred 5 broken ones to documentation:
+
+| book_id | file | title | chapters | result |
+|---|---|---|---|---|
+| 107 | pg244 | A Study in Scarlet | 14 | 0 FAIL / 0 WARN / 8 PASS |
+| 108 | pg23 | Frederick Douglass Narrative | 12 | 0 FAIL / 1 WARN / 7 PASS |
+| 109 | pg1695 | The Man Who Was Thursday | 16 | 0 FAIL / 1 WARN / 7 PASS |
+| 110 | pg3296 | Confessions of St. Augustine | 14 | 0 FAIL / 1 WARN / 7 PASS |
+| 111 | pg110 | Tess of the d'Urbervilles | 60 | 0 FAIL / 1 WARN / 7 PASS |
+
+### Fix pg245 (Twain) + pg3268 (Radcliffe) — TOC/body numeral mismatch class - COMPLETED
+
+User pushed back on skipping books: "I didn't mean to skip these books entirely when you hit a roadblock." Investigated pg245 and pg3268 and found they share the same root-cause class.
+
+**Root cause: TOC and body use different numeral systems.**
+- **pg245** (Twain): TOC `CHAPTER I, II, III, …, LX`; body `CHAPTER 1, 2, 3, …, 60`
+- **pg3268** (Radcliffe): TOC `VOLUME I, II, III, IV`; body `VOLUME 1, 2, 3, 4`
+
+Three independent code paths in the parser compared markers by string equality, so `'1'` never matched `'I'`.
+
+**Fixes in `scripts/content/generate_summaries.py`:**
+1. `extract_toc` — recognize `TABLE OF CONTENTS` / `LIST OF CHAPTERS` (not just `CONTENTS` / standalone `CHAPTER`)
+2. `detect_chapters` — when checking `chapter_marker in toc`, try integer-equivalence lookup via `roman_to_int`/`word_to_int`. New `_toc_lookup` inner helper
+3. `extract_two_level_toc` — for VOLUME sections, run the same duplicate-detection that PART/BOOK/ACT already have (so `VOLUME I` from TOC + `VOLUME 1` from body don't double-count)
+4. New `SummaryGenerator._build_numeral_alternation(number, observed_numeral)` helper returns a regex alternation of all valid numeral forms (`'1|I'`, `'14|XIV'`). Wired into:
+   - first-section search pattern
+   - per-section search pattern (and `_with_title` variants and decorative)
+   - next-section (end-boundary) pattern (and `_with_title` and decorative)
+   - VOLUME-specific first-chapter pattern widened to accept Roman OR Arabic with optional period
+5. Removed the VOLUME-structure `search_start_line=0` exception; now searches from `toc_end_line` like all other structures
+6. Added `SummaryGenerator._int_to_roman` (the helper existed on `ChapterMarkerFinder` but wasn't accessible from `SummaryGenerator`)
+
+**Validator improvements in `scripts/audits/validate_chapter_split.py`:**
+- `_strip_punct_lower` — punctuation/whitespace now becomes a single space (was: deleted). Fixes false-positive on `first_chapter_opens_body` when chapter opening is laid out across multiple short lines (e.g. poem epigraph)
+- `check_count_matches_toc` — for multi-section books, accept any count within ±max(n_sections×5, 10) of `n_toc × n_sections` as WARN rather than FAIL
+
+**Tests:**
+- `tests/test_toc_header_variants.py` — `TABLE OF CONTENTS` / `LIST OF CHAPTERS` recognized (2 tests)
+- `tests/test_toc_body_numeral_mismatch.py` — Roman TOC + Arabic body validates correctly; `extract_two_level_toc` dedupes Roman+Arabic VOLUMEs (2 tests)
+
+**Result:**
+| book_id | file | title | chapters | sections | result |
+|---|---|---|---|---|---|
+| 112 | pg245 | Life on the Mississippi | 61 | 1 | 0 FAIL / 1 WARN / 7 PASS |
+| 114 | pg3268 | The Mysteries of Udolpho | 57 | 4 | 0 FAIL / 1 WARN / 7 PASS |
+
+7 of the original 10 downloads are now in the DB. Both pg245 and pg3268 within ±0.3% char coverage vs source.
+
+### Verification
+
+- `pytest -q` → **333 passed, 1 deselected** (was 245 at session start; +88 net from new tests + downstream effects)
+- All 7 newly ingested books pass `validate_chapter_split.py` cleanly
+- Re-validating the 6 ingested-earlier books (107–112) shows no regressions
+
+### Failed-to-parse list (permanent — do not re-attempt without source-format fix)
+
+| File | Title | Author | Why it fails | Fix shape |
+|---|---|---|---|---|
+| `pg100.txt` | The Complete Works of William Shakespeare | Shakespeare | **Anthology**: 38 plays in a single file. Parser detects ACT markers from the first play only; one "chapter" ends up >1MB. Coverage 24.5%. | Not a single "book" — would need a pre-processing step that splits source into 38 per-play files. Out of scope. |
+| `pg2680.txt` | Meditations | Marcus Aurelius | **Aphoristic body, footnote markers**: body has no chapter structure; translator's footnotes use `BOOK X N` syntax. `re.IGNORECASE` on `section_pattern` matches lowercase prose `"part one to another"` mid-sentence as a PART marker. | Add structural guard to `section_pattern` callers (require flanking blank lines + UPPERCASE-only at line start). 5 callsites in `scripts/content/generate_summaries.py`; touches risky shared code. Defer until needed. |
+| `pg175.txt` | The Phantom of the Opera | Gaston Leroux | **In-body headings not regex-matchable**: only 2 "chapters" detected, one is the entire book as 76K-word "Preface", the other has title `'.'`. | Would need a heading-style addition. The book uses something the current chapter regex doesn't cover. Defer until inspected closely. |
+
+Source files remain in `data/books/`. To revisit:
+```sh
+PYTHONPATH=backend venv/bin/python scripts/content/generate_summaries.py data/books/<file> --dry-run
+```
+
+### CLAUDE.md additions (this session)
+
+- New section **"Book Ingestion Workflow (always dry-run first)"** with the 3-step flow (dry-run → review → ingest → validate), exact commands, and the "stop signs" to look for
+- Documented known-bad book classes (anthologies, aphoristic non-chaptered classics, in-body heading mismatches), referring to `WORK_LOG.md` Failed-to-parse list as canonical inventory
+- Listed which cases the parser handles well so future ingestions know what to expect
+- Linked the 4 test files covering these areas
+
+---
+
 ## 2026-05-30: Fix empty-medium-summary parser bug; persist raw Gemini responses
 
 **Why:** Six newly added books (IDs 107–112) had empty medium summaries (`word_count=0` in the `summaries` table) after running the summary pipeline. Investigation by dumping the raw Gemini response showed the model returned a complete 2,500-word medium summary; the parser was dropping it.
