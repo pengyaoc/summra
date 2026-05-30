@@ -950,5 +950,85 @@ class TestChapterLoopUsesCharacterBrief:
         mock_brief.assert_not_called()
 
 
+class TestProviderSelection:
+    """build_generator factory + main() flag-guard behavior."""
+
+    def test_build_generator_default_provider_is_imagen(self):
+        from scripts.images.generate_illustrations import (
+            build_generator, ImagenImageGenerator,
+        )
+        gen = build_generator(provider="imagen", api_key="fake", model=None)
+        assert isinstance(gen, ImagenImageGenerator)
+
+    def test_build_generator_gemini_explicit(self):
+        from scripts.images.generate_illustrations import (
+            build_generator, GeminiImageGenerator,
+        )
+        gen = build_generator(provider="gemini", api_key="fake", model="gemini-3-pro-image-preview")
+        assert isinstance(gen, GeminiImageGenerator)
+        assert gen.model == "gemini-3-pro-image-preview"
+
+    def test_build_generator_gemini_default_model(self):
+        from scripts.images.generate_illustrations import build_generator
+        gen = build_generator(provider="gemini", api_key="fake", model=None)
+        assert gen.model == "gemini-3-pro-image-preview"
+
+    def test_build_generator_unknown_provider_raises(self):
+        from scripts.images.generate_illustrations import build_generator
+        with pytest.raises(ValueError, match="Unknown provider"):
+            build_generator(provider="dall-e", api_key="fake", model=None)
+
+    @patch("scripts.images.generate_illustrations.config")
+    def test_imagen_with_sync_mode_exits_non_zero(self, mock_config, capsys, monkeypatch):
+        """--provider imagen + --sync-mode should error out, not silently fall back."""
+        mock_config.GEMINI_API_KEY = "fake"
+        from scripts.images.generate_illustrations import main
+        monkeypatch.setattr(
+            "sys.argv",
+            ["generate_illustrations.py", "--book-id", "1", "--sync-mode"],
+        )
+        rc = main()
+        assert rc != 0
+        captured = capsys.readouterr()
+        combined = captured.out + captured.err
+        assert "imagen" in combined.lower()
+        assert "batch" in combined.lower() or "sync" in combined.lower()
+
+    @patch("scripts.images.generate_illustrations.config")
+    def test_imagen_with_list_jobs_exits_non_zero(self, mock_config, capsys, monkeypatch):
+        mock_config.GEMINI_API_KEY = "fake"
+        from scripts.images.generate_illustrations import main
+        monkeypatch.setattr(
+            "sys.argv",
+            ["generate_illustrations.py", "--list-jobs"],
+        )
+        rc = main()
+        # --list-jobs is still allowed under --provider gemini default. With imagen, it errors.
+        # Provider defaults to imagen, so this MUST error.
+        assert rc != 0
+
+    @patch("scripts.images.generate_illustrations.config")
+    def test_imagen_with_model_flag_prints_warning(self, mock_config, capsys, monkeypatch):
+        """--provider imagen --model X should warn and ignore the model flag, not crash."""
+        mock_config.GEMINI_API_KEY = "fake"
+        from scripts.images.generate_illustrations import main
+        # Use --dry-run so we don't actually invoke the API
+        monkeypatch.setattr(
+            "sys.argv",
+            ["generate_illustrations.py", "--book-id", "1", "--model",
+             "gemini-2.5-flash-image", "--dry-run"],
+        )
+        # Don't care about return code (DB may be missing); we want the warning text.
+        try:
+            main()
+        except SystemExit:
+            pass
+        except Exception:
+            pass
+        captured = capsys.readouterr()
+        combined = captured.out + captured.err
+        assert "--model" in combined or "ignored" in combined.lower()
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
