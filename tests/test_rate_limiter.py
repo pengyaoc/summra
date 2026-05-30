@@ -11,6 +11,7 @@ import sys
 import os
 from pathlib import Path
 import time
+from unittest.mock import patch
 import pytest
 
 # Add parent directories to path
@@ -59,28 +60,36 @@ class TestRateLimiter:
         assert len(limiter.request_times) == 5
 
     @pytest.mark.slow
+    def test_request_limit_enforcement_slow(self):
+        """Real-time variant of test_request_limit_enforcement (no sleep mock).
+
+        Kept under @slow so the full suite stays fast. Run with: pytest -m slow.
+        """
+        limiter = RateLimiter(max_requests_per_minute=3, max_tokens_per_minute=1000000)
+        for i in range(3):
+            limiter.wait_if_needed(estimated_tokens=100)
+        limiter.wait_if_needed(estimated_tokens=100)
+        assert len(limiter.request_times) >= 1
+
     def test_request_limit_enforcement(self):
-        """Test that request limit triggers waiting"""
+        """Test that request limit triggers waiting (time.sleep mocked)"""
         limiter = RateLimiter(max_requests_per_minute=3, max_tokens_per_minute=1000000)
 
         # Make 3 requests quickly (at the limit)
         for i in range(3):
             limiter.wait_if_needed(estimated_tokens=100)
 
-        # 4th request should trigger wait
-        start_time = time.time()
-        limiter.wait_if_needed(estimated_tokens=100)
-        elapsed = time.time() - start_time
+        # 4th request should trigger wait — mock sleep so the test is instant
+        with patch("scripts.generate_summaries.time.sleep") as mock_sleep:
+            limiter.wait_if_needed(estimated_tokens=100)
 
-        # Should have waited (at least 1 second, since we need to wait ~60s from first request)
-        # Note: In reality it would wait longer, but for unit tests we just check it triggered
-        # For actual testing, we'd need to mock time.time() and time.sleep()
-        # For now, just verify the logic is called
+        # Verify the wait path was taken (sleep called with a positive duration)
+        assert mock_sleep.called
+        assert mock_sleep.call_args[0][0] > 0
         assert len(limiter.request_times) >= 1  # Request was recorded
 
-    @pytest.mark.slow
     def test_token_limit_enforcement(self):
-        """Test that token limit triggers waiting"""
+        """Test that token limit triggers waiting (time.sleep mocked)"""
         limiter = RateLimiter(max_requests_per_minute=100, max_tokens_per_minute=10000)
 
         # Make requests that total to token limit
@@ -88,12 +97,13 @@ class TestRateLimiter:
         limiter.wait_if_needed(estimated_tokens=4000)
 
         # This request would exceed token limit (8000 + 3000 > 10000)
-        # Should trigger wait
-        start_time = time.time()
-        limiter.wait_if_needed(estimated_tokens=3000)
-        elapsed = time.time() - start_time
+        # Should trigger wait — mock sleep so the test is instant
+        with patch("scripts.generate_summaries.time.sleep") as mock_sleep:
+            limiter.wait_if_needed(estimated_tokens=3000)
 
-        # Verify token was recorded
+        # Verify the wait path was taken
+        assert mock_sleep.called
+        assert mock_sleep.call_args[0][0] > 0
         assert len(limiter.token_counts) >= 1
 
     def test_rolling_window_cleanup(self):
@@ -155,9 +165,8 @@ class TestRateLimiter:
         initial_count = len(limiter.request_times)
         assert initial_count == 2
 
-    @pytest.mark.slow
     def test_concurrent_limits(self):
-        """Test handling of both request and token limits simultaneously"""
+        """Test handling of both request and token limits simultaneously (time.sleep mocked)"""
         limiter = RateLimiter(max_requests_per_minute=5, max_tokens_per_minute=20000)
 
         # Make 3 requests with moderate token usage
@@ -169,11 +178,13 @@ class TestRateLimiter:
         total_tokens = sum(count for _, count in limiter.token_counts)
         assert total_tokens == 15000
 
-        # Next request with high tokens should check both limits
-        limiter.wait_if_needed(estimated_tokens=6000)
+        # Next request with high tokens should trigger the token-limit wait
+        # (15000 + 6000 > 20000). Mock sleep so the test is instant.
+        with patch("scripts.generate_summaries.time.sleep") as mock_sleep:
+            limiter.wait_if_needed(estimated_tokens=6000)
 
-        # Would trigger token limit (15000 + 6000 > 20000)
-        # Verify it's being tracked
+        assert mock_sleep.called
+        assert mock_sleep.call_args[0][0] > 0
         assert len(limiter.token_counts) >= 1
 
 
