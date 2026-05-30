@@ -367,6 +367,8 @@ Generate ONE high-quality, professional book cover."""
             print(f"  ❌ Error generating chapter illustration: {e}")
             return (None, prompt)
 
+    # ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+    # the Files-based Batch API. Kept for potential rollback to --provider gemini.
     def create_batch_job(self, batch_requests: List[Dict],
                         job_display_name: str = "chapter-illustrations-batch") -> Optional[str]:
         """Create and submit a batch job for multiple chapter illustrations
@@ -425,6 +427,8 @@ Generate ONE high-quality, professional book cover."""
             print(f"  ❌ Error creating batch job: {e}")
             return None
 
+    # ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+    # the Files-based Batch API. Kept for potential rollback to --provider gemini.
     def poll_batch_job(self, job_name: str, poll_interval: int = BATCH_POLL_INTERVAL_SECONDS,
                       max_wait_hours: int = BATCH_MAX_WAIT_HOURS) -> Optional[Dict]:
         """Poll batch job until completion
@@ -492,6 +496,8 @@ Generate ONE high-quality, professional book cover."""
             print(f"  ❌ Error polling batch job: {e}")
             return None
 
+    # ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+    # the Files-based Batch API. Kept for potential rollback to --provider gemini.
     def retrieve_batch_results(self, batch_job) -> Dict[str, Tuple[Optional[bytes], Optional[str]]]:
         """Retrieve and parse batch job results
 
@@ -665,6 +671,8 @@ Summary of the overall book (for reference):
     return prompt
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def save_batch_job_state(book_id: int, job_name: str, chapter_numbers: List[int],
                         model: str, chapter_range: Optional[Tuple[int, int]] = None) -> Path:
     """Save batch job state to disk for later resumption
@@ -699,6 +707,8 @@ def save_batch_job_state(book_id: int, job_name: str, chapter_numbers: List[int]
     return state_file
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def load_batch_job_state(state_file: Path) -> Dict:
     """Load batch job state from disk
 
@@ -712,6 +722,8 @@ def load_batch_job_state(state_file: Path) -> Dict:
         return json.load(f)
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def update_batch_job_state(state_file: Path, status: str, **kwargs):
     """Update batch job state file
 
@@ -729,6 +741,8 @@ def update_batch_job_state(state_file: Path, status: str, **kwargs):
         json.dump(state, f, indent=2)
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def list_pending_batch_jobs() -> List[Dict]:
     """List all pending batch jobs
 
@@ -1141,6 +1155,8 @@ def generate_chapter_illustrations_for_book(db: Database, generator: GeminiImage
     return all_success
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def generate_chapter_illustrations_batch(db: Database, generator: GeminiImageGenerator,
                                          book_id: int, chapter_range: Optional[Tuple[int, int]] = None,
                                          poll_interval: int = BATCH_POLL_INTERVAL_SECONDS,
@@ -1447,6 +1463,8 @@ def generate_chapter_illustrations_batch(db: Database, generator: GeminiImageGen
     return all_success
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def resume_batch_job(state_file: Path, generator: GeminiImageGenerator,
                     poll_interval: int = BATCH_POLL_INTERVAL_SECONDS) -> bool:
     """Resume a previously started batch job
@@ -1622,6 +1640,8 @@ def find_books_without_chapter_illustrations(db: Database) -> List[Dict]:
     return books_needing_illustrations
 
 
+# ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
+# the Files-based Batch API. Kept for potential rollback to --provider gemini.
 def generate_book_covers_batch(db: Database, generator: GeminiImageGenerator,
                                book_ids: List[int], poll_interval: int = BATCH_POLL_INTERVAL_SECONDS,
                                dry_run: bool = False) -> bool:
