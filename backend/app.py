@@ -36,19 +36,22 @@ def generate_tts():
                 'error': 'No text provided'
             }), 400
 
-        # Import TTS handler
+        # Import Gemini TTS handler (local Coqui/VITS handler removed).
         try:
-            from .tts_handler import TTSHandler
+            from .gemini_tts_handler import GeminiTTSHandler
         except ImportError:
-            from tts_handler import TTSHandler
+            from gemini_tts_handler import GeminiTTSHandler
         import threading
         import hashlib
         import wave
 
-        tts = TTSHandler()
+        tts = GeminiTTSHandler()
 
         # Check for cached audio using shared utility function
-        import tts_utils
+        try:
+            from . import tts_utils
+        except ImportError:
+            import tts_utils
         cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.BASE_DIR)
         if cached_audio:
             logger.info(f"Using cached audio: {cached_audio['provider']}")

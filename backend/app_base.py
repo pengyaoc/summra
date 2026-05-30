@@ -59,9 +59,11 @@ user_db = user_models.UserDatabase()
 auth_routes.user_db = user_db
 progress_routes.user_db = user_db
 
-# Register blueprints
-app.register_blueprint(auth_routes.auth_bp)
-app.register_blueprint(progress_routes.progress_bp)
+# Register blueprints — gated behind FEATURE_AUTH so the routes return clean
+# 404s (not 403s) when the auth/progress subsystems are dark.
+if config.FEATURE_AUTH:
+    app.register_blueprint(auth_routes.auth_bp)
+    app.register_blueprint(progress_routes.progress_bp)
 
 # Set environment flag (will be overridden by app.py or app_prod.py)
 app.config['IS_DEVELOPMENT'] = False
@@ -69,9 +71,11 @@ app.config['IS_DEVELOPMENT'] = False
 # Add context processor to make environment available in templates
 @app.context_processor
 def inject_environment():
-    """Make environment flag available to all templates"""
+    """Make environment flag and feature flags available to all templates."""
     return {
-        'is_development': app.config.get('IS_DEVELOPMENT', False)
+        'is_development': app.config.get('IS_DEVELOPMENT', False),
+        'feature_auth': config.FEATURE_AUTH,
+        'feature_blog': config.FEATURE_BLOG,
     }
 
 
@@ -263,7 +267,7 @@ def add_cache_headers(response):
 def index():
     """Serve the main page"""
     return render_template('index.html',
-                         meta_title='Free Classic Book Summaries, Chapter Summaries & Full Text | Summra')
+                         meta_title='Summra — Read the Classics in Plain English')
 
 
 @app.route('/discover')
@@ -345,6 +349,25 @@ def sitemap():
         'changefreq': 'weekly',
         'priority': '0.8'
     })
+
+    # Blog URLs only when the blog feature is enabled. Listing blog URLs in
+    # the sitemap while routes 404 would actively hurt SEO.
+    if config.FEATURE_BLOG:
+        pages.append({
+            'loc': 'https://summra.com/blog',
+            'changefreq': 'weekly',
+            'priority': '0.6'
+        })
+        for post in db.get_all_blog_posts():
+            slug = post.get('slug')
+            if not slug:
+                continue
+            pages.append({
+                'loc': f'https://summra.com/blog/{slug}',
+                'lastmod': post.get('published_date') or post.get('created_at'),
+                'changefreq': 'monthly',
+                'priority': '0.5'
+            })
 
     sitemap_xml = render_template('sitemap.xml', pages=pages)
     response = app.make_response(sitemap_xml)
@@ -1319,103 +1342,104 @@ def author_page(author_slug):
     )
 
 
-# Blog routes
-@app.route('/blog')
-def blog_index():
-    """Server-side rendering for blog index (SEO)"""
-    meta_title = "Blog - Classic Literature Guides | Summra"
-    meta_description = "Read our guides on classic literature, ESL learning, and book recommendations. Learn how to read classics as a non-native English speaker."
-    canonical_url = "https://summra.com/blog"
+# Blog routes — gated behind FEATURE_BLOG so they return clean 404s when off.
+if config.FEATURE_BLOG:
+    @app.route('/blog')
+    def blog_index():
+        """Server-side rendering for blog index (SEO)"""
+        meta_title = "Blog - Classic Literature Guides | Summra"
+        meta_description = "Read our guides on classic literature, ESL learning, and book recommendations. Learn how to read classics as a non-native English speaker."
+        canonical_url = "https://summra.com/blog"
 
-    # Get all blog posts for SEO
-    posts = db.get_all_blog_posts()
+        # Get all blog posts for SEO
+        posts = db.get_all_blog_posts()
 
-    # Schema.org structured data for Blog
-    structured_data = {
-        "@context": "https://schema.org",
-        "@type": "Blog",
-        "name": "Summra Blog",
-        "description": "Classic literature guides and reading tips for ESL learners"
-    }
-
-    # Build breadcrumbs
-    breadcrumbs = build_breadcrumbs('blog')
-    breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
-
-    combined_structured_data = [structured_data, breadcrumb_schema]
-
-    initial_data = {
-        'type': 'blog',
-        'breadcrumbs': breadcrumbs
-    }
-
-    return render_template(
-        'index.html',
-        meta_title=meta_title,
-        meta_description=meta_description,
-        canonical_url=canonical_url,
-        og_type='website',
-        structured_data=combined_structured_data,
-        initial_data=initial_data
-    )
-
-
-@app.route('/blog/<slug>')
-def blog_post_page(slug):
-    """Server-side rendering for blog post pages (SEO)"""
-    post = db.get_blog_post_by_slug(slug)
-
-    if not post:
-        return render_template('index.html'), 404
-
-    # Prepare meta tags
-    meta_title = f"{post['title']} | Summra Blog"
-
-    # Extract first 160 chars for description
-    meta_description = post.get('excerpt', '')[:160] if post.get('excerpt') else post['title']
-
-    canonical_url = f"https://summra.com/blog/{slug}"
-
-    # Schema.org structured data for BlogPosting
-    structured_data = {
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        "headline": post['title'],
-        "datePublished": post.get('published_date', post.get('created_at', '')),
-        "author": {
-            "@type": "Organization",
-            "name": post.get('author', 'Summra Team')
-        },
-        "publisher": {
-            "@type": "Organization",
-            "name": "Summra"
+        # Schema.org structured data for Blog
+        structured_data = {
+            "@context": "https://schema.org",
+            "@type": "Blog",
+            "name": "Summra Blog",
+            "description": "Classic literature guides and reading tips for ESL learners"
         }
-    }
 
-    if post.get('excerpt'):
-        structured_data["description"] = post['excerpt']
+        # Build breadcrumbs
+        breadcrumbs = build_breadcrumbs('blog')
+        breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
 
-    # Build breadcrumbs
-    breadcrumbs = build_breadcrumbs('blog-post', blog_post=post)
-    breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
+        combined_structured_data = [structured_data, breadcrumb_schema]
 
-    combined_structured_data = [structured_data, breadcrumb_schema]
+        initial_data = {
+            'type': 'blog',
+            'breadcrumbs': breadcrumbs
+        }
 
-    initial_data = {
-        'type': 'blog-post',
-        'slug': slug,
-        'breadcrumbs': breadcrumbs
-    }
+        return render_template(
+            'index.html',
+            meta_title=meta_title,
+            meta_description=meta_description,
+            canonical_url=canonical_url,
+            og_type='website',
+            structured_data=combined_structured_data,
+            initial_data=initial_data
+        )
 
-    return render_template(
-        'index.html',
-        meta_title=meta_title,
-        meta_description=meta_description,
-        canonical_url=canonical_url,
-        og_type='article',
-        structured_data=combined_structured_data,
-        initial_data=initial_data
-    )
+
+    @app.route('/blog/<slug>')
+    def blog_post_page(slug):
+        """Server-side rendering for blog post pages (SEO)"""
+        post = db.get_blog_post_by_slug(slug)
+
+        if not post:
+            return render_template('index.html'), 404
+
+        # Prepare meta tags
+        meta_title = f"{post['title']} | Summra Blog"
+
+        # Extract first 160 chars for description
+        meta_description = post.get('excerpt', '')[:160] if post.get('excerpt') else post['title']
+
+        canonical_url = f"https://summra.com/blog/{slug}"
+
+        # Schema.org structured data for BlogPosting
+        structured_data = {
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            "headline": post['title'],
+            "datePublished": post.get('published_date', post.get('created_at', '')),
+            "author": {
+                "@type": "Organization",
+                "name": post.get('author', 'Summra Team')
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": "Summra"
+            }
+        }
+
+        if post.get('excerpt'):
+            structured_data["description"] = post['excerpt']
+
+        # Build breadcrumbs
+        breadcrumbs = build_breadcrumbs('blog-post', blog_post=post)
+        breadcrumb_schema = breadcrumbs_to_schema(breadcrumbs)
+
+        combined_structured_data = [structured_data, breadcrumb_schema]
+
+        initial_data = {
+            'type': 'blog-post',
+            'slug': slug,
+            'breadcrumbs': breadcrumbs
+        }
+
+        return render_template(
+            'index.html',
+            meta_title=meta_title,
+            meta_description=meta_description,
+            canonical_url=canonical_url,
+            og_type='article',
+            structured_data=combined_structured_data,
+            initial_data=initial_data
+        )
 
 
 @app.route('/api/authors/<path:author_slug>', methods=['GET'])
@@ -1523,46 +1547,47 @@ def get_author_books(author_slug):
         }), 500
 
 
-# Blog routes
-@app.route('/api/blog', methods=['GET'])
-def get_all_blog_posts():
-    """Get all blog posts (title, slug, excerpt, date only)"""
-    try:
-        posts = db.get_all_blog_posts()
-        return jsonify({
-            'success': True,
-            'posts': posts,
-            'count': len(posts)
-        })
-    except Exception as e:
-        logger.error(f"Error fetching blog posts: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/blog/<slug>', methods=['GET'])
-def get_blog_post(slug):
-    """Get full blog post by slug"""
-    try:
-        post = db.get_blog_post_by_slug(slug)
-        if post:
+# Blog API routes — gated behind FEATURE_BLOG to match the page-level gate.
+if config.FEATURE_BLOG:
+    @app.route('/api/blog', methods=['GET'])
+    def get_all_blog_posts():
+        """Get all blog posts (title, slug, excerpt, date only)"""
+        try:
+            posts = db.get_all_blog_posts()
             return jsonify({
                 'success': True,
-                'post': post
+                'posts': posts,
+                'count': len(posts)
             })
-        else:
+        except Exception as e:
+            logger.error(f"Error fetching blog posts: {e}")
             return jsonify({
                 'success': False,
-                'error': 'Blog post not found'
-            }), 404
-    except Exception as e:
-        logger.error(f"Error fetching blog post {slug}: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+                'error': str(e)
+            }), 500
+
+
+    @app.route('/api/blog/<slug>', methods=['GET'])
+    def get_blog_post(slug):
+        """Get full blog post by slug"""
+        try:
+            post = db.get_blog_post_by_slug(slug)
+            if post:
+                return jsonify({
+                    'success': True,
+                    'post': post
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Blog post not found'
+                }), 404
+        except Exception as e:
+            logger.error(f"Error fetching blog post {slug}: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
 
 
 # Error handlers

@@ -78,3 +78,9 @@ VITS_TTS_CHUNK_SIZE_WORDS = 20  # Much smaller chunks for local TTS processing
 FLASK_HOST = '0.0.0.0'
 FLASK_PORT = 5001
 FLASK_DEBUG = True
+
+# Feature flags — default False so the gated subsystems are dark until ready.
+# FEATURE_AUTH gates auth + reading progress + active Save-for-Offline.
+# FEATURE_BLOG gates the editorial blog (routes + sitemap entries).
+FEATURE_AUTH = False
+FEATURE_BLOG = False

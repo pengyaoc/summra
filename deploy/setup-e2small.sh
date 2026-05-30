@@ -63,23 +63,13 @@ source venv/bin/activate
 
 echo -e "\n${GREEN}Step 5: Installing Python dependencies${NC}"
 pip install --upgrade pip
-pip install -r requirements-prod-tts.txt
+pip install -r requirements-prod.txt
 
-# Download TTS model on first run to avoid cold start issues
-echo -e "\n${GREEN}Step 6: Pre-downloading TTS model${NC}"
-python3 << 'EOF'
-from TTS.api import TTS
-print("Downloading VITS model...")
-tts = TTS("tts_models/en/vctk/vits")
-print("TTS model ready!")
-EOF
-
-echo -e "\n${GREEN}Step 7: Setting up environment variables${NC}"
+echo -e "\n${GREEN}Step 6: Setting up environment variables${NC}"
 cat > .env << EOF
 GEMINI_API_KEY=$GEMINI_API_KEY
 FLASK_ENV=production
 DATABASE_PATH=data/database.db
-TTS_MODEL_NAME=tts_models/en/vctk/vits
 TTS_OUTPUT_DIR=frontend/static/audio
 PORT=5000
 EOF
