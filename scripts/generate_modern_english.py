@@ -62,19 +62,20 @@ class ModernEnglishGenerator:
     MAX_BATCH_CHARS = 60000     # Maximum characters per batch
     MAX_OUTPUT_TOKENS = 65535    # Maximum output tokens
 
-    def __init__(self, api_key: str = None, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str = None, model_name: str = None):
         """Initialize generator with API credentials
 
         Args:
             api_key: Google AI API key (defaults to config.GEMINI_API_KEY)
-            model_name: Gemini model to use for generation
+            model_name: Gemini model to use for generation (defaults to
+                config.PLAIN_TEXT_MODEL — Flash-Lite for bulk rewrites)
         """
         self.api_key = api_key or config.GEMINI_API_KEY
         if not self.api_key:
             raise ValueError("Gemini API key not found. Set GEMINI_API_KEY in environment or config.")
 
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = model_name
+        self.model_name = model_name or config.PLAIN_TEXT_MODEL
         self.db = Database()
 
     def build_single_chapter_prompt(self, book_title: str, book_author: str,
@@ -736,8 +737,8 @@ Examples:
 
     parser.add_argument('--dry-run', action='store_true',
                        help='Preview prompts without making API calls')
-    parser.add_argument('--model', type=str, default='gemini-2.5-flash',
-                       help='Gemini model to use (default: gemini-2.5-flash)')
+    parser.add_argument('--model', type=str, default=config.PLAIN_TEXT_MODEL,
+                       help=f'Gemini model to use (default: {config.PLAIN_TEXT_MODEL})')
     parser.add_argument('--batch-size', type=int, default=5,
                        help=f'Number of chapters to process per API call (default: 5, max: {ModernEnglishGenerator.MAX_CHAPTERS_PER_BATCH})')
     parser.add_argument('--save-to-db', action='store_true', default=True,

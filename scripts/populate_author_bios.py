@@ -56,7 +56,12 @@ class AuthorBioGenerator:
         else:
             self.client = None
 
-        self.model_name = 'gemini-2.5-flash'
+        # Model fallback chain (3.5 → 3 → 2.5), pulled from the same config the
+        # summary generator uses. self.model_name is kept as the *primary* for
+        # log/display compatibility.
+        cfg = config.SUMMARY_CONFIGS['combined']
+        self.model_chain = [cfg['model']] + list(cfg.get('model_fallbacks', []))
+        self.model_name = self.model_chain[0]
 
         # Statistics
         self.stats = {
@@ -226,7 +231,7 @@ TOP_BOOKS:
             print("\n" + "="*60)
             print("DRY RUN - PROMPT PREVIEW")
             print("="*60)
-            print(f"\nModel: {self.model_name}")
+            print(f"\nModel chain: {' → '.join(self.model_chain)}")
             print(f"Temperature: 0.3")
             print(f"Max output tokens: 8000")
             print(f"\n{prompt}")
@@ -235,55 +240,77 @@ TOP_BOOKS:
             print("="*60)
             return {}
 
+        # Retry loop with model fallback. Parsing errors retry on the SAME model.
+        # Retriable API errors advance to the NEXT model in the chain (resetting
+        # the per-model attempt counter). Non-retriable API errors fail fast.
+        max_retries_per_model = 3
         try:
-            # Make API call with retry logic
-            max_retries = 3
-            retry_count = 0
+            for model_idx, model_name in enumerate(self.model_chain):
+                attempt = 0
+                while attempt <= max_retries_per_model:
+                    try:
+                        chain_suffix = f" (chain {model_idx + 1}/{len(self.model_chain)})" if len(self.model_chain) > 1 else ""
+                        print(f"  [API Call] {model_name}{chain_suffix} — attempt {attempt + 1}/{max_retries_per_model + 1}...")
 
-            while retry_count <= max_retries:
-                try:
-                    print(f"  [API Call] Attempt {retry_count + 1}/{max_retries + 1}...")
+                        response = self.client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                            config={
+                                'temperature': 0.3,  # Lower temperature for factual content
+                                'max_output_tokens': 8000,  # Allow for batch response
+                            }
+                        )
 
-                    response = self.client.models.generate_content(
-                        model=self.model_name,
-                        contents=prompt,
-                        config={
-                            'temperature': 0.3,  # Lower temperature for factual content
-                            'max_output_tokens': 8000,  # Allow for batch response
-                        }
-                    )
+                        # Extract and parse structured text response
+                        response_text = response.text.strip()
+                        batch_data = self._parse_structured_response(response_text)
 
-                    # Extract and parse structured text response
-                    response_text = response.text.strip()
-
-                    # Parse the structured text format
-                    batch_data = self._parse_structured_response(response_text)
-
-                    if batch_data:
-                        print(f"  ✓ Successfully generated bios for {len(batch_data)} authors")
-                        return batch_data
-                    else:
+                        if batch_data:
+                            if model_idx > 0:
+                                print(f"  ✓ Successfully generated bios for {len(batch_data)} authors on fallback model {model_name}")
+                            else:
+                                print(f"  ✓ Successfully generated bios for {len(batch_data)} authors")
+                            return batch_data
                         raise ValueError("No author data parsed from response")
 
-                except ValueError as e:
-                    print(f"  ✗ Parsing error: {str(e)}")
-                    if retry_count < max_retries:
-                        print(f"  → Retrying in 2 seconds...")
-                        time.sleep(2)
-                        retry_count += 1
-                    else:
-                        print(f"  ✗ Failed after {max_retries + 1} attempts")
+                    except ValueError as e:
+                        # Parsing problem — same model, just retry
+                        print(f"  ✗ Parsing error: {str(e)}")
+                        if attempt < max_retries_per_model:
+                            print(f"  → Retrying in 2 seconds (same model)...")
+                            time.sleep(2)
+                            attempt += 1
+                            continue
+                        print(f"  ✗ Parsing failed {max_retries_per_model + 1} times on {model_name}")
                         return {}
 
-                except Exception as e:
-                    print(f"  ✗ API error: {str(e)}")
-                    if retry_count < max_retries:
-                        print(f"  → Retrying in 2 seconds...")
-                        time.sleep(2)
-                        retry_count += 1
-                    else:
-                        print(f"  ✗ Failed after {max_retries + 1} attempts")
+                    except Exception as e:
+                        msg = str(e)
+                        retriable = (
+                            '503' in msg
+                            or 'overloaded' in msg.lower()
+                            or 'UNAVAILABLE' in msg
+                            or '429' in msg
+                            or 'RESOURCE_EXHAUSTED' in msg
+                        )
+                        print(f"  ✗ API error on {model_name}: {msg[:200]}")
+                        if not retriable:
+                            return {}
+                        if model_idx < len(self.model_chain) - 1:
+                            next_model = self.model_chain[model_idx + 1]
+                            print(f"  ⤳ Retriable error — falling back from {model_name} to {next_model}")
+                            break  # break inner while → next model in chain
+                        # Last model in chain — fall through to its own retry
+                        if attempt < max_retries_per_model:
+                            print(f"  → Retrying in 2 seconds (last model in chain)...")
+                            time.sleep(2)
+                            attempt += 1
+                            continue
+                        print(f"  ✗ Exhausted all models and retries")
                         return {}
+
+            # All models in chain exhausted without success
+            return {}
 
         except Exception as e:
             print(f"  ✗ Unexpected error: {str(e)}")

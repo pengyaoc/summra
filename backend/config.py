@@ -29,20 +29,36 @@ MAX_TOKENS_PER_MINUTE = 250000
 
 # Summary configurations
 # Note: Use model names compatible with google-genai v1beta API
+# 'model' is the primary model. 'model_fallbacks' is an ordered list tried by
+# SummaryGenerator._generate_content_with_fallback when the primary returns a
+# retriable error (503 / UNAVAILABLE / 429 / RESOURCE_EXHAUSTED). Simpler
+# callers (batch jobs, categorization) just read 'model' and ignore the chain.
 SUMMARY_CONFIGS = {
     'combined': {
         'concise_max_words': 500,
         'medium_max_words': 2500,  # Target middle of 2000-3000 range
-        'model': 'gemini-3-flash-preview',  # Used for generating concise + medium summaries together
+        'model': 'gemini-3.5-flash',  # primary: latest stable flash, free tier
+        'model_fallbacks': [
+            'gemini-3-flash-preview',  # frontier-preview, free tier
+            'gemini-2.5-flash',        # stable predecessor, free tier
+        ],
         'description': 'Combined generation of concise (500 words, no spoilers) and medium (2500 words) summaries in single API call'
     },
     'comprehensive': {
         'words_per_chapter': 1000,
         'overall_summary_words': 2500,
-        'model': 'gemini-3-flash-preview',  # Used for chapter-by-chapter summaries
+        'model': 'gemini-3.5-flash',  # primary: latest stable flash, free tier
+        'model_fallbacks': [
+            'gemini-3-flash-preview',
+            'gemini-2.5-flash',
+        ],
         'description': 'Most comprehensive - chapter-by-chapter breakdown with connections'
     }
 }
+
+# Plain-text / bulk rewrite model (modern-english translations etc.).
+# Flash-Lite: stable, free tier, lower latency, cheaper at paid tier.
+PLAIN_TEXT_MODEL = 'gemini-3.1-flash-lite'
 
 # TTS configuration (using VITS for real-time, Gemini for offline)
 TTS_OUTPUT_DIR = BASE_DIR / 'frontend' / 'static' / 'audio'

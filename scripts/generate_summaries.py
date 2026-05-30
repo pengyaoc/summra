@@ -1678,6 +1678,93 @@ class SummaryGenerator:
         )
         self.last_large_call_time = None  # Track last large API call
 
+    @staticmethod
+    def _is_retriable_error(error_message: str) -> bool:
+        """Predicate matching the same retriable signatures all 4 summary call
+        sites used: 503 / overloaded / UNAVAILABLE / 429 / RESOURCE_EXHAUSTED."""
+        msg = error_message
+        return (
+            '503' in msg
+            or 'overloaded' in msg.lower()
+            or 'UNAVAILABLE' in msg
+            or '429' in msg
+            or 'RESOURCE_EXHAUSTED' in msg
+        )
+
+    @staticmethod
+    def _retry_wait_seconds_from_error(error_message: str) -> int:
+        """Honour any 'Please retry in Ns' / 'Please retry in Nms' suggestion
+        in a 429/RESOURCE_EXHAUSTED message; otherwise fall back to defaults."""
+        if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
+            m = re.search(r'Please retry in ([\d.]+)([ms]?s?)', error_message)
+            if m:
+                value = float(m.group(1))
+                unit = m.group(2)
+                return int(value / 1000) + 1 if unit == 'ms' else int(value) + 1
+            return APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
+        return APIConstants.DEFAULT_RETRY_WAIT_SECONDS
+
+    def _generate_with_retries(self, model_name: str, contents, *, gen_config=None,
+                               log_label: str = "API call"):
+        """Single-model retry loop. Returns the SDK response on success; raises
+        the last exception on terminal failure (non-retriable or retries exhausted).
+        """
+        max_retries = APIConstants.MAX_RETRIES
+        for attempt in range(max_retries + 1):
+            try:
+                if gen_config is not None:
+                    return self.client.models.generate_content(
+                        model=model_name, contents=contents, config=gen_config
+                    )
+                return self.client.models.generate_content(
+                    model=model_name, contents=contents
+                )
+            except Exception as e:
+                error_message = str(e)
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ {log_label} failed on {model_name}: {type(e).__name__}")
+                if '429' in error_message:
+                    print(f"  → Error type: Rate limit exceeded (429)")
+                elif 'RESOURCE_EXHAUSTED' in error_message:
+                    print(f"  → Error type: Resource exhausted")
+                elif '503' in error_message:
+                    print(f"  → Error type: Service unavailable (503)")
+                else:
+                    print(f"  → Error type: {error_message[:100]}")
+
+                if self._is_retriable_error(error_message) and attempt < max_retries:
+                    wait_time = self._retry_wait_seconds_from_error(error_message)
+                    print(f"  ⏳ Retrying in {wait_time}s on {model_name} (attempt {attempt + 2}/{max_retries + 1})")
+                    time.sleep(wait_time)
+                    continue
+                if attempt > 0:
+                    print(f"  ❌ Max retries exceeded on {model_name}")
+                raise
+
+    def _generate_content_with_fallback(self, config_key: str, contents, *,
+                                        gen_config=None, log_label: str = "API call"):
+        """Try the primary model for `config_key`, then each fallback in order,
+        on retriable failure. Non-retriable errors propagate immediately so we
+        don't waste fallback budget on prompt/auth bugs."""
+        cfg = config.SUMMARY_CONFIGS[config_key]
+        chain = [cfg['model']] + list(cfg.get('model_fallbacks', []))
+        last_error = None
+        for idx, model_name in enumerate(chain):
+            try:
+                response = self._generate_with_retries(
+                    model_name, contents, gen_config=gen_config, log_label=log_label
+                )
+                if idx > 0:
+                    print(f"  ✓ Succeeded on fallback model: {model_name}")
+                return response, model_name
+            except Exception as e:
+                last_error = e
+                if not self._is_retriable_error(str(e)):
+                    raise
+                if idx < len(chain) - 1:
+                    next_model = chain[idx + 1]
+                    print(f"  ⤳ Falling back from {model_name} to {next_model}")
+        raise last_error
+
     def submit_batch_job(self, requests: List[Dict], model_name: str, display_name: str) -> str:
         """
         Submit a batch job to Gemini Batch API.
@@ -1978,64 +2065,14 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
 
         # Log input word count
         input_words = len(prompt.split())
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Generating combined summaries using {model_name}...")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Generating combined summaries using {model_name} (fallback chain enabled)...")
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-        # Make API call with retry logic for retriable errors
-        max_retries = APIConstants.MAX_RETRIES
-        retry_count = 0
-        result = None
-
-        while retry_count <= max_retries:
-            try:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Making API call (attempt {retry_count + 1}/{max_retries + 1})...")
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                result = self.clean_llm_response(response.text)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ API call successful")
-                break  # Success - exit retry loop
-            except Exception as e:
-                error_message = str(e)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ API call failed: {type(e).__name__}")
-
-                # Log error details
-                if '429' in error_message:
-                    print(f"  → Error type: Rate limit exceeded (429)")
-                elif 'RESOURCE_EXHAUSTED' in error_message:
-                    print(f"  → Error type: Resource exhausted")
-                elif '503' in error_message:
-                    print(f"  → Error type: Service unavailable (503)")
-                else:
-                    print(f"  → Error type: {error_message[:100]}")
-
-                # Check if error is retriable
-                is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
-                               'UNAVAILABLE' in error_message or '429' in error_message or
-                               'RESOURCE_EXHAUSTED' in error_message)
-
-                # Extract retry delay from error message if present
-                wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
-                if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
-                    retry_match = re.search(r'Please retry in ([\d.]+)([ms])', error_message)
-                    if retry_match:
-                        delay_value = float(retry_match.group(1))
-                        delay_unit = retry_match.group(2)
-                        wait_time = int(delay_value / 1000) + 1 if delay_unit == 'ms' else int(delay_value) + 1
-                        print(f"  → Suggested retry delay: {delay_value}{delay_unit}")
-                    else:
-                        wait_time = APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
-
-                if is_retriable and retry_count < max_retries:
-                    retry_count += 1
-                    print(f"  ⚠️  API error (retriable): Rate limit or server issue")
-                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
-                    time.sleep(wait_time)
-                else:
-                    if retry_count > 0:
-                        print(f"  ❌ Max retries exceeded")
-                    raise
+        response, used_model = self._generate_content_with_fallback(
+            'combined', prompt, log_label="combined-summary API call"
+        )
+        result = self.clean_llm_response(response.text)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ API call successful on {used_model}")
 
         # Parse the response using the shared parsing method
         return self.parse_combined_summaries_response(result, title, author)
@@ -5910,50 +5947,15 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
 
         # Log input word count
         input_words = len(prompt.split())
-        print(f"Generating concise summary using {model_name}...")
+        print(f"Generating concise summary using {model_name} (fallback chain enabled)...")
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-        # Make API call with retry logic for retriable errors
-        max_retries = APIConstants.MAX_RETRIES  # Allow retries for rate limits
-        retry_count = 0
-        result = None
-
-        while retry_count <= max_retries:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                result = self.clean_llm_response(response.text)
-                break  # Success - exit retry loop
-            except Exception as e:
-                error_message = str(e)
-
-                # Check if error is retriable (503, UNAVAILABLE, or 429 RESOURCE_EXHAUSTED)
-                is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
-                               'UNAVAILABLE' in error_message or '429' in error_message or
-                               'RESOURCE_EXHAUSTED' in error_message)
-
-                # Extract retry delay from error message if present
-                wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
-                if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
-                    # Try to extract retry delay from error message
-                    import re
-                    retry_match = re.search(r'Please retry in ([\d.]+)s', error_message)
-                    if retry_match:
-                        wait_time = int(float(retry_match.group(1))) + 1
-                    else:
-                        wait_time = APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
-
-                if is_retriable and retry_count < max_retries:
-                    retry_count += 1
-                    print(f"  ⚠️  API error (retriable): Rate limit or server issue")
-                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
-                    time.sleep(wait_time)
-                else:
-                    if retry_count > 0:
-                        print(f"  ❌ Max retries exceeded")
-                    raise
+        response, used_model = self._generate_content_with_fallback(
+            'combined', prompt, log_label="concise-summary API call"
+        )
+        result = self.clean_llm_response(response.text)
+        if used_model != config.SUMMARY_CONFIGS['combined']['model']:
+            print(f"  ✓ Concise summary generated on fallback model: {used_model}")
 
         output_words = len(result.split())
         print(f"  ← Output: {output_words:,} words")
@@ -5988,50 +5990,15 @@ Cover all major plot points, themes, and character developments in chronological
 
         # Log input word count
         input_words = len(prompt.split())
-        print(f"Generating medium summary using {model_name}...")
+        print(f"Generating medium summary using {model_name} (fallback chain enabled)...")
         print(f"  → Input: {input_words:,} words (~{len(prompt):,} chars)")
 
-        # Make API call with retry logic for retriable errors
-        max_retries = APIConstants.MAX_RETRIES  # Allow retries for rate limits
-        retry_count = 0
-        result = None
-
-        while retry_count <= max_retries:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                result = self.clean_llm_response(response.text)
-                break  # Success - exit retry loop
-            except Exception as e:
-                error_message = str(e)
-
-                # Check if error is retriable (503, UNAVAILABLE, or 429 RESOURCE_EXHAUSTED)
-                is_retriable = ('503' in error_message or 'overloaded' in error_message.lower() or
-                               'UNAVAILABLE' in error_message or '429' in error_message or
-                               'RESOURCE_EXHAUSTED' in error_message)
-
-                # Extract retry delay from error message if present
-                wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
-                if '429' in error_message or 'RESOURCE_EXHAUSTED' in error_message:
-                    # Try to extract retry delay from error message
-                    import re
-                    retry_match = re.search(r'Please retry in ([\d.]+)s', error_message)
-                    if retry_match:
-                        wait_time = int(float(retry_match.group(1))) + 1
-                    else:
-                        wait_time = APIConstants.RATE_LIMIT_RETRY_WAIT_SECONDS
-
-                if is_retriable and retry_count < max_retries:
-                    retry_count += 1
-                    print(f"  ⚠️  API error (retriable): Rate limit or server issue")
-                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
-                    time.sleep(wait_time)
-                else:
-                    if retry_count > 0:
-                        print(f"  ❌ Max retries exceeded")
-                    raise
+        response, used_model = self._generate_content_with_fallback(
+            'combined', prompt, log_label="medium-summary API call"
+        )
+        result = self.clean_llm_response(response.text)
+        if used_model != config.SUMMARY_CONFIGS['combined']['model']:
+            print(f"  ✓ Medium summary generated on fallback model: {used_model}")
 
         output_words = len(result.split())
         print(f"  ← Output: {output_words:,} words")
@@ -6209,76 +6176,38 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
         self.rate_limiter.wait_if_needed(estimated_tokens)
 
         # Log input
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Generating bulk summary for {len(chapters_batch)} chapters: {chapter_numbers}")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Generating bulk summary for {len(chapters_batch)} chapters: {chapter_numbers} (fallback chain enabled)")
         print(f"  → Input: {total_words:,} words (~{len(prompt):,} chars)")
 
-        # Make API call with retry logic for retriable errors
-        max_retries = APIConstants.MAX_RETRIES
-        retry_count = 0
-        response_text = None
+        response, used_model = self._generate_content_with_fallback(
+            'comprehensive', prompt,
+            log_label=f"bulk-chapter API call (chapters {chapter_numbers})"
+        )
+        response_text = response.text
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ API call successful for chapters {chapter_numbers} on {used_model}")
 
-        while retry_count <= max_retries:
-            try:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Making API call for chapters {chapter_numbers} (attempt {retry_count + 1}/{max_retries + 1})...")
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                response_text = response.text
+        # Log the full API response for debugging
+        try:
+            import json
+            from pathlib import Path
+            logs_dir = Path(__file__).parent.parent / "data" / "log" / "gemini_logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            log_filename = f"gemini_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}_ch{chapter_numbers[0]}-{chapter_numbers[-1]}.json"
+            log_path = logs_dir / log_filename
 
-                # Log the full API response for debugging
-                try:
-                    import json
-                    from pathlib import Path
-                    logs_dir = Path(__file__).parent.parent / "data" / "log" / "gemini_logs"
-                    logs_dir.mkdir(parents=True, exist_ok=True)
-                    log_filename = f"gemini_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}_ch{chapter_numbers[0]}-{chapter_numbers[-1]}.json"
-                    log_path = logs_dir / log_filename
+            log_data = {
+                "timestamp": datetime.now().isoformat(),
+                "chapter_numbers": chapter_numbers,
+                "model": used_model,
+                "response_text": response_text,
+                "prompt_preview": prompt[:500] + "..." if len(prompt) > 500 else prompt
+            }
 
-                    log_data = {
-                        "timestamp": datetime.now().isoformat(),
-                        "chapter_numbers": chapter_numbers,
-                        "model": model_name,
-                        "response_text": response_text,
-                        "prompt_preview": prompt[:500] + "..." if len(prompt) > 500 else prompt
-                    }
-
-                    with open(log_path, 'w', encoding='utf-8') as f:
-                        json.dump(log_data, f, indent=2, ensure_ascii=False)
-                    print(f"  → Logged full response to: {log_path}")
-                except Exception as log_error:
-                    print(f"  → Warning: Could not log response: {log_error}")
-
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ API call successful for chapters {chapter_numbers}")
-                break  # Success - exit retry loop
-            except Exception as e:
-                error_message = str(e)
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ API call failed for chapters {chapter_numbers}: {type(e).__name__}")
-
-                # Log error details
-                if '429' in error_message:
-                    print(f"  → Error type: Rate limit exceeded (429)")
-                elif 'RESOURCE_EXHAUSTED' in error_message:
-                    print(f"  → Error type: Resource exhausted")
-                elif '503' in error_message:
-                    print(f"  → Error type: Service unavailable (503)")
-                else:
-                    print(f"  → Error: {error_message[:DisplayConstants.MAX_ERROR_MESSAGE_CHARS]}")
-
-                # Check if this is a retriable error (503 or other server errors)
-                is_retriable = '503' in error_message or 'overloaded' in error_message.lower() or 'UNAVAILABLE' in error_message
-
-                if is_retriable and retry_count < max_retries:
-                    retry_count += 1
-                    wait_time = APIConstants.DEFAULT_RETRY_WAIT_SECONDS
-                    print(f"  ⚠️  API error (retriable): {error_message[:DisplayConstants.MAX_ERROR_MESSAGE_CHARS]}")
-                    print(f"  ⏳ Retrying in {wait_time} seconds... (attempt {retry_count + 1}/{max_retries + 1})")
-                    time.sleep(wait_time)
-                else:
-                    # Non-retriable error or max retries exceeded
-                    if retry_count > 0:
-                        print(f"  ❌ Max retries exceeded")
-                    raise  # Re-raise the exception
+            with open(log_path, 'w', encoding='utf-8') as f:
+                json.dump(log_data, f, indent=2, ensure_ascii=False)
+            print(f"  → Logged full response to: {log_path}")
+        except Exception as log_error:
+            print(f"  → Warning: Could not log response: {log_error}")
 
         # Safety check: ensure we got a response
         if response_text is None:
