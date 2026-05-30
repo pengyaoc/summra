@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
 sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
 
 # Import the modules we need to test
-from scripts.generate_gemini_illustrations import (
+from scripts.images.generate_gemini_illustrations import (
     GeminiImageGenerator,
     filter_eligible_chapters,
     build_chapter_illustration_prompt,
@@ -218,8 +218,8 @@ class TestGeminiIllustrations:
 
     # ==================== Sync Mode Tests ====================
 
-    @patch('scripts.generate_gemini_illustrations.save_image')
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.save_image')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_sync_mode_full_generation(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode: generate all chapters (1-10)"""
         db, book_id = temp_db
@@ -248,8 +248,8 @@ class TestGeminiIllustrations:
         second_call = mock_generator.generate_chapter_illustration.call_args_list[1]
         assert second_call.kwargs['reference_image'] is not None
 
-    @patch('scripts.generate_gemini_illustrations.save_image')
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.save_image')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_sync_mode_chapter_range_with_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode: generate chapters 1-5 (includes Chapter 1)"""
         db, book_id = temp_db
@@ -275,8 +275,8 @@ class TestGeminiIllustrations:
         assert first_call.kwargs['chapter']['chapter_number'] == 1
         assert first_call.kwargs['reference_image'] is None
 
-    @patch('scripts.generate_gemini_illustrations.save_image')
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.save_image')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_sync_mode_chapter_range_without_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode: generate chapters 5-8 (no Chapter 1)"""
         db, book_id = temp_db
@@ -311,8 +311,8 @@ class TestGeminiIllustrations:
 
     # ==================== Batch Mode Tests ====================
 
-    @patch('scripts.generate_gemini_illustrations.save_image')
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.save_image')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_batch_mode_full_generation(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode: generate all chapters (1-10)
 
@@ -355,8 +355,8 @@ class TestGeminiIllustrations:
         # Could be 9 (if Ch1 generated sync) or 10 (if Ch1 was in batch)
         assert mock_save_image.call_count in [9, 10], f"Expected 9 or 10 save calls, got {mock_save_image.call_count}"
 
-    @patch('scripts.generate_gemini_illustrations.save_image')
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.save_image')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_batch_mode_chapter_range_with_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode: generate chapters 1-5
 
@@ -398,8 +398,8 @@ class TestGeminiIllustrations:
         # If Chapter 1 doesn't exist: 4 chapters in batch (2-5 only)
         assert len(batch_requests) in [4, 5], f"Expected 4 or 5 batch requests, got {len(batch_requests)}"
 
-    @patch('scripts.generate_gemini_illustrations.save_image')
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.save_image')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_batch_mode_chapter_range_without_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode: generate chapters 5-8 (no Chapter 1 in range)
 
@@ -463,7 +463,7 @@ class TestGeminiIllustrations:
 
     # ==================== Edge Cases ====================
 
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_batch_mode_dry_run(self, mock_config, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode dry run doesn't actually generate images"""
         db, book_id = temp_db
@@ -485,7 +485,7 @@ class TestGeminiIllustrations:
         assert mock_generator.poll_batch_job.call_count == 0
         assert mock_generator.retrieve_batch_results.call_count == 0
 
-    @patch('scripts.generate_gemini_illustrations.config')
+    @patch('scripts.images.generate_gemini_illustrations.config')
     def test_sync_mode_dry_run(self, mock_config, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode dry run doesn't actually generate images"""
         db, book_id = temp_db

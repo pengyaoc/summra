@@ -17,7 +17,7 @@ import pytest
 # Add parent directories to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.generate_summaries import RateLimiter
+from scripts.content.generate_summaries import RateLimiter
 
 
 class TestRateLimiter:
@@ -80,7 +80,7 @@ class TestRateLimiter:
             limiter.wait_if_needed(estimated_tokens=100)
 
         # 4th request should trigger wait — mock sleep so the test is instant
-        with patch("scripts.generate_summaries.time.sleep") as mock_sleep:
+        with patch("scripts.content.generate_summaries.time.sleep") as mock_sleep:
             limiter.wait_if_needed(estimated_tokens=100)
 
         # Verify the wait path was taken (sleep called with a positive duration)
@@ -98,7 +98,7 @@ class TestRateLimiter:
 
         # This request would exceed token limit (8000 + 3000 > 10000)
         # Should trigger wait — mock sleep so the test is instant
-        with patch("scripts.generate_summaries.time.sleep") as mock_sleep:
+        with patch("scripts.content.generate_summaries.time.sleep") as mock_sleep:
             limiter.wait_if_needed(estimated_tokens=3000)
 
         # Verify the wait path was taken
@@ -180,7 +180,7 @@ class TestRateLimiter:
 
         # Next request with high tokens should trigger the token-limit wait
         # (15000 + 6000 > 20000). Mock sleep so the test is instant.
-        with patch("scripts.generate_summaries.time.sleep") as mock_sleep:
+        with patch("scripts.content.generate_summaries.time.sleep") as mock_sleep:
             limiter.wait_if_needed(estimated_tokens=6000)
 
         assert mock_sleep.called

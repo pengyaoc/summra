@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 import pytest
 
 

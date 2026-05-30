@@ -93,6 +93,6 @@ if __name__ == '__main__':
     ensure_directories()
 
     # This is only for development/testing
-    # In production, use: gunicorn -c gunicorn_config.py backend.app_prod:app
+    # In production, use: gunicorn -c deploy/gunicorn_config.py backend.app_prod:app
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

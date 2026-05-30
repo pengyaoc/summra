@@ -6,6 +6,44 @@
 
 ## 2026-05-29
 
+### Folder Structure Reorganization - COMPLETED
+**Status:** Completed
+**Started:** 2026-05-29
+**Completed:** 2026-05-29
+
+**Problem:** Repo root held 22 tracked `.md` files (mixing live docs like `PRD.md`/`ERD.md` with one-shot historical notes like `REFACTORING_PROGRESS.md`, `PARADISE_LOST_ISSUES.md`), 2 gunicorn configs, a stray `test_app_prod.py`, a case-collided `claude.md` vs `CLAUDE.md`, plus 70+ ungrouped scripts under `scripts/` and accumulated debris (`.coverage`, `htmlcov/`, `*.bak`, `audit_results*.csv`, raw Gutenberg `.txt` downloads).
+
+**Goal:** Group by purpose so the root is scannable, scripts are discoverable, and history is preserved.
+
+#### Layout Changes
+- **`docs/` (new)** — `PRD.md`, `ERD.md`, `USAGE.md`, `PROJECT_OVERVIEW.md` at root, plus `docs/tts/` (TTS_SETUP, TTS_STREAMING_SUMMARY), `docs/marketing/` (7 files), `docs/archive/` (8 one-shot historical docs).
+- **`scripts/` reorg** — 10 purpose-based subfolders: `content/`, `audio/`, `images/`, `categorization/`, `migrations/`, `backfills/`, `audits/`, `book_fixes/`, `blog/`, `archive/`. Every script moved into its group. Only `__init__.py` + new `README.md` (index of subfolders, cross-listings, destructive-script warnings) remain at `scripts/` root. Each subfolder is now a Python package via `__init__.py`.
+- **`deploy/`** — `gunicorn_config.py` and `gunicorn_config_e2small.py` moved alongside the existing systemd/nginx files (originally tried `config/` at root but it collided with `backend/config.py` as a namespace package and broke 21 tests — backed out and used `deploy/` instead).
+- **`tests/`** — `test_app_prod.py` moved in from root.
+- **Root** — `claude.md` → `CLAUDE.md` (two-step `git mv` to defeat case-insensitive FS); now matches what Claude Code expects on case-sensitive Linux deploys.
+
+#### Mechanical Edits
+- **42 `Path(__file__).parent.parent` → `.parent.parent.parent`** bumps in moved scripts (they walked up the tree to find the repo root; the extra subfolder broke that). Caught when `scripts/data/batch_jobs/` mysteriously appeared after a test run — `BATCH_JOBS_DIR` was resolving to `scripts/data` instead of `repo/data`. Done via `/tmp/bump_parent.py` with a regex that avoided double-bumping correct triple-parent calls.
+- **159 doc references + 104 script self-references** updated from `scripts/X.py` → `scripts/<group>/X.py` via `/tmp/update_script_paths.py` (Python script with a `{filename → subfolder}` dict — bash 3.2 on macOS doesn't have associative arrays).
+- **6 package-style imports** updated: `from scripts.generate_summaries` → `from scripts.content.generate_summaries`, same for `scripts.generate_gemini_illustrations` → `scripts.images.generate_gemini_illustrations`. Also updated the matching `patch('scripts.X.Y')` strings in 4 test files (mock targets resolve by import path, not source location).
+- **`tests/conftest.py`** auto-adds every `scripts/<group>/` and `backend/` to `sys.path`. This kept the existing bare-module style (`from generate_summaries import ...`, used in ~15 test files via per-file `sys.path.insert(..., '../scripts')`) working without editing every test.
+- **`deploy/systemd-summra*.service`** `ExecStart` now references `deploy/gunicorn_config*.py` (paths are relative to `WorkingDirectory=/var/www/summra`). Same fix in `deploy/DEPLOY.md`, `deploy/README.md`, `backend/app_prod.py` comment, `README.md` (tree diagram + script invocation examples), `setup.sh`, `CLAUDE.md` (PRD/ERD references now point at `docs/`).
+
+#### Deletions (untracked debris)
+`coverage.json`, `.coverage`, `htmlcov/`, `WORK_LOG.md.bak`, root `summra.db` (real one at `backend/summra.db`), `audit_results*.csv`, root `__pycache__/`, `data/pg18857.txt`, `data/pg209.txt` (raw Gutenberg downloads, user confirmed), `tests/*.bak` (3 files), `scripts/generate_summaries.py.bak{,2}`.
+
+#### Verification
+- `pytest tests/` → **248 passed, 1 deselected** (identical to pre-reorg baseline).
+- `from app import app` loads cleanly with 48 routes.
+- Both import styles verified at the Python REPL: bare-module `from generate_summaries import SummaryGenerator` works, and package-style `from scripts.content.generate_summaries import SummaryGenerator` works.
+- `BATCH_JOBS_DIR` resolves to `/Users/pengyao/Documents/dev/summra/data/batch_jobs` in both `scripts/content/generate_summaries.py` and `scripts/images/generate_gemini_illustrations.py`.
+- `git status` shows 42 pure renames + 52 rename-with-edit — history preserved through `git mv`.
+- e2e smoke (`node smoke.mjs` on `/`) returns 200.
+
+**Files touched:** ~120 (24 doc renames, 70 script renames, 16 modified live files including 4 tests + `conftest.py` + 2 systemd services + `README.md` + `setup.sh` + `CLAUDE.md` + deploy docs + 42 script `__file__` bumps). Not committed — staged for user review.
+
+---
+
 ### Fix Breadcrumb Layout Shift on Book Pages - COMPLETED
 **Status:** Completed
 **Started:** 2026-05-29

@@ -447,8 +447,8 @@ sudo journalctl -u summra -n 100 --no-pager
 # Test manually
 cd /var/www/summra
 source venv/bin/activate
-gunicorn -c gunicorn_config.py backend.app_prod:app  # e2-micro
-gunicorn -c gunicorn_config_e2small.py backend.app:app  # e2-small
+gunicorn -c deploy/gunicorn_config.py backend.app_prod:app  # e2-micro
+gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app  # e2-small
 ```
 
 ### 502 Bad Gateway

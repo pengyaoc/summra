@@ -230,7 +230,7 @@ sudo tail -f /var/log/nginx/error.log
 
 ### Application Won't Start
 1. Check logs: `sudo journalctl -u summra -n 50`
-2. Test manually: `cd /var/www/summra && source venv/bin/activate && gunicorn -c gunicorn_config_e2small.py backend.app:app`
+2. Test manually: `cd /var/www/summra && source venv/bin/activate && gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app`
 3. Check permissions: `ls -la /var/www/summra`
 
 ### Out of Memory

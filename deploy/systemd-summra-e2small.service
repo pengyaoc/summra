@@ -19,7 +19,7 @@ EnvironmentFile=/var/www/summra/.env
 
 # Start Gunicorn
 ExecStart=/var/www/summra/venv/bin/gunicorn \
-    -c gunicorn_config_e2small.py \
+    -c deploy/gunicorn_config_e2small.py \
     backend.app:app
 
 # Restart policy
