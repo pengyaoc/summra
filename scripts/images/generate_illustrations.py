@@ -1326,7 +1326,8 @@ def generate_chapter_illustrations_for_book(db: Database, generator: GeminiImage
         previous_chapter_summary = None
 
         # Try to load previous illustration from filesystem if this isn't the first chapter
-        if chapter_num > 1 and reference_image is None:
+        # (skip for backends that don't use reference images)
+        if generator.supports_reference_image and chapter_num > 1 and reference_image is None:
             # Load the immediately preceding chapter's illustration from originals first
             prev_img_path = illustrations_originals_dir / f"{chapter_num - 1}.png"
             if not prev_img_path.exists():
@@ -1376,8 +1377,9 @@ def generate_chapter_illustrations_for_book(db: Database, generator: GeminiImage
             print(f"  ℹ️  Original illustration saved to {img_path}")
             print(f"  ℹ️  Run reduce_illustration_resolution.py to create optimized versions")
 
-            # Save the generated image as reference for next chapter
-            reference_image = image_data
+            # Save the generated image as reference for next chapter (no-op for Imagen)
+            if generator.supports_reference_image:
+                reference_image = image_data
             # Track successfully generated chapter
             generated_chapters.append(chapter_num)
         else:
