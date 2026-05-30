@@ -115,8 +115,49 @@ BATCH_MAX_WAIT_HOURS = 24  # Maximum time to wait for batch completion
 BATCH_JOBS_DIR = Path(__file__).parent.parent.parent / "data" / "batch_jobs"  # Directory to store batch job state
 
 
-class GeminiImageGenerator:
+class ImageGeneratorBase:
+    """Common interface for image generation backends.
+
+    Subclasses must set the three class-level attributes and implement
+    generate_cover_image / generate_chapter_illustration with the signatures
+    declared below. The character_brief and reference_image kwargs are
+    advisory — backends that don't use them must accept and ignore them
+    so the caller doesn't need to branch.
+    """
+
+    name: str = ""                          # "gemini" | "imagen"
+    supports_batch: bool = False
+    supports_reference_image: bool = False
+
+    def generate_cover_image(
+        self,
+        book_title: str,
+        book_author: str,
+        medium_summary: str,
+        dry_run: bool = False,
+    ) -> Tuple[Optional[bytes], str]:
+        raise NotImplementedError
+
+    def generate_chapter_illustration(
+        self,
+        book_title: str,
+        book_author: str,
+        medium_summary: str,
+        chapter: Dict,
+        previous_chapter_summary: Optional[str] = None,
+        reference_image: Optional[bytes] = None,
+        character_brief: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Tuple[Optional[bytes], str]:
+        raise NotImplementedError
+
+
+class GeminiImageGenerator(ImageGeneratorBase):
     """Handler for generating images using Gemini image models"""
+
+    name = "gemini"
+    supports_batch = True
+    supports_reference_image = True
 
     def __init__(self, api_key: str, model: str = DEFAULT_IMAGE_MODEL):
         """Initialize the Gemini image generator
@@ -234,6 +275,7 @@ Generate ONE high-quality, professional book cover."""
                                      medium_summary: str, chapter: Dict,
                                      previous_chapter_summary: Optional[str] = None,
                                      reference_image: Optional[bytes] = None,
+                                     character_brief: Optional[str] = None,
                                      dry_run: bool = False) -> Tuple[Optional[bytes], str]:
         """Generate illustration for a single chapter
 
@@ -249,6 +291,9 @@ Generate ONE high-quality, professional book cover."""
         Returns:
             Tuple of (image bytes or None if failed, prompt text)
         """
+        # character_brief is unused on the Gemini path — reference images carry
+        # cross-chapter consistency. Accepted for ImageGeneratorBase interface parity.
+        _ = character_brief
         chapter_num = chapter['chapter_number']
 
         # Build prompt using shared function

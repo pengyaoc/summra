@@ -508,5 +508,23 @@ class TestGeminiIllustrations:
             assert call.kwargs['dry_run'] is True
 
 
+class TestImageGeneratorBaseInterface:
+    """ImageGeneratorBase contract — both subclasses must expose name and capability flags."""
+
+    def test_gemini_generator_attributes(self):
+        from scripts.images.generate_illustrations import GeminiImageGenerator
+        gen = GeminiImageGenerator(api_key="fake-key", model="gemini-3-pro-image-preview")
+        assert gen.name == "gemini"
+        assert gen.supports_batch is True
+        assert gen.supports_reference_image is True
+
+    def test_gemini_chapter_signature_accepts_character_brief(self):
+        """Gemini ignores character_brief but accepts the kwarg for interface parity."""
+        import inspect
+        from scripts.images.generate_illustrations import GeminiImageGenerator
+        sig = inspect.signature(GeminiImageGenerator.generate_chapter_illustration)
+        assert "character_brief" in sig.parameters
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
