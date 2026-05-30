@@ -1,68 +1,43 @@
 #!/usr/bin/env python3
-"""
-Batch generate book covers and chapter illustrations using Gemini image models
+"""Batch generate book covers and chapter illustrations.
 
-This script supports two Gemini image generation models:
-1. gemini-3-pro-image-preview (default): High quality, 4K for covers, 2K for chapters
-2. gemini-2.5-flash-image: Faster, lower cost, auto resolution (aspect ratio 2:3)
+Default backend (--provider imagen):
+    Imagen 4 fallback chain — imagen-4.0-ultra-generate-001 → imagen-4.0-generate-001
+    → imagen-4.0-fast-generate-001. Each image attempts Ultra first and falls
+    through to the next tier only on quota / rate-limit / 5xx errors. Content-policy
+    and bad-prompt errors surface immediately. Aspect ratio "3:4". Cross-chapter
+    character consistency comes from a per-book "character brief" cached under
+    data/character_briefs/{book_id}.txt (auto-built on first use via gemini-2.5-flash).
 
-Features:
-- Book cover images at 4K resolution (4096x6144 @ 2:3) for highest quality
-- Chapter illustrations at 2K resolution (2048x3072 @ 2:3) for balanced quality/cost
-- Character consistency via reference images from Chapter 1
-- Art style continuity across generations
-- Previous chapter context for narrative flow
-- Batch API support for 50% cost savings on both covers and chapter illustrations
-
-Processing Modes:
-1. Async (default): Submits requests as async batch job via Batch API
-   - 50% cost reduction
-   - Typical completion: 1-4 hours for 100 chapters
-   - For chapters: Chapter 1 generated sync as reference for other chapters
-   - For covers: All covers generated asynchronously
-2. Synchronous (--sync-mode): Generates one at a time with live progress
-   - Costs 2x more than async mode
-   - Immediate results with live progress feedback
+Legacy backend (--provider gemini):
+    Original Gemini 3 Pro Image / 2.5 Flash Image path. Supports reference-image
+    character consistency and an async Batch API (50% cost reduction). Kept for
+    rollback now that the Gemini image models are no longer available on the free
+    tier. The Gemini batch helpers remain in this file but are dormant unless
+    --provider gemini is set.
 
 Usage:
-    # Generate cover only (default: async mode with 50% cost savings)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53
+    # Default (Imagen 4 sync, with fallback chain)
+    python scripts/images/generate_illustrations.py --book-id 53
+    python scripts/images/generate_illustrations.py --book-id 53 --with-chapters
+    python scripts/images/generate_illustrations.py --book-id 53 --chapters-only --chapter-range 2-50
+    python scripts/images/generate_illustrations.py --book-ids 53,54,55
+    python scripts/images/generate_illustrations.py --batch-all
 
-    # Generate cover with sync mode for immediate results (costs 2x more)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --sync-mode
+    # Rollback to Gemini (async batch is the default for Gemini)
+    python scripts/images/generate_illustrations.py --book-id 53 --provider gemini
+    python scripts/images/generate_illustrations.py --book-id 53 --provider gemini --sync-mode
+    python scripts/images/generate_illustrations.py --book-id 53 --provider gemini --model gemini-2.5-flash-image
+    python scripts/images/generate_illustrations.py --provider gemini --list-jobs
+    python scripts/images/generate_illustrations.py --provider gemini --resume data/batch_jobs/book_47_*.json
 
-    # Use faster flash model (async mode is default)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --model gemini-2.5-flash-image
+    # Dry run
+    python scripts/images/generate_illustrations.py --book-id 53 --dry-run
 
-    # Generate covers for multiple books (async mode is default)
-    python scripts/images/generate_gemini_illustrations.py --book-ids 53,54,55
-
-    # Generate cover AND chapter illustrations (async mode)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --with-chapters
-
-    # Generate cover AND chapter illustrations (sync mode)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --with-chapters --sync-mode
-
-    # Generate chapter illustrations only, skip cover (async mode)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --chapters-only
-
-    # Generate specific chapters (uses existing Chapter 1 if available)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --chapters-only --chapter-range 2-50
-
-    # Batch process all books missing illustrations (async mode)
-    python scripts/images/generate_gemini_illustrations.py --batch-all
-
-    # Dry run to see what would be generated
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --dry-run
-
-    # Customize batch polling interval (for async mode)
-    python scripts/images/generate_gemini_illustrations.py --book-id 53 --batch-poll-interval 60
-
-    # List pending batch jobs
-    python scripts/images/generate_gemini_illustrations.py --list-jobs
-
-    # Resume an interrupted batch job
-    python scripts/images/generate_gemini_illustrations.py --resume data/batch_jobs/book_47_1234567890.json
+Notes:
+    - --sync-mode / --resume / --list-jobs / non-default --batch-poll-interval require
+      --provider gemini and will error out under --provider imagen.
+    - --model is ignored (with a warning) under --provider imagen.
 """
 
 import sys
