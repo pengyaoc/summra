@@ -1,63 +1,81 @@
-# Summra Production Deployment Guide (GCP e2-micro)
+# Summra Production Deployment Guide
 
-Complete step-by-step guide for deploying Summra to Google Cloud Platform e2-micro instance (1GB RAM, Debian 12).
+Complete guide for deploying Summra to Google Cloud Platform. Covers both e2-micro (FREE) and e2-small (~$13/month) instance types.
 
 ---
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Initial VM Setup](#initial-vm-setup)
-3. [DNS Configuration](#dns-configuration)
-4. [Static IP Setup](#static-ip-setup)
-5. [Deployment Steps](#deployment-steps)
-6. [Nginx Configuration](#nginx-configuration)
-7. [SSL Certificate Setup](#ssl-certificate-setup)
-8. [Service Management](#service-management)
-9. [Troubleshooting](#troubleshooting)
-10. [Common Issues](#common-issues)
+1. [Instance Types](#instance-types)
+2. [Prerequisites](#prerequisites)
+3. [Create GCP Instance](#create-gcp-instance)
+4. [Static IP & DNS](#static-ip--dns)
+5. [Deploy Application](#deploy-application)
+6. [Upload Data Files](#upload-data-files)
+7. [Nginx Configuration](#nginx-configuration)
+8. [SSL Certificate Setup](#ssl-certificate-setup)
+9. [SSL Auto-Renewal](#ssl-auto-renewal)
+10. [Service Management](#service-management)
+11. [Monitoring & Maintenance](#monitoring--maintenance)
+12. [Troubleshooting](#troubleshooting)
+13. [Security](#security)
+14. [Backup Strategy](#backup-strategy)
+15. [Cost & Upgrade Path](#cost--upgrade-path)
+
+---
+
+## Instance Types
+
+| Instance | Monthly Cost | RAM | vCPU | TTS | Best For |
+|----------|-------------|-----|------|-----|----------|
+| **e2-micro** | FREE* | 1 GB | 0.25-2 | No | Free tier, testing |
+| **e2-small** | ~$13 | 2 GB | 2 | Yes | Production |
+| **e2-medium** | ~$25 | 4 GB | 2 | Yes | Heavy traffic |
+
+*e2-micro is free in us-central1, us-west1, or us-east1 (1 instance per billing account)
+
+### Architecture
+
+```
+Internet
+    |
+Nginx (Port 80/443)
+    ├── Static files → /var/www/summra/frontend/static/
+    ├── API requests → Gunicorn (Port 5000)
+    └── TTS requests → Gunicorn (Port 5000, 5min timeout)
+           |
+    Gunicorn (1-2 workers)
+           |
+    Flask Application
+           |
+    ├── SQLite Database
+    ├── Gemini API (summaries)
+    └── TTS Model (audio generation, e2-small only)
+```
 
 ---
 
 ## Prerequisites
 
-### Local Machine Requirements
+**Local machine:**
+- `gcloud` CLI installed and authenticated
 - Git installed
-- SSH access configured
-- GitHub personal access token (if using private repo)
-- Access to domain DNS settings
 
-### GCP Requirements
+**GCP:**
 - GCP account with billing enabled
-- e2-micro instance created (Debian 12 bookworm recommended)
-- Project with Compute Engine API enabled
-- gcloud CLI installed (optional, for command-line management)
+- Compute Engine API enabled
 
-### Domain Requirements
-- Domain name registered
-- Access to DNS management console
+**Domain:**
+- Domain name registered with DNS access
 
 ---
 
-## Initial VM Setup
+## Create GCP Instance
 
-### 1. Create GCP e2-micro Instance
+### e2-micro (FREE)
 
-**Via GCP Console:**
-1. Go to Compute Engine → VM Instances
-2. Click "Create Instance"
-3. Configure:
-   - **Name**: `summra-instance` (or your choice)
-   - **Region**: Choose closest to your users (e.g., `us-west1`)
-   - **Zone**: Any zone in selected region (e.g., `us-west1-b`)
-   - **Machine type**: `e2-micro` (1 vCPU, 1GB RAM)
-   - **Boot disk**: Debian GNU/Linux 12 (bookworm), 10GB standard persistent disk
-   - **Firewall**: Check "Allow HTTP traffic" and "Allow HTTPS traffic"
-4. Click "Create"
-
-**Via gcloud CLI:**
 ```bash
-gcloud compute instances create summra-instance \
+gcloud compute instances create summra \
     --machine-type=e2-micro \
     --zone=us-west1-b \
     --image-family=debian-12 \
@@ -66,272 +84,21 @@ gcloud compute instances create summra-instance \
     --tags=http-server,https-server
 ```
 
-### 2. SSH Access
+### e2-small (Recommended)
 
 ```bash
-# Via gcloud
-gcloud compute ssh summra-instance --zone=us-west1-b
-
-# Or via SSH with external IP
-ssh username@EXTERNAL_IP
-```
-
----
-
-## DNS Configuration
-
-### Critical: DNS Must Point to Correct IP
-
-**Problem:** If your VM has an ephemeral (temporary) IP, it changes every time the VM restarts, breaking DNS.
-
-**Solution Options:**
-
-#### Option A: Reserve Static IP (Recommended)
-
-**Via GCP Console:**
-1. Go to VPC Network → IP Addresses
-2. Find your VM's current external IP
-3. Click the three dots → "Reserve"
-4. Name: `summra-static-ip`
-5. Confirm reservation
-
-**Via gcloud:**
-```bash
-# Reserve current IP as static
-gcloud compute addresses create summra-static-ip \
-    --addresses=YOUR_CURRENT_IP \
-    --region=us-west1
-
-# Detach current ephemeral IP
-gcloud compute instances delete-access-config summra-instance \
+gcloud compute instances create summra \
+    --machine-type=e2-small \
     --zone=us-west1-b \
-    --access-config-name="External NAT"
-
-# Attach static IP
-gcloud compute instances add-access-config summra-instance \
-    --zone=us-west1-b \
-    --access-config-name="External NAT" \
-    --address=summra-static-ip
+    --image-family=debian-12 \
+    --image-project=debian-cloud \
+    --boot-disk-size=50GB \
+    --tags=http-server,https-server
 ```
 
-#### Option B: Dynamic DNS Updates
-
-If you don't want to pay for static IP (~$3/month when VM is off):
-- Set up a cron job to update DNS when IP changes
-- Use a dynamic DNS service
-- Accept that you'll need to update DNS manually after restarts
-
-### Configure DNS A Record
-
-Point your domain to the VM's external IP:
-
-**Example for subdomain:**
-```
-Type: A
-Name: summra
-Value: YOUR_VM_EXTERNAL_IP (e.g., 34.82.3.27)
-TTL: 300 (5 minutes for faster propagation during setup)
-```
-
-**Verify DNS propagation:**
-```bash
-# Check from local machine
-dig +short summra.yourdomain.com
-nslookup summra.yourdomain.com
-
-# Should return your VM's IP address
-```
-
-**⚠️ CRITICAL:** Wait for DNS to propagate (5-30 minutes) before running certbot for SSL.
-
----
-
-## Static IP Setup
-
-### Why You Need a Static IP
-
-**Problem:**
-- Ephemeral IPs change when VM restarts/stops
-- Breaks DNS configuration
-- SSL certificates fail
-- Service becomes unreachable
-
-**Costs:**
-- Static IP while VM is running: **FREE**
-- Static IP while VM is stopped: **~$3/month** (to prevent this, delete static IP before stopping VM for extended periods)
-
-### Reserve Static IP (Detailed Steps)
-
-1. **Check current IP:**
-   ```bash
-   # On VM
-   curl ifconfig.me
-
-   # Or from GCP console
-   gcloud compute instances describe summra-instance --zone=us-west1-b | grep natIP
-   ```
-
-2. **Reserve it:**
-   - Go to VPC Network → External IP addresses
-   - Find your ephemeral IP
-   - Click "Type" column dropdown → "Static"
-   - Enter name: `summra-static-ip`
-   - Confirm
-
-3. **Verify:**
-   ```bash
-   gcloud compute addresses list
-   # Should show your IP as RESERVED
-   ```
-
----
-
-## Deployment Steps
-
-### 1. Install Git (if not already installed)
+### Configure Firewall
 
 ```bash
-# Update system
-sudo apt update
-
-# Install git
-sudo apt install -y git
-
-# Verify
-git --version
-```
-
-### 2. Clone Repository
-
-**For public repositories:**
-```bash
-cd /var/www
-sudo mkdir -p summra
-sudo chown $USER:$USER summra
-git clone https://github.com/yourusername/summra.git summra
-```
-
-**For private repositories (requires personal access token):**
-
-1. **Create GitHub Personal Access Token:**
-   - Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
-   - Click "Generate new token (classic)"
-   - Select scopes: `repo` (full control of private repositories)
-   - Generate and copy token (you won't see it again!)
-
-2. **Clone with token:**
-   ```bash
-   cd /var/www
-   sudo mkdir -p summra
-   sudo chown $USER:$USER summra
-   git clone https://YOUR_TOKEN@github.com/yourusername/summra.git summra
-   ```
-
-**⚠️ Common Issue:** Permission denied errors
-```bash
-# Fix ownership
-sudo chown -R $USER:$USER /var/www/summra
-```
-
-### 3. Fix Line Endings (if deploying from Windows)
-
-**Problem:** Setup script may have Windows CRLF line endings that cause execution errors.
-
-**Symptoms:**
-```bash
--bash: ./deploy/setup-e2micro.sh: cannot execute: required file not found
-```
-
-**Fix:**
-```bash
-cd /var/www/summra
-
-# Install dos2unix
-sudo apt install -y dos2unix
-
-# Convert line endings
-dos2unix deploy/setup-e2micro.sh
-
-# Make executable
-chmod +x deploy/setup-e2micro.sh
-```
-
-### 4. Run Setup Script
-
-```bash
-cd /var/www/summra
-./deploy/setup-e2micro.sh
-```
-
-**Script prompts for:**
-- Domain name (e.g., `summra.yourdomain.com`)
-- Gemini API key (for LLM summaries)
-
-**What the script does:**
-1. Detects OS (Debian 12 or Ubuntu 22.04)
-2. Updates system packages
-3. Installs Python, Nginx, dependencies
-4. Creates virtual environment
-5. Installs Python packages (without TTS to save memory)
-6. Sets up systemd service
-7. Configures Nginx
-8. Enables 1GB swap file
-9. Attempts to configure firewall (may fail - see below)
-10. Starts services
-
-**⚠️ Expected Failure: UFW Firewall**
-
-The script tries to configure UFW firewall, which isn't installed by default on Debian:
-
-```
-sudo: ufw: command not found
-```
-
-**This is OK!** GCP uses its own firewall. Continue to next section.
-
-### 5. Fix File Permissions
-
-The setup script may set restrictive permissions that prevent the app from writing logs/data.
-
-```bash
-# Fix ownership to www-data (nginx user)
-sudo chown -R www-data:www-data /var/www/summra
-
-# Ensure app can write to data directories
-sudo chmod -R 775 /var/www/summra/data
-sudo chmod -R 775 /var/www/summra/frontend/static/audio
-
-# Allow your user to manage git
-sudo chown -R $USER:$USER /var/www/summra/.git
-```
-
-### 6. Configure GCP Firewall
-
-**⚠️ CRITICAL:** Without this, your site won't be accessible from the internet.
-
-**Via GCP Console (Recommended):**
-
-1. Go to: https://console.cloud.google.com/networking/firewalls/list
-2. Click "CREATE FIREWALL RULE"
-3. Configure rule 1 (HTTP):
-   - Name: `allow-http`
-   - Targets: `All instances in the network`
-   - Source IPv4 ranges: `0.0.0.0/0`
-   - Protocols and ports: TCP `80`
-   - Click "CREATE"
-
-4. Click "CREATE FIREWALL RULE" again
-5. Configure rule 2 (HTTPS):
-   - Name: `allow-https`
-   - Targets: `All instances in the network`
-   - Source IPv4 ranges: `0.0.0.0/0`
-   - Protocols and ports: TCP `443`
-   - Click "CREATE"
-
-**Via gcloud CLI:**
-
-```bash
-# From local machine with gcloud installed
 gcloud compute firewall-rules create allow-http \
     --allow tcp:80 \
     --source-ranges 0.0.0.0/0 \
@@ -343,135 +110,145 @@ gcloud compute firewall-rules create allow-https \
     --description "Allow HTTPS traffic"
 ```
 
-**Verify firewall rules:**
+---
+
+## Static IP & DNS
+
+### Reserve Static IP
+
+Without a static IP, the VM's IP changes on every restart, breaking DNS.
+
 ```bash
-gcloud compute firewall-rules list | grep allow-http
+# Reserve current IP as static
+gcloud compute addresses create summra-static-ip \
+    --addresses=$(gcloud compute instances describe summra --zone=us-west1-b --format='get(networkInterfaces[0].accessConfigs[0].natIP)') \
+    --region=us-west1
+
+# Verify
+gcloud compute addresses list
 ```
 
-**Test connectivity:**
+**Cost:** FREE while VM is running, ~$3/month while VM is stopped.
+
+### Configure DNS
+
+Create an A record pointing your domain to the VM's external IP:
+
+```
+Type: A
+Name: @ (or subdomain)
+Value: YOUR_VM_EXTERNAL_IP
+TTL: 300
+```
+
+**Verify propagation (wait 5-30 minutes):**
 ```bash
-# From local machine
-curl http://YOUR_VM_IP/health
-# Should return: {"status":"healthy"}
+dig +short summrabook.com
+```
+
+---
+
+## Deploy Application
+
+### SSH into Instance
+
+```bash
+gcloud compute ssh summra --zone=us-west1-b --project=YOUR_PROJECT_ID
+```
+
+**If SSH fails with "SSH authentication has failed":**
+```bash
+gcloud compute ssh summra --zone=us-west1-b --project=YOUR_PROJECT_ID --force-key-file-overwrite
+```
+
+### Upload and Run Setup
+
+**From local machine:**
+```bash
+cd /path/to/summra
+gcloud compute scp --recurse . summra:/tmp/summra --zone=us-west1-b
+```
+
+**On the VM:**
+```bash
+sudo mkdir -p /var/www/summra
+sudo chown $USER:$USER /var/www/summra
+cp -r /tmp/summra/* /var/www/summra/
+cd /var/www/summra
+
+# For e2-micro (no TTS)
+chmod +x deploy/setup-e2micro.sh
+./deploy/setup-e2micro.sh
+
+# For e2-small (with TTS)
+chmod +x deploy/setup-e2small.sh
+./deploy/setup-e2small.sh
+```
+
+The script prompts for domain name and Gemini API key, then automatically installs dependencies, creates the Python venv, configures Nginx, sets up the systemd service, enables swap, and starts the application.
+
+### Fix Permissions
+
+```bash
+sudo chown -R www-data:www-data /var/www/summra
+sudo chmod -R 775 /var/www/summra/data
+sudo chmod -R 775 /var/www/summra/frontend/static/audio
+sudo chown -R $USER:$USER /var/www/summra/.git
+```
+
+---
+
+## Upload Data Files
+
+**From local machine:**
+```bash
+cd /path/to/summra
+
+# Database
+gcloud compute scp data/database.db summra:/var/www/summra/data/ --zone=us-west1-b
+
+# Audio files
+gcloud compute scp --recurse frontend/static/audio/ summra:/var/www/summra/frontend/static/ --zone=us-west1-b
+
+# Cover images
+gcloud compute scp --recurse frontend/static/covers/ summra:/var/www/summra/frontend/static/ --zone=us-west1-b
+
+# Fix permissions after upload
+gcloud compute ssh summra --zone=us-west1-b -- \
+    "sudo chown -R www-data:www-data /var/www/summra/data /var/www/summra/frontend/static"
 ```
 
 ---
 
 ## Nginx Configuration
 
-### Understanding the Config Structure
+### Config Structure
 
-Nginx config is split across multiple files:
-- `/etc/nginx/nginx.conf` - Main config
-- `/etc/nginx/sites-available/summra` - Summra site config
-- `/etc/nginx/sites-enabled/summra` - Symlink to enable site
+- Main config: `/etc/nginx/sites-available/summra`
+- Common config: `/etc/nginx/snippets/summra-common.conf`
+- Enabled link: `/etc/nginx/sites-enabled/summra`
 
-### Verify Nginx Setup
+### Verify Setup
 
 ```bash
-# Check if config exists
-cat /etc/nginx/sites-available/summra
-
-# Check if it's enabled
-ls -la /etc/nginx/sites-enabled/ | grep summra
+# Ensure server_name is set (required for SSL)
+grep server_name /etc/nginx/sites-available/summra
 
 # Test config syntax
 sudo nginx -t
 
-# Check Nginx status
-sudo systemctl status nginx
+# Test locally
+curl http://localhost/health
 ```
 
-### Fix Missing server_name (Required for SSL)
+### If server_name is Missing
 
-**Problem:** Certbot can't install SSL certificates without `server_name` directive.
-
-**Check current config:**
-```bash
-cat /etc/nginx/sites-available/summra
-```
-
-**Should contain:**
-```nginx
-server {
-    listen 80;
-    server_name summra.yourdomain.com;  # <-- MUST BE PRESENT
-
-    # Serve static files directly
-    location /static/ {
-        alias /var/www/summra/frontend/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location /covers/ {
-        alias /var/www/summra/frontend/static/covers/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location /audio/ {
-        alias /var/www/summra/frontend/static/audio/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Proxy all other requests to Gunicorn
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeout settings
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-}
-```
-
-**If `server_name` is missing, add it:**
 ```bash
 sudo nano /etc/nginx/sites-available/summra
-```
+# Add after "listen 80;":
+#   server_name summrabook.com www.summrabook.com;
 
-Add this line after `listen 80;`:
-```nginx
-server_name summra.yourdomain.com;
-```
-
-**Reload Nginx:**
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### Test Nginx Locally
-
-```bash
-# Test root endpoint
-curl http://localhost/
-
-# Test API endpoint
-curl http://localhost/health
-
-# Test static files
-curl -I http://localhost/static/css/style.css
-
-# Check what's listening on port 80
-sudo netstat -tlnp | grep :80
-# Should show: nginx
-```
-
-### Test Nginx Externally
-
-```bash
-# From local machine
-curl http://YOUR_VM_IP/
-curl http://YOUR_VM_IP/health
-curl http://YOUR_VM_IP/api/books
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
@@ -480,199 +257,182 @@ curl http://YOUR_VM_IP/api/books
 
 ### Prerequisites Checklist
 
-Before running certbot, verify ALL of these:
+Before running certbot, verify:
 
-- [ ] DNS A record points to correct IP
-- [ ] DNS has propagated (wait 5-30 minutes after DNS change)
-- [ ] GCP firewall allows ports 80 and 443
+- [ ] DNS A record points to VM's IP: `dig +short summrabook.com`
+- [ ] HTTP works externally: `curl http://summrabook.com/health`
 - [ ] Nginx is running: `sudo systemctl status nginx`
 - [ ] Nginx config has `server_name` directive
-- [ ] HTTP works: `curl http://YOUR_DOMAIN/health` returns 200
-- [ ] No other service is using port 443
+- [ ] Ports 80 and 443 open in GCP firewall
 
-### Install Certbot
+### Install Certificate
 
 ```bash
-sudo apt update
 sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d summrabook.com -d www.summrabook.com
 ```
-
-### Run Certbot
-
-```bash
-sudo certbot --nginx -d summra.yourdomain.com
-```
-
-**Prompts:**
-1. Email address: `your@email.com` (for renewal reminders)
-2. Agree to Terms of Service: `Y`
-3. Share email with EFF: `Y` or `N` (optional)
-
-### Successful Output
-
-```
-Successfully received certificate.
-Certificate is saved at: /etc/letsencrypt/live/summra.yourdomain.com/fullchain.pem
-Key is saved at:         /etc/letsencrypt/live/summra.yourdomain.com/privkey.pem
-This certificate expires on 2026-XX-XX.
-Certbot has set up a scheduled task to automatically renew this certificate.
-
-Deploying certificate
-Successfully deployed certificate for summra.yourdomain.com to /etc/nginx/sites-enabled/summra
-Congratulations! You have successfully enabled HTTPS on https://summra.yourdomain.com
-```
-
-### If Certbot Can't Install Certificate
-
-**Error:**
-```
-Could not automatically find a matching server block for summra.yourdomain.com.
-Set the `server_name` directive to use the Nginx installer.
-```
-
-**Fix:**
-1. Edit Nginx config to add `server_name`:
-   ```bash
-   sudo nano /etc/nginx/sites-available/summra
-   # Add: server_name summra.yourdomain.com;
-   ```
-
-2. Test and reload Nginx:
-   ```bash
-   sudo nginx -t
-   sudo systemctl reload nginx
-   ```
-
-3. Install certificate manually:
-   ```bash
-   sudo certbot install --cert-name summra.yourdomain.com
-   ```
 
 ### Verify SSL
 
 ```bash
-# From local machine
-curl https://summra.yourdomain.com/health
-
-# Check certificate expiry
+curl https://summrabook.com/health
 sudo certbot certificates
-
-# Test SSL configuration
-curl -I https://summra.yourdomain.com
 ```
 
-### Auto-Renewal
+---
 
-Certbot automatically sets up a systemd timer for renewal.
+## SSL Auto-Renewal
 
-**Verify auto-renewal:**
+Let's Encrypt certificates expire every 90 days. Certbot's systemd timer handles auto-renewal.
+
+### Verify Auto-Renewal is Active
+
 ```bash
-# Check timer is active
 sudo systemctl status certbot.timer
+sudo systemctl list-timers | grep certbot
+```
 
-# Dry run renewal test
+### Enable Timer (if inactive)
+
+```bash
+sudo systemctl enable --now certbot.timer
+```
+
+### Add Nginx Reload Hook
+
+Certbot renews the cert but nginx must reload to pick up the new cert:
+
+```bash
+sudo sh -c 'echo "#!/bin/bash
+systemctl reload nginx" > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh'
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+```
+
+### Test Renewal
+
+```bash
 sudo certbot renew --dry-run
 ```
 
-**Manual renewal (if needed):**
+### Renewal Troubleshooting
+
+**Problem: "Could not bind TCP port 80"**
+
+The `summrabook.com` cert must use the **nginx authenticator**, not standalone. If renewal fails with port 80 in use:
+
 ```bash
-sudo certbot renew
+# Renew using the nginx plugin (works while nginx is running)
+sudo certbot certonly --nginx -d summrabook.com -d www.summrabook.com --force-renewal
 sudo systemctl reload nginx
+```
+
+**Problem: Old/dead certificates blocking renewal**
+
+If `certbot renew` hangs on a cert with dead DNS (e.g., an old domain that no longer points to this server):
+
+```bash
+# List all certificates
+sudo certbot certificates
+
+# Delete the dead certificate
+sudo certbot delete --cert-name old-domain.example.com --non-interactive
+
+# Retry renewal
+sudo certbot renew --dry-run
+```
+
+**Problem: "Another instance of Certbot is already running"**
+
+```bash
+sudo pkill -f certbot
+sudo rm -f /var/lib/letsencrypt/.certbot.lock
+```
+
+### Manual Renewal
+
+```bash
+sudo certbot renew && sudo systemctl reload nginx
+```
+
+### Check Certificate Expiry
+
+```bash
+sudo certbot certificates
+# Or from any machine:
+echo | openssl s_client -connect summrabook.com:443 2>/dev/null | openssl x509 -noout -dates
 ```
 
 ---
 
 ## Service Management
 
-### Summra Application Service
-
-The app runs as a systemd service managed by Gunicorn.
-
-**Service file location:** `/etc/systemd/system/summra.service`
-
-### Common Commands
+### Summra Application
 
 ```bash
-# Check status
-sudo systemctl status summra
-
-# Start service
 sudo systemctl start summra
-
-# Stop service
 sudo systemctl stop summra
+sudo systemctl restart summra    # After code changes
+sudo systemctl status summra
+sudo systemctl enable summra     # Enable on boot
 
-# Restart service (after code changes)
-sudo systemctl restart summra
-
-# Enable on boot
-sudo systemctl enable summra
-
-# Disable on boot
-sudo systemctl disable summra
-
-# View logs (last 50 lines)
-sudo journalctl -u summra -n 50 --no-pager
-
-# Follow logs in real-time
-sudo journalctl -u summra -f
-
-# View logs since last boot
-sudo journalctl -u summra -b
+# Logs
+sudo journalctl -u summra -f            # Follow real-time
+sudo journalctl -u summra -n 100        # Last 100 lines
+sudo journalctl -u summra --since today  # Today's logs
 ```
 
-### Check Service Health
+### Nginx
 
 ```bash
-# Check if process is running
-ps aux | grep gunicorn
+sudo nginx -t                    # Test config
+sudo systemctl reload nginx      # Reload config (no downtime)
+sudo systemctl restart nginx     # Full restart
+sudo systemctl status nginx
 
-# Check memory usage
-sudo systemctl status summra | grep Memory
-
-# Check port binding
-sudo netstat -tlnp | grep 5000
-# Should show: gunicorn listening on 127.0.0.1:5000
+# Logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
 ```
 
-### After Code Changes
+### Update Application Code
 
 ```bash
 cd /var/www/summra
-
-# Pull latest changes
 git pull origin main
-
-# Restart service to load new code
 sudo systemctl restart summra
-
-# Check it started successfully
-sudo systemctl status summra
-
-# Test endpoints
 curl http://localhost:5000/health
 ```
 
-### Nginx Service
+---
+
+## Monitoring & Maintenance
+
+### Health Check
 
 ```bash
-# Check status
-sudo systemctl status nginx
+# Services running
+sudo systemctl is-active summra && echo "Summra: OK" || echo "Summra: DOWN"
+sudo systemctl is-active nginx && echo "Nginx: OK" || echo "Nginx: DOWN"
 
-# Test config before reloading
-sudo nginx -t
+# Ports listening
+sudo netstat -tlnp | grep -E ':(80|443|5000)\s'
 
-# Reload (for config changes)
-sudo systemctl reload nginx
+# Endpoint test
+curl -s http://localhost/health
 
-# Restart (if reload doesn't work)
-sudo systemctl restart nginx
+# Memory
+free -h
 
-# View error log
-sudo tail -f /var/log/nginx/error.log
+# Disk
+df -h
+```
 
-# View access log
-sudo tail -f /var/log/nginx/access.log
+### System Updates
+
+```bash
+sudo apt update && sudo apt upgrade -y
+# Reboot if kernel was updated
+sudo reboot
 ```
 
 ---
@@ -681,660 +441,285 @@ sudo tail -f /var/log/nginx/access.log
 
 ### Service Won't Start
 
-**1. Check logs:**
 ```bash
 sudo journalctl -u summra -n 100 --no-pager
-```
 
-**2. Common errors:**
-
-#### ModuleNotFoundError: No module named 'config'
-**Cause:** Python can't find the config module.
-
-**Fix:** Ensure app is started from correct directory:
-```bash
-cat /etc/systemd/system/summra.service | grep WorkingDirectory
-# Should be: WorkingDirectory=/var/www/summra
-```
-
-#### ImportError: cannot import name 'init_db'
-**Cause:** Old version of app_prod.py with incorrect imports.
-
-**Fix:**
-```bash
+# Test manually
 cd /var/www/summra
-git pull origin main  # Get latest fixed version
-sudo systemctl restart summra
+source venv/bin/activate
+gunicorn -c gunicorn_config.py backend.app_prod:app  # e2-micro
+gunicorn -c gunicorn_config_e2small.py backend.app:app  # e2-small
 ```
 
-#### Port already in use
-**Cause:** Old gunicorn process still running.
+### 502 Bad Gateway
 
-**Fix:**
+Nginx can't reach Gunicorn:
 ```bash
-# Find and kill the process
+sudo systemctl status summra
+sudo netstat -tlnp | grep 5000
+sudo systemctl restart summra && sudo systemctl restart nginx
+```
+
+### Port 5000 Already in Use
+
+```bash
 sudo pkill gunicorn
-
-# Or find specific PID
-sudo lsof -i :5000
-sudo kill -9 <PID>
-
-# Restart service
 sudo systemctl restart summra
 ```
 
-#### Permission denied errors
-**Cause:** Wrong file ownership/permissions.
+### Permission Denied Errors
 
-**Fix:**
 ```bash
 sudo chown -R www-data:www-data /var/www/summra
 sudo chmod -R 775 /var/www/summra/data
-sudo chmod -R 775 /var/www/summra/frontend/static/audio
 ```
 
-### Nginx Issues
+### Out of Memory (OOM)
 
-#### 502 Bad Gateway
-**Cause:** Nginx can't reach Gunicorn backend.
-
-**Fix:**
 ```bash
-# Check if summra service is running
-sudo systemctl status summra
-
-# Check if port 5000 is listening
-sudo netstat -tlnp | grep 5000
-
-# Restart both services
-sudo systemctl restart summra
-sudo systemctl restart nginx
-```
-
-#### 504 Gateway Timeout
-**Cause:** Request timeout, or backend not responding.
-
-**Fix:**
-```bash
-# Increase timeout in Nginx config
-sudo nano /etc/nginx/sites-available/summra
-
-# Add these lines in location / block:
-proxy_connect_timeout 60s;
-proxy_send_timeout 60s;
-proxy_read_timeout 60s;
-
-# Reload nginx
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-#### Static files not loading (404)
-**Cause:** Wrong path in Nginx config.
-
-**Fix:**
-```bash
-# Verify static files exist
-ls -la /var/www/summra/frontend/static/
-
-# Check Nginx config
-cat /etc/nginx/sites-available/summra | grep static
-
-# Should have:
-# location /static/ {
-#     alias /var/www/summra/frontend/static/;
-# }
-```
-
-### SSL Certificate Issues
-
-#### Certificate not renewing
-**Cause:** Renewal timer not running, or DNS issues.
-
-**Fix:**
-```bash
-# Check timer
-sudo systemctl status certbot.timer
-
-# Enable timer
-sudo systemctl enable certbot.timer
-sudo systemctl start certbot.timer
-
-# Test renewal
-sudo certbot renew --dry-run
-```
-
-#### "Could not bind to port 443"
-**Cause:** Another process using port 443, or certificate already installed.
-
-**Fix:**
-```bash
-# Check what's using port 443
-sudo lsof -i :443
-
-# If it's Nginx, stop it temporarily
-sudo systemctl stop nginx
-sudo certbot install --cert-name summra.yourdomain.com
-sudo systemctl start nginx
-```
-
-### DNS Issues
-
-#### Domain doesn't resolve
-**Check DNS propagation:**
-```bash
-dig +short summra.yourdomain.com
-nslookup summra.yourdomain.com
-
-# Check from multiple locations
-# https://www.whatsmydns.net/
-```
-
-**Wait:** DNS can take 5 minutes to 48 hours to propagate globally. Typically:
-- 5-10 minutes for most DNS providers
-- 30 minutes for conservative propagation
-- 24-48 hours for complete worldwide propagation
-
-#### Domain resolves to wrong IP
-**Cause:** DNS not updated, or old cache.
-
-**Fix:**
-```bash
-# Flush local DNS cache (on Mac)
-sudo dscacheutil -flushcache
-
-# On Linux
-sudo systemd-resolve --flush-caches
-
-# On Windows
-ipconfig /flushdns
-
-# Verify DNS from VM
-dig @8.8.8.8 summra.yourdomain.com
-```
-
-### External Access Issues
-
-#### Site works locally but not externally
-**Checklist:**
-```bash
-# 1. Test locally (from VM)
-curl http://localhost/health
-# Should return: {"status":"healthy"}
-
-# 2. Test via IP (from local machine)
-curl http://YOUR_VM_IP/health
-# Should return: {"status":"healthy"}
-
-# 3. If step 2 fails, check firewall
-gcloud compute firewall-rules list | grep allow-http
-
-# 4. If firewall exists, check if Nginx is listening
-sudo netstat -tlnp | grep :80
-
-# 5. Check GCP tags on instance
-gcloud compute instances describe summra-instance --zone=us-west1-b | grep tags
-# Should have: http-server, https-server
-```
-
-#### Browser shows "Connection refused"
-**Cause:** Firewall blocking, or Nginx not running.
-
-**Fix:**
-```bash
-# Check Nginx
-sudo systemctl status nginx
-
-# Check firewall (from GCP console)
-# VPC Network → Firewall → Look for allow-http and allow-https rules
-
-# Test with curl to isolate browser issues
-curl -I http://YOUR_VM_IP
-```
-
-#### Browser auto-redirects to HTTPS before certificate is installed
-**Cause:** Browser HSTS cache from previous SSL site, or browser security settings.
-
-**Fix:**
-- Use incognito/private browsing mode
-- Clear browser cache and HSTS settings
-- Use curl for testing: `curl http://YOUR_VM_IP`
-- Install SSL certificate (see SSL section)
-
-### Memory Issues
-
-#### Out of Memory (OOM) Killer
-**Symptoms:** Service randomly stops, dmesg shows OOM messages.
-
-**Check:**
-```bash
-# Check memory usage
 free -h
-
-# Check swap
-swapon --show
-
-# Check OOM logs
 dmesg | grep -i oom
-sudo journalctl | grep -i oom
-```
 
-**Fix:**
-```bash
-# Ensure swap is enabled (1GB recommended)
-sudo fallocate -l 1G /swapfile
+# Enable swap if not already
+sudo fallocate -l 1G /swapfile  # 1G for e2-micro, 2G for e2-small
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
-
-# Make permanent
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
 
-# Reduce memory usage
-# Edit service file to limit workers
-sudo nano /etc/systemd/system/summra.service
-# Change: workers = 1 in gunicorn_config.py
+### SSH Fails with "Authentication Failed"
 
+```bash
+# Force key regeneration
+gcloud compute ssh INSTANCE_NAME --zone=ZONE --project=PROJECT_ID --force-key-file-overwrite
+
+# Or try IAP tunnel
+gcloud compute ssh INSTANCE_NAME --zone=ZONE --project=PROJECT_ID --tunnel-through-iap
+
+# Or enable OS Login
+gcloud compute instances add-metadata INSTANCE_NAME --zone=ZONE --metadata=enable-oslogin=TRUE
+```
+
+### Static Files Return 404
+
+```bash
+ls -la /var/www/summra/frontend/static/
+grep "location /static" /etc/nginx/sites-available/summra
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### DNS Not Resolving
+
+```bash
+dig +short summrabook.com
+# If wrong IP, update DNS A record and wait 5-30 min
+# Flush local DNS cache (Mac): sudo dscacheutil -flushcache
+```
+
+---
+
+## Security
+
+### Firewall
+
+Only ports 22 (SSH), 80 (HTTP), and 443 (HTTPS) should be open. GCP firewall rules handle this.
+
+### SSH
+
+```bash
+# Disable password auth (use keys only)
+sudo nano /etc/ssh/sshd_config
+# Set: PasswordAuthentication no
+sudo systemctl restart sshd
+
+# Install fail2ban
+sudo apt install -y fail2ban
+sudo systemctl enable --now fail2ban
+```
+
+### Automatic Security Updates
+
+```bash
+sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure --priority=low unattended-upgrades
+```
+
+---
+
+## Backup Strategy
+
+### Automated Daily Backups
+
+```bash
+cat > /var/www/summra/backup.sh << 'SCRIPT'
+#!/bin/bash
+BACKUP_DIR="/var/www/summra/backups"
+DATE=$(date +%Y%m%d)
+mkdir -p $BACKUP_DIR
+cp /var/www/summra/data/database.db $BACKUP_DIR/database_$DATE.db
+cp /var/www/summra/.env $BACKUP_DIR/env_$DATE
+find $BACKUP_DIR -type f -mtime +7 -delete
+echo "Backup complete: $DATE"
+SCRIPT
+chmod +x /var/www/summra/backup.sh
+
+# Run daily at 3 AM
+(crontab -l 2>/dev/null; echo "0 3 * * * /var/www/summra/backup.sh") | crontab -
+```
+
+### Off-Site Backups to GCS
+
+```bash
+gsutil mb gs://summra-backups
+gsutil cp data/database.db gs://summra-backups/database_$(date +%Y%m%d).db
+```
+
+---
+
+## Cost & Upgrade Path
+
+### e2-micro Cost Breakdown
+
+```
+Instance:  $0/month (FREE tier)
+Storage:   $0/month (30GB free)
+Egress:    $0-5/month (1GB free)
+Total:     $0-5/month
+```
+
+### e2-small Cost Breakdown
+
+```
+Instance:  ~$13/month
+Storage:   ~$2/month (50GB)
+Egress:    ~$0-5/month
+Total:     ~$15-20/month
+```
+
+### Upgrading e2-micro to e2-small
+
+```bash
+# Stop instance
+gcloud compute instances stop summra --zone=us-west1-b
+
+# Change machine type
+gcloud compute instances set-machine-type summra \
+    --machine-type=e2-small --zone=us-west1-b
+
+# Start instance
+gcloud compute instances start summra --zone=us-west1-b
+
+# SSH in and update service config
+sudo cp /var/www/summra/deploy/systemd-summra-e2small.service /etc/systemd/system/summra.service
 sudo systemctl daemon-reload
 sudo systemctl restart summra
 ```
 
+### Memory Usage
+
+**e2-micro (1GB):**
+```
+System:            ~250 MB
+Nginx:             ~20 MB
+Summra (1 worker): ~150-200 MB
+Swap (if needed):  Up to 1GB
+Free:              ~550-600 MB
+```
+
+**e2-small (2GB):**
+```
+System:             ~300 MB
+Nginx:              ~20 MB
+Summra (2 workers): ~600-800 MB
+TTS (temporary):    ~400-600 MB
+Buffer:             ~200 MB
+```
+
 ---
 
-## Common Issues
+## Quick Reference
 
-### Issue: "Permission denied (publickey)" when SSHing
+### Current Production Setup
 
-**Cause:** SSH keys not configured.
+- **Domain:** summrabook.com
+- **VM:** instance-20251125-033837
+- **Zone:** us-west1-b
+- **Project:** project-7f192cbf-77f3-4f7a-acc
+- **IP:** 34.82.3.27
+- **Machine type:** e2-micro
+- **OS:** Debian 12 (bookworm)
 
-**Fix:**
+### SSH Command
+
 ```bash
-# Use gcloud SSH helper
-gcloud compute ssh summra-instance --zone=us-west1-b
-
-# Or add SSH key via GCP console
-# Compute Engine → Metadata → SSH Keys → Add SSH key
+gcloud compute ssh instance-20251125-033837 \
+    --zone=us-west1-b \
+    --project=project-7f192cbf-77f3-4f7a-acc
 ```
 
-### Issue: Git operations fail with "Permission denied"
+### Key File Locations (on VM)
 
-**Cause:** Wrong ownership on .git directory.
-
-**Fix:**
-```bash
-sudo chown -R $USER:$USER /var/www/summra/.git
+```
+Application:     /var/www/summra/
+Database:        /var/www/summra/data/database.db
+Environment:     /var/www/summra/.env
+Nginx config:    /etc/nginx/sites-available/summra
+Service file:    /etc/systemd/system/summra.service
+SSL certs:       /etc/letsencrypt/live/summrabook.com/
+Certbot logs:    /var/log/letsencrypt/letsencrypt.log
+Nginx logs:      /var/log/nginx/{access,error}.log
+App logs:        sudo journalctl -u summra
 ```
 
-### Issue: "Address already in use" on port 5000
+---
 
-**Cause:** Old Gunicorn process still running.
+## Incident Log
 
-**Fix:**
+### 2026-05-10: SSL Certificate Expired (71 days)
+
+**Symptoms:** Site not loading. Browser errors: `ERR_CERT_AUTHORITY_INVALID`, `ERR_FAILED` for all resources. Service worker returning network error responses.
+
+**Root cause:** Let's Encrypt certificate for `summrabook.com` expired 2026-03-01. Auto-renewal failed for two reasons:
+1. The `summrabook.com` cert was configured with the **standalone authenticator** (which needs port 80 free), but nginx was already running on port 80. Error: `Could not bind TCP port 80 because it is already in use`.
+2. A dead certificate for `summra.pengyaochen.com` (old domain, DNS deleted) was also failing renewal with `NXDOMAIN`, causing `certbot renew` to report failures and exit early.
+
+**Fix applied:**
 ```bash
-# Find and kill
-sudo lsof -i :5000
-sudo kill -9 <PID>
-
-# Or kill all gunicorn
-sudo pkill gunicorn
-
-# Restart service
-sudo systemctl restart summra
-```
-
-### Issue: Static files return 404
-
-**Cause:** Nginx config wrong, or files don't exist.
-
-**Fix:**
-```bash
-# Verify files exist
-ls -la /var/www/summra/frontend/static/css/
-
-# Check Nginx config
-cat /etc/nginx/sites-available/summra | grep "location /static"
-
-# Should have correct alias
-location /static/ {
-    alias /var/www/summra/frontend/static/;
-}
-
-# Reload Nginx
-sudo nginx -t
+# 1. Force-renewed using nginx plugin (works while nginx is running)
+sudo certbot certonly --nginx -d summrabook.com -d www.summrabook.com --force-renewal
 sudo systemctl reload nginx
+
+# 2. Deleted dead certificate blocking future renewals
+sudo certbot delete --cert-name summra.pengyaochen.com --non-interactive
+
+# 3. Added nginx reload hook (was missing — nginx wouldn't pick up renewed certs)
+sudo sh -c 'printf "#!/bin/bash\nsystemctl reload nginx\n" > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh'
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+
+# 4. Verified auto-renewal works
+sudo certbot renew --dry-run  # "Congratulations, all simulated renewals succeeded"
 ```
 
-### Issue: API returns empty response or 500 error
+**Prevention:** The certbot timer was already active (runs twice daily). The fixes above ensure future renewals succeed by using the correct authenticator and removing the blocking dead cert. The reload hook ensures nginx picks up new certs automatically.
 
-**Cause:** Application error, database issue, or import error.
+### 2026-05-11: GCP Console SSH "Authentication Failed"
 
-**Check logs:**
+**Symptoms:** Clicking "SSH" in the GCP Console UI always fails with "SSH authentication has failed." Same failure on personal computer (not VPN-related). CLI SSH via `gcloud compute ssh` with `--force-key-file-overwrite` worked intermittently.
+
+**Root cause:** The `google-guest-agent` service was **disabled and not running**. This agent manages SSH key injection — when you click "SSH" in the GCP Console, Google injects a temporary SSH key via instance metadata, and the guest agent picks it up and adds it to `~/.ssh/authorized_keys`. Without the agent running, the injected keys are never written, so authentication fails.
+
+**Fix applied:**
 ```bash
-sudo journalctl -u summra -n 100 --no-pager
+sudo systemctl enable --now google-guest-agent
 ```
 
-**Common fixes:**
+**Prevention:** The agent is now enabled and will start automatically on boot. If SSH from the GCP Console ever breaks again, check this first:
 ```bash
-# Ensure database exists
-ls -la /var/www/summra/data/database.db
-
-# Check file permissions
-sudo chown -R www-data:www-data /var/www/summra/data
-
-# Restart service
-sudo systemctl restart summra
-
-# Test locally
-curl http://localhost:5000/api/books
-```
-
-### Issue: Certbot fails with connection timeout
-
-**Causes:**
-1. DNS not pointing to correct IP
-2. Firewall blocking port 80
-3. Nginx not running
-4. Wrong server_name in Nginx config
-
-**Debug:**
-```bash
-# 1. Check DNS
-dig +short summra.yourdomain.com
-# Must return your VM's external IP
-
-# 2. Check firewall
-gcloud compute firewall-rules list | grep allow-http
-
-# 3. Check Nginx
-sudo systemctl status nginx
-curl http://localhost/.well-known/acme-challenge/test
-
-# 4. Check server_name
-cat /etc/nginx/sites-available/summra | grep server_name
-# Must match your domain exactly
-```
-
-### Issue: VM IP changed after restart
-
-**Cause:** Using ephemeral (temporary) IP instead of static IP.
-
-**Fix:** See [Static IP Setup](#static-ip-setup) section above.
-
-**Quick workaround:**
-1. Note new IP: `curl ifconfig.me`
-2. Update DNS A record to new IP
-3. Wait for propagation (5-30 min)
-4. Renew SSL: `sudo certbot renew --force-renewal`
-
-**Permanent fix:** Reserve a static IP.
-
-### Issue: Service won't start after VM reboot
-
-**Cause:** Service not enabled on boot.
-
-**Fix:**
-```bash
-# Enable service
-sudo systemctl enable summra
-sudo systemctl enable nginx
-
-# Start now
-sudo systemctl start summra
-sudo systemctl start nginx
-```
-
-### Issue: Database locked or permission denied
-
-**Cause:** Wrong ownership or multiple processes accessing DB.
-
-**Fix:**
-```bash
-# Stop service
-sudo systemctl stop summra
-
-# Fix ownership
-sudo chown www-data:www-data /var/www/summra/data/database.db
-
-# Fix permissions
-sudo chmod 664 /var/www/summra/data/database.db
-
-# Ensure directory is writable
-sudo chmod 775 /var/www/summra/data
-
-# Start service
-sudo systemctl start summra
+sudo systemctl status google-guest-agent
 ```
 
 ---
 
-## Performance Monitoring
-
-### Check Resource Usage
-
-```bash
-# CPU and memory
-top
-htop  # More user-friendly (install with: sudo apt install htop)
-
-# Disk usage
-df -h
-du -sh /var/www/summra/*
-
-# Memory details
-free -h
-sudo systemctl status summra | grep Memory
-
-# Network connections
-sudo netstat -tlnp
-```
-
-### Monitor Logs
-
-```bash
-# Follow all logs
-sudo journalctl -f
-
-# Follow summra logs
-sudo journalctl -u summra -f
-
-# Follow nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-
-# Check for errors
-sudo journalctl -u summra -p err
-```
-
-### Service Health Check
-
-```bash
-# Quick health check script
-#!/bin/bash
-echo "=== Summra Health Check ==="
-echo ""
-echo "1. Summra Service:"
-sudo systemctl is-active summra && echo "✓ Running" || echo "✗ Not running"
-echo ""
-echo "2. Nginx Service:"
-sudo systemctl is-active nginx && echo "✓ Running" || echo "✗ Not running"
-echo ""
-echo "3. Port 5000 (Gunicorn):"
-sudo netstat -tlnp | grep :5000 && echo "✓ Listening" || echo "✗ Not listening"
-echo ""
-echo "4. Port 80 (HTTP):"
-sudo netstat -tlnp | grep :80 && echo "✓ Listening" || echo "✗ Not listening"
-echo ""
-echo "5. Port 443 (HTTPS):"
-sudo netstat -tlnp | grep :443 && echo "✓ Listening" || echo "✗ Not listening"
-echo ""
-echo "6. HTTP Endpoint:"
-curl -s http://localhost/health && echo " ✓" || echo "✗ Failed"
-echo ""
-echo "7. Memory Usage:"
-free -h | grep Mem
-echo ""
-echo "=== End Health Check ==="
-```
-
----
-
-## Maintenance
-
-### Update Application Code
-
-```bash
-cd /var/www/summra
-
-# Pull latest changes
-git pull origin main
-
-# Restart service
-sudo systemctl restart summra
-
-# Verify
-curl http://localhost:5000/health
-```
-
-### Update System Packages
-
-```bash
-# Update package list
-sudo apt update
-
-# Upgrade packages
-sudo apt upgrade -y
-
-# Reboot if kernel was updated
-sudo reboot
-```
-
-### Backup Important Files
-
-```bash
-# Backup database
-sudo cp /var/www/summra/data/database.db /var/www/summra/data/database.db.backup-$(date +%Y%m%d)
-
-# Backup nginx config
-sudo cp /etc/nginx/sites-available/summra /var/www/summra/deploy/nginx-summra.conf.backup
-
-# Backup SSL certificates (before renewal)
-sudo cp -r /etc/letsencrypt /root/letsencrypt-backup-$(date +%Y%m%d)
-```
-
-### Certificate Renewal
-
-Automatic renewal happens via systemd timer, but you can manually renew:
-
-```bash
-# Check expiry
-sudo certbot certificates
-
-# Renew all certificates
-sudo certbot renew
-
-# Reload nginx
-sudo systemctl reload nginx
-```
-
----
-
-## Security Recommendations
-
-### 1. Firewall
-
-- Only allow ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
-- Use GCP firewall rules to restrict source IPs if possible
-- Consider using Cloud Armor for DDoS protection
-
-### 2. SSH
-
-- Use SSH keys instead of passwords
-- Disable root login
-- Use fail2ban to block brute force attempts
-
-### 3. Application
-
-- Keep dependencies updated
-- Use environment variables for secrets (never commit `.env`)
-- Regularly backup database
-- Monitor logs for suspicious activity
-
-### 4. SSL
-
-- Use strong ciphers (Let's Encrypt defaults are good)
-- Enable HSTS (already configured in Nginx)
-- Monitor certificate expiry
-
----
-
-## Summary Checklist
-
-**Before Deployment:**
-- [ ] GCP e2-micro instance created
-- [ ] Static IP reserved
-- [ ] DNS A record configured
-- [ ] Domain propagated (verify with `dig`)
-
-**During Deployment:**
-- [ ] Git repository cloned
-- [ ] Line endings fixed (if needed)
-- [ ] Setup script run successfully
-- [ ] File permissions fixed
-- [ ] GCP firewall configured (ports 80, 443)
-- [ ] Nginx config has `server_name`
-
-**After Deployment:**
-- [ ] HTTP works: `curl http://YOUR_DOMAIN/health`
-- [ ] SSL certificate installed
-- [ ] HTTPS works: `curl https://YOUR_DOMAIN/health`
-- [ ] Service enabled on boot
-- [ ] Auto-renewal configured
-
-**Final Verification:**
-- [ ] Visit site in browser: `https://your domain.com`
-- [ ] Check service status: `sudo systemctl status summra`
-- [ ] Check logs for errors: `sudo journalctl -u summra -n 50`
-- [ ] Verify memory usage: `free -h`
-- [ ] Test all endpoints (/, /api/books, /health)
-
----
-
-## Support and Resources
-
-### Logs Locations
-
-- Application: `sudo journalctl -u summra`
-- Nginx access: `/var/log/nginx/access.log`
-- Nginx error: `/var/log/nginx/error.log`
-- Certbot: `/var/log/letsencrypt/letsencrypt.log`
-- System: `sudo journalctl`
-
-### Useful Commands Reference
-
-```bash
-# Service management
-sudo systemctl {start|stop|restart|status|enable|disable} summra
-sudo systemctl {start|stop|restart|status|reload} nginx
-
-# Logs
-sudo journalctl -u summra -f  # Follow logs
-sudo journalctl -u summra -n 100  # Last 100 lines
-sudo journalctl -u summra --since "1 hour ago"
-
-# Testing
-curl http://localhost:5000/health  # Local test
-curl http://YOUR_IP/health  # External test
-curl https://YOUR_DOMAIN/health  # SSL test
-
-# Debugging
-sudo netstat -tlnp  # Show listening ports
-sudo lsof -i :5000  # Show what's using port 5000
-ps aux | grep gunicorn  # Show gunicorn processes
-sudo nginx -t  # Test nginx config
-```
-
----
-
-**Document Version:** 1.0
-**Last Updated:** 2025-11-25
+**Last Updated:** 2026-05-11
 **Tested On:** Debian 12 (bookworm), GCP e2-micro
