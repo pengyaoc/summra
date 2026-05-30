@@ -7323,9 +7323,32 @@ if not toc_structure:
 
 ## Gemini Image Generation System
 
-**Location:** `scripts/images/generate_gemini_illustrations.py` (1500+ lines)
+**Location:** `scripts/images/generate_illustrations.py` (1500+ lines)
 
 The Gemini Image Generation System provides automated creation of book covers and chapter illustrations using Google's Gemini image generation models. This enhances the visual presentation of classic literature with AI-generated artwork.
+
+**Backends:** the script supports two image-generation providers via `--provider`:
+
+- **`imagen` (default)** — Imagen 4 fallback chain: `imagen-4.0-ultra-generate-001` →
+  `imagen-4.0-generate-001` → `imagen-4.0-fast-generate-001`. Each image attempts Ultra
+  first and falls through to the next tier only on quota / rate-limit / 5xx errors.
+  Aspect ratio `3:4`. No reference-image support — character consistency comes from a
+  per-book "character brief" (cached at `data/character_briefs/{book_id}.txt`,
+  auto-built on first use via `gemini-2.5-flash`).
+- **`gemini` (rollback)** — original Gemini 3 Pro Image / 2.5 Flash Image path. Kept
+  for rollback now that the Gemini image models are no longer available on the free
+  tier. Supports reference-image consistency and the async Batch API (50% cost
+  reduction); these features remain available only under `--provider gemini`.
+
+**Flag interactions** (Imagen has no Files-based Batch API):
+
+| Flag | `--provider imagen` (default) | `--provider gemini` |
+|------|------------------------------|---------------------|
+| `--sync-mode` | Errors: not supported | Works as legacy |
+| `--resume` | Errors: not supported | Works as legacy |
+| `--list-jobs` | Errors: not supported | Works as legacy |
+| `--batch-poll-interval` (non-default) | Errors: not supported | Works as legacy |
+| `--model` | Ignored with a warning | Works as legacy |
 
 ### Overview
 
@@ -7667,13 +7690,13 @@ else:
 **CLI Commands:**
 ```bash
 # Submit batch job
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --batch-mode --chapters-only
+python scripts/images/generate_illustrations.py --book-id 47 --provider gemini --batch-mode --chapters-only
 
 # List pending jobs
-python scripts/images/generate_gemini_illustrations.py --list-jobs
+python scripts/images/generate_illustrations.py --provider gemini --list-jobs
 
 # Resume interrupted job
-python scripts/images/generate_gemini_illustrations.py --resume data/batch_jobs/book_47_1234567890.json
+python scripts/images/generate_illustrations.py --provider gemini --resume data/batch_jobs/book_47_1234567890.json
 ```
 
 **Cost Comparison:**
@@ -7724,34 +7747,34 @@ WHERE book_id = {book_id} AND chapter_number = {chapter_num};
 
 ### Command-Line Interface
 
-**Script:** `scripts/images/generate_gemini_illustrations.py`
+**Script:** `scripts/images/generate_illustrations.py`
 
 **Usage Examples:**
 
 ```bash
 # Generate cover only for specific book
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --cover-only
+python scripts/images/generate_illustrations.py --book-id 47 --cover-only
 
 # Generate all chapter illustrations
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --chapters-only
+python scripts/images/generate_illustrations.py --book-id 47 --chapters-only
 
 # Generate specific chapter range
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --chapter-range 1-10
+python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-10
 
 # Generate both cover and all chapters
-python scripts/images/generate_gemini_illustrations.py --book-id 47
+python scripts/images/generate_illustrations.py --book-id 47
 
-# Use faster flash model (lower cost)
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --model gemini-2.5-flash-image
+# Use faster flash model (lower cost, Gemini provider only)
+python scripts/images/generate_illustrations.py --book-id 47 --model gemini-2.5-flash-image
 
 # Batch process all books missing illustrations
-python scripts/images/generate_gemini_illustrations.py --batch-all
+python scripts/images/generate_illustrations.py --batch-all
 
 # Dry run (preview without generating)
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --dry-run
+python scripts/images/generate_illustrations.py --book-id 47 --dry-run
 
 # Force regenerate existing illustrations
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --force
+python scripts/images/generate_illustrations.py --book-id 47 --force
 ```
 
 **Arguments:**
@@ -7950,7 +7973,7 @@ Requirements:
 
 **Test Case: Peter Pan (Book ID 47)**
 ```bash
-python scripts/images/generate_gemini_illustrations.py --book-id 47 --chapter-range 1-10
+python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-10
 ```
 
 **Results:**
@@ -8092,7 +8115,7 @@ project_root/
 
 ### Workflow
 
-#### Stage 1: Generation (generate_gemini_illustrations.py)
+#### Stage 1: Generation (generate_illustrations.py)
 
 ```python
 # Saves to data/cover_originals/ or data/illustration_originals/
@@ -8475,7 +8498,7 @@ du -sh frontend/static/illustrations/47
 
 1. **Generate Illustrations:**
    ```bash
-   python scripts/images/generate_gemini_illustrations.py --book-id 47 --chapters-only
+   python scripts/images/generate_illustrations.py --book-id 47 --chapters-only
    # Saves originals to data/illustration_originals/47/*.png
    # Outputs: "ℹ️  Run reduce_illustration_resolution.py to create optimized versions"
    ```
