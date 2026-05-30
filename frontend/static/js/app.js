@@ -459,6 +459,14 @@ class SummraApp {
             this.clearPagination();
         }
 
+        // Hide the footer on chapter pages (focused reading view); show it elsewhere.
+        // Mirrors the server-side Jinja gate in index.html so SPA navigation matches.
+        const footer = document.querySelector('footer.footer');
+        if (footer) {
+            const onChapter = showArray.includes('chapter-detail-section');
+            footer.classList.toggle('hidden', onChapter);
+        }
+
         // Only modify sections if they're not already in the correct state
         // This prevents flash when server-side rendered page is already showing correct section
         this.ALL_SECTIONS.forEach(sectionId => {
