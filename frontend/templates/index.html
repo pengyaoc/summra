@@ -239,9 +239,20 @@
 
             <!-- Book Detail Section -->
             <section class="summary-section {% if not initial_data or initial_data.type != 'book' %}hidden{% endif %}" id="summary-section">
-                <nav class="breadcrumb-nav" id="breadcrumb-nav-book" aria-label="Breadcrumb">
+                <nav class="breadcrumb-nav {% if not initial_data or initial_data.type != 'book' or not initial_data.breadcrumbs %}hidden{% endif %}" id="breadcrumb-nav-book" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list" id="breadcrumb-list-book">
-                        <!-- Breadcrumbs will be dynamically loaded here -->
+                        {% if initial_data and initial_data.type == 'book' and initial_data.breadcrumbs %}
+                            {% for crumb in initial_data.breadcrumbs %}
+                                <li class="breadcrumb-item">
+                                    {% if loop.last %}
+                                        <span class="breadcrumb-current">{{ crumb.name }}</span>
+                                    {% else %}
+                                        <a href="{{ crumb.url }}" class="breadcrumb-link">{{ crumb.name }}</a>
+                                        <span class="breadcrumb-separator">›</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        {% endif %}
                     </ol>
                 </nav>
 
