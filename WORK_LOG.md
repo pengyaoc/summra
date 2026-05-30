@@ -33,7 +33,14 @@ Behaves identically to the old script (subject to Gemini free-tier availability)
 - `docs/superpowers/specs/2026-05-30-imagen-fallback-design.md`
 - `docs/superpowers/plans/2026-05-30-imagen-fallback-impl.md`
 
-**Tests:** 59 passed in `tests/test_illustrations.py` (was 14 before this work; +45 new tests across 7 new test classes covering provider selection, Imagen retry classification, Imagen fallback chain, Imagen cover + chapter generation, prompt builder character_brief injection, chapter-loop character_brief wiring, and character-brief cache helper).
+**Tests:** 59 passed in `tests/test_illustrations.py` (was 14 before this work; +45 new tests across 7 new test classes covering provider selection, Imagen retry classification, Imagen fallback chain, Imagen cover + chapter generation, prompt builder character_brief injection, chapter-loop character_brief wiring, and character-brief cache helper). Full project suite: 354 passed.
+
+**Manual smoke (operator):**
+1. Pick a small book with existing Gemini illustrations (for A/B comparison): `SMOKE_BOOK_ID=<id>`.
+2. Cover: `python scripts/images/generate_illustrations.py --book-id $SMOKE_BOOK_ID`
+3. First three chapters: `python scripts/images/generate_illustrations.py --book-id $SMOKE_BOOK_ID --chapters-only --chapter-range 1-3`
+4. Compare new outputs in `frontend/static/illustrations/$SMOKE_BOOK_ID/` against the prior Gemini versions: look for aspect-ratio sanity, character consistency across chapters 1-3, no text artifacts.
+5. Rollback dry-run: `python scripts/images/generate_illustrations.py --book-id $SMOKE_BOOK_ID --provider gemini --dry-run` — verify it exits cleanly and shows the Gemini prompt path.
 
 ---
 
