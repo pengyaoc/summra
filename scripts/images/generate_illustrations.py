@@ -623,6 +623,41 @@ class ImagenImageGenerator(ImageGeneratorBase):
         msg = str(exc).lower()
         return any(s in msg for s in IMAGEN_RETRYABLE_SUBSTRINGS)
 
+    def _generate_with_fallback(
+        self, prompt: str, aspect_ratio: str
+    ) -> Tuple[Optional[bytes], str]:
+        """Walk IMAGEN_MODEL_CHAIN top-down. Return (image_bytes_or_None, model_used)."""
+        last_error_msg = None
+        last_model_attempted = IMAGEN_MODEL_CHAIN[-1]
+        for model in IMAGEN_MODEL_CHAIN:
+            last_model_attempted = model
+            try:
+                self._wait_for_rate_limit()
+                response = self.client.models.generate_images(
+                    model=model,
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(
+                        number_of_images=1,
+                        aspect_ratio=aspect_ratio,
+                        person_generation="allow_adult",
+                    ),
+                )
+                if response.generated_images:
+                    print(f"  ✅ Generated with {model}")
+                    return response.generated_images[0].image.image_bytes, model
+                last_error_msg = f"{model}: empty response"
+                print(f"  ⚠️  {model} returned no images; trying next tier...")
+                continue
+            except Exception as e:  # noqa: BLE001 — surface or fall through based on _is_retryable
+                last_error_msg = f"{model}: {e}"
+                if not self._is_retryable(e):
+                    print(f"  ❌ Non-retryable error from {model}: {e}")
+                    return None, model
+                print(f"  ⚠️  {model} failed ({e}); trying next tier...")
+                continue
+        print(f"  ❌ All Imagen tiers failed. Last error: {last_error_msg}")
+        return None, last_model_attempted
+
 
 def save_image(image_data: bytes, output_path: Path, optimize: bool = True) -> bool:
     """Save image data to a file and optionally optimize size

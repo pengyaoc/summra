@@ -579,5 +579,78 @@ class TestImagenIsRetryable:
         assert generator._is_retryable(exc) is False
 
 
+class TestImagenFallbackChain:
+    """ImagenImageGenerator._generate_with_fallback: per-tier behavior."""
+
+    @pytest.fixture
+    def generator(self):
+        from scripts.images.generate_illustrations import ImagenImageGenerator
+        gen = ImagenImageGenerator(api_key="fake-key")
+        # Mock out the actual API client and the rate limiter
+        gen.client = MagicMock()
+        gen._wait_for_rate_limit = MagicMock()
+        return gen
+
+    def _make_success_response(self, image_bytes: bytes = b"fake-png-bytes"):
+        """Build a generate_images response with one image."""
+        image_obj = MagicMock()
+        image_obj.image.image_bytes = image_bytes
+        response = MagicMock()
+        response.generated_images = [image_obj]
+        return response
+
+    def test_first_tier_success_does_not_try_lower_tiers(self, generator):
+        generator.client.models.generate_images.return_value = self._make_success_response()
+        image, model = generator._generate_with_fallback(prompt="test", aspect_ratio="3:4")
+        assert image == b"fake-png-bytes"
+        assert model == "imagen-4.0-ultra-generate-001"
+        assert generator.client.models.generate_images.call_count == 1
+
+    def test_quota_on_first_tier_falls_through_to_second(self, generator):
+        quota_exc = Exception("RESOURCE_EXHAUSTED: quota for ultra")
+        generator.client.models.generate_images.side_effect = [
+            quota_exc,
+            self._make_success_response(b"second-tier-bytes"),
+        ]
+        image, model = generator._generate_with_fallback(prompt="test", aspect_ratio="3:4")
+        assert image == b"second-tier-bytes"
+        assert model == "imagen-4.0-generate-001"
+        assert generator.client.models.generate_images.call_count == 2
+
+    def test_all_three_tiers_quota_returns_none(self, generator):
+        quota_exc = Exception("quota exceeded")
+        generator.client.models.generate_images.side_effect = [quota_exc, quota_exc, quota_exc]
+        image, model = generator._generate_with_fallback(prompt="test", aspect_ratio="3:4")
+        assert image is None
+        assert model == "imagen-4.0-fast-generate-001"  # last tier attempted
+        assert generator.client.models.generate_images.call_count == 3
+
+    def test_non_retryable_error_stops_at_first_tier(self, generator):
+        policy_exc = Exception("Image blocked by safety filter")
+        generator.client.models.generate_images.side_effect = [policy_exc]
+        image, model = generator._generate_with_fallback(prompt="test", aspect_ratio="3:4")
+        assert image is None
+        assert model == "imagen-4.0-ultra-generate-001"  # tier that raised
+        assert generator.client.models.generate_images.call_count == 1
+
+    def test_empty_response_falls_through(self, generator):
+        empty = MagicMock()
+        empty.generated_images = []
+        generator.client.models.generate_images.side_effect = [
+            empty,
+            self._make_success_response(b"recovered"),
+        ]
+        image, model = generator._generate_with_fallback(prompt="test", aspect_ratio="3:4")
+        assert image == b"recovered"
+        assert model == "imagen-4.0-generate-001"
+
+    def test_aspect_ratio_passed_to_api(self, generator):
+        generator.client.models.generate_images.return_value = self._make_success_response()
+        generator._generate_with_fallback(prompt="test", aspect_ratio="3:4")
+        call_kwargs = generator.client.models.generate_images.call_args.kwargs
+        assert call_kwargs["config"].aspect_ratio == "3:4"
+        assert call_kwargs["config"].number_of_images == 1
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
