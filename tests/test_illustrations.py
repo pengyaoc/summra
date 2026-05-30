@@ -827,5 +827,53 @@ class TestImagenChapterGeneration:
         generator._generate_with_fallback.assert_not_called()
 
 
+class TestGetOrBuildCharacterBrief:
+    """get_or_build_character_brief: cache to disk, fallback on LLM failure."""
+
+    @pytest.fixture
+    def tmp_briefs_dir(self, tmp_path, monkeypatch):
+        d = tmp_path / "character_briefs"
+        d.mkdir()
+        from scripts.images import generate_illustrations
+        monkeypatch.setattr(generate_illustrations, "CHARACTER_BRIEFS_DIR", d)
+        return d
+
+    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    def test_first_call_invokes_llm_and_writes_cache(self, mock_llm, tmp_briefs_dir):
+        from scripts.images.generate_illustrations import get_or_build_character_brief
+        mock_llm.return_value = "ART STYLE: oil painting"
+        result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
+        assert result == "ART STYLE: oil painting"
+        mock_llm.assert_called_once_with("A summary")
+        cache_file = tmp_briefs_dir / "42.txt"
+        assert cache_file.exists()
+        assert cache_file.read_text() == "ART STYLE: oil painting"
+
+    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    def test_second_call_uses_cache_and_skips_llm(self, mock_llm, tmp_briefs_dir):
+        from scripts.images.generate_illustrations import get_or_build_character_brief
+        (tmp_briefs_dir / "42.txt").write_text("CACHED BRIEF")
+        result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
+        assert result == "CACHED BRIEF"
+        mock_llm.assert_not_called()
+
+    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    def test_llm_failure_returns_empty_string(self, mock_llm, tmp_briefs_dir):
+        from scripts.images.generate_illustrations import get_or_build_character_brief
+        mock_llm.side_effect = Exception("API down")
+        result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
+        assert result == ""
+        # Should NOT write a cache file on failure
+        assert not (tmp_briefs_dir / "42.txt").exists()
+
+    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    def test_llm_empty_response_returns_empty_string(self, mock_llm, tmp_briefs_dir):
+        from scripts.images.generate_illustrations import get_or_build_character_brief
+        mock_llm.return_value = ""
+        result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
+        assert result == ""
+        assert not (tmp_briefs_dir / "42.txt").exists()
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

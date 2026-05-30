@@ -113,6 +113,8 @@ SECONDS_BETWEEN_REQUESTS = 60 / MAX_REQUESTS_PER_MINUTE
 BATCH_POLL_INTERVAL_SECONDS = 30  # How often to check batch job status
 BATCH_MAX_WAIT_HOURS = 24  # Maximum time to wait for batch completion
 BATCH_JOBS_DIR = Path(__file__).parent.parent.parent / "data" / "batch_jobs"  # Directory to store batch job state
+CHARACTER_BRIEFS_DIR = Path(__file__).parent.parent.parent / "data" / "character_briefs"
+CHARACTER_BRIEF_MODEL = "gemini-2.5-flash"  # cheap text-only model
 
 
 class ImageGeneratorBase:
@@ -838,6 +840,63 @@ Book: {book_title} by {book_author}
 {chapter_summary}"""
 
     return prompt
+
+
+def _call_brief_llm(medium_summary: str) -> str:
+    """Call the brief-builder LLM. Separated so tests can patch it cleanly."""
+    prompt = f"""You are preparing a visual style guide for a book illustrator who will draw
+one illustration per chapter and must keep characters looking consistent
+across all illustrations.
+
+Read the book summary below and produce a CONCISE visual brief (under 200 words)
+describing:
+
+1. ART STYLE — overall artistic style appropriate to the book's tone and era
+   (e.g., "moody oil painting", "watercolor children's book illustration",
+   "stark Victorian engraving").
+
+2. COLOR PALETTE — 3-5 dominant colors that should appear throughout.
+
+3. RECURRING CHARACTERS — for each main character, give:
+   - Name
+   - Approximate age, build, hair color/style, distinctive clothing or props
+   - One defining visual feature (a scar, a hat, a coat, etc.)
+
+4. SETTING — the dominant environment / time period in 1-2 sentences.
+
+Do NOT include plot details, dialogue, or anything not visually relevant.
+Output as plain text, not JSON. Keep each section short.
+
+Book summary:
+{medium_summary}"""
+
+    client = genai.Client(api_key=config.GEMINI_API_KEY)
+    response = client.models.generate_content(model=CHARACTER_BRIEF_MODEL, contents=prompt)
+    return (response.text or "").strip()
+
+
+def get_or_build_character_brief(book_id: int, medium_summary: str) -> str:
+    """Return the cached character brief for `book_id`, generating it once if missing.
+
+    On LLM failure or empty response, returns "" and does NOT write a cache file
+    (so the next run gets a chance to retry). Manual cache invalidation =
+    delete data/character_briefs/{book_id}.txt.
+    """
+    CHARACTER_BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = CHARACTER_BRIEFS_DIR / f"{book_id}.txt"
+    if cache_file.exists():
+        return cache_file.read_text()
+    try:
+        brief = _call_brief_llm(medium_summary)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ⚠️  Character brief LLM failed for book {book_id}: {e}")
+        return ""
+    if not brief:
+        print(f"  ⚠️  Character brief LLM returned empty for book {book_id}")
+        return ""
+    cache_file.write_text(brief)
+    print(f"  💾 Cached character brief for book {book_id}: {cache_file}")
+    return brief
 
 
 # ⚠️ DORMANT: Gemini-only batch path. Imagen 4 does not currently support
