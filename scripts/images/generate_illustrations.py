@@ -751,18 +751,14 @@ def clean_title_for_prompt(title: str) -> str:
 
 def build_chapter_illustration_prompt(book_title: str, book_author: str,
                                      medium_summary: str, chapter: Dict,
-                                     previous_chapter_summary: Optional[str] = None) -> str:
-    """Build the prompt for chapter illustration generation
+                                     previous_chapter_summary: Optional[str] = None,
+                                     character_brief: Optional[str] = None) -> str:
+    """Build the prompt for chapter illustration generation.
 
-    Args:
-        book_title: Title of the book
-        book_author: Author of the book
-        medium_summary: Medium-length summary of the entire book
-        chapter: Chapter dict with 'chapter_number', 'chapter_title', 'summary'
-        previous_chapter_summary: Summary of the previous chapter (for context)
-
-    Returns:
-        Complete prompt string for chapter illustration
+    character_brief, when non-empty, is injected under a VISUAL STYLE GUIDE
+    header between the "Book:" line and the overall book summary. Used by
+    ImagenImageGenerator for cross-chapter character consistency; the Gemini
+    path passes None.
     """
     chapter_num = chapter['chapter_number']
     chapter_title = chapter.get('chapter_title', '')
@@ -770,12 +766,18 @@ def build_chapter_illustration_prompt(book_title: str, book_author: str,
 
     title_part = f" - {chapter_title}" if chapter_title else ""
 
-    # Build previous context section
     prev_context = ""
     if previous_chapter_summary:
         prev_context = f"""
 Summary of previous chapter for reference:
 {previous_chapter_summary}
+
+"""
+
+    style_guide_section = ""
+    if character_brief:
+        style_guide_section = f"""=== VISUAL STYLE GUIDE (apply to every illustration in this book) ===
+{character_brief}
 
 """
 
@@ -795,7 +797,7 @@ The image must be completely text-free. Any text, dialog, or words will make the
 
 Book: {book_title} by {book_author}
 
-Summary of the overall book (for reference):
+{style_guide_section}Summary of the overall book (for reference):
 {medium_summary}
 
 {prev_context}Chapter to be illustrated:
