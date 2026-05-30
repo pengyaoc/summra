@@ -6,6 +6,21 @@
 
 ## 2026-05-29
 
+### Fix Breadcrumb Layout Shift on Book Pages - COMPLETED
+**Status:** Completed
+**Started:** 2026-05-29
+**Completed:** 2026-05-29
+
+**Problem:** On every book page load, the breadcrumb nav snapped in after a split-second, pushing the book cover and the rest of the section below it down by ~20px. Very obvious visual jolt.
+
+**Root cause:** The book breadcrumb `<ol>` in `index.html` was server-emitted empty and populated client-side by JS in `updateBreadcrumbs('book')`. `.breadcrumb-nav` carried `margin-top: 16px` + `margin-bottom: 24px` but zero content height on first paint, so when JS injected the `<li>` items the content below was shoved down. The backend already passes `initial_data.breadcrumbs` for book pages (`app_base.py:412`); the template just wasn't using it. The author section was already doing the right thing (`index.html:561-571`).
+
+**Fix:** `frontend/templates/index.html:242-258` — server-render the book breadcrumb items inline from `initial_data.breadcrumbs`, mirroring the author section. Added `hidden` class on the `<nav>` when no initial breadcrumbs exist (client-side navigations) so the margins don't reserve space prematurely; JS removes `hidden` in `renderBreadcrumbs` when it injects the items.
+
+**Verification:** `curl /books/the-great-gatsby` returns the breadcrumb HTML in the initial response. e2e smoke (`PATHS=/books/the-great-gatsby node smoke.mjs`) passes; screenshot shows "Home › All Books › The Great Gatsby" in its final position from first paint.
+
+---
+
 ### Gemini Model Upgrade + Fallback Chain - COMPLETED
 **Status:** Completed
 **Started:** 2026-05-29
