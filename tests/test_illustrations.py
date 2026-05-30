@@ -88,7 +88,8 @@ class TestGeminiIllustrations:
 
         # Mock generate_chapter_illustration to return fake image data
         def mock_generate_chapter(book_title, book_author, medium_summary, chapter,
-                                  previous_chapter_summary=None, reference_image=None, dry_run=False):
+                                  previous_chapter_summary=None, reference_image=None,
+                                  character_brief=None, dry_run=False):
             chapter_num = chapter['chapter_number']
             fake_image = f"fake_image_data_chapter_{chapter_num}".encode()
             prompt = f"Prompt for chapter {chapter_num}"
@@ -873,6 +874,80 @@ class TestGetOrBuildCharacterBrief:
         result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
         assert result == ""
         assert not (tmp_briefs_dir / "42.txt").exists()
+
+
+class TestChapterLoopUsesCharacterBrief:
+    """generate_chapter_illustrations_for_book passes character_brief to the generator."""
+
+    @patch("scripts.images.generate_illustrations.auto_optimize_illustrations")
+    @patch("scripts.images.generate_illustrations.save_image", return_value=True)
+    @patch("scripts.images.generate_illustrations.get_or_build_character_brief")
+    def test_brief_fetched_once_per_book_and_passed_to_every_chapter(
+        self, mock_brief, mock_save, mock_optimize, tmp_path, monkeypatch
+    ):
+        from scripts.images import generate_illustrations
+        from scripts.images.generate_illustrations import (
+            generate_chapter_illustrations_for_book, ImagenImageGenerator,
+        )
+
+        # Redirect illustration_originals into tmp_path so the test doesn't touch the real tree
+        monkeypatch.setattr(
+            generate_illustrations,
+            "project_root",
+            tmp_path,
+            raising=False,
+        )
+
+        mock_brief.return_value = "ART STYLE: ink wash"
+        db = MagicMock()
+        db.get_book.return_value = {"id": 1, "title": "T", "author": "A"}
+        db.get_summary.return_value = {"content": "A summary"}
+        db.get_chapters.return_value = [
+            {"chapter_number": n, "chapter_title": "", "summary": "s", "word_count": 1000}
+            for n in (1, 2)
+        ]
+        db.get_chapter.return_value = {"summary": "prev"}
+
+        generator = ImagenImageGenerator(api_key="fake")
+        generator.generate_chapter_illustration = MagicMock(
+            return_value=(b"img", "imagen-4.0-generate-001")
+        )
+
+        generate_chapter_illustrations_for_book(db, generator, book_id=1, dry_run=False)
+
+        # Brief fetched exactly once
+        mock_brief.assert_called_once()
+        # Passed to every chapter call
+        for call in generator.generate_chapter_illustration.call_args_list:
+            assert call.kwargs["character_brief"] == "ART STYLE: ink wash"
+
+    @patch("scripts.images.generate_illustrations.auto_optimize_illustrations")
+    @patch("scripts.images.generate_illustrations.save_image", return_value=True)
+    @patch("scripts.images.generate_illustrations.get_or_build_character_brief")
+    def test_brief_not_fetched_for_gemini_generator(
+        self, mock_brief, mock_save, mock_optimize, tmp_path, monkeypatch
+    ):
+        from scripts.images import generate_illustrations
+        from scripts.images.generate_illustrations import (
+            generate_chapter_illustrations_for_book, GeminiImageGenerator,
+        )
+        monkeypatch.setattr(generate_illustrations, "project_root", tmp_path, raising=False)
+
+        db = MagicMock()
+        db.get_book.return_value = {"id": 1, "title": "T", "author": "A"}
+        db.get_summary.return_value = {"content": "A summary"}
+        db.get_chapters.return_value = [
+            {"chapter_number": 1, "chapter_title": "", "summary": "s", "word_count": 1000},
+        ]
+        db.get_chapter.return_value = None
+
+        generator = GeminiImageGenerator(api_key="fake", model="gemini-3-pro-image-preview")
+        generator.generate_chapter_illustration = MagicMock(
+            return_value=(b"img", "")
+        )
+
+        generate_chapter_illustrations_for_book(db, generator, book_id=1, dry_run=False)
+        mock_brief.assert_not_called()
 
 
 if __name__ == '__main__':

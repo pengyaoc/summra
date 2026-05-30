@@ -1298,6 +1298,12 @@ def generate_chapter_illustrations_for_book(db: Database, generator: GeminiImage
     print(f"   Total chapters: {len(chapters)}")
     print(f"{'='*80}")
 
+    # Imagen needs cross-chapter consistency via prompt text (no reference-image input).
+    # Gemini uses the previous-chapter PNG as reference instead.
+    character_brief = ""
+    if generator.name == "imagen":
+        character_brief = get_or_build_character_brief(book_id, summary['content'])
+
     # Create illustrations directory in data/illustration_originals
     illustrations_originals_dir = project_root / "data" / "illustration_originals" / str(book_id)
     illustrations_originals_dir.mkdir(parents=True, exist_ok=True)
@@ -1352,6 +1358,7 @@ def generate_chapter_illustrations_for_book(db: Database, generator: GeminiImage
             chapter=chapter,
             previous_chapter_summary=previous_chapter_summary,
             reference_image=reference_image,
+            character_brief=character_brief,
             dry_run=dry_run
         )
 
