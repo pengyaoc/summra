@@ -2,9 +2,11 @@
 
 ## Product Vision
 
-Summra is a web application that makes classic literature accessible through AI-generated summaries of varying lengths. It helps readers explore public domain books quickly with concise overviews, comprehensive summaries, or detailed chapter-by-chapter analyses, enhanced with text-to-speech capabilities.
+Summra makes public-domain classics easier to read. The headline feature is a **sentence-by-sentence rewrite of every chapter into modern English**, displayed side-by-side with the original. Summaries (short and full), chapter-by-chapter breakdowns, AI illustrations, and audio narration round out the experience.
 
-**Mission:** Democratize access to classic literature by providing high-quality, AI-generated summaries that help readers discover, understand, and appreciate great books.
+**Mission:** Democratize access to classic literature by removing the language barrier — translating Victorian, Romantic, and Enlightenment-era prose into the English a modern reader actually speaks, while preserving the original.
+
+**Positioning (as it appears on the site):** *"Read the Classics in Plain English — every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free."*
 
 ## Target Users
 
@@ -111,12 +113,16 @@ Users can listen to any summary using high-quality text-to-speech conversion, en
 **Specifications:**
 
 **Audio Generation:**
-- **Technology:** VITS open-source TTS model
-- **Voice:** Female English speaker (default: p226)
-- **Quality:** 22050 Hz, 16-bit WAV
+- **Technology:** Google Gemini 2.5 Flash TTS API (the original local Coqui/VITS handler was removed)
+- **Voice:** Configurable in `backend/config.py` — `GEMINI_TTS_VOICE` (default: `Kore`; options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
+- **Quality:** 24 kHz WAV (Gemini default), stitched from chunked requests
 - **Format:** Standard HTML5 audio playback
-- **Caching:** Generated audio is cached permanently for instant replay
-- **Limit:** First 5000 characters of summary
+- **Caching:** Generated audio is cached on disk under `frontend/static/audio/` and reused indefinitely
+- **Dev vs prod split:**
+  - Dev (`backend/app.py`) generates audio on demand via the Gemini API
+  - Prod (`backend/app_prod.py`) only **serves** pre-generated audio — TTS generation is disabled to keep the production VM small
+  - Bulk pre-generation lives in `scripts/audio/` (`batch_generate_concise_audio.py`, `batch_generate_medium_audio.py`, `generate_gemini_audio_batch_offline.py`)
+- **Limit:** Long inputs are chunked (~900 words per request) and the WAVs are stitched together
 
 **Playback Controls:**
 - Play/Pause button
@@ -644,7 +650,9 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - Minimal, unobtrusive UI elements during reading
 - Professional typography and spacing
 
-### 7. User Authentication & Reading Progress (Added 2025-12-20)
+### 7. User Authentication & Reading Progress (Added 2025-12-20, gated behind `FEATURE_AUTH` since 2026)
+
+**Status:** Implemented but **dark by default** in current builds. Set `FEATURE_AUTH = True` in `backend/config.py` to enable. When the flag is off, the Account button and Save-for-Offline button are server-stripped from the SPA shell, the `/api/auth/*` and `/api/progress/*` blueprints are not registered, and the routes return clean 404s. The schema and code paths described below ship in the repo and are exercised by tests.
 
 **Feature Description:**
 User authentication system with reading progress tracking that persists across devices and works offline in PWA mode.
@@ -1578,7 +1586,7 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 
 ### User Accounts
 - Q: Do we need user accounts?
-- A: ✅ Implemented (2025-12-20) - Full user authentication with reading progress tracking
+- A: Implemented (2025-12-20), but shipped dark behind `FEATURE_AUTH` (default `False`). The full auth + reading-progress stack — Flask sessions, SHA-256 + salt password hashing, `users` / `reading_progress` / `chapter_completion` tables in `summra.db`, Continue-Reading button, offline progress sync — is present in code. Flip the flag in `backend/config.py` to turn it on.
 
 ## Dependencies
 
@@ -1591,11 +1599,13 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
   - No API key required
 
 ### Technical Stack
-- **Frontend:** Vanilla HTML/CSS/JavaScript
-- **Backend:** Python Flask
-- **Database:** SQLite
-- **TTS:** Coqui TTS (VITS model)
-- **Hosting:** Self-hosted or cloud (TBD)
+- **Frontend:** Vanilla HTML/CSS/JavaScript (single-page app, hash routing) + PWA service worker
+- **Backend:** Python Flask (`backend/app_base.py` for shared routes, `app.py` for dev, `app_prod.py` for prod)
+- **Databases:** SQLite — `data/database.db` for content, `summra.db` (project root) for users + reading progress
+- **Summary / metadata / illustration generation:** Google Gemini (3.5 Flash + fallbacks; 2.5 Flash Image / batch for chapter illustrations)
+- **Modern-English rewrite:** Google Gemini 3.1 Flash-Lite (`PLAIN_TEXT_MODEL`)
+- **TTS:** Google Gemini 2.5 Flash TTS API (offline batch in prod, on-demand in dev)
+- **Hosting:** GCP (e2-micro free tier, no on-demand TTS; or e2-small ~$13/mo with full TTS) — see `deploy/`
 
 ## Risk Assessment
 
@@ -1617,18 +1627,20 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 ## Appendix
 
 ### Glossary
-- **Concise Summary:** 500-word overview without spoilers
-- **Medium Summary:** 2000-3000 word comprehensive summary
+- **Concise / Short Summary:** ~500-word overview, spoiler-free for fiction
+- **Medium / Full Summary:** 2000–3000 word comprehensive summary
 - **Comprehensive Summary:** Chapter-by-chapter analysis
-- **TTS:** Text-to-Speech conversion to audio
+- **Modern English Rewrite (Plain English):** Sentence-by-sentence rewrite of the original chapter text into contemporary English, viewable side-by-side with the original
+- **TTS:** Text-to-Speech conversion to audio (Google Gemini 2.5 Flash TTS)
 - **Project Gutenberg:** Digital library of public domain books
-- **VITS:** Variational Inference Text-to-Speech model
+- **Feature flag:** A boolean in `backend/config.py` that gates an entire subsystem (e.g. `FEATURE_AUTH`, `FEATURE_BLOG`)
 
 ### References
 - Project Gutenberg: https://www.gutenberg.org/
 - WCAG Accessibility Guidelines: https://www.w3.org/WAI/WCAG21/quickref/
 - Google Gemini API: https://ai.google.dev/
-- Coqui TTS: https://github.com/coqui-ai/TTS
+- Gemini TTS docs: https://ai.google.dev/gemini-api/docs/speech-generation
+- Workbox (PWA caching): https://developer.chrome.com/docs/workbox/
 
 ---
 
@@ -2360,7 +2372,128 @@ Summra is a Progressive Web App that enables users to install the application on
 
 ---
 
-**Document Version:** 2.1
-**Last Updated:** 2025-12-18
+## 14. Plain English Rewrites (Headline Feature)
+
+**Feature Owner:** Engineering + Content Team
+**Priority:** Critical — current site headline ("Read the Classics in Plain English") is built around this feature
+**Status:** ✅ Implemented (ongoing — rolled out per-book as chapters are generated)
+
+### Overview
+
+Every chapter has a **modern-English rewrite** generated from the original text. The rewrite preserves the meaning, structure, and paragraph boundaries of the source but renders it in the English a contemporary reader actually speaks — short sentences, modern vocabulary, no archaic syntax. Users read this side-by-side with the original (desktop) or by itself (mobile).
+
+This is not a summary. The rewrite is the same scene, chapter by chapter, sentence by sentence — just in plain English.
+
+### User Stories
+
+- As a reader put off by Victorian or Romantic-era prose, I want a version of the actual chapter in modern English so I can enjoy the story without parsing every sentence twice
+- As a student, I want the original and the plain version side-by-side so I can build comprehension
+- As an ESL reader, I want plain English versions so the language doesn't get in the way of the story
+- As a long-form reader, I want the option to read only the plain version on my phone, because side-by-side doesn't fit on a small screen
+
+### Specifications
+
+**Storage:**
+- Stored per chapter in `chapters.modern_english_text` (TEXT, nullable; column added by migration in `models.py`)
+- Generated independently from the chapter summary; books can have summaries without modern English, or vice versa
+
+**Generation:**
+- Script: `scripts/content/generate_modern_english.py`
+- Model: `PLAIN_TEXT_MODEL` in `backend/config.py` (currently `gemini-3.1-flash-lite`)
+- Per-chapter prompt; output is plain text matching paragraph structure of the original
+- Subject to the same Gemini rate limiter as summary generation
+
+**Reading view:**
+- Three view modes on the chapter page:
+  1. **Original** — original Project Gutenberg text only
+  2. **Modern** — plain English only
+  3. **Side-by-Side** — two columns, original on the left, modern on the right, paragraph-aligned (desktop only; mobile falls back to Modern)
+- Reading settings (font family, size, theme, pagination) apply across all three view modes
+- Page-based pagination recalculates when view mode changes
+
+**Hero-page CTA:**
+- The Read section card on the home page links directly to **Jane Eyre, Chapter 1** as a demo
+  - Desktop CTA opens side-by-side view
+  - Mobile CTA opens modern-only view (side-by-side doesn't fit on small screens)
+
+### Acceptance Criteria
+
+- [✅] `modern_english_text` column present in `chapters` table
+- [✅] `scripts/content/generate_modern_english.py` generates and persists rewrites
+- [✅] Chapter API (`GET /api/books/<id>/chapters/<n>`) returns `modern_english_text` when present
+- [✅] Frontend offers Original / Modern / Side-by-Side view modes
+- [✅] Side-by-Side view paragraph-aligns the two columns
+- [✅] Mobile falls back to Modern when user picks Side-by-Side
+- [✅] Pagination recalculates when view mode changes (PRD §12)
+- [✅] Reading settings (font, size, theme) apply to all three view modes
+- [✅] Chapters without a generated rewrite degrade gracefully (Modern + Side-by-Side hidden or disabled)
+
+### Future Enhancements
+
+- Backfill modern-English for the remaining chapters that don't have it yet
+- Per-book quality regen (regenerate any chapter where the rewrite was flagged as low quality)
+- Reader-controlled "translation level" (lighter vs. heavier modernization)
+- Surface a per-chapter language-difficulty indicator on the chapter list so readers know which chapters most benefit from the plain version
+
+---
+
+## 15. Editorial Blog (Feature-Flagged)
+
+**Feature Owner:** Content Team
+**Status:** Implemented but **dark by default** — gated behind `FEATURE_BLOG` in `backend/config.py` (default `False`)
+
+### Overview
+
+A long-form editorial blog for essays, book deep-dives, and topical pieces (e.g. AI-and-classics commentary). Lives in the `blog_posts` table and is rendered through dedicated routes when the flag is on. Header images come from Unsplash.
+
+### Specifications
+
+- **Routes (gated):**
+  - `GET /blog` — Blog index (cards with header image, title, excerpt)
+  - `GET /blog/<slug>` — Individual blog post (full header image, body)
+  - `GET /api/blog` — JSON list
+  - `GET /api/blog/<slug>` — JSON post
+- **Storage:** `blog_posts(id, slug UNIQUE, title, content, excerpt, author, published_date, updated_date, header_image_url, created_at)`
+- **Header images:** Unsplash API via `scripts/blog/assign_blog_header_images.py` (requires `UNSPLASH_ACCESS_KEY` env var). Search terms are mapped per blog topic (e.g. "british" → "british library books vintage")
+- **Sitemap integration:** When `FEATURE_BLOG=True`, blog URLs are included in `sitemap.xml`
+- **Frontend:** Server-rendered HTML pages, not part of the SPA shell
+
+### Acceptance Criteria
+
+- [✅] Schema present in `models.py`
+- [✅] Blog routes registered under `if config.FEATURE_BLOG:`
+- [✅] Routes return clean 404s when flag is off
+- [✅] Sitemap omits blog URLs when flag is off
+- [✅] Header-image assignment script works against the Unsplash Demo tier (1,000 req/hr cap)
+
+### Future Enhancements
+
+- Tag and category system for blog posts
+- Author profiles linked to author hub pages
+- RSS feed
+- Comments / discussion (would require auth — see Feature 7)
+
+---
+
+## Feature Flag Bundle
+
+The following subsystems are **implemented in code but dark by default**, gated by flags in `backend/config.py`. The flags exist so the production deployment can stay focused on the core reading experience while heavier or less-polished subsystems are wired through but inert.
+
+| Flag | Default | What it gates |
+|------|---------|---------------|
+| `FEATURE_AUTH` | `False` | User registration/login, reading-progress tracking, Continue-Reading button, active Save-for-Offline (PRD §7) |
+| `FEATURE_BLOG` | `False` | Editorial blog routes, blog API endpoints, blog entries in `sitemap.xml` (PRD §15) |
+
+**Convention:**
+- Backend: blueprints are conditionally registered (`if config.FEATURE_AUTH: app.register_blueprint(auth_routes.bp)`); routes return 404 when the flag is off
+- Frontend: the flag values are injected into the SPA shell as `window.FEATURE_AUTH` / `window.FEATURE_BLOG`, and the gated button markup is server-stripped from `index.html` when off
+- Tests: feature flags are exercised by `tests/test_feature_flags.py`
+
+When updating the PRD or ERD for a feature-flagged subsystem, always note the flag status — the section can otherwise read as if the feature is live to all users.
+
+---
+
+**Document Version:** 2.2
+**Last Updated:** 2026-05-30
 **Author:** Summra Team
 **Status:** Living Document
