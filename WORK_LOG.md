@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-05-31: Plain-English prompt rewritten to 8th-grade U.S. reading standard — COMPLETED
+
+User asked: "Update the modern english generation script to give precise instruction. I want to set the standard as 8th grade English. Search online to put together a detailed prompt for standard of the rewrite." Confirmed: bundle in the duplicated-text bug fix at lines 113–114, keep the 15–20 word/sentence average.
+
+**What changed in `scripts/content/generate_modern_english.py`:**
+
+0. **Added an ⚠️ MOST IMPORTANT RULE banner** at the very top of the rules block in both prompts (before rule 1), elevating paragraph-count preservation above the numbered list so the model can't lose it in the noise. The banner explicitly tells the model to (a) count original paragraphs first, (b) translate one paragraph at a time, (c) preserve one-line dialogue paragraphs as separate paragraphs, (d) preserve blank lines, and (e) count its own output and fix mismatches before emitting. Notes that the side-by-side reading view depends on 1-to-1 alignment.
+1. **Rewrote `MODERNIZE LANGUAGE` (rule 2)** in both `build_single_chapter_prompt` and `build_bulk_translation_prompt` with concrete, measurable 8th-grade targets: Flesch-Kincaid 7–9, a mandatory archaic→modern substitution list (thou, doth, hath, ere, whence, methinks, betwixt, countenance, perambulate, etc.), an explicit ban on nominalizations, wordy connectives ("in order to" → "to"), and Latinate hedges (aforementioned, heretofore).
+2. **Rewrote `SIMPLIFY SYNTAX` (rule 4)**: average 15–20 words per sentence, hard cap ~25; permit splitting a long compound sentence (joined by `;`, `—`, or multiple conjunctions) into 2–3 shorter sentences within the **same paragraph**; reorder Yoda-style inversions; resolve ambiguous pronouns; prefer active voice.
+3. **Rewrote `QUALITY STANDARDS` (rule 5)** to anchor on a curious 13–14-year-old reader, Lexile 925L–1185L, "feels like a contemporary YA novel set in the original era" instead of the vague "middle school reading level" line.
+4. **Bug fix at lines 113–114**: removed the duplicated `...as they appearONE paragraph in the translation` copy-paste artifact and the redundant `Maintain the exact same number of sentences and paragraphs` line (now subsumed by the per-paragraph rule + the new in-paragraph sentence-split allowance).
+5. **Updated structure rule (rule 1)** to explicitly permit in-paragraph sentence splits for long compound originals, so the new syntax rule 4 doesn't contradict the structural lock. Paragraph count must still match exactly — that's the load-bearing invariant for the side-by-side reading view.
+
+**Standard sourced from:**
+- [Flesch-Kincaid Grade Level — Readable](https://readable.com/readability/flesch-reading-ease-flesch-kincaid-grade-level/) — formula and grade-8 target
+- [Iowa DX — Write at Grade 8 or Below](https://dxtraining.iowa.gov/write-grade-8-or-below-reading-level) — plain-language principles
+- [Plain Language for Grade Level 8](https://sites.google.com/view/clearwrite/articles/Plain-Language-for-Grade-Level-8-A-Comprehensive-Guide) — 15–20 word sentences, active voice
+- [Digital.gov — Plain language principles](https://digital.gov/guides/plain-language/principles)
+- [Common Core ELA Grade 8 Literature](https://www.thecorestandards.org/ELA-Literacy/RL/8/) — Lexile 925L–1185L band for 8th-grade fiction
+- [50 Plain-Language Substitutions](https://www.dailywritingtips.com/50-plain-language-substitutions-for-wordy-phrases/) — concrete word-pair list
+
+**Verification:**
+- `python -c "import ast; ast.parse(...)"` → syntax OK.
+- `pytest tests/test_split_modern_paragraphs.py` → 22/22 pass (only existing tests touching this script's adjacent helper).
+- Dry-run on `book-id 1 chapter 1` (Alice ch.1) → prompt renders cleanly, length grew from ~6.5K to ~16.9K chars. Per-batch input-token cost rises modestly; output-token cost (the dominant cost driver) is unchanged.
+
+**Not done / intentionally deferred:**
+- No post-generation Flesch-Kincaid validator script — out of scope; the user asked to update the *prompt*, not add new validation. Worth adding if real-world output drifts above grade 9.
+- Did not re-run generation on any existing chapter. The new standard will take effect on the next `--all-chapters` or per-chapter regen invocation. Existing `modern_english_text` rows are unchanged.
+- Did not touch temperature (0.3), model default (`gemini-3.1-flash-lite` per `config.PLAIN_TEXT_MODEL`), or batch sizing.
+
+---
+
 ## 2026-05-30: Chapter page defaults to Plain English when available
 
 ### New default reading mode on chapter pages - COMPLETED
@@ -6183,4 +6216,50 @@ The system is ready to integrate with existing `app.js` code. See `READING_PROGR
 **Test Coverage:** Backend unit tests passing
 
 **Production Readiness:** ⚠️ Requires integration with app.js for full functionality
+
+---
+
+## 2026-05-31 — Plain English batch: top 10 most-requested books + Room with a View
+
+**Result:** 11 books, 408 chapters, 100% exact paragraph match (408/408).
+
+### Books completed (all 100% match)
+
+| ID | Book | Chapters |
+|---|---|---|
+| 94 | A Room with a View — Forster | 20 |
+| 53 | White Fang — London | 25 |
+| 29 | Huckleberry Finn — Twain | 43 |
+| 4 | Uncle Tom's Cabin — Stowe | 45 |
+| 73 | Scarlet Letter — Hawthorne | 25 |
+| 54 | Treasure Island — Stevenson | 34 |
+| 36 | Little Women — Alcott | 48 |
+| 48 | Sense and Sensibility — Austen | 50 |
+| 74 | Anne of Green Gables — Montgomery | 38 |
+| 77 | A Little Princess — Burnett | 20 |
+| 111 | Tess of the D'Urbervilles — Hardy | 60 |
+
+### New patterns surfaced and codified
+
+Added 8 new lessons (#11–#18) to `docs/plain_english_workflow.md`. Highlights:
+
+- **±5 rule**: if `abs(diff) ≤ 5`, dispatch Sonnet subagent — don't burn Gemini quota. Validated on 18 chapters across 5 books at 100% fix rate (Uncle Tom's 14, Anne 2, S&S 2, Little Princess 1, Little Women 1).
+- **Illustration captions** (Little Women): 191 captions interleaved as paragraphs in ch.1 alone. New `scripts/audits/strip_illustration_captions.py` handles this — short paras with no terminal punct, no opening quote, no lowercase start; plus known front-matter labels.
+- **Trailing publisher boilerplate**: Little Women ch.47 had 165 paragraphs of Alcott book catalog ads after the story's final line. Solution: manually truncate `chapter_text` at the last narrative paragraph.
+- **`gemini-3.5-flash` 20-request/day cap** on free tier — get triaged usage right or burn the day's quota in one shot on Uncle Tom's.
+- **Long chapters fare better on flash-lite**: Scarlet Letter ch.0 (89K char Custom-House preface) was truncated by 3.5-flash but handled fully by default flash-lite. Counter-intuitive — don't escalate long chapters by default.
+- **Gemini's `### CHAPTER N` markdown artifact**: occasionally injected as paragraph 0 in multi-chapter batches. Strip mechanically.
+- **END OF FIRST/SECOND VOLUME** markers: Victorian multi-volume novels (S&S) have these as standalone paragraphs; Gemini drops them. Append verbatim.
+- **Inline poetry quote collapse**: Gemini squashes narration→quote→continuation into one paragraph (Anne 19, 33; LW 47). Sonnet can split adjacent to where the quote belongs.
+
+### New script
+
+- `scripts/audits/strip_illustration_captions.py` — strips illustration captions, front-matter labels, trailing transcriber/publisher noise from `chapter_text`. Idempotent. Run BEFORE first-pass `generate_modern_english.py` on illustrated editions.
+
+### Cost summary
+
+- ~85 Gemini batches (most on flash-lite free tier; ~25 on 3.5-flash before hitting daily cap)
+- 5 Sonnet subagent invocations fixing 18 chapters at 100% success
+- Sonnet calls replaced an estimated 30-50 Gemini regens that would have eaten the next 2-3 days of 3.5-flash quota
+- Total marginal spend: well under $1
 

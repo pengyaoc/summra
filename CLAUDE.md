@@ -285,6 +285,8 @@ for n, ot, mt in db.execute('SELECT chapter_number, chapter_text, modern_english
 
 ### 5. Fix paragraph misalignment
 
+**Decision rule:** if `abs(diff) ≤ 5`, ALWAYS dispatch a Sonnet subagent to split/merge mechanically. Do NOT call Gemini to regenerate the chapter. Sonnet subagents reliably fix small deltas (the prior batch covered diffs from ±1 to ±4 across 14 chapters of Uncle Tom's Cabin with 100% success rate) and avoid burning Gemini quota or risking truncation on retry. Regenerate via step 6 only when `abs(diff) > 5` OR the chapter is truncated/summary-shaped.
+
 Try mechanical fixes FIRST — most off-by-N diffs are these patterns, fixable without LLMs:
 
 **5a. Missing title in modern (most common — off-by-1).** The original's first paragraph IS the chapter title, but Gemini's translation dropped it. Prepend the title using the body's casing (the body may be `UPPERCASE` while `chapters.chapter_title` is title-case — use the body's version):
