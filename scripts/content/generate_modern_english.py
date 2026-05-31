@@ -98,49 +98,60 @@ CHAPTER: {chapter_title}
 
 CRITICAL TRANSLATION RULES:
 
+⚠️ MOST IMPORTANT RULE — PARAGRAPH COUNT MUST MATCH EXACTLY ⚠️
+The original chapter has N paragraphs (separated by blank lines / double newlines). Your translation MUST have EXACTLY N paragraphs. Not N-1. Not N+1. EXACTLY N.
+- Count the paragraphs in the original BEFORE you start translating.
+- Translate one paragraph at a time, in order. Never merge two original paragraphs into one. Never split one original paragraph into two.
+- If the original has a very short one-line paragraph (e.g. a single dialogue line: "Yes."), your translation must also be a separate one-line paragraph in the same position.
+- If the original has a blank line between two paragraphs, your translation must preserve that blank line in the same position.
+- Before producing your final output, COUNT YOUR OUTPUT PARAGRAPHS and confirm the number equals the original's paragraph count. If it doesn't match, you have failed this task — fix it before responding.
+- The side-by-side reading view in the product depends on a 1-to-1 paragraph alignment. A single missed or extra paragraph breaks the whole chapter.
+
 1. PRESERVE EXACT STRUCTURE:
    - Do NOT add or remove ANY sentences
-   - Do NOT add or remove ANY paragraphs
+   - Do NOT add or remove ANY paragraphs (see ⚠️ banner above — this is non-negotiable)
    - Do NOT merge or split paragraphs
    - CRITICAL: Do NOT split a single paragraph into multiple paragraphs
    - CRITICAL: Do NOT merge multiple paragraphs into one
    - CRITICAL: Do NOT skip or omit any paragraph - every paragraph must be translated
    - CRITICAL: Do NOT skip or omit any sentence - every sentence must be translated
-   - CRITICAL: Each original sentence must remain as ONE sentence in the translation
-   - CRITICAL: If the chapter text begins with the chapter title as its first paragraph (e.g. "CHAPTER I" or "IN WHICH PIGLET MEETS A HEFFALUMP"), you MUST keep that title verbatim as the first paragraph of your translation. Do NOT translate, modernize, or drop the title.
-   - Maintain the exact same number of sentences and paragraphs as the original
-   - Each original paragraph must remain as ONE paragraph in the translation
-   - Keep dialogue markers and formatting exactly as they appearONE paragraph in the translation
+   - CRITICAL: Each original sentence must remain as ONE sentence in the translation, UNLESS the original is a long compound sentence joined by semicolons, em-dashes, or multiple conjunctions (see rule 4). In that case you may split into 2–3 shorter sentences within the SAME paragraph. Never split across paragraph boundaries.
+   - CRITICAL: If the chapter text begins with the chapter title as its first paragraph (e.g. "CHAPTER I" or "IN WHICH PIGLET MEETS A HEFFALUMP"), you MUST keep that title verbatim as the first paragraph of your translation. Do NOT translate, modernize, or drop the title. The title counts as paragraph #1 in the count.
+   - Each original paragraph must remain as ONE paragraph in the translation — the paragraph count must match exactly
    - Keep dialogue markers and formatting exactly as they appear
 
-2. MODERNIZE LANGUAGE:
-   - Replace archaic words with modern equivalents (e.g., "thou" → "you", "doth" → "does")
-   - Simplify complex Victorian/classical sentence structures
-   - Use contemporary vocabulary while preserving literary quality
-   - Make implicit meanings explicit when helpful for modern readers
-   - Use PLAIN ENGLISH: avoid difficult, complex, or obscure words
-   - Choose simple, common words over sophisticated vocabulary
-   - Aim for accessibility while maintaining the story's essence
+2. MODERNIZE LANGUAGE — TARGET: 8TH-GRADE U.S. READING LEVEL (Flesch-Kincaid Grade 7–9):
+   - Replace archaic words with modern equivalents. Mandatory substitutions include (but are not limited to):
+       thou/thee/thy → you/your   doth/dost → does/do   hath → has   art → are   ye → you
+       ere → before   whence → from where   thence → from there   hither → here   thither → there   hitherto → until now   henceforth → from now on
+       betwixt → between   oft → often   nay → no   aye → yes   verily → truly   methinks → I think   perchance → maybe
+       abode → home   countenance/visage → face   perambulate/promenade → walk   commence → start/begin   endeavour/endeavor → try   perceive → see/notice   behold → look at   utter (v.) → say   utilize → use   purchase → buy   reside → live   inquire → ask
+   - Prefer everyday 1–2 syllable words. If a 3+ syllable word has a common shorter synonym, use the shorter one.
+   - AVOID nominalizations: "made a decision" → "decided"; "gave consideration to" → "considered"; "carried out an examination" → "examined".
+   - AVOID wordy connectives: "in order to" → "to"; "due to the fact that" → "because"; "with regard to" → "about"; "at this point in time" → "now"; "in spite of the fact that" → "although".
+   - AVOID legal/Latinate hedges: aforementioned, heretofore, herein, thereof, thereto, notwithstanding.
+   - Make implicit meanings explicit when an 8th grader would otherwise miss the point — but do NOT add new facts or interpretations.
 
 3. PRESERVE MEANING & TONE:
-   - Keep the author's intended meaning completely intact
-   - Maintain the emotional tone and atmosphere
-   - Preserve literary devices like metaphors, imagery, and symbolism
-   - Keep character voices and dialogue styles distinctive
-   - Do not modernize proper nouns, character names, or place names
+   - Keep the author's intended meaning completely intact. Do NOT summarize, paraphrase loosely, or compress.
+   - Maintain the emotional tone and atmosphere — modernization is about vocabulary and syntax, not about flattening feeling, rhythm, or voice.
+   - Preserve literary devices (metaphors, imagery, symbolism) if a 13–14-year-old can grasp them. Only literalize a metaphor when the original imagery is genuinely opaque to a modern reader.
+   - Keep character voices distinct. A formal character should still sound more formal than a casual one — just at an 8th-grade level for both.
+   - Do NOT modernize proper nouns, character names, place names, or period-specific objects (carriage, telegram, snuff-box, parasol). The setting stays in its era.
 
-4. SIMPLIFY SYNTAX:
-   - Break complex nested clauses into clearer structures
-   - Reorder inverted sentence structures to standard modern order
-   - Clarify ambiguous pronoun references
-   - Make passive voice active where it improves clarity
+4. SIMPLIFY SYNTAX — TARGET: 15–20 WORDS PER SENTENCE ON AVERAGE:
+   - Average sentence length should be 15–20 words. Hard cap: ~25 words. Mix in some 5–10 word sentences for rhythm.
+   - When the original is a long sentence joined by semicolons, em-dashes, or multiple coordinating conjunctions (and/but/yet/for), split it into 2–3 shorter sentences within the SAME paragraph.
+   - Reorder inverted ("Yoda-style") sentence structures into standard subject–verb–object order. Example: "Strange were the sights that met our eyes" → "The sights that met our eyes were strange."
+   - Resolve ambiguous pronouns: if "he" or "it" could refer to two characters/things, name the referent.
+   - Prefer ACTIVE voice over passive. "The letter was written by Jane" → "Jane wrote the letter." Keep passive only when the agent is unknown or genuinely irrelevant ("He was killed in the war").
+   - Break nested relative clauses ("which … that … whom …") into separate sentences.
 
-5. QUALITY STANDARDS:
-   - The result should read naturally to a modern audience
-   - Target middle school reading level - use simple, everyday language
-   - Replace difficult words with common alternatives
-   - Preserve the literary merit and artistry of the original through clear storytelling
-   - Prioritize clarity and accessibility over sophisticated vocabulary
+5. QUALITY STANDARDS — WRITE FOR A CURIOUS 13–14-YEAR-OLD READER:
+   - The reader is in 8th grade (U.S.), age 13–14, reading for pleasure. They are smart but not yet fluent in 19th-century English. Lexile target: roughly 925L–1185L.
+   - Use plain, everyday words a middle schooler hears at school or sees in YA novels — NOT picture-book vocabulary. Do not condescend.
+   - Keep the story's emotion, suspense, humor, and atmosphere. Modernization should make the prose feel like a contemporary YA novel set in the original era — not like a Wikipedia plot summary.
+   - Before producing the final text, mentally check: would an 8th grader read this aloud without stumbling on any word or sentence?
 
 EXAMPLE TRANSFORMATIONS:
 
@@ -196,42 +207,55 @@ CHAPTERS TO TRANSLATE:
 
 CRITICAL TRANSLATION RULES:
 
+⚠️ MOST IMPORTANT RULE — PARAGRAPH COUNT MUST MATCH EXACTLY (FOR EVERY CHAPTER) ⚠️
+For EACH chapter, count the original's paragraphs (separated by blank lines / double newlines) BEFORE you start translating that chapter. Your translation of that chapter MUST have EXACTLY the same number of paragraphs. Not one fewer. Not one more. EXACTLY the same.
+- Translate one paragraph at a time, in order. Never merge two original paragraphs into one. Never split one original paragraph into two.
+- A very short one-line paragraph (e.g. a single dialogue line: "Yes.") in the original MUST stay as its own separate one-line paragraph in the same position in your translation.
+- Preserve blank lines between paragraphs exactly as they appear.
+- Before emitting each `### CHAPTER N` block, COUNT YOUR OUTPUT PARAGRAPHS and confirm it equals that chapter's original paragraph count. If they don't match, fix it before emitting.
+- The side-by-side reading view in the product depends on a 1-to-1 paragraph alignment per chapter. A single missed or extra paragraph in any chapter breaks the whole chapter for readers.
+
 1. PRESERVE EXACT STRUCTURE:
    - Do NOT add or remove ANY sentences in any chapter
-   - Do NOT add or remove ANY paragraphs in any chapter
+   - Do NOT add or remove ANY paragraphs in any chapter (see ⚠️ banner above — this is non-negotiable)
    - Do NOT merge or split paragraphs
-   - CRITICAL: If a chapter's text begins with the chapter title as its first paragraph (e.g. "CHAPTER I" or "IN WHICH PIGLET MEETS A HEFFALUMP"), you MUST keep that title verbatim as the first paragraph of that chapter's translation. Do NOT translate, modernize, or drop the title.
-   - Maintain the exact same number of sentences and paragraphs as the original for EACH chapter
+   - CRITICAL: If a chapter's text begins with the chapter title as its first paragraph (e.g. "CHAPTER I" or "IN WHICH PIGLET MEETS A HEFFALUMP"), you MUST keep that title verbatim as the first paragraph of that chapter's translation. Do NOT translate, modernize, or drop the title. The title counts as paragraph #1 in the count.
+   - Maintain the exact same number of paragraphs as the original for EACH chapter
+   - Within a paragraph, you may split a long compound sentence (joined by semicolons, em-dashes, or multiple conjunctions) into 2–3 shorter sentences. Never split across paragraph boundaries.
    - Keep dialogue markers and formatting exactly as they appear
 
-2. MODERNIZE LANGUAGE:
-   - Replace archaic words with modern equivalents (e.g., "thou" → "you", "doth" → "does")
-   - Simplify complex Victorian/classical sentence structures
-   - Use contemporary vocabulary while preserving literary quality
-   - Make implicit meanings explicit when helpful for modern readers
-   - Use PLAIN ENGLISH: avoid difficult, complex, or obscure words
-   - Choose simple, common words over sophisticated vocabulary
-   - Aim for accessibility while maintaining the story's essence
+2. MODERNIZE LANGUAGE — TARGET: 8TH-GRADE U.S. READING LEVEL (Flesch-Kincaid Grade 7–9):
+   - Replace archaic words with modern equivalents. Mandatory substitutions include (but are not limited to):
+       thou/thee/thy → you/your   doth/dost → does/do   hath → has   art → are   ye → you
+       ere → before   whence → from where   thence → from there   hither → here   thither → there   hitherto → until now   henceforth → from now on
+       betwixt → between   oft → often   nay → no   aye → yes   verily → truly   methinks → I think   perchance → maybe
+       abode → home   countenance/visage → face   perambulate/promenade → walk   commence → start/begin   endeavour/endeavor → try   perceive → see/notice   behold → look at   utter (v.) → say   utilize → use   purchase → buy   reside → live   inquire → ask
+   - Prefer everyday 1–2 syllable words. If a 3+ syllable word has a common shorter synonym, use the shorter one.
+   - AVOID nominalizations: "made a decision" → "decided"; "gave consideration to" → "considered".
+   - AVOID wordy connectives: "in order to" → "to"; "due to the fact that" → "because"; "with regard to" → "about"; "at this point in time" → "now".
+   - AVOID legal/Latinate hedges: aforementioned, heretofore, herein, thereof, thereto, notwithstanding.
+   - Make implicit meanings explicit when an 8th grader would otherwise miss the point — but do NOT add new facts or interpretations.
 
 3. PRESERVE MEANING & TONE:
-   - Keep the author's intended meaning completely intact
-   - Maintain the emotional tone and atmosphere
-   - Preserve literary devices like metaphors, imagery, and symbolism
-   - Keep character voices and dialogue styles distinctive
-   - Do not modernize proper nouns, character names, or place names
+   - Keep the author's intended meaning completely intact. Do NOT summarize, paraphrase loosely, or compress.
+   - Maintain the emotional tone and atmosphere — modernization is about vocabulary and syntax, not flattening feeling, rhythm, or voice.
+   - Preserve literary devices (metaphors, imagery, symbolism) if a 13–14-year-old can grasp them. Only literalize a metaphor when the original imagery is genuinely opaque to a modern reader.
+   - Keep character voices distinct. A formal character should still sound more formal than a casual one — just at an 8th-grade level for both.
+   - Do NOT modernize proper nouns, character names, place names, or period-specific objects (carriage, telegram, snuff-box, parasol). The setting stays in its era.
 
-4. SIMPLIFY SYNTAX:
-   - Break complex nested clauses into clearer structures
-   - Reorder inverted sentence structures to standard modern order
-   - Clarify ambiguous pronoun references
-   - Make passive voice active where it improves clarity
+4. SIMPLIFY SYNTAX — TARGET: 15–20 WORDS PER SENTENCE ON AVERAGE:
+   - Average sentence length should be 15–20 words. Hard cap: ~25 words. Mix in some 5–10 word sentences for rhythm.
+   - When the original is a long sentence joined by semicolons, em-dashes, or multiple coordinating conjunctions, split it into 2–3 shorter sentences within the SAME paragraph.
+   - Reorder inverted sentence structures into standard subject–verb–object order.
+   - Resolve ambiguous pronouns: if "he" or "it" could refer to two characters/things, name the referent.
+   - Prefer ACTIVE voice over passive. Keep passive only when the agent is unknown or genuinely irrelevant.
+   - Break nested relative clauses ("which … that … whom …") into separate sentences.
 
-5. QUALITY STANDARDS:
-   - The result should read naturally to a modern audience
-   - Target middle school reading level - use simple, everyday language
-   - Replace difficult words with common alternatives
-   - Preserve the literary merit and artistry of the original through clear storytelling
-   - Prioritize clarity and accessibility over sophisticated vocabulary
+5. QUALITY STANDARDS — WRITE FOR A CURIOUS 13–14-YEAR-OLD READER:
+   - The reader is in 8th grade (U.S.), age 13–14, reading for pleasure. They are smart but not yet fluent in 19th-century English. Lexile target: roughly 925L–1185L.
+   - Use plain, everyday words a middle schooler hears at school or sees in YA novels — NOT picture-book vocabulary. Do not condescend.
+   - Keep the story's emotion, suspense, humor, and atmosphere. Modernization should make the prose feel like a contemporary YA novel set in the original era — not like a Wikipedia plot summary.
+   - Before producing the final text, mentally check: would an 8th grader read this aloud without stumbling on any word or sentence?
 
 IMPORTANT OUTPUT FORMAT:
 Format your response EXACTLY as shown below. Use sequential chapter numbers (1, 2, 3...) in your markers:

@@ -126,6 +126,22 @@ Removes any paragraph that is entirely whitespace + decorative chars (`* - . …
 
 `formatChapterText` and `formatSideBySideText` in `frontend/static/js/app.js` split on **single `\n`**, then filter blank lines. So if a `*` survives in the DB, it appears as a `<p>*</p>` in the rendered chapter. The DB-strip is the single source of truth — the frontend does NOT defensively filter dividers (we chose explicit data over hidden cleanup).
 
+### Sibling cleanup — strip illustration captions
+
+For illustrated editions (Little Women in particular), `chapter_text` is polluted with illustration captions interleaved as paragraphs (`"Tail-piece"`, `"The procession set out"`, `"List of Illustrations"`). Run this immediately after `strip_decorative_dividers`:
+
+```sh
+PYTHONPATH=backend venv/bin/python scripts/audits/strip_illustration_captions.py --book-id <id> --dry-run
+PYTHONPATH=backend venv/bin/python scripts/audits/strip_illustration_captions.py --book-id <id>
+```
+
+The script strips (from `chapter_text` only):
+- Short paragraphs (<100 chars) that don't end with terminal punctuation and don't start with an opening quote or lowercase letter
+- Known front-matter labels (`Contents`, `Preface`, `Tail-piece`, `List of Illustrations`, `Part First`, `Part Second`)
+- Trailing transcriber/publisher notes (`On page N`, `Transcriber's Note`, `Project Gutenberg`, `This is a list of`)
+
+Idempotent. Safe to run on non-illustrated books (no-op on most). See lesson #13 for detection details and lesson #14 for the related publisher-boilerplate case where you may need to manually truncate `chapter_text` at the last narrative paragraph.
+
 ---
 
 ## Step 4 — Audit each chapter
@@ -231,6 +247,8 @@ Examples:
 
 ### 5g. Internal Gemini merge/split (when 5a-5f don't apply)
 
+**Decision rule: `abs(diff) ≤ 5` → ALWAYS dispatch a Sonnet subagent. `abs(diff) > 5` → regenerate via step 6 first.** See lesson #11 for the rationale and validation data. Subagents are cheaper, deterministic, and never produce damage when properly gated.
+
 Dispatch a **Sonnet** subagent (NOT Haiku — see below) per chapter:
 
 ```sh
@@ -243,8 +261,9 @@ Subagent prompt must include:
 - ONLY modify that single chapter (`book_id` + `chapter_number`).
 - ALWAYS dry-run via `--split "..." --dry-run` before applying.
 - NEVER split mid-sentence — only at sentence-terminator boundaries (`.!?")'”’`).
-- Target paragraph counts must match EXACTLY (`orig - mod == 0`). Don't stop at ±2.
+- Target paragraph counts must match EXACTLY (`orig - mod == 0`). Don't stop at ±1.
 - If split points don't visually align with original paragraph boundaries, REPORT and exit. Don't guess.
+- Mention the alternative: if the original has a paragraph the modern dropped (poetry, footnote, end-of-volume marker, transcriber note), append/insert it verbatim from `chapter_text` via direct SQL rather than splitting mod text.
 
 ### Why Sonnet, not Haiku
 
@@ -301,6 +320,7 @@ After regenerating any chapter, return to step 2 (reformat) → step 3 (strip) �
 | `scripts/content/generate_modern_english.py` | Calls Gemini; writes to `chapters.modern_english_text` and logs | (integration) |
 | `scripts/audits/reformat_paragraphs.py` | Hard-wrap → `\n\n`, strip title prefix. Works on either column. | `tests/test_reformat_paragraphs.py` |
 | `scripts/audits/strip_decorative_dividers.py` | Removes `* * *`, `---`, etc. divider paragraphs from both columns | `tests/test_strip_decorative_dividers.py` |
+| `scripts/audits/strip_illustration_captions.py` | Removes illustration captions (short, no terminal punct, no opening quote), front-matter labels (`Tail-piece`, `Contents`, etc.), and trailing transcriber/publisher noise from `chapter_text`. Run BEFORE first-pass generation on illustrated editions. | (none yet — add when used in anger) |
 | `scripts/audits/split_modern_paragraphs.py` | Manual `--split` / `--merge` tool for surgical alignment via Sonnet subagent | `tests/test_split_modern_paragraphs.py` |
 
 All scripts:
@@ -337,6 +357,7 @@ What works: launch 2 at a time. As each finishes, validate via steps 2-5 (which 
 | After regen + cleanup of Dracula publisher boilerplate | 510 / 523 | 97.5% |
 | First 10 new books regenerated (147 chapters) | 657 / 670 | 98.1% |
 | Second 10 new books regenerated (146 chapters) | **816 / 816** | **100%** |
+| **Top-10 next batch (May 31, 11 new books, 408 chapters)** | **1224 / 1224** | **100%** |
 
 ### Books with notable corner cases
 
@@ -358,6 +379,19 @@ What works: launch 2 at a time. As each finishes, validate via steps 2-5 (which 
 | All Quiet ch.3 | Rhyming couplet split into 2 paragraphs by modern | Sonnet merge |
 | Jungle Book ch.8 (Lukannon) | Poem — 6 stanzas exploded into 25 single-line paragraphs | Sonnet merges (18 of them) |
 | Jungle Book ch.7 (White Seal) | Seal Lullaby poem stanzas exploded | Sonnet merges |
+| Little Women ch.1 (305 paras), ch.47 (256 paras) | Illustration captions interleaved as paragraphs in `chapter_text` (e.g. "Tail-piece", "The procession set out"); Gemini correctly omitted them | New `strip_illustration_captions.py` script, then regen |
+| Little Women ch.47 | 165 paragraphs of publisher catalog ads (Alcott book list with prices) after final story line | Truncate `chapter_text` at the last narrative paragraph |
+| Huckleberry Finn chs 35-38 | Gemini injected literal `### CHAPTER 1`-`### CHAPTER 4` markdown headers as paragraph 0 | Mechanical strip of the bogus header paragraph |
+| Huckleberry Finn ch.43 | Gemini prepended a `CHAPTER 43: <title>` paragraph not in original | Mechanical strip |
+| Scarlet Letter ch.24 | Original ended with 5 paragraphs of transcriber typo-correction notes (`page 072 — spelling normalized...`) Gemini dropped | Append verbatim from original to modern |
+| Scarlet Letter ch.0 (Custom-House) | 89K-char preface; gemini-3.5-flash *truncated* on the long input, summarizing down to ~30K chars. Default flash-lite handled it correctly. | Counter-intuitive: don't escalate long chapters; flash-lite handled it on first try |
+| Anne ch.19, Anne ch.33, Little Women ch.47 | Inline poetry quote that Gemini collapsed into surrounding narration without paragraph breaks | Sonnet split at sentence-terminator boundaries adjacent to the quote |
+| Anne ch.36 | Gemini injected `### CHAPTER 1` markdown header (same pattern as Huck chs 35-38) | Merge into next paragraph |
+| Sense & Sensibility ch.22, ch.36 | Original ends with `END OF THE FIRST VOLUME` / `END OF THE SECOND VOLUME` marker as its own paragraph; Gemini dropped it | Append verbatim from original |
+| A Little Princess ch.19 | Original's last paragraph was the Project Gutenberg end note (`"End of Project Gutenberg's A Little Princess..."`) Gemini omitted | Append verbatim |
+| Uncle Tom's Cabin (14 chapters) | Bible/literary citation footnotes as standalone paragraphs (`[1] Ps. 74:20.`, `[2] hymn attribution`) Gemini dropped | Insert verbatim from original at correct position |
+| Tess ch.44 | Original ended with 3 division markers (`End of Phase the Fifth`, `Phase the Sixth:`, `The Convert`) Gemini dropped | Append verbatim from original |
+| Tess ch.43 | Gemini merged two short adjacent narration paragraphs into one | Sonnet split at sentence terminator |
 
 ---
 
@@ -413,15 +447,68 @@ When modern correctly omits non-narrative content (publisher ads after "THE END"
 
 Paradise Lost (`is_poetry=1`) uses single `\n` as a verse-line break. The paragraph-count comparison is meaningless. Scripts that touch paragraphs refuse to operate on these. Currently no plain-English version exists for verse books; would need a verse-aware prompt + validation flow.
 
+### 11. The ±5 rule — Sonnet for small deltas, Gemini for big ones
+
+Decision boundary: `abs(diff) ≤ 5` → ALWAYS dispatch a Sonnet subagent. `abs(diff) > 5` OR `char_ratio < 0.50` → regenerate via Gemini.
+
+Rationale validated on this batch: across the Top-10 next-batch session, Sonnet subagents fixed 18 distinct chapters with diffs ranging ±1 to +4 at 100% success rate (Uncle Tom's Cabin 14, Anne 2, A Little Princess 1, S&S 2, Little Women 1). Every Sonnet attempt either nailed exact match or correctly reported the problem was structural (poetry collapse without sentence-terminator anchors) — never produced damage. Gemini regen costs 1 paid call (often more if it retries on the same mismatch); Sonnet costs a few cents and is deterministic. **The previous "don't stop at ±2" guidance from step 5g is superseded by ±5.**
+
+For abs(diff) > 5: those are almost always summary-shaped chapters or truncated chapters where mechanical splitting can't work because the source material is missing. Regenerate first, audit, then if still off-by-small dispatch Sonnet.
+
+### 12. `gemini-3.5-flash` has a hard 20-requests-per-day quota on the free tier
+
+Once exhausted, you get `429 RESOURCE_EXHAUSTED` for the rest of the day on that model only. Default `gemini-3.1-flash-lite` has a separate, much higher quota. Plan escalations carefully: don't burn 3.5-flash on 14 chapters of Uncle Tom's Cabin in one shot when you might need it tomorrow for an actually-truncated chapter. **Triage first**: only escalate chapters where you've confirmed flash-lite's output is summary-shaped or mid-word-truncated, not just off-by-1.
+
+### 13. Illustration captions are pollution in `chapter_text`, not narrative
+
+Books like Little Women (illustrated edition) interleave illustration captions as paragraphs between narrative paragraphs (e.g. `"Tail-piece"`, `"The procession set out"`, `"List of Illustrations"`). Gemini correctly omits these from translation, but they inflate the original's paragraph count, breaking alignment.
+
+**Detection pattern**: short paragraph (<100 chars), doesn't end with terminal punctuation (`.!?")`), doesn't start with an opening quote (real dialogue), doesn't start with lowercase. Plus known front-matter labels (`Contents`, `Preface`, `Tail-piece`, `List of Illustrations`, `Part First`, `Part Second`).
+
+Use `scripts/audits/strip_illustration_captions.py --book-id N --dry-run` BEFORE first-pass `generate_modern_english.py`. Idempotent. Safer to run on every illustrated edition.
+
+### 14. Trailing publisher boilerplate can be hundreds of paragraphs
+
+Little Women ch.47 had 165 paragraphs of Louisa May Alcott book catalog ads after the story's final line ("...never can wish you a greater happiness than this!"). Modern correctly stopped at the story's end; original kept going. The +166 diff is misleading — it's not a translation problem, it's a `chapter_text` pollution problem.
+
+**Detection**: original is many times longer than modern + last narrative paragraph identifiable + back-matter has telltale markers (`THE LITTLE WOMEN SERIES.`, equals-sign-wrapped book titles, prices like `$1.50`). Truncate `chapter_text` at the last narrative paragraph before regenerating modern.
+
+### 15. Counter-intuitive: long chapters fare BETTER on flash-lite than 3.5-flash
+
+Scarlet Letter ch.0 ("The Custom-House", 89K chars) was *truncated* by `gemini-3.5-flash` (output capped at ~30K) but handled fully by default `gemini-3.1-flash-lite` (full 15K-word translation, exact 101→101 paragraph match). Don't default to escalating long chapters — try flash-lite first; 3.5-flash has a tighter output ceiling.
+
+### 16. Gemini sometimes injects `### CHAPTER N` markdown headers as paragraph 0
+
+When a single batch contains multiple chapters, Gemini occasionally prepends a literal `### CHAPTER 1`-style header to the first chapter's translation. This is *not* a chapter title, just markdown chrome. Strip mechanically — drop paragraph 0 if it matches `^### CHAPTER \d+` or `^CHAPTER \d+:`.
+
+Pattern observed in: Huck Finn chs 35-38 + ch.43, Anne ch.36.
+
+### 17. `END OF THE FIRST VOLUME` / `END OF THE SECOND VOLUME` / `Phase the Sixth:` markers
+
+Multi-volume Victorian novels (Sense & Sensibility, Vanity Fair, Tess of the D'Urbervilles, etc.) often have structural markers as standalone paragraphs at the end of certain chapters: volume divisions (`END OF THE FIRST VOLUME`), phase divisions in Tess (`End of Phase the Fifth`, `Phase the Sixth:`, `The Convert`), or part divisions. Gemini drops them — they look like trash to the translator. Append verbatim from `chapter_text` — they're load-bearing for paragraph alignment but not translatable.
+
+### 18. Inline poetry quotes — Gemini collapses them into surrounding narration
+
+When the original has narration → poetry quote → continuation as three paragraphs, Gemini frequently squashes all three into one prose paragraph, dropping the poetry quote entirely or paraphrasing it inline. Sonnet can split the result at sentence-terminator boundaries adjacent to where the quote belongs, sometimes recovering structure without needing to re-inject the quote.
+
+Pattern observed in: Anne ch.19, Anne ch.33, Little Women ch.47.
+
 ---
 
-## Cost summary (for the 20-book migration)
+## Cost summary
 
+**20-book initial migration (May 2026):**
 - ~316 chapters across 20 books, average ~3 API calls per chapter (with reruns + escalations) ≈ ~70 paid API calls
 - Almost all on `gemini-3.1-flash-lite` free tier (cost: $0)
 - ~5 chapters escalated to `gemini-3.5-flash` (cost: <$0.10 at list pricing)
 - ~10 Sonnet subagent invocations for alignment (cost: a few cents each via Anthropic API)
 - **Total marginal spend: ~$1-2** for 316 chapters of paragraph-aligned plain English
+
+**Top-10 next-batch session (May 31, 11 new books, 408 chapters → 100% match):**
+- ~85 Gemini batches (~22 books worth — many regens for misalignments)
+- All on `gemini-3.1-flash-lite` except ~25 calls on `gemini-3.5-flash` (exhausted the 20/day quota on day 1)
+- **5 Sonnet subagent invocations** total — fixed 18 chapters at 100% success rate
+- Key insight: every Sonnet call replaces 1-3 Gemini regens that would have eaten quota AND still might leave mismatches. ±5 rule pays back fast.
 
 ---
 
