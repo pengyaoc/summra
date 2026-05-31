@@ -3902,109 +3902,41 @@ class SummraApp {
 
         // Reinitialize pagination if active (check for pagination wrapper existence)
         const paginationWrapper = document.querySelector('.pagination-wrapper');
-        if (paginationWrapper) {
-            console.log('[Font] Pagination wrapper found, reinitializing...');
-            const currentViewMode = this.getCurrentViewMode();
-            console.log('[Font] Current view mode:', currentViewMode);
+        if (!paginationWrapper) {
+            return;
+        }
 
-            // Get the parent container that has the pagination wrapper
-            const parentContainer = paginationWrapper.parentElement;
-            console.log('[Font] Parent container:', parentContainer?.id, parentContainer?.className);
+        const currentViewMode = this.getCurrentViewMode();
+        const parentContainer = paginationWrapper.parentElement;
+        if (!parentContainer) {
+            return;
+        }
 
-            if (parentContainer) {
-                this.clearPagination();
+        this.clearPagination();
 
-                // IMPORTANT: We need to restore ALL the view containers, not just the current one
-                // Because pagination wrapper is inside one container, but we need all containers fresh
-                const fullTextEl = document.getElementById('chapter-fulltext');
-                const modernEnglishEl = document.getElementById('chapter-modern-english');
-                const sideBySideEl = document.getElementById('chapter-side-by-side');
+        // Restore each view container from the snapshot taken before pagination
+        // wrapped them. originalContent holds the correctly-formatted HTML for
+        // whichever containers have been paginated this session — including
+        // side-by-side, which was built from raw chapter text in showChapterDetail.
+        const fullTextEl = document.getElementById('chapter-fulltext');
+        const modernEnglishEl = document.getElementById('chapter-modern-english');
+        const sideBySideEl = document.getElementById('chapter-side-by-side');
 
-                console.log('[Font] Restoring all view containers from originalContent...');
-
-                // Restore each container individually
-                if (this.pagination.originalContent) {
-                    if (this.pagination.originalContent['chapter-fulltext'] && fullTextEl) {
-                        fullTextEl.innerHTML = this.pagination.originalContent['chapter-fulltext'];
-                        console.log('[Font] Restored chapter-fulltext');
-                    }
-                    if (this.pagination.originalContent['chapter-modern-english'] && modernEnglishEl) {
-                        modernEnglishEl.innerHTML = this.pagination.originalContent['chapter-modern-english'];
-                        console.log('[Font] Restored chapter-modern-english');
-                    }
-                    if (this.pagination.originalContent['chapter-side-by-side'] && sideBySideEl) {
-                        sideBySideEl.innerHTML = this.pagination.originalContent['chapter-side-by-side'];
-                        console.log('[Font] Restored chapter-side-by-side');
-                    }
-                } else {
-                    console.log('[Font] No original content stored');
-                }
-
-                // Regenerate side-by-side content if needed (it's dynamically generated, not stored)
-                if (currentViewMode === 'side-by-side') {
-                    console.log('[Font] Current view mode is side-by-side, regenerating...');
-                    const sideBySideEl = document.getElementById('chapter-side-by-side');
-                    const fullTextEl = document.getElementById('chapter-fulltext');
-                    const modernEnglishEl = document.getElementById('chapter-modern-english');
-
-                    console.log('[Font] Elements found:', {
-                        sideBySideEl: !!sideBySideEl,
-                        fullTextEl: !!fullTextEl,
-                        modernEnglishEl: !!modernEnglishEl
-                    });
-
-                    // Get the raw text from the already-populated containers
-                    const originalText = fullTextEl?.textContent || '';
-                    const modernText = modernEnglishEl?.textContent || '';
-
-                    console.log('[Font] Text lengths:', {
-                        original: originalText.length,
-                        modern: modernText.length
-                    });
-
-                    console.log('[Font] Calling formatSideBySideText...');
-                    const sideBySideFormatted = this.formatSideBySideText(originalText, modernText);
-                    console.log('[Font] Formatted HTML length:', sideBySideFormatted.length);
-
-                    console.log('[Font] Setting innerHTML...');
-                    sideBySideEl.innerHTML = sideBySideFormatted;
-                    console.log('[Font] innerHTML set complete');
-
-                    // Check if side-by-side structure was preserved
-                    const headers = sideBySideEl.querySelectorAll('.side-by-side-headers');
-                    const rows = sideBySideEl.querySelectorAll('.side-by-side-row');
-                    console.log('[Font] Side-by-side structure check:', {
-                        headers: headers.length,
-                        rows: rows.length,
-                        firstRowHTML: rows[0]?.outerHTML.substring(0, 200)
-                    });
-                }
-
-                // Get fresh container after restoration
-                console.log('[Font] Applying chapter view mode...');
-                const containerToPaginate = this.applyChapterViewMode(currentViewMode);
-                console.log('[Font] Container to paginate:', containerToPaginate?.id, containerToPaginate?.className);
-                console.log('[Font] Container HTML length:', containerToPaginate?.innerHTML?.length);
-
-                // Verify side-by-side structure in container
-                if (currentViewMode === 'side-by-side' && containerToPaginate) {
-                    const headers = containerToPaginate.querySelectorAll('.side-by-side-headers');
-                    const rows = containerToPaginate.querySelectorAll('.side-by-side-row');
-                    console.log('[Font] Container side-by-side structure:', {
-                        headers: headers.length,
-                        rows: rows.length,
-                        containerClasses: containerToPaginate.className
-                    });
-                }
-
-                if (containerToPaginate) {
-                    console.log('[Font] Calling initializePagination...');
-                    this.initializePagination(containerToPaginate, currentViewMode, this.currentIllustrationData);
-                    console.log('[Font] initializePagination complete');
-                }
+        if (this.pagination.originalContent) {
+            if (this.pagination.originalContent['chapter-fulltext'] && fullTextEl) {
+                fullTextEl.innerHTML = this.pagination.originalContent['chapter-fulltext'];
             }
-        } else {
-            console.log('[Font] No pagination wrapper found');
+            if (this.pagination.originalContent['chapter-modern-english'] && modernEnglishEl) {
+                modernEnglishEl.innerHTML = this.pagination.originalContent['chapter-modern-english'];
+            }
+            if (this.pagination.originalContent['chapter-side-by-side'] && sideBySideEl) {
+                sideBySideEl.innerHTML = this.pagination.originalContent['chapter-side-by-side'];
+            }
+        }
+
+        const containerToPaginate = this.applyChapterViewMode(currentViewMode);
+        if (containerToPaginate) {
+            this.initializePagination(containerToPaginate, currentViewMode, this.currentIllustrationData);
         }
     }
 
