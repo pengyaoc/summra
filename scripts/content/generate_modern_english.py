@@ -107,8 +107,10 @@ CRITICAL TRANSLATION RULES:
    - CRITICAL: Do NOT skip or omit any paragraph - every paragraph must be translated
    - CRITICAL: Do NOT skip or omit any sentence - every sentence must be translated
    - CRITICAL: Each original sentence must remain as ONE sentence in the translation
+   - CRITICAL: If the chapter text begins with the chapter title as its first paragraph (e.g. "CHAPTER I" or "IN WHICH PIGLET MEETS A HEFFALUMP"), you MUST keep that title verbatim as the first paragraph of your translation. Do NOT translate, modernize, or drop the title.
    - Maintain the exact same number of sentences and paragraphs as the original
    - Each original paragraph must remain as ONE paragraph in the translation
+   - Keep dialogue markers and formatting exactly as they appearONE paragraph in the translation
    - Keep dialogue markers and formatting exactly as they appear
 
 2. MODERNIZE LANGUAGE:
@@ -198,6 +200,7 @@ CRITICAL TRANSLATION RULES:
    - Do NOT add or remove ANY sentences in any chapter
    - Do NOT add or remove ANY paragraphs in any chapter
    - Do NOT merge or split paragraphs
+   - CRITICAL: If a chapter's text begins with the chapter title as its first paragraph (e.g. "CHAPTER I" or "IN WHICH PIGLET MEETS A HEFFALUMP"), you MUST keep that title verbatim as the first paragraph of that chapter's translation. Do NOT translate, modernize, or drop the title.
    - Maintain the exact same number of sentences and paragraphs as the original for EACH chapter
    - Keep dialogue markers and formatting exactly as they appear
 
