@@ -24,18 +24,23 @@ if (workbox) {
         { url: '/offline', revision: '1.0.0' }
     ]);
 
-    // Cache CSS files - Cache First (long-lived, versioned in URL)
+    // Cache CSS files - Stale While Revalidate (serve cache instantly, refresh
+    // in background). Switched from CacheFirst because the 30-day max-age was
+    // pinning broken CSS for returning users after layout changes shipped.
+    // SWR self-heals within one navigation cycle even without URL versioning,
+    // and templates now also append asset_v('css/...') as a content-hash query
+    // string for immediate cache invalidation on deploy.
     registerRoute(
         ({ request }) => request.destination === 'style',
-        new CacheFirst({
-            cacheName: 'css-cache',
+        new StaleWhileRevalidate({
+            cacheName: 'css-cache-v2',
             plugins: [
                 new CacheableResponsePlugin({
                     statuses: [0, 200],
                 }),
                 new ExpirationPlugin({
                     maxEntries: 10,
-                    maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                    maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
                 }),
             ],
         })

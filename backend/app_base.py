@@ -79,6 +79,48 @@ def inject_environment():
     }
 
 
+# Cache-busting helper for static assets.
+#
+# The service worker (frontend/static/service-worker.js) caches CSS with the
+# CacheFirst strategy and a 30-day max-age. If a deploy ships a CSS that's
+# incompatible with the existing HTML/JS, returning users will serve the new
+# HTML over old cached CSS until either the cache expires or the user clears
+# site data. asset_v('css/foo.css') returns '?v=<mtime>' so the URL changes
+# whenever the file changes, forcing a cache miss on the new URL.
+#
+# The mtime is read at the start of each request (cheap stat) so it works
+# under any deploy method. Missing files yield '' so templates degrade
+# gracefully rather than crashing.
+def _resolve_static_path(filename: str):
+    """Return the on-disk path of a static asset, honoring a test override."""
+    override = os.environ.get('SUMMRA_STATIC_DIR_OVERRIDE')
+    if override:
+        return Path(override) / filename
+    static_folder = app.static_folder
+    if not static_folder:
+        return None
+    return Path(static_folder) / filename
+
+
+def asset_v(filename: str) -> str:
+    """Return '?v=<mtime>' for an existing static asset, or '' if missing.
+
+    Composed in templates as:
+        href="{{ url_for('static', filename='css/style.css') }}{{ asset_v('css/style.css') }}"
+    """
+    path = _resolve_static_path(filename)
+    if not path or not path.exists():
+        return ''
+    try:
+        mtime = int(path.stat().st_mtime)
+    except OSError:
+        return ''
+    return f'?v={mtime}'
+
+
+app.jinja_env.globals['asset_v'] = asset_v
+
+
 # Helper Functions
 
 def author_name_to_slug(name):

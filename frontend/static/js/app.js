@@ -1415,6 +1415,17 @@ class SummraApp {
         // Show book detail section (handles all section visibility)
         this.showBookDetail(restoreScroll);
 
+        // Render breadcrumbs eagerly here — after the section visibility
+        // transition (so #breadcrumb-nav-book's parent is no longer
+        // display:none) but before any await (so the breadcrumb is filled in
+        // synchronously and the user never sees a 0-height gap between the
+        // outgoing page's breadcrumb being hidden and this page's being
+        // rendered — the "breadcrumb snap-in" regression).
+        // The breadcrumb trail uses this.currentBook + this.originCategory /
+        // originDiscover / originAuthor (set above), none of which depend on
+        // the async loads below.
+        this.updateBreadcrumbs('book');
+
         // Load summaries, chapters, and related books
         await Promise.all([
             this.loadConciseSummary(),
@@ -1428,9 +1439,6 @@ class SummraApp {
 
         // Update URL
         this.updateURL(book);
-
-        // Update breadcrumbs
-        this.updateBreadcrumbs('book');
 
         // Update page title
         this.updatePageTitle(`${book.title} by ${book.author} | Summra`);
@@ -4363,9 +4371,14 @@ class SummraApp {
     /**
      * Hide all breadcrumb navigations
      */
-    hideAllBreadcrumbs() {
+    hideAllBreadcrumbs(except = null) {
+        // `except` lets a caller skip the section it is about to immediately
+        // re-render, which avoids a visible flash (display:none collapses the
+        // breadcrumb's layout box; the content below jumps up then back down
+        // when the rebuilt HTML reattaches a frame later). See updateBreadcrumbs.
         const sections = ['book', 'medium', 'chapter', 'category', 'all-categories', 'blog', 'blog-post', 'author'];
         sections.forEach(section => {
+            if (section === except) return;
             const breadcrumbNav = document.getElementById(`breadcrumb-nav-${section}`);
             if (breadcrumbNav) {
                 breadcrumbNav.classList.add('hidden');
@@ -4423,8 +4436,11 @@ class SummraApp {
      * @param {string} section - Section identifier (book, medium, chapter, category, all-categories)
      */
     updateBreadcrumbs(section = 'book') {
-        // Hide all breadcrumbs first to prevent persistence
-        this.hideAllBreadcrumbs();
+        // Hide every OTHER section's breadcrumb (they may be leftover-visible
+        // from a prior view). Do NOT hide the one we're about to render —
+        // hiding it would collapse its layout box, jump the page content, then
+        // the rebuild a frame later jumps it back ("snap-in" regression).
+        this.hideAllBreadcrumbs(section);
 
         // Build and render breadcrumbs for the active section
         const breadcrumbs = this.buildBreadcrumbs();
