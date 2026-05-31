@@ -4,6 +4,41 @@
 
 ---
 
+## 2026-05-30: Chapter page defaults to Plain English when available
+
+### New default reading mode on chapter pages - COMPLETED
+
+User asked: "On chapter page, default to Plain English if exist, fall back to original." Constraint: "only when user has no saved preference" and (clarified mid-task) "no need to consider backward compatibility."
+
+**Old behavior:** `localStorage.getItem('reading_chapterViewMode') || 'original'` — every first-time visitor saw the source text, even when a Plain English version existed.
+
+**New behavior:** when no saved preference exists (or the saved preference is incompatible with the current chapter / screen), prefer Plain English when `chapter.modern_english_text` exists, else Original. Valid saved preferences are still honored.
+
+**Refactor: extracted decision into a pure helper.** The same default-resolution logic was duplicated in two places in `frontend/static/js/app.js` (chapter view setup, line ~2573; pagination init, line ~2673), each with its own slightly-different fallback ladder. Replaced both with calls to `window.resolveInitialChapterViewMode({ savedMode, hasModern, hasSummary, isScreenTooNarrow })` in a new `frontend/static/js/view_mode.js`. Removed ~20 lines of duplicated fallback code.
+
+The helper file is loaded via plain `<script>` before `app.min.js` in `frontend/templates/index.html`. Mirrored the two patches into the hand-maintained `app.min.js` (no build step in repo).
+
+**Tests:**
+- `tests/js/resolve_view_mode.test.mjs` — 12 unit tests via `node --test`. Loads `view_mode.js` through `node:vm` with a stub `window` so production and tests run the exact same source (no divergence risk from inlining the helper into app.js).
+- `tests/e2e/chapter_view_default.mjs` — 3 Playwright cases against a live Flask: (1) no saved preference → `modern` is active, (2) saved `original` → honored, (3) saved `summary` → honored. All pass on `/books/alices-adventures-in-wonderland/chapters/1`.
+- `pytest tests/` → 362/362 still pass.
+- Smoke harness on `/`, book page, chapter page → no console errors, no failed first-party requests.
+
+**Worktree setup notes** (`.claude/worktrees/read-mode-default`):
+- `data/database.db` symlinked to main worktree's 190MB DB so a chapter page actually renders (worktree starts with a 94KB schema-only stub). Original saved as `data/database.db.worktree-bak`.
+- `tests/e2e/node_modules` symlinked to main.
+- Flask `FLASK_PORT` is hardcoded to 5001 in `backend/config.py`; running parallel sessions requires overriding the port in a Python wrapper, e.g.:
+  ```sh
+  /Users/pengyao/Documents/dev/summra/venv/bin/python -c "
+  import config; config.FLASK_PORT = 5005
+  import app_base
+  app_base.app.run(host='0.0.0.0', port=5005, debug=False, use_reloader=False)
+  "
+  ```
+  (Run from `backend/`.) The env-var contract `PORT=...` mentioned in CLAUDE.md is aspirational — config.py doesn't read it. Consider making `FLASK_PORT` read `os.environ.get('PORT', 5001)` in a follow-up.
+
+---
+
 ## 2026-05-30: Ingest 7 of 10 new Gutenberg books; fix multiple parser bugs
 
 ### Dry-run-first ingestion workflow + line-range helper - COMPLETED

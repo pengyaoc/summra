@@ -2577,17 +2577,14 @@ class SummraApp {
             // Function to check if screen is too narrow for side-by-side view
             const isScreenTooNarrow = () => window.innerWidth < 1024;
 
-            // Load saved view mode preference or default to original
-            let savedViewMode = localStorage.getItem('reading_chapterViewMode') || 'original';
-
-            // Apply saved view mode (unless it's side-by-side on narrow screen or summary when no summary available)
-            let viewModeToApply = savedViewMode;
-            if (savedViewMode === 'side-by-side' && isScreenTooNarrow()) {
-                viewModeToApply = 'original';
-            }
-            if (savedViewMode === 'summary' && !chapter.summary) {
-                viewModeToApply = 'original';
-            }
+            // Resolve the initial view mode (honors valid saved preference,
+            // otherwise prefers Plain English when available, else Original).
+            const viewModeToApply = window.resolveInitialChapterViewMode({
+                savedMode: localStorage.getItem('reading_chapterViewMode'),
+                hasModern: !!chapter.modern_english_text,
+                hasSummary: !!chapter.summary,
+                isScreenTooNarrow: isScreenTooNarrow(),
+            });
 
             // Setup unified view toggle event listeners
             const unifiedViewBtns = document.querySelectorAll('.unified-view-btn');
@@ -2677,23 +2674,13 @@ class SummraApp {
             // Clear any existing pagination
             this.clearPagination();
 
-            // Determine which view mode to use
-            let savedViewMode = localStorage.getItem('reading_chapterViewMode') || 'original';
-
-            // If saved view mode is 'summary' but no summary available, fall back to 'original'
-            if (savedViewMode === 'summary' && !chapter.summary) {
-                savedViewMode = 'original';
-            }
-
-            // If saved view mode is 'modern' but no modern English available, fall back to 'original'
-            if (savedViewMode === 'modern' && !chapter.modern_english_text) {
-                savedViewMode = 'original';
-            }
-
-            // If saved view mode is 'side-by-side' but no modern English available, fall back to 'original'
-            if (savedViewMode === 'side-by-side' && !chapter.modern_english_text) {
-                savedViewMode = 'original';
-            }
+            // Resolve the initial view mode (same helper as the toggle setup above).
+            const savedViewMode = window.resolveInitialChapterViewMode({
+                savedMode: localStorage.getItem('reading_chapterViewMode'),
+                hasModern: !!chapter.modern_english_text,
+                hasSummary: !!chapter.summary,
+                isScreenTooNarrow: window.innerWidth < 1024,
+            });
 
             // Apply view mode and get container to paginate (DRY - uses same helper as view toggle)
             const containerToPaginate = this.applyChapterViewMode(savedViewMode);
