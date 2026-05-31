@@ -787,6 +787,10 @@
     <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
     {% endif %}
 
+    {# view_mode.js exposes window.resolveInitialChapterViewMode and must
+       load before app.js / app.min.js. #}
+    <script src="{{ url_for('static', filename='js/view_mode.js') }}{{ asset_v('js/view_mode.js') }}"></script>
+
     {# In dev mode serve the un-minified app.js so source-mapped errors,
        breakpoints, and edits show up without a rebuild. Prod serves
        app.min.js. asset_v() appends a content-hash query so the service

@@ -20,8 +20,8 @@ if (workbox) {
     // Precache app shell and critical resources
     // Note: In production, you would generate this list with workbox-build
     precacheAndRoute([
-        { url: '/', revision: '1.0.0' },
-        { url: '/offline', revision: '1.0.0' }
+        { url: '/', revision: '1.0.1' },
+        { url: '/offline', revision: '1.0.1' }
     ]);
 
     // Cache CSS files - Stale While Revalidate (serve cache instantly, refresh
