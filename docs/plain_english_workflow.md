@@ -1,0 +1,430 @@
+# Plain English (Modern Translation) Workflow
+
+End-to-end process for generating, validating, and fixing `chapters.modern_english_text` — the "plain English" version of each chapter shown alongside the original in the side-by-side reading view.
+
+This document is the long-form companion to the "Plain English Workflow" section in `CLAUDE.md`. CLAUDE.md is the cheat-sheet; this is the full story, including every corner case we hit during the first 20-book migration and how we solved it.
+
+## The end goal
+
+For every chapter where modern text exists:
+
+- **`paragraph_diff == 0` (EXACT match).** Splitting `chapter_text` and `modern_english_text` on `\n\n` must yield the same paragraph count. The side-by-side reading view pairs them by index — any mismatch causes visible misalignment. Within ±2 is NOT good enough.
+- **`char_ratio` in `[0.50, 1.10]`.** Modern is at least 50% of original length and not wildly longer. Anything <50% almost always indicates truncation or summary substitution by Gemini.
+- **Modern ends at a sentence terminator** matching the original's narrative endpoint. Mid-word endings ("...risky har") are an instant-fail truncation signal.
+- **Title alignment.** If the original's first paragraph is the chapter title, modern's first paragraph must be the same title (case-matched to the body — not to the `chapter_title` field which may differ).
+
+## The 6-step process
+
+```
+1. Generate (Gemini)
+2. Reformat hard-wrapped paragraphs (mechanical)
+3. Strip decorative dividers      (mechanical)
+4. Audit each chapter             (mechanical)
+5. Fix misalignments              (mostly mechanical; Sonnet subagent if needed)
+6. Regenerate damaged chapters    (Gemini, only for truncated/summary cases)
+```
+
+Steps 2, 3, 4 are idempotent and free. Step 5 is mechanical for the common patterns (title prepend, divider strip, end-marker append) and falls back to a Sonnet subagent for non-trivial cases. Step 6 is the only paid step beyond step 1; gate it carefully.
+
+---
+
+## Step 1 — Generate the plain-English version
+
+```sh
+PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --all-chapters --dry-run
+PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --all-chapters
+```
+
+### Rules
+
+- **Always dry-run first** to see batch count and per-batch char sizes. The smart batcher caps each batch at 60K input chars and 10 chapters per batch — large chapters land solo.
+- **Always start with `gemini-3.1-flash-lite`** (the default). Cheapest, fastest, handles 90%+ of chapters cleanly. Don't escalate preemptively.
+- **Escalate to `--model gemini-3.5-flash`** for individual chapters that come back truncated or summary-shaped (detected in step 4). Confirmed to recover full output where flash-lite gave up.
+- **The prompt instructs Gemini to keep the chapter title as the first paragraph** (`scripts/content/generate_modern_english.py:109-110`). Older runs predating that prompt fix often dropped titles — step 5a fixes those mechanically.
+
+### Cost discipline (`MEMORY.md → feedback_llm_cost.md`)
+
+- Never run without explicit permission.
+- Raw responses persist to `data/log/gemini_logs/`; per-chapter previews to `data/log/modern_english/`. If a parsing bug requires reprocessing, you can replay from these logs without paying again.
+
+### Rate limits
+
+- Free tier: ~5 RPM, 1M TPM, 1500 RPD for `gemini-3.1-flash-lite`.
+- Each script run sleeps 3 seconds between batches.
+- **Don't run more than 2 books in parallel.** We tried 10 — they all stalled on rate-limit backoff (10-minute exponential retries piled up) and produced zero progress for 30+ minutes before we killed them. 2 concurrent processes keep total RPM under the limit because batches take 30-180 seconds each.
+
+### Batch size and truncation
+
+Config constants in the script:
+- `MAX_CHAPTERS_PER_BATCH = 10`
+- `MAX_BATCH_CHARS = 60000` — chapters >60K solo
+- `MAX_OUTPUT_TOKENS = 65535` — output cap
+
+The output cap isn't usually the bottleneck. Truncation happens because flash-lite **chooses to abbreviate** on long inputs even when output cap allows more. Examples we hit:
+
+- **Moby Dick ch.81** (24K orig) → modern was 30% length, ending mid-word "har"
+- **Sherlock ch.1** (~50K orig) → modern was 36% length, ending "...with you." mid-conversation
+- **Invisible Man ch.28** (16K orig + 6K epilogue) → modern dropped the entire 12-paragraph "THE EPILOGUE"
+- **Odyssey ch.24** (79K orig, 252 paragraphs of stichomythia) → flash-lite AND 3.5-flash both produced ~45-paragraph summaries; this chapter remains the model's ceiling
+
+---
+
+## Step 2 — Reformat hard-wrapped paragraphs
+
+```sh
+PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id> --dry-run
+PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id>
+PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id> --column modern_english_text
+```
+
+### Why this matters
+
+Many Project Gutenberg ingests stored `chapter_text` (and some `modern_english_text`) hard-wrapped: paragraphs separated by single `\n` instead of `\n\n`. The paragraph validator splits on `\n\n` and would misreport `Orig=1, Modern=N` for every such chapter — looks like 100% mismatch but is actually just a formatting artifact.
+
+### What the script does
+
+For each chapter:
+1. Strips a leading `title\n` prefix if the chapter_text starts with the title followed by a newline.
+2. Replaces any single `\n` (not adjacent to another `\n`) with `\n\n`.
+
+Pure DB rewrite. No LLM calls. Idempotent.
+
+### Corner cases handled
+
+- **Title-case mismatch**: `chapter_title` field may be `"In Which Piglet Meets a Heffalump"` while `chapter_text` starts with `"IN WHICH PIGLET MEETS A HEFFALUMP\n..."`. The strip uses the title from `chapter_title` literally, so uppercase body titles aren't stripped. This is fine — step 5a handles title alignment separately.
+- **Poetry books**: `is_poetry=1` books refuse to be reformatted (verse line breaks are not paragraph breaks). Paradise Lost is the canonical example.
+- **Pre-existing `\n\n` runs**: left alone (the regex `(?<!\n)\n(?!\n)` only matches isolated newlines).
+
+### Tests
+
+`tests/test_reformat_paragraphs.py` — covers transform purity, title-prefix stripping with special regex chars, idempotency, `--column` flag.
+
+---
+
+## Step 3 — Strip decorative section dividers
+
+```sh
+PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id <id> --dry-run
+PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id <id>
+```
+
+### Why this matters
+
+Some books use rows of `* * * * *` (or dashes/dots) as scene-break markers. Gemini correctly ignores them as non-content, so modern winds up short — but the original side still counts them as paragraphs, causing systematic mismatches.
+
+### Examples we hit
+
+- **Alice ch.1**: 6 dividers (Carroll marks each "Alice shrinks/grows" scene change). Without strip, ch.1 was `orig=30, mod=24` (diff -6).
+- **Dracula**: 23 of 28 chapters had `* * *` scene breaks. Without strip, every chapter mismatched.
+- **Single asterisks**: a lone `*` is also treated as a divider (Alice ch.1 had one).
+
+### What the script does
+
+Removes any paragraph that is entirely whitespace + decorative chars (`* - . … • · ~ _ =`). Idempotent. Tests at `tests/test_strip_decorative_dividers.py`.
+
+### Important — frontend rendering
+
+`formatChapterText` and `formatSideBySideText` in `frontend/static/js/app.js` split on **single `\n`**, then filter blank lines. So if a `*` survives in the DB, it appears as a `<p>*</p>` in the rendered chapter. The DB-strip is the single source of truth — the frontend does NOT defensively filter dividers (we chose explicit data over hidden cleanup).
+
+---
+
+## Step 4 — Audit each chapter
+
+For every chapter, verify ALL of these — any single failure is a real problem to investigate:
+
+| Check | Expected | Failure means |
+|---|---|---|
+| `paragraph_diff == 0` | `len(chapter_text.split('\n\n')) == len(modern_english_text.split('\n\n'))` | Off-by-1 usually = missing title; larger = truncation/merge |
+| `char_ratio in [0.50, 1.10]` | `len(modern) / len(original)` | Below 50% = truncation or summary substitution |
+| Modern ends at terminator | Last non-whitespace char in `.!?")'”’` | Mid-word endings = truncated |
+| Modern's ending matches narrative endpoint | Compare last ~200 chars | Different events = truncated |
+| Title alignment | If orig's first paragraph IS the title, modern's must be too | Causes off-by-1 |
+
+### Smart-quote pitfall
+
+Earlier audits incorrectly flagged chapters ending in `”` (right smart quote) as "no terminator." **Smart quotes ARE valid terminators.** Include `”` and `’` in the terminator set. Confirmed false positives we wasted time on: Alice ch.6/9/10/11/12, Sherlock ch.2, Oliver Twist ch.13.
+
+### Quick per-book audit snippet
+
+```sh
+PYTHONPATH=backend venv/bin/python3 -c "
+import sqlite3
+db = sqlite3.connect('data/database.db')
+def c(t): return len(t.strip().split(chr(10)*2)) if t and t.strip() else 0
+for n, ot, mt in db.execute('SELECT chapter_number, chapter_text, modern_english_text FROM chapters WHERE book_id=BOOK_ID ORDER BY chapter_number'):
+    if mt is None: print(f'ch.{n}: NULL'); continue
+    o, m = c(ot), c(mt); ratio = len(mt)/max(1,len(ot))*100
+    end = mt.strip()[-1] if mt.strip() else ''
+    flag = 'EXACT' if o == m else 'MISMATCH'
+    print(f'ch.{n}: orig={o} mod={m} diff={o-m:+d} ratio={ratio:.0f}% ends={end!r} {flag}')
+"
+```
+
+---
+
+## Step 5 — Fix paragraph misalignment
+
+Try mechanical fixes FIRST. Most off-by-N diffs match one of these patterns and don't need any LLM:
+
+### 5a. Missing title in modern (most common — off-by-1)
+
+The original's first paragraph IS the chapter title, but Gemini's translation dropped it. Prepend the title using the body's casing — NOT the `chapter_title` field's casing, which often differs (e.g., body has `"FRIDAY NIGHT."` while `chapter_title` is `"Friday Night"`).
+
+```python
+import sqlite3
+db = sqlite3.connect("data/database.db")
+for r in db.execute("SELECT chapter_number, chapter_title, chapter_text, modern_english_text FROM chapters WHERE book_id=BOOK_ID ORDER BY chapter_number"):
+    n, title, ot, mt = r
+    if mt is None: continue
+    op = ot.split("\n\n")[0]
+    mp = mt.split("\n\n")[0]
+    # orig's first paragraph IS the title (short, matches title field case-insensitively)
+    if title and title.lower().rstrip(".") in op.lower().rstrip(".") and len(op) < len(title) + 20:
+        if title.lower().rstrip(".") not in mp.lower().rstrip("."):
+            body_title = op.strip()
+            new_mt = f"{body_title}\n\n{mt}"
+            db.execute("UPDATE chapters SET modern_english_text=? WHERE book_id=BOOK_ID AND chapter_number=?", (new_mt, n))
+            print(f"Fixed ch.{n}: prepended {body_title!r}")
+db.commit()
+```
+
+**Corner case — false negative.** The heuristic `title.lower() not in mp.lower()` can return False when the title phrase appears mid-text. War of the Worlds ch.8 had title "Friday Night" and modern text contained the phrase "on Friday night" 246 chars in — the heuristic skipped the prepend. Fall back to a manual prepend for any chapter that still mismatches after the bulk run.
+
+### 5b. Missing "THE END" or chapter-closing marker
+
+Modern often drops trailing single-line markers like `THE END` or `THE EPILOGUE` because they look like boilerplate. Append them verbatim from the original.
+
+Examples we hit: Wizard of Oz ch.0 (missing book title at end), Looking-Glass ch.12 (missing "THE END"), Hound ch.15 (missing "THE END").
+
+```python
+ot, mt = db.execute("SELECT chapter_text, modern_english_text FROM chapters WHERE book_id=B AND chapter_number=N").fetchone()
+new = mt.rstrip() + "\n\nTHE END"
+db.execute("UPDATE chapters SET modern_english_text=? WHERE book_id=B AND chapter_number=N", (new,))
+```
+
+### 5c. Missing frontmatter (bibliography, publisher info)
+
+Some chapter-0 (preface) rows have publisher/translator/year info as separate paragraphs in the original that Gemini collapsed. Either append back to modern OR strip from original — both work.
+
+Example: All Quiet on the Western Front ch.0 had orig=7 (title, author, translator, city, publisher, year, preface body) but mod=3 (title, author, preface body). We inserted the missing 4 bibliographic paragraphs into modern.
+
+### 5d. Trailing publisher boilerplate
+
+The reverse: some originals end with publisher advertisements after "THE END" that Gemini correctly omitted. Strip from original.
+
+Example: Dracula ch.27 had orig=104, mod=80 — modern stopped at "THE END" (paragraph 80) but original continued for 24 paragraphs of Grosset & Dunlap catalog listings. We removed paragraphs 81-104 from original.
+
+### 5e. Footnote paragraphs
+
+Some originals contain translator/editor footnotes (e.g. `[1] Heber C. Kemball, in one of his sermons...`) that aren't narrative content. Modern translation correctly omits them. Strip from original.
+
+Example: Study in Scarlet ch.10 had a single editor footnote between O18 and O20. Removing it dropped orig from 39 to 38, matching modern.
+
+### 5f. Poem stanza splits
+
+Gemini sometimes formats each verse line as its own paragraph when the original keeps stanzas as paragraphs. Use the `--merge` flag in `split_modern_paragraphs.py` to join consecutive lines back into stanzas.
+
+Examples:
+- **Jungle Book ch.8 (Lukannon)**: 6 stanzas each split into 4 lines (modern had 25 paragraphs, original 7). Merged each group of 4 lines.
+- **Dorian Gray ch.14**: 12 verse lines of French poetry split into individual paragraphs; original had 3 stanza-paragraphs.
+- **All Quiet ch.3**: a rhyming couplet split into 2 paragraphs by modern; original had them as one.
+
+### 5g. Internal Gemini merge/split (when 5a-5f don't apply)
+
+Dispatch a **Sonnet** subagent (NOT Haiku — see below) per chapter:
+
+```sh
+PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --inspect --snippet 200
+PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --split "5:200,7:100" --dry-run
+PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --split "5:200,7:100"
+```
+
+Subagent prompt must include:
+- ONLY modify that single chapter (`book_id` + `chapter_number`).
+- ALWAYS dry-run via `--split "..." --dry-run` before applying.
+- NEVER split mid-sentence — only at sentence-terminator boundaries (`.!?")'”’`).
+- Target paragraph counts must match EXACTLY (`orig - mod == 0`). Don't stop at ±2.
+- If split points don't visually align with original paragraph boundaries, REPORT and exit. Don't guess.
+
+### Why Sonnet, not Haiku
+
+Earlier in this work we used Haiku subagents for alignment. **They dutifully inserted `\n\n` mid-sentence to hit a paragraph count when the modern text was truncated, producing chapters with sentence-cut damage.** Confirmed casualties that had to be regenerated:
+
+- Moby Dick ch.81 (split "Rather\n\n than lose the whale")
+- Odyssey ch.2/14
+- Oliver Twist ch.3/12
+
+Sonnet is the required model for any alignment work that involves judgment.
+
+### Gate step 5g on completeness
+
+Before dispatching ANY alignment subagent, the chapter must pass:
+
+- **char_ratio ≥ 0.50** — modern is at least half the original's length.
+- **Modern ends at a sentence terminator** — last char in `.!?")'”’`.
+
+If either fails, the modern text is INCOMPLETE. Splitting it produces garbage. Regenerate via step 6 first.
+
+---
+
+## Step 6 — Regenerate damaged chapters (Gemini)
+
+When step 4 audit flags a chapter as truncated, summary-shaped, or has a massive irreducible diff that can't be fixed mechanically, regenerate with Gemini.
+
+```sh
+# First retry: re-run with default flash-lite (it's non-deterministic at temperature 0.3)
+PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N,M" --dry-run
+PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N,M"
+
+# If still truncated/summarized, escalate just that chapter
+PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N" --model gemini-3.5-flash
+```
+
+### Failure modes and remediation
+
+| Pattern | Signal | Fix |
+|---|---|---|
+| **Truncated** | char_ratio <50% AND ends mid-word | Re-run flash-lite (may succeed). If repeats, escalate one chapter to 3.5-flash. |
+| **Summary-shaped** | char_ratio <30%, content is condensed not translated. Sometimes prefaced with "I have provided a modern English summary..." | Same — retry, then escalate. |
+| **Massive paragraph mismatch (diff >50, valid content)** | orig 252 → mod 45 with full coverage | Manual subagent alignment infeasible without splitting mid-sentence. Try 3.5-flash (better at preserving structure). If it still summarizes, flag for manual review. Odyssey ch.24 is at the model's ceiling — accepted as known-unfixable. |
+| **NULL modern** | Gemini's parser failed to extract a chapter from the bulk response | Re-run — usually succeeds on retry |
+| **Verse books** | `is_poetry=1`, orig=1 single big block | Skip the paragraph-count check; comparison is meaningless for verse |
+
+After regenerating any chapter, return to step 2 (reformat) → step 3 (strip) → step 4 (audit) → step 5 (fix what's left).
+
+---
+
+## Supporting scripts
+
+| Script | Purpose | Tests |
+|---|---|---|
+| `scripts/content/generate_modern_english.py` | Calls Gemini; writes to `chapters.modern_english_text` and logs | (integration) |
+| `scripts/audits/reformat_paragraphs.py` | Hard-wrap → `\n\n`, strip title prefix. Works on either column. | `tests/test_reformat_paragraphs.py` |
+| `scripts/audits/strip_decorative_dividers.py` | Removes `* * *`, `---`, etc. divider paragraphs from both columns | `tests/test_strip_decorative_dividers.py` |
+| `scripts/audits/split_modern_paragraphs.py` | Manual `--split` / `--merge` tool for surgical alignment via Sonnet subagent | `tests/test_split_modern_paragraphs.py` |
+
+All scripts:
+- Take `--book-id`, support `--dry-run`.
+- Are idempotent (running twice is a no-op).
+- Make zero LLM calls.
+- Refuse to operate on `is_poetry=1` books where applicable.
+
+---
+
+## Per-book parallelism
+
+Rate-limit math: 5 RPM ÷ 1 batch per ~60-180s = roughly 2 concurrent books is the safe ceiling for `gemini-3.1-flash-lite` on free tier.
+
+What we tried that didn't work: 10 books in parallel → all hit 429s, the SDK backed off with exponential retries up to 10 min, processes appeared alive but did nothing for 30+ minutes. Had to kill all 10 and restart serially.
+
+What works: launch 2 at a time. As each finishes, validate via steps 2-5 (which run fast, no LLM cost) and queue the next book. While Sonnet is doing alignment on a finished book, a new book can be regen'ing.
+
+---
+
+## The 20-book migration journey (May 2026)
+
+### Match rate progression
+
+| Stage | EXACT count | Pct |
+|---|---|---|
+| Session start (pre-fix) | 225 / 523 | 43% |
+| After reformat sweep | 484 / 523 | 92.5% |
+| After Gemini regen of 12 summary-shaped chapters | 493 / 523 | 94.3% |
+| After Haiku manual alignment of 7 small-diff chapters | 500 / 523 | 95.6% |
+| After Gemini 3.5-flash escalation for 6 truncated chapters | 505 / 523 | 96.6% |
+| After Haiku alignment of 8 more — DAMAGE FOUND, switched to Sonnet | 505 / 523 | 96.6% |
+| After Sonnet alignment of remaining mismatches | 507 / 523 | 97.0% |
+| After regen + cleanup of Dracula publisher boilerplate | 510 / 523 | 97.5% |
+| First 10 new books regenerated (147 chapters) | 657 / 670 | 98.1% |
+| Second 10 new books regenerated (146 chapters) | **816 / 816** | **100%** |
+
+### Books with notable corner cases
+
+| Book | Issue | Fix |
+|---|---|---|
+| Alice ch.1 | 6 `* * *` scene dividers + a single `*` | Strip dividers |
+| Alice ch.9/12 | Modern dropped title paragraph (title was first paragraph of original) | Title prepend |
+| Dracula ch.1-23 | 23 chapters had `* * *` scene breaks | Strip dividers |
+| Dracula ch.27 | 24 paragraphs of Grosset & Dunlap publisher ads after "THE END" | Strip from original |
+| Wizard of Oz ch.0 | Missing "The Wonderful Wizard of Oz" title at end | Append marker |
+| Moby Dick ch.81 | Truncated mid-word "har"; Haiku then split mid-sentence to fake paragraph count | Regen with flash-lite; switched to Sonnet for alignment |
+| Moby Dick ch.1, Great Expectations ch.1 | Heavily condensed (18-27% length) | Regen; 3.5-flash recovered them |
+| Odyssey ch.2/14, Oliver Twist ch.3/12 | Truncated long before Haiku touched them | Regen |
+| Odyssey ch.24 | 79K-char chapter with 252 dialogue paragraphs; even 3.5-flash summarizes | Accepted at model's ceiling |
+| War of the Worlds (all 20+ chapters) | All chapters' modern text dropped uppercase title paragraph | Bulk title prepend |
+| Study in Scarlet (all 14 chapters) | Same — all titles dropped | Bulk title prepend |
+| Study in Scarlet ch.10 | Editor footnote (`[1] Heber C. Kemball...`) in original Gemini correctly skipped | Strip from original |
+| All Quiet ch.0 | Original had bibliographic frontmatter (translator, city, publisher, year) Gemini collapsed | Append to modern |
+| All Quiet ch.3 | Rhyming couplet split into 2 paragraphs by modern | Sonnet merge |
+| Jungle Book ch.8 (Lukannon) | Poem — 6 stanzas exploded into 25 single-line paragraphs | Sonnet merges (18 of them) |
+| Jungle Book ch.7 (White Seal) | Seal Lullaby poem stanzas exploded | Sonnet merges |
+
+---
+
+## Lessons learned
+
+### 1. Don't trust Gemini's response shape blindly
+
+Gemini will silently substitute a summary for a translation when the input is long, AND keep the same `### CHAPTER N` / `### END CHAPTER N` envelope so the parser accepts it. We caught this in a Dec 2025 gemini log:
+
+> "I can certainly help you understand these chapters from *Moby Dick*. **Instead of a line-by-line translation, I have provided a modern English summary of each section** to help clarify the story and its themes."
+
+The parser dutifully wrote 5 summary-paragraphs to `modern_english_text` for 5 Moby Dick chapters. char_ratio caught it later (4-10% per chapter). **Always run step 4 audit, never trust step 1 completion alone.**
+
+### 2. Gate alignment subagents on completeness
+
+A subagent told to "make paragraph counts match" will faithfully insert `\n\n` mid-sentence to hit a target — even mid-word in the worst case. This produces chapters that pass the count check but are content-broken (Moby Dick ch.81 "Rather\n\n than lose the whale...").
+
+**Before dispatching any alignment subagent, verify**:
+- char_ratio ≥ 0.50
+- modern ends at sentence terminator
+
+If either fails, regenerate, don't align.
+
+### 3. Sonnet for judgment, Haiku not allowed for alignment
+
+Haiku tends to take "match the count" too literally and split where it shouldn't. Sonnet recognizes when no valid split exists and reports back instead of forcing it.
+
+### 4. Use the body's casing for title-prepend, not the title field
+
+`chapters.chapter_title` is often title-case (`"In Which Piglet Meets a Heffalump"`) while the body has uppercase (`"IN WHICH PIGLET MEETS A HEFFALUMP"`). When prepending the title to modern, **use what appears in the body** to preserve the book's typography. Strip via `chapter_text.split('\n\n')[0].strip()`.
+
+### 5. The title-match heuristic has false positives
+
+Checking `title.lower() in modern_first_paragraph.lower()` can match a passing reference to the title's words. War of the Worlds ch.8 title "Friday Night" appeared mid-paragraph as "...on Friday night..." and the heuristic skipped the prepend. **For chapters that remain off-by-1 after bulk-prepend, manually verify and force-prepend.**
+
+### 6. Frontend renders both columns by splitting on single `\n`
+
+`formatChapterText` in `frontend/static/js/app.js` splits on `\n`, not `\n\n`, then filters blank lines. So `\n\n`-separated paragraphs render fine (empty strings get filtered). But any decorative `*` that survives in the DB renders as a literal `<p>*</p>`. The DB-strip is the only line of defense.
+
+### 7. Smart quotes are valid sentence terminators
+
+Audit scripts that check `last_char in '.!?")'` miss valid terminators `”` and `’`. Add both. Failure to do so caused us to incorrectly flag and regenerate clean chapters multiple times.
+
+### 8. Rate-limit math: 2 books in parallel, max
+
+Don't trust "they all started fine" — Gemini's SDK backs off silently for 10+ minutes on 429s. 10 concurrent books → 30+ min of zero progress before timeouts started killing processes. 2 concurrent is a safer ceiling because each batch takes longer than 12 seconds (5 RPM = 12s/req).
+
+### 9. Publisher boilerplate and editor footnotes belong in the original-side cleanup
+
+When modern correctly omits non-narrative content (publisher ads after "THE END", editor footnotes), **the right fix is to remove them from `chapter_text`**, not add them to `modern_english_text`. Modern should be plain English of the actual story, not a translation of publisher catalogs.
+
+### 10. Verse books need a separate strategy
+
+Paradise Lost (`is_poetry=1`) uses single `\n` as a verse-line break. The paragraph-count comparison is meaningless. Scripts that touch paragraphs refuse to operate on these. Currently no plain-English version exists for verse books; would need a verse-aware prompt + validation flow.
+
+---
+
+## Cost summary (for the 20-book migration)
+
+- ~316 chapters across 20 books, average ~3 API calls per chapter (with reruns + escalations) ≈ ~70 paid API calls
+- Almost all on `gemini-3.1-flash-lite` free tier (cost: $0)
+- ~5 chapters escalated to `gemini-3.5-flash` (cost: <$0.10 at list pricing)
+- ~10 Sonnet subagent invocations for alignment (cost: a few cents each via Anthropic API)
+- **Total marginal spend: ~$1-2** for 316 chapters of paragraph-aligned plain English
+
+---
+
+## When you find a new corner case
+
+Add it to the "Books with notable corner cases" table above with: book/chapter, signal, fix. If the fix is a recurring pattern, also update the corresponding step (2, 3, or 5 sub-section). Update CLAUDE.md if the workflow steps themselves change.

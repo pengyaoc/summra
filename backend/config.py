@@ -76,7 +76,7 @@ VITS_TTS_CHUNK_SIZE_WORDS = 20  # Much smaller chunks for local TTS processing
 
 # Flask configuration
 FLASK_HOST = '0.0.0.0'
-FLASK_PORT = 5001
+FLASK_PORT = int(os.environ.get('PORT', 5001))
 FLASK_DEBUG = True
 
 # Feature flags — default False so the gated subsystems are dark until ready.
