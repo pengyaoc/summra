@@ -1,317 +1,259 @@
-# 📚 Summra - AI-Powered Classic Book Summaries
+# Summra — Read the Classics in Plain English
 
-Summra is a web application that provides AI-generated summaries of classic books in the public domain. It offers three different summary lengths to suit your reading needs, from quick overviews to comprehensive chapter-by-chapter analyses.
+Summra is a web app that makes public-domain classics easier to read. Every book is paired with two AI-generated summaries (a short overview and a fuller summary), chapter-by-chapter summaries, AI-generated chapter illustrations, optional audio narration, and — most importantly — a **sentence-by-sentence rewrite of the original text in modern English**, viewable side-by-side with the original.
 
-## ✨ Features
+Currently ships with ~90 books from Project Gutenberg covering Dickens, Austen, Doyle, Tolstoy, Twain, Hardy, Dostoyevsky, the Greek classics, philosophy, and more.
 
-- **Three Summary Lengths:**
-  - **Concise** (~500 words): Quick overview without spoilers for fiction
-  - **Medium** (2000-3000 words): Comprehensive summary with all key details
-  - **Comprehensive**: Chapter-by-chapter breakdown with overall analysis (2000-3000 words each)
+## What it does
 
-- **AI-Powered Summaries**: Uses Google Gemini API (Gemini 2.0 Flash and Gemini Exp 1206) for high-quality summaries
-- **Text-to-Speech**: Listen to summaries using VITS open-source TTS model
-- **Public Domain Focus**: Works with classic books available in the public domain
-- **Rate Limit Handling**: Intelligent rate limiting for API calls (10 requests/min, 250k tokens/min)
-- **Clean Web Interface**: Modern, responsive design for easy browsing
+- **Two summary lengths per book:** a ~500-word short summary (spoiler-free for fiction) and a ~2,000–3,000-word full summary.
+- **Per-chapter summaries** with optional spoiler-protected reveal, plus the full original chapter text.
+- **Plain English rewrites** of every chapter, rendered side-by-side with the original on desktop or stand-alone on mobile.
+- **AI-generated chapter illustrations** with a click-to-zoom lightbox.
+- **Text-to-speech** for summaries (and chapters where pre-generated), via the Google Gemini 2.5 Flash TTS API.
+- **Kindle-style reading UI:** page-based pagination, font/size/theme settings (light/dark/sepia), progress indicator, sticky chapter header.
+- **Discovery:** home page with curated carousels (Popular, Easy to Read, Read in a Day, by category, by author), a full categories page, an authors hub, and a related-books carousel on each book.
+- **PWA:** installable on iOS/Android/desktop, offline-cached pages, offline fallback page.
+- **Optional auth + reading progress** (behind a feature flag — see below).
+- **Optional editorial blog** (behind a feature flag).
 
-## 🏗️ Project Structure
+## Project layout
 
 ```
 summra/
 ├── backend/
-│   ├── app.py              # Flask web application
-│   ├── models.py           # Database models and operations
-│   ├── config.py           # Configuration settings
-│   ├── tts_handler.py      # Text-to-speech handler
-│   └── requirements.txt    # Python dependencies
-├── scripts/
-│   ├── content/             # generate_summaries.py and other content scripts
-│   ├── audio/               # TTS generation scripts
-│   ├── images/              # cover / illustration scripts
-│   ├── migrations/, backfills/, audits/, book_fixes/, blog/, archive/
-│   └── README.md            # Index of every subfolder
-├── docs/                    # PRD.md, ERD.md, USAGE.md, marketing/, archive/
-├── deploy/                  # systemd + nginx + gunicorn configs
+│   ├── app_base.py          # Shared Flask routes (used by dev + prod)
+│   ├── app.py               # Dev entry point — registers live Gemini TTS generation
+│   ├── app_prod.py          # Prod entry point — TTS serves pre-generated files only
+│   ├── config.py            # Models, rate limits, feature flags, paths
+│   ├── models.py            # Content DB (books, chapters, summaries, categories, authors, blog…)
+│   ├── user_models.py       # User DB (users, reading_progress, chapter_completion)
+│   ├── auth_routes.py       # Auth blueprint (gated by FEATURE_AUTH)
+│   ├── progress_routes.py   # Reading-progress blueprint (gated by FEATURE_AUTH)
+│   ├── gemini_tts_handler.py# Gemini 2.5 Flash TTS client
+│   └── tts_utils.py         # Provider-agnostic chunking, stitching, cache lookup
 ├── frontend/
-│   ├── static/
-│   │   ├── css/
-│   │   │   └── style.css   # Styles
-│   │   ├── js/
-│   │   │   └── app.js      # Frontend JavaScript
-│   │   └── audio/          # Generated TTS audio files
-│   └── templates/
-│       └── index.html      # Main HTML template
+│   ├── templates/           # index.html (SPA shell), offline.html, sitemap.xml
+│   └── static/              # css/, js/, covers/, illustrations/, audio/, guides/, images/, manifest.json, service-worker.js
+├── scripts/
+│   ├── content/             # generate_summaries.py (main ingestion), modern-English rewrite, slugs, chapter cleanup, author bios
+│   ├── audio/               # Offline TTS batches, audio backfill, filename migration
+│   ├── images/              # Cover download, chapter illustrations, hero images, app icon, resize helpers
+│   ├── categorization/      # Category assignment + master-category generation
+│   ├── migrations/          # One-shot schema migrations
+│   ├── backfills/           # Idempotent backfills after schema/field changes
+│   ├── audits/              # Read-only inspections (chapter-text audit, validate_chapter_split, etc.)
+│   ├── book_fixes/          # Per-book one-shot fixes (mostly historical)
+│   ├── blog/                # Blog import + Unsplash header-image assignment
+│   ├── archive/             # Dead-end or destructive scripts — read before running
+│   └── README.md            # Per-folder index
 ├── data/
-│   ├── books/              # Place your .txt book files here
-│   ├── summaries/          # Generated summaries (JSON)
-│   └── database.db         # SQLite database
-├── .env.example            # Example environment variables
-├── .gitignore
-└── README.md
+│   ├── books/               # Source .txt files (Project Gutenberg)
+│   ├── character_briefs/    # Per-book character/style briefs for illustration consistency
+│   └── database.db          # Content SQLite database (gitignored)
+├── summra.db                # User SQLite database (gitignored, project root)
+├── deploy/                  # nginx, systemd, gunicorn, GCP setup scripts (e2-micro + e2-small)
+├── docs/                    # PRD.md, ERD.md, USAGE.md, marketing/, archive/
+├── tests/                   # pytest unit suite + e2e/ Playwright harness
+├── CLAUDE.md                # Instructions for Claude Code sessions (work log, TDD, parser quirks)
+├── WORK_LOG.md              # Append-only log of completed and in-progress work
+├── requirements-prod.txt    # Prod deps (no TTS model)
+├── backend/requirements.txt # Dev deps
+└── .env.example
 ```
 
-## 🚀 Getting Started
+Two databases are intentional: content lives in `data/database.db` (large, regeneratable from `data/books/`); user accounts and reading progress live in `summra.db` at the project root (small, irreplaceable).
+
+## Getting started
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- Gemini API key (from Google AI Studio)
-- pip (Python package manager)
+- Python 3.8+
+- A Google Gemini API key — https://aistudio.google.com/app/apikey (free tier is enough to run the app; ingesting new books burns through the free quota quickly)
+- Optional: an Unsplash access key (`UNSPLASH_ACCESS_KEY`) if you want to use `scripts/blog/assign_blog_header_images.py`
 
-### Installation
-
-1. **Clone or navigate to the project directory:**
-   ```bash
-   cd summra
-   ```
-
-2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   ```
-
-3. **Activate the virtual environment:**
-   - On macOS/Linux:
-     ```bash
-     source venv/bin/activate
-     ```
-   - On Windows:
-     ```bash
-     venv\Scripts\activate
-     ```
-
-4. **Install dependencies:**
-   ```bash
-   pip install -r backend/requirements.txt
-   ```
-
-5. **Set up environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-
-   Edit `.env` and add your Gemini API key:
-   ```
-   GEMINI_API_KEY=your_actual_api_key_here
-   ```
-
-   Get your API key from: https://makersuite.google.com/app/apikey
-
-### First Time Setup
-
-The first time you run the TTS functionality, it will download the VITS model (approximately 100-200MB). This is a one-time download and will be cached for future use.
-
-## 📖 Usage
-
-### Step 1: Generate Summaries
-
-Before using the web interface, you need to generate summaries for your books.
-
-1. **Place your book .txt files in the `data/books/` directory**
-
-   You can find public domain books at:
-   - [Project Gutenberg](https://www.gutenberg.org/)
-   - [Standard Ebooks](https://standardebooks.org/)
-   - [Internet Archive](https://archive.org/details/texts)
-
-2. **Generate summaries for a single book:**
-   ```bash
-   python scripts/content/generate_summaries.py data/books/your_book.txt
-   ```
-
-   With custom title and author:
-   ```bash
-   python scripts/content/generate_summaries.py data/books/your_book.txt \
-       --title "The Great Gatsby" \
-       --author "F. Scott Fitzgerald"
-   ```
-
-3. **Batch process multiple books:**
-   ```bash
-   python scripts/content/generate_summaries.py data/books/ --batch
-   ```
-
-The script will:
-- Extract title and author from the text (if available)
-- Detect chapters automatically
-- Generate all three types of summaries
-- Store results in the database and as JSON files
-- Handle API rate limits automatically
-
-**Note:** Generating summaries can take several minutes per book, especially for comprehensive summaries with many chapters.
-
-### Step 2: Run the Web Application
-
-1. **Start the Flask server:**
-   ```bash
-   python backend/app.py
-   ```
-
-2. **Open your browser and navigate to:**
-   ```
-   http://localhost:5000
-   ```
-
-3. **Browse and read summaries:**
-   - Select a book from the grid
-   - Choose your preferred summary length
-   - Click "Listen to Summary" to hear it via TTS
-
-## 🔧 Configuration
-
-Edit `backend/config.py` to customize:
-
-- **API Models**: Change which Gemini models to use
-- **Summary Lengths**: Adjust target word counts
-- **Rate Limits**: Modify API rate limit thresholds
-- **TTS Model**: Change the VITS model variant
-- **Server Settings**: Modify host, port, and debug mode
-
-## 🎯 API Endpoints
-
-The backend provides the following REST API endpoints:
-
-- `GET /api/books` - List all books
-- `GET /api/books/<id>` - Get book details
-- `GET /api/books/<id>/summary/<type>` - Get summary (type: concise, medium, comprehensive)
-- `GET /api/books/<id>/chapters` - Get chapter summaries
-- `POST /api/tts/generate` - Generate TTS audio
-- `GET /api/summary-configs` - Get summary configuration options
-
-## 📝 Summary Generation Script Options
+### Install
 
 ```bash
-usage: generate_summaries.py [-h] [--title TITLE] [--author AUTHOR] [--batch] input
-
-Generate book summaries using Gemini API
-
-positional arguments:
-  input            Book file (.txt) or directory for batch processing
-
-optional arguments:
-  -h, --help       show this help message and exit
-  --title TITLE    Book title (optional, will try to extract from text)
-  --author AUTHOR  Author name (optional, will try to extract from text)
-  --batch          Process all .txt files in directory
+git clone <repo>
+cd summra
+./setup.sh                     # creates venv, installs deps, copies .env.example
+# then edit .env and set GEMINI_API_KEY
 ```
 
-## 🎤 Text-to-Speech (TTS)
+Or manually:
 
-Summra uses the VITS open-source TTS model to generate natural-sounding audio:
+```bash
+python3 -m venv venv
+source venv/bin/activate       # Windows: venv\Scripts\activate
+pip install -r backend/requirements.txt
+cp .env.example .env           # then add GEMINI_API_KEY
+```
 
-- **Model**: `tts_models/en/vctk/vits` (multi-speaker English)
-- **Default Voice**: Female (speaker p226)
-- **Audio Format**: WAV
-- **Caching**: Generated audio is cached to avoid regeneration
-- **Text Limit**: First 5000 characters of summary (for performance)
+### Run the app
 
-To customize the TTS settings, edit `backend/config.py` and `backend/tts_handler.py`.
+```bash
+python backend/app.py
+```
 
-## 🔒 Rate Limiting
+The server binds **`http://localhost:5001`** (port 5000 is reserved by macOS ControlCenter). Override with `PORT=5002 python backend/app.py` if needed.
 
-The summary generation script includes intelligent rate limiting:
+The repository ships without `data/database.db` (it's gitignored). To get a working app, either restore your own DB or ingest books — see below.
 
-- **Maximum Requests**: 10 per minute
-- **Maximum Tokens**: 250,000 per minute
-- **Automatic Waiting**: The script will pause when approaching limits
-- **Token Estimation**: Estimates token usage before making requests
+## Ingesting a book
 
-The script tracks both request count and token usage within rolling 1-minute windows.
+```bash
+PYTHONPATH=backend venv/bin/python scripts/content/generate_summaries.py data/books/your_book.txt
+```
 
-## 🗄️ Database Schema
+Common options:
 
-Summra uses SQLite with the following tables:
+```bash
+# Just parse chapters, no LLM calls (free, fast — useful for verifying chapter detection):
+... generate_summaries.py data/books/pg1342.txt --parse-only
 
-- **books**: Book metadata and full text
-- **summaries**: Generated summaries (concise, medium, comprehensive)
-- **chapters**: Individual chapter summaries
-- **audio_files**: TTS audio file references
+# Inspect detected chapter boundaries without writing to the DB:
+... generate_summaries.py data/books/pg1342.txt --dry-run
 
-## 🎨 Frontend Features
+# Batch a directory:
+... generate_summaries.py data/books/ --batch
 
-- **Responsive Design**: Works on desktop, tablet, and mobile
-- **Clean Interface**: Modern, card-based layout
-- **Collapsible Chapters**: Chapter summaries can be expanded/collapsed
-- **Audio Player**: Built-in HTML5 audio player for TTS
-- **Loading States**: Clear feedback during data loading
+# Override metadata:
+... generate_summaries.py data/books/pg1342.txt --title "Pride and Prejudice" --author "Jane Austen"
+```
 
-## 🐛 Troubleshooting
+The script auto-detects chapters, generates a combined short + full summary in a single Gemini call, optionally generates per-chapter summaries, and persists raw LLM responses to `data/llm_responses/` so a parser bug doesn't force a re-call.
 
-### "No books found" error
-- Make sure you've run the summary generation script first
-- Check that the database file exists in `data/database.db`
+**Always dry-run first.** The chapter parser is tuned for prose novels with `CHAPTER I/II/III` style markers (and the two-level `PART I → CHAPTER I` variant). It does **not** handle anthologies, aphoristic non-chaptered works, or non-English structural conventions — see `CLAUDE.md` "Book Ingestion Workflow" for the dry-run / validate workflow and the canonical list of known-bad book classes.
 
-### TTS not working
-- The first run will download the VITS model (be patient)
-- Check that you have enough disk space (~200MB for the model)
-- Try a different TTS model in `config.py` if issues persist
+### Generating audio (offline batches)
 
-### API rate limit errors
-- The script should handle this automatically
-- If you hit limits frequently, consider using a paid API tier
-- You can adjust `MAX_REQUESTS_PER_MINUTE` in `config.py`
+Real-time TTS via the dev server (`backend/app.py`) uses the **Gemini 2.5 Flash TTS** API and caches the resulting WAV files under `frontend/static/audio/`. For pre-generating audio in bulk:
 
-### Summary generation is slow
-- This is normal - comprehensive summaries can take 10-30 minutes
-- Rate limiting adds wait times between requests
-- Consider running batch processing overnight
+```bash
+# All concise summaries in the DB:
+venv/bin/python scripts/audio/batch_generate_concise_audio.py
 
-### Chapter detection not working
-- Some books may not have standard chapter markers
-- You can manually edit the text to add clear chapter headings
-- The script will treat the whole book as one chapter if none are detected
+# All medium summaries:
+venv/bin/python scripts/audio/batch_generate_medium_audio.py
 
-## 📚 Recommended Book Sources
+# Per-chapter audio for a specific book:
+venv/bin/python scripts/audio/generate_gemini_audio_batch_offline.py --book-id 47
+```
 
-For public domain books in text format:
+Production (`backend/app_prod.py`) does **not** generate TTS on demand — it only serves files pre-generated by these scripts. The TTS pipeline is split this way so the production VM can stay small (e2-small or even e2-micro).
 
-1. **Project Gutenberg** (https://www.gutenberg.org/)
-   - Largest collection of public domain books
-   - Plain text format available
-   - Metadata included in files
+## Configuration
 
-2. **Standard Ebooks** (https://standardebooks.org/)
-   - High-quality formatting
-   - Modern, carefully edited texts
+`backend/config.py` is the single source of truth:
 
-3. **Internet Archive** (https://archive.org/details/texts)
-   - Vast collection
-   - Multiple formats available
+- **`DATABASE_PATH`** — `data/database.db`
+- **`GEMINI_API_KEY`** — read from env
+- **`SUMMARY_CONFIGS`** — model + word-count target per summary type
+- **`PLAIN_TEXT_MODEL`** — model used for modern-English rewrites (currently `gemini-3.1-flash-lite`)
+- **`GEMINI_TTS_MODEL`**, **`GEMINI_TTS_VOICE`** — TTS model + voice (Kore by default; options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
+- **`MAX_REQUESTS_PER_MINUTE`** / **`MAX_TOKENS_PER_MINUTE`** — Gemini rate-limiter caps
+- **`FLASK_HOST`**, **`FLASK_PORT`**, **`FLASK_DEBUG`**
+- **`FEATURE_AUTH`** — gate auth, reading-progress, active Save-for-Offline (default `False`)
+- **`FEATURE_BLOG`** — gate the editorial blog (default `False`)
 
-## 🔮 Future Enhancements
+Both feature flags default off so the routes return clean 404s and the relevant frontend buttons are server-stripped from the SPA shell.
 
-Potential features to add:
-- User accounts and favorites
-- Search functionality
-- Book recommendations
-- Export summaries as PDF
-- Multiple TTS voices
-- Offline mode support
-- Mobile app version
+## Tests
 
-## 📄 License
+### Backend (pytest)
 
-This project is for educational and personal use. Books should be in the public domain or you should have appropriate rights to process them.
+```bash
+PYTHONPATH=backend venv/bin/python -m pytest tests/ -v
+```
 
-## 🙏 Acknowledgments
+40+ test files cover chapter detection, the LLM client + rate limiter, the bulk-summary parser, validators, the database layer, and several specific historical bugs (preface detection, two-level TOC, multi-line titles, dotted abbreviations).
 
-- **Google Gemini AI** for summary generation
-- **Coqui TTS** for the VITS text-to-speech models
-- **Project Gutenberg** for making classic literature freely available
-- **Flask** for the web framework
+### Frontend (headless Chromium)
 
-## 🤝 Contributing
+```bash
+cd tests/e2e && npm install && npx playwright install chromium     # one-time
+python backend/app.py &                                              # in another terminal
+cd tests/e2e && node smoke.mjs
+```
 
-This is a personal project, but suggestions and improvements are welcome!
+`smoke.mjs` visits a configurable set of routes (override with `PATHS=/,/book/104,/explore`), screenshots each one, and exits non-zero on any non-200, console error, or failed first-party request. See `tests/e2e/README.md` for the full flag set.
 
-## 📧 Support
+### Post-ingest validation
 
-For issues or questions:
-1. Check the troubleshooting section above
-2. Review the configuration in `backend/config.py`
-3. Check the console logs for detailed error messages
+```bash
+PYTHONPATH=backend venv/bin/python scripts/audits/validate_chapter_split.py --book-id <id> --llm-digest
+```
 
----
+Deterministic checks (chapter count, monotonic numbering, coverage) plus an optional LLM digest spot-check.
 
-**Happy Reading! 📚✨**
+## Parallel sessions (git worktrees)
+
+If you run multiple Claude Code sessions on this repo simultaneously, give each its own worktree — never share a working directory.
+
+```bash
+git worktree add .claude/worktrees/<name> -b <branch>
+git worktree list
+git worktree remove .claude/worktrees/<name>
+```
+
+Per-session isolation requirements (Flask port, `venv/`, `tests/e2e/node_modules/`, `data/database.db`) are documented in detail in `CLAUDE.md` under "Parallel Sessions".
+
+## API endpoints (selected)
+
+Page routes (server-rendered shell + hash-based SPA):
+
+- `GET /` — Home (Discover carousels)
+- `GET /discover` — Discover page
+- `GET /books` — All books grid
+- `GET /books/<slug>` — Book detail
+- `GET /books/<slug>/summary` — Full summary page
+- `GET /books/<slug>/chapters/<n>` — Chapter page
+- `GET /categories`, `GET /categories/<id>` — Category index + detail
+- `GET /authors/<author_slug>` — Author hub
+- `GET /blog`, `GET /blog/<slug>` — Blog (FEATURE_BLOG)
+- `GET /offline`, `GET /service-worker.js`, `GET /robots.txt`, `GET /sitemap.xml` — PWA + SEO
+
+JSON API:
+
+- `GET /api/books` — List books
+- `GET /api/books/<id>` — Book detail
+- `GET /api/books/<id>/summary/<type>` — Summary (concise | medium | comprehensive)
+- `GET /api/books/<id>/chapters` — Chapter list
+- `GET /api/books/<id>/chapters/<n>` — Single chapter (incl. modern-English text, illustration URL)
+- `GET /api/books/<id>/categories`, `GET /api/books/<id>/related`
+- `GET /api/categories`, `GET /api/categories/<id>`, `GET /api/categories/<id>/books`
+- `GET /api/authors/<slug>`, `GET /api/authors/<slug>/books`
+- `GET /api/books/by-author/<name>`
+- `GET /api/discover/carousels` — Curated carousels for the Discover page
+- `GET /api/summary-configs` — Summary config for the frontend
+- `POST /api/tts/generate` — Generate (dev) or fetch (prod) TTS audio for a given text id
+
+Auth + progress endpoints register under blueprints when `FEATURE_AUTH=True` — see `backend/auth_routes.py` and `backend/progress_routes.py`.
+
+## Deployment
+
+`deploy/DEPLOY.md` walks through the GCP path: e2-micro (free tier, no on-demand TTS) or e2-small (~$13/mo, full TTS). The directory ships nginx configs, systemd unit files, gunicorn configs, and a `setup-e2small.sh` automation script.
+
+## Troubleshooting
+
+**"no such table: books"** — `data/database.db` is empty or missing. Either restore a database, or ingest at least one book with `scripts/content/generate_summaries.py`.
+
+**Port 5000 already in use** — That's macOS ControlCenter (AirPlay Receiver). Use 5001 (the default) or pick another with `PORT=`.
+
+**Gemini rate-limit errors** — The rate limiter caps at `MAX_REQUESTS_PER_MINUTE` (10) and `MAX_TOKENS_PER_MINUTE` (250 000). Ingesting many books in parallel will hit these. The script pauses automatically; if you hit a hard 429 you may need a paid tier.
+
+**Chapter detection looks wrong** — Run `generate_summaries.py … --dry-run` and read the `CHAPTER BREAKDOWN` block. The parser handles standard prose novels; see `CLAUDE.md` for known-bad book classes (anthologies, aphoristic works) that should be skipped.
+
+**TTS isn't generating in production** — That's by design. `app_prod.py` only serves pre-generated audio. Run the offline batch scripts (`scripts/audio/`) and deploy the resulting WAV files.
+
+## Acknowledgments
+
+- **Project Gutenberg** for the source texts and cover images
+- **Google Gemini** for summaries, modern-English rewrites, chapter illustrations, and TTS
+- **Unsplash** for blog header images
+- **Flask**, **Workbox**, **Playwright** for the underlying machinery
+
+## License
+
+For personal and educational use. Source texts must be in the public domain or you must hold appropriate rights.

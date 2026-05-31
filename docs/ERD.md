@@ -4,20 +4,53 @@ This document provides in-depth technical documentation for the Summra project, 
 
 ## Table of Contents
 
-1. [Database Schema & ERD](#database-schema--erd)
-2. [SEO Architecture](#seo-architecture)
-3. [Related Books System](#related-books-system)
-4. [Chapter Parser Implementation](#chapter-parser-implementation)
-5. [TTS Engine Implementation](#tts-engine-implementation)
-6. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
-7. [Bulk Summary Processing](#bulk-summary-processing)
-8. [Project Gutenberg Integration](#project-gutenberg-integration)
-9. [Gemini Image Generation System](#gemini-image-generation-system)
-10. [Book Metadata Enrichment](#book-metadata-enrichment)
-11. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
-12. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
-13. [Pagination System](#pagination-system-added-2025-12-19)
-14. [PWA Offline Support & Caching](#pwa-offline-support--caching-added-2025-12-31)
+1. [Backend Module Map](#backend-module-map)
+2. [Database Schema & ERD](#database-schema--erd)
+3. [SEO Architecture](#seo-architecture)
+4. [Related Books System](#related-books-system)
+5. [Chapter Parser Implementation](#chapter-parser-implementation)
+6. [TTS Engine Implementation](#tts-engine-implementation)
+7. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
+8. [Bulk Summary Processing](#bulk-summary-processing)
+9. [Project Gutenberg Integration](#project-gutenberg-integration)
+10. [Gemini Image Generation System](#gemini-image-generation-system)
+11. [Book Metadata Enrichment](#book-metadata-enrichment)
+12. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
+13. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
+14. [Pagination System](#pagination-system-added-2025-12-19)
+15. [PWA Offline Support & Caching](#pwa-offline-support--caching-added-2025-12-31)
+
+---
+
+## Backend Module Map
+
+The Flask app is split into a shared base module + two entry points so the production VM can run a slimmer version without the TTS dependencies.
+
+| File | Role |
+|------|------|
+| `backend/app_base.py` | **Shared base.** Creates the Flask app, configures CORS + sessions, registers all read-side routes (pages, JSON API, sitemap, robots.txt, service-worker, offline), and conditionally registers auth + blog blueprints based on feature flags. Both entry points import `app` from here. |
+| `backend/app.py` | **Dev entry point.** Adds `POST /api/tts/generate` that calls `GeminiTTSHandler` to generate audio on demand (and `POST /api/tts/stop` to abort + clean up chunks), plus an admin chapter-edit route. Sets `IS_DEVELOPMENT = True`. Run with `python backend/app.py` — binds `:5001`. |
+| `backend/app_prod.py` | **Prod entry point.** Replaces `POST /api/tts/generate` with a pre-generated-only lookup (no live generation). Adds `/health`. Served by Gunicorn behind Nginx in production. |
+| `backend/config.py` | Single source of truth for paths, models, rate limits, summary configs, feature flags. |
+| `backend/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection. |
+| `backend/user_models.py` | User database layer (`summra.db` at project root) — users, reading_progress, chapter_completion. SHA-256 + salt password hashing. Sessions are Flask permanent sessions (30 days). |
+| `backend/auth_routes.py` | Auth blueprint (register / login / logout / me). Conditionally registered behind `FEATURE_AUTH`. |
+| `backend/progress_routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete). Conditionally registered behind `FEATURE_AUTH`. |
+| `backend/gemini_tts_handler.py` | Gemini 2.5 Flash TTS client + per-key rate limiter (`GEMINI_TTS_MAX_REQUESTS_PER_MINUTE`, `…_TOKENS_PER_MINUTE`). Owns voice selection, chunking, retries. |
+| `backend/tts_utils.py` | Provider-agnostic helpers: `clean_text_for_speech`, chunk-by-words, WAV stitching, on-disk cache lookup. Cache lookup probes Opus → Gemini WAV → legacy `*_vits.wav` → legacy `*_complete.wav` so older audio still resolves. |
+| `backend/add_cefr_levels.py`, `backend/add_missing_book_links.py`, `backend/audit_all_book_references.py`, `backend/validate_blog_links.py`, `backend/import_blog_posts.py` | One-shot maintenance scripts kept next to the models they touch. |
+
+**Feature flags** (`backend/config.py`):
+- `FEATURE_AUTH` (default `False`) — gates auth routes, progress routes, the Account button, and active Save-for-Offline.
+- `FEATURE_BLOG` (default `False`) — gates `/blog`, `/blog/<slug>`, `/api/blog*`, and the blog entries in `sitemap.xml`.
+
+Both flags are injected into the SPA shell as `window.FEATURE_AUTH` / `window.FEATURE_BLOG` so the frontend can server-strip the gated buttons.
+
+**Two databases:**
+- `data/database.db` — content (books, summaries, chapters, etc.). Regeneratable from `data/books/` via `scripts/content/generate_summaries.py`.
+- `summra.db` (project root) — users, reading progress. Small, **irreplaceable**, separate so a content rebuild can't accidentally drop user data.
+
+**Scripts inventory** lives in `scripts/README.md` — every subfolder (`content/`, `audio/`, `images/`, `categorization/`, `migrations/`, `backfills/`, `audits/`, `book_fixes/`, `blog/`, `archive/`) is a Python package and is auto-added to `sys.path` by `tests/conftest.py` so tests can import scripts as either `from generate_summaries import …` or `from scripts.content.generate_summaries import …`.
 
 ---
 
@@ -2306,7 +2339,9 @@ else:
 
 ## TTS Engine Implementation
 
-### Overview
+> **Status note (2026-05):** The original local Coqui/VITS handler was removed. Both real-time TTS (dev) and offline batch TTS (prod) now use the **Google Gemini 2.5 Flash TTS API**. The sections below preserve the historical description of the VITS pipeline because (a) older cached audio files on disk still follow the VITS filename convention (`{audio_id}_vits.wav`) and `backend/tts_utils.py` still looks them up as a fallback, and (b) the chunking, caching, and rate-limiting logic carried over to the Gemini implementation. Treat the VITS narrative as historical context, not current implementation. See `### Gemini TTS (Offline Generation)` further down for the live system.
+
+### Overview (historical — VITS)
 
 **Technology:** VITS (Variational Inference with adversarial learning for end-to-end Text-to-Speech)
 
@@ -2314,7 +2349,10 @@ else:
 
 **Model:** `tts_models/en/vctk/vits` - Multi-speaker English model
 
-**Location:** `backend/tts_handler.py`
+**Location (historical):** `backend/tts_handler.py` — **removed**. The live entry points are now:
+- `backend/app.py` (dev) → imports `GeminiTTSHandler` from `backend/gemini_tts_handler.py`
+- `backend/app_prod.py` (prod) → does **not** generate TTS; only serves files pre-generated by `scripts/audio/*`
+- `backend/tts_utils.py` → provider-agnostic chunking, WAV stitching, and cache lookup (still active; falls back to legacy `*_vits.wav` files on disk if present)
 
 ### Architecture
 
@@ -2567,23 +2605,25 @@ MAX_TTS_LENGTH = 5000  # characters
 - `tts_models/en/ljspeech/glow-tts` - Flow-based, faster inference
 - `tts_models/multilingual/multi-dataset/your_tts` - Multi-language support
 
-### Gemini TTS (Offline Generation)
+### Gemini TTS (current real-time and offline)
 
 **Overview:**
 
-In addition to real-time VITS TTS for user-triggered audio generation, Summra supports offline batch TTS generation using Google Gemini 2.5 Flash TTS API. This enables pre-generating high-quality audio files for entire books.
+Gemini 2.5 Flash TTS is the **only** TTS engine in current builds. It serves two paths:
+
+1. **On-demand (dev only)** — `backend/app.py` exposes `POST /api/tts/generate`, which calls `GeminiTTSHandler` to synthesize audio in chunks, stitch the WAVs, cache the result on disk, and stream the path back to the client. Production (`backend/app_prod.py`) does **not** wire this up; it serves only pre-generated files via the same on-disk cache lookup in `backend/tts_utils.py`.
+2. **Offline batch (dev + prod prep)** — scripts in `scripts/audio/` (`batch_generate_concise_audio.py`, `batch_generate_medium_audio.py`, `generate_gemini_audio_batch_offline.py`) pre-render audio for every summary and chapter so the production VM never needs to hit the Gemini TTS API.
 
 **Technology:** Google Gemini 2.5 Flash TTS API
 
-**Model:** `gemini-2.5-flash-tts`
+**Model:** `gemini-2.5-flash-preview-tts` (configured as `GEMINI_TTS_MODEL` in `backend/config.py`)
 
-**Location:** `backend/gemini_tts_handler.py`, `scripts/audio/generate_offline_tts.py`
+**Location:** `backend/gemini_tts_handler.py`, `backend/tts_utils.py`, `scripts/audio/*.py`
 
-**Purpose:**
-- Offline batch generation of TTS audio for book summaries and chapters
-- Separate from real-time VITS TTS (user-triggered remains VITS)
-- Professional voice options with higher quality than VITS
-- Pre-generation for instant playback
+**Why split this way:**
+- Keeps the production VM small (e2-micro on the free tier can serve audio without ever calling the TTS API)
+- Avoids paying per-request TTS costs for content that doesn't change between deploys
+- Lets the dev environment generate audio for newly ingested books without a separate batch step
 
 **Architecture:**
 
