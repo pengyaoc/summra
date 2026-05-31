@@ -39,6 +39,241 @@ The helper file is loaded via plain `<script>` before `app.min.js` in `frontend/
 
 ---
 
+## 2026-05-30: Audit and fix book_id=6 (The Wonderful Wizard of Oz) modern_english_text - COMPLETED
+
+**Issue identified:** 22 of 25 chapters missing the chapter title as a prefix to `modern_english_text`. The `chapter_text` field stores "Title\nBody...", but the modernized version had only "Body..." (title dropped during modernization).
+
+**Known issue confirmed (ch 1):** `chapter_text = "The Cyclone\nDorothy lived..."` (title + body, single newline), `modern_english_text = "Dorothy lived in the middle..."` (title completely missing).
+
+**Root cause:** The Gemini summarization API likely received only the body text (after in-memory title stripping), so the modern text never included the title. The `chapter_title` field is populated separately in the DB, but `modern_english_text` needs to mirror the structure of `chapter_text` for consistency.
+
+**Audit findings:**
+- Total chapters in book_id=6: 25
+- Chapters with missing title prefix: 22 (regular chapters) + 2 edge cases (Introduction chapter 0, title-case mismatch in ch 23)
+- Coverage: 24 out of 25 needed title prepending; 1 chapter (ch 24) already correct
+
+**Fixes applied:**
+1. **Chapters 1–22 (main batch):** Prepended `chapter_title + "\n"` to `modern_english_text` for all 22 chapters missing the title.
+2. **Chapter 0 (Introduction):** Prepended "Introduction\n" (chapter doesn't have in-body title marker in `chapter_text`, but needs it in modernized version for consistency).
+3. **Chapter 23 (case mismatch):** Detected `chapter_title = "Glinda the Good Witch..."` (lowercase "the") vs actual text "Glinda The Good Witch..." (capital "The"). Updated `chapter_title` in DB to match the actual text; then prepended to `modern_english_text`.
+4. **Chapter 24 (Home Again):** Already had correct structure; verified and left unchanged.
+
+**Verification:**
+- ✓ All 25 chapters now have `modern_english_text` starting with their `chapter_title`
+- ✓ All 25 chapters have non-NULL `chapter_text`, `chapter_title`, `modern_english_text`
+- ✓ Case consistency: fixed ch 23's chapter_title from "the" to "The" to match source
+
+**Database changes:**
+- Updated 24 rows in `chapters` table (prepend title to `modern_english_text`)
+- Updated 1 row in `chapters` table (ch 23: corrected `chapter_title` case)
+
+All changes committed to `/Users/pengyao/Documents/dev/summra/data/database.db`.
+
+---
+
+## 2026-05-30: Fix book_id=65 (Winnie-the-Pooh) title misalignment in modern_english_text
+
+### Issue: Chapters 5–10 missing title in modern_english_text
+
+The original book text (`chapter_text`) for chapters 5–10 starts with an uppercase `IN WHICH ...` title line. The `chapter_title` field stores these as title case (e.g., `'In Which Piglet Meets a Heffalump'`). When `modern_english_text` was generated via Gemini LLM, the reformat script's title-strip was case-sensitive and didn't match uppercase titles, so the modern text **dropped** the titles entirely. This caused a 1–3 paragraph diff when comparing the two versions.
+
+**Audit revealed:**
+- Chapter 5: `98.6%` char_ratio (was missing title)
+- Chapter 6: `99.0%` char_ratio (was missing title)
+- Chapter 7: `98.9%` char_ratio (was missing title)
+- Chapter 8: `99.3%` char_ratio (was missing title)
+- Chapter 9: `99.3%` char_ratio (was missing title)
+- Chapter 10: `96.6%` char_ratio (was missing title variant)
+
+**Fix — surgical DB prepend:**
+```python
+for chapter_num in range(5, 11):
+    # Get title (title case from DB) and modern_english_text
+    # Prepend: "{title}\n\n{modern_english_text}"
+    # Update chapters table
+```
+
+**Result after fix:**
+- All chapters 5–10 now have title as first paragraph (title case, matching chapter_title field)
+- Character ratios normalized to 97.2%–99.7% range (within healthy 50–110% bounds)
+- Paragraph counts aligned: all chapters now have identical paragraph counts between chapter_text and modern_english_text
+- All chapters end with valid terminators (`.`, `!`, `?`, `"`, `)`, `'`)
+- **Full audit: 11/11 chapters PASS**
+
+**No regen needed:** titles were present in the source; modern text just didn't capture them during the initial LLM pass. Surgical prepend restores alignment without re-processing.
+
+### Verification
+
+- `pytest -q` → **333 passed, 1 deselected** (was 245 at session start; +88 net from new tests + downstream effects)
+- All 7 newly ingested books pass `validate_chapter_split.py` cleanly
+- Re-validating the 6 ingested-earlier books (107–112) shows no regressions
+
+### Failed-to-parse list (permanent — do not re-attempt without source-format fix)
+
+| File | Title | Author | Why it fails | Fix shape |
+|---|---|---|---|---|
+| `pg100.txt` | The Complete Works of William Shakespeare | Shakespeare | **Anthology**: 38 plays in a single file. Parser detects ACT markers from the first play only; one "chapter" ends up >1MB. Coverage 24.5%. | Not a single "book" — would need a pre-processing step that splits source into 38 per-play files. Out of scope. |
+| `pg2680.txt` | Meditations | Marcus Aurelius | **Aphoristic body, footnote markers**: body has no chapter structure; translator's footnotes use `BOOK X N` syntax. `re.IGNORECASE` on `section_pattern` matches lowercase prose `"part one to another"` mid-sentence as a PART marker. | Add structural guard to `section_pattern` callers (require flanking blank lines + UPPERCASE-only at line start). 5 callsites in `scripts/content/generate_summaries.py`; touches risky shared code. Defer until needed. |
+| `pg175.txt` | The Phantom of the Opera | Gaston Leroux | **In-body headings not regex-matchable**: only 2 "chapters" detected, one is the entire book as 76K-word "Preface", the other has title `'.'`. | Would need a heading-style addition. The book uses something the current chapter regex doesn't cover. Defer until inspected closely. |
+
+Source files remain in `data/books/`. To revisit:
+```sh
+PYTHONPATH=backend venv/bin/python scripts/content/generate_summaries.py data/books/<file> --dry-run
+```
+
+### CLAUDE.md additions (this session)
+
+- New section **"Book Ingestion Workflow (always dry-run first)"** with the 3-step flow (dry-run → review → ingest → validate), exact commands, and the "stop signs" to look for
+- Documented known-bad book classes (anthologies, aphoristic non-chaptered classics, in-body heading mismatches), referring to `WORK_LOG.md` Failed-to-parse list as canonical inventory
+- Listed which cases the parser handles well so future ingestions know what to expect
+- Linked the 4 test files covering these areas
+
+---
+
+## 2026-05-30: Audit and fix book_id=64 (The Picture of Dorian Gray) modern_english_text - COMPLETED
+
+**Issue identified:** All 21 chapters missing the chapter title as a prefix to `modern_english_text`. The `chapter_text` field stores "Title\nBody...", but the modernized version had only "Body..." (title dropped during Gemini LLM pass).
+
+**Audit findings:**
+- Total chapters in book_id=64: 21
+- Chapters with missing title prefix: 21/21
+- Character ratios: all 96–101% (healthy range)
+- Chapters 3, 12, 20 end with `"` or `THE END` — valid terminators despite initial false-positive flags
+
+**Fix applied:**
+Prepended `chapter_title + "\n\n"` to `modern_english_text` for all 21 chapters:
+```python
+for chapter_number in range(0, 21):
+    # Get title + modern_english_text
+    # Update: modern_english_text = "{title}\n\n{modern_english_text}"
+```
+
+**Verification:**
+- ✓ All 21 chapters now have `modern_english_text` starting with their `chapter_title` as the first paragraph
+- ✓ All 21 chapters have non-NULL `chapter_text`, `chapter_title`, `modern_english_text`
+- ✓ Character coverage: 96–101% (all chapters within healthy bounds)
+- ✓ Valid terminators: `.` (18 chapters), `"` (2 chapters), `THE END` (1 chapter) — all valid
+- ✓ Paragraph structure: chapters 5–15 (single orig para) + chapters 0–4, 16–20 (1–136 para diff) — expected for modernized LLM pass
+- ✓ Full test suite: 367 passed
+
+**Pattern match:**
+This issue mirrors book_id=6 (Wizard of Oz) and book_id=65 (Winnie-the-Pooh), where Gemini's title-stripping logic dropped the chapter title during modernization. Fix: surgical DB prepend, no regen needed.
+
+**Database changes:**
+- Updated 21 rows in `chapters` table (prepend title to `modern_english_text`)
+
+All changes committed to `/Users/pengyao/Documents/dev/summra/data/database.db`.
+
+**Top-10 carousel section heading** (`hero-discover` → `hero-banner-heading`)
+- BEFORE: `Discover Classics the Modern Way`
+- AFTER:  `Popular Classics — Now in Plain English`
+
+**"Literature, Beautifully Explained" section heading**
+- BEFORE: `Literature, Beautifully Explained`
+- AFTER:  `Literature, Beautifully Explained` *(heading kept per user choice; only the 3 cards below it were rewritten)*
+
+**Card 1** (`learn-feature-title` + `learn-feature-description`)
+- BEFORE title:  `Beautiful Illustrations`
+- AFTER title:   `Plain English Rewrites`
+- BEFORE desc:   `Make sense of complex plots and symbolism with beautifully illustrated character maps, timelines, and theme guides.`
+- AFTER desc:    `Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no summaries, no shortcuts.`
+
+**Card 2**
+- BEFORE title:  `Audio Summary`
+- AFTER title:   `Side-by-Side Reading`
+- BEFORE desc:   `Help you preview, understand, and enjoy classics at your own pace.`
+- AFTER desc:    `See the original and the plain English version next to each other. Read the way that works for you.`
+
+**Card 3**
+- BEFORE title:  `For Every Reader`
+- AFTER title:   `Built for Real Reading`
+- BEFORE desc:   `Kindle-like reading experience enhanced with chapter illustrations, summaries and plain-English version for English learners.`
+- AFTER desc:    `Kindle-style pages, themes, and font controls. Plus summaries and visual guides when you want to go deeper.`
+
+**Image alt-text on the 3 cards** also updated to match the new card titles.
+
+#### Note on what was NOT restructured
+
+The plan described a "3-card stack" with 📖/🔍/📚 emoji cards. The actual template has three full-width hero banners (Main / Discover / Learn) with different inner structure. Per the "structure is preserved" directive, copy was rewritten in place rather than restructuring into the planned card stack. If a future pass wants the actual card-stack rebuild, it's a separate change.
+
+#### Files changed
+
+**Backend:**
+- `backend/config.py` — added `FEATURE_AUTH = False`, `FEATURE_BLOG = False`
+- `backend/app_base.py` — gated blueprint registration, blog routes, sitemap blog-URL block; added flags to context processor; `/` route updated to pass new `meta_title`
+- `backend/app.py` — `/api/tts/generate` now imports `GeminiTTSHandler` instead of `TTSHandler`
+- `backend/tts_handler.py` — **deleted**
+- `backend/requirements.txt` — removed `TTS>=0.22.0`
+- `requirements-prod-tts.txt` — **deleted** (whole purpose was the TTS variant)
+
+**Frontend:**
+- `frontend/templates/index.html` — all copy changes above, plus `{% if feature_auth %}` and `{% if feature_blog %}` wrappers around gated UI, inline `window.FEATURE_AUTH` / `window.FEATURE_BLOG` script, "Modern English" → "Plain English" chapter tab label
+- `frontend/static/js/auth.js` — entire body wrapped in `if (window.FEATURE_AUTH)` early-return
+- `frontend/static/js/app.js` — `if (!window.FEATURE_AUTH) return;` guards in `setupSaveOfflineButton()` and `getOfflineBooks()`; "Modern English" string changed to "Plain English" in side-by-side header; bumped `?v=6.1.53` → `?v=6.1.54`
+- `frontend/static/js/app.min.js` — rebuilt via esbuild (110.9 KB)
+
+**Deploy:**
+- `deploy/setup-e2small.sh` — step 5 now installs `requirements-prod.txt`; removed step 6 TTS model download; removed stray `TTS_MODEL_NAME` env var
+- `deploy/README.md` — 5 refs to the deleted `requirements-prod-tts.txt` updated; "TTS model download" bullet, "TTS models: ~200 MB" line, and "TTS Fails" troubleshooting section removed
+
+**Tests:**
+- `tests/test_feature_flags.py` — **new**, 8 tests covering flag-off 404s, flag-on 200s, sitemap blog exclusion, context processor, and `tts_handler` ModuleNotFoundError
+
+#### Verification
+
+- `pytest tests/ -q` → **286 passed, 1 deselected** (was 278 → +8 new feature-flag tests). No regressions.
+- Playwright smoke (`tests/e2e/smoke.mjs`) on `/`, `/books/jane-eyre`, `/books/jane-eyre/chapters/1`, `/books/romeo-and-juliet` → all PASS, exit 0.
+- Flag-off curl checks: `/api/auth/check`, `/api/progress/all`, `/blog`, `/api/blog` → all 404. Sitemap contains zero `/blog` URLs. Account button / blog link / Save-for-Offline button absent from DOM. `window.FEATURE_AUTH = false` and `window.FEATURE_BLOG = false` rendered inline.
+- Flag-on (both flipped True at runtime): routes return 200, gated UI reappears in DOM, `window.FEATURE_AUTH = true` inline. Toggle works in both directions.
+- Visual screenshots confirm new hero copy, "Popular Classics — Now in Plain English" carousel section, new 3 cards under "Literature, Beautifully Explained", chapter sticky header tab strip reading **Summary | Original | Plain English | Side×Side**.
+
+#### Known caveat at deploy time
+
+Service worker cache invalidation: users with the existing PWA installed or with the SW registered will see a stale homepage / broken book pages on first visit after deploy until they hard reload once. User chose to ship as-is and accept the one-time stale hit rather than bump the cache version.
+
+#### Process notes
+
+Work split across two parallel teammates (backend track + frontend track) coordinated via the team task list at `~/.claude/tasks/summra-trim/`. Two issues caught in cross-track verification and fixed by lead: (1) the `/` route's `meta_title` override in `app_base.py:269` was masking the new template default; (2) the deploy script still referenced the deleted `requirements-prod-tts.txt`.
+
+#### Follow-up: "no summaries" → "no abbreviation"
+
+After the initial copy pass, the phrase "no summaries" felt off — it reads as anti-summary, which contradicts the rest of the site where summaries are positioned as the on-ramp / preview path. Swapped to "no abbreviation," which is a positive claim about what Plain English actually is (a complete rewrite, nothing abridged) rather than a negative claim about a parallel feature on the same site.
+
+**Hero banner subtitle**
+- BEFORE: `Every sentence rewritten — no summaries, no shortcuts, no fear.`
+- AFTER:  `Every sentence rewritten — no abbreviation, no shortcuts, no fear.`
+
+**Card 1 description ("Plain English Rewrites")**
+- BEFORE: `Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no summaries, no shortcuts.`
+- AFTER:  `Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no abbreviation, no shortcuts.`
+
+#### Follow-up: carousel heading — drop the "Plain English" echo
+
+The carousel section heading ("Popular Classics — Now in Plain English") repeated "Plain English" within 100px of the hero headline ("Read the Classics in Plain English"). On a single screen, the slogan landed twice and read like we were hammering it. The carousel's actual job is to point at specific books, not re-pitch the product the hero already pitched.
+
+**Top-10 carousel section heading**
+- BEFORE: `Popular Classics — Now in Plain English`
+- AFTER:  `Where Most Readers Start`
+
+Social-proof framing. Tells visitors these are the entry points other readers picked, and trusts the hero above to have already done the product pitch.
+
+#### Follow-up: "Literature, Beautifully Explained" → "Classic Literature, Made Easy"
+
+The third section heading was changed to the original hero copy (which had been replaced by the new Plain English hero). Reusing it here gives the section a clearer, plainer label.
+
+**"Literature, Beautifully Explained" section heading**
+- BEFORE: `Literature, Beautifully Explained`
+- AFTER:  `Classic Literature, Made Easy`
+
+#### Follow-up: swap images on Card 2 and Card 3
+
+`chapter_view.*` (showing a reading view) is a better visual fit for "Side-by-Side Reading" than `summary.*` (an open-book illustration). `summary.*` works fine above "Built for Real Reading" since reading-experience features pair naturally with a book illustration. Swapped the image filenames between Card 2 and Card 3; titles, descriptions, and alt text stayed in place.
+
+- Card 2 ("Side-by-Side Reading") image:  `summary.{webp,jpg}` → `chapter_view.{webp,jpg}`
+- Card 3 ("Built for Real Reading") image: `chapter_view.{webp,jpg}` → `summary.{webp,jpg}`
+
+---
+
 ## 2026-05-30: Ingest 7 of 10 new Gutenberg books; fix multiple parser bugs
 
 ### Dry-run-first ingestion workflow + line-range helper - COMPLETED
