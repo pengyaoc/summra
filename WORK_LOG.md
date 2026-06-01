@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-05-31: Fix side-by-side page 1 showing only column headers (TDD)
+
+**Bug.** User on iPad/tablet reported: navigating book page → chapter in side-by-side mode lands on what looks like an empty view ("sometimes"). The page footer shows `Page 1 of 62` but the body is blank below the "Original | Plain English" column banner.
+
+**Root cause.** `calculatePages` treated `.side-by-side-headers` as its own atomic block alongside `.side-by-side-row` blocks. Headers fit on page 1, the first row didn't fit alongside them, so the row got bumped to page 2. Page 1 ended up as the headers banner alone with a vast empty area underneath. Deterministic, not a race — reproduced 12/12 trials at iPad-landscape (1194×834) via pushState nav from the book page. The "sometimes" perception was because the side-by-side mode only auto-activates on screens ≥ 1024px, so the bug only surfaced on iPad-ish widths where the user had previously selected the mode.
+
+**Fix.** In `calculatePages`, pull `.side-by-side-headers` out of the paginated blocks, subtract its rendered height from the per-page container budget, then re-prepend its HTML to every page string in the `pages` array. Result: column labels stay visible on every page (matches printed-textbook running-head convention), and page 1 always carries at least one content row. Total page count went from 62 → 67 for a typical chapter — expected, since each page is slightly shorter to make room for persistent headers.
+
+**TDD loop.**
+1. Wrote `tests/e2e/sxs_page1_has_rows.mjs` — runs 6 trials of book→chapter pushState nav with `reading_chapterViewMode='side-by-side'` pre-set, asserts that page 1 has headers AND at least one `.side-by-side-row`.
+2. Ran on un-patched code → 6/6 FAIL (`pageRowCount: 0`).
+3. Applied fix in `frontend/static/js/app.js` `calculatePages`.
+4. Re-ran → 6/6 PASS (`pageRowCount: 1`, `totalPages: 67`).
+5. Visually verified screenshots of page 1 + page 3 — both show headers + content rows.
+6. Ran existing regression tests: `chapter_header_hidden.mjs`, `text_size_adjust.mjs`, `smoke.mjs`, `sxs_font_regression.mjs` — all pass.
+
+**Open question raised by user.** User said "these are 2 bugs I found, don't necessarily related." Above fix covers the deterministic "page 1 is blank" symptom. If the user also observed a separate race where side-by-side container is genuinely never populated even on later pages, that's a second bug not yet reproduced — flag to revisit.
+
+---
+
 ## 2026-05-31: Fix site-nav overlap race on chapter-page pushState nav (TDD)
 
 **Bug.** User reported: on mobile (iOS Safari + iOS Chrome), clicking a chapter from the book page lands on the chapter reading page with the site nav bar overlaid on top of the chapter text about half the time.
