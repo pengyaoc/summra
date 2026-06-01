@@ -22,6 +22,8 @@
 
 **Open question raised by user.** User said "these are 2 bugs I found, don't necessarily related." Above fix covers the deterministic "page 1 is blank" symptom. If the user also observed a separate race where side-by-side container is genuinely never populated even on later pages, that's a second bug not yet reproduced — flag to revisit.
 
+**User verification (2026-05-31).** User confirmed on-device that all three mobile bugs fixed this session — iOS Safari sticky-header text-resize lag (`df588f8`), site-nav overlap race on chapter-page pushState nav (`5a2d359`), and side-by-side page 1 showing only headers (`0d51f6e`) — are resolved.
+
 ---
 
 ## 2026-05-31: Fix site-nav overlap race on chapter-page pushState nav (TDD)
