@@ -230,6 +230,43 @@ The reverse: some originals end with publisher advertisements after "THE END" th
 
 Example: Dracula ch.27 had orig=104, mod=80 — modern stopped at "THE END" (paragraph 80) but original continued for 24 paragraphs of Grosset & Dunlap catalog listings. We removed paragraphs 81-104 from original.
 
+### 5d-warning. **NEVER append verbatim PROSE to fix mid-chapter truncation**
+
+A subtle but critical anti-pattern. The legitimate verbatim-append cases above (5b end-markers, 5c bibliographic frontmatter, 5d publisher boilerplate, 5e footnotes, 5f volume markers) all share one property: **the appended text is structural/boilerplate, not narrative prose to be modernized.** It's correct to keep `THE END`, `END OF THE SECOND VOLUME`, `[1] Heber C. Kemball...`, `0185m` page markers, `[Picture: Asked him to take care of us]` captions, and bibliographic blocks verbatim — those are metadata that doesn't need translation.
+
+**It is NEVER correct to paste raw 19th-century prose paragraphs verbatim from `chapter_text` to recover from a truncated translation.** The product invariant is that `modern_english_text` reads as modern English. Pasting source-language prose at the chapter end creates a Frankenstein chapter: 90% modernized + 10% raw Dickens / Dumas / Dostoevsky. Side-by-side readers will see the modern column suddenly switch register, and the duplicate-paragraph signature (see below) sometimes occurs when the appended verbatim overlaps content the truncated modern already partially covered.
+
+**Confirmed casualty:** Monte Cristo ch.35 and ch.37 (2026-05-31 batch). A Sonnet subagent batch was told "if you can't fix mechanically, REPORT" but interpreted "5 missing paragraphs at the chapter end" as an invitation to append those paragraphs verbatim from `chapter_text`. Ch.35 ended with 3 paragraphs of raw 1844-Dumas prose; ch.37 with 5. Both had duplicate-paragraph contamination where the appended verbatim overlapped content the truncated modern had already started rendering. Rolled back via direct SQL `UPDATE` (dropped the contaminated tails) and queued for `gemini-3.5-flash` regen.
+
+**Detection signature (run after any large-diff fix campaign):**
+
+```python
+import sqlite3
+db = sqlite3.connect("data/database.db")
+for bid in (...):
+    for n, ot, mt in db.execute("SELECT chapter_number, chapter_text, modern_english_text FROM chapters WHERE book_id=? AND modern_english_text IS NOT NULL", (bid,)):
+        op = ot.strip().split("\n\n")
+        mp = mt.strip().split("\n\n")
+        # Flag: last N paragraphs of modern identical to last N of original AND those paragraphs are prose (>40 chars, not all-caps marker, not [Picture/[1]/asterisk/page-number)
+        for offset in (1, 2, 3, 4, 5):
+            if len(op) < offset or len(mp) < offset: break
+            o_tail = op[-offset].strip()
+            m_tail = mp[-offset].strip()
+            if not (len(o_tail) > 40 and o_tail == m_tail): break
+            if o_tail.startswith(("[Picture", "*", "[*]")) or o_tail.upper() == o_tail: continue
+            print(f"book {bid} ch.{n}: tail offset -{offset} verbatim — INSPECT")
+```
+
+A handful of false positives (Gemini correctly leaves short modern-English-already sentences unchanged — "Though Miss Matty was startled, she submitted to Fate and Love."). The real positives have a tell: **the modern's last few paragraphs are full of Victorian/19th-c register inconsistent with the rest of the chapter**, often with adjacent-paragraph duplicates.
+
+**Correct response when modern is truncated at end:**
+
+1. Confirm via step-4 audit signals: `char_ratio < 0.95` AND modern's last paragraph doesn't match the narrative endpoint of original's last paragraph.
+2. **Do NOT append verbatim.** Roll back any prior verbatim-append by dropping the contaminated tail from `modern_english_text`.
+3. Regenerate the full chapter via step 6 (`--chapters N --model gemini-3.5-flash`). If 3.5-flash also truncates, accept the partial translation and document the chapter as a known stuck case — better a complete-but-summary modern than a half-modernized half-Dickens hybrid.
+
+**Subagent prompt addendum (bake into all step-5g dispatches):** "If you find that the modern text is truncated mid-chapter (last paragraph doesn't reach the original's narrative endpoint), REPORT and EXIT. Do NOT paste verbatim original-language prose to fill the gap — that creates a half-translated hybrid that breaks the product invariant. Truncated chapters must be regenerated via step 6, not patched."
+
 ### 5e. Footnote paragraphs
 
 Some originals contain translator/editor footnotes (e.g. `[1] Heber C. Kemball, in one of his sermons...`) that aren't narrative content. Modern translation correctly omits them. Strip from original.
@@ -264,6 +301,7 @@ Subagent prompt must include:
 - Target paragraph counts must match EXACTLY (`orig - mod == 0`). Don't stop at ±1.
 - If split points don't visually align with original paragraph boundaries, REPORT and exit. Don't guess.
 - Mention the alternative: if the original has a paragraph the modern dropped (poetry, footnote, end-of-volume marker, transcriber note), append/insert it verbatim from `chapter_text` via direct SQL rather than splitting mod text.
+- **CRITICAL — never paste verbatim PROSE to fix mid-chapter truncation** (see §5d-warning). Verbatim-append is only for structural/boilerplate paragraphs (markers, footnotes, picture captions, page numbers, bibliographic blocks). If modern is truncated and missing narrative-prose paragraphs at the end, REPORT and EXIT — the chapter must be regenerated via step 6, not patched.
 
 ### Why Sonnet, not Haiku
 

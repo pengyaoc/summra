@@ -159,6 +159,13 @@ git worktree remove .claude/worktrees/<name>   # cleanup
 - Prefer rebase over merge when integrating between worktrees (keeps history linear, easier for Claude to reason about).
 - Clean up stale worktrees weekly — they accumulate uncommitted state and waste disk.
 
+**Subagent worktree discipline:** Subagents inherit the parent's CWD but can `cd` anywhere and use absolute paths. A subagent spawned from a worktree can silently write to the main checkout (or commit to `main`) if not constrained. Always:
+- **Brief explicitly** — subagents don't see conversation context. State the worktree path and branch in the prompt: "You are in worktree `.claude/worktrees/feature-x` on branch `feature-x`. Do NOT `cd` to the main checkout or use absolute paths outside this worktree."
+- **Use relative paths** in subagent prompts (`backend/app.py`, not `/Users/pengyao/Documents/dev/summra/backend/app.py`).
+- **For truly independent work, spawn with `isolation: "worktree"`** — the Agent tool creates a fresh worktree just for that subagent.
+- **Verify before committing** — end subagent prompts with: "Before committing, run `pwd && git branch --show-current` and confirm it matches the expected worktree. If not, stop and report."
+- **If a subagent writes to main unexpectedly:** `cd` to the main checkout, `git status` / `git log -5 main` to assess, then `git reset --hard HEAD~N` (local only) or `git revert <sha>` (if pushed). Re-do the work in the correct worktree.
+
 ## Book Ingestion Workflow (always dry-run first)
 
 When asked to ingest a new book file (typically a `data/books/pg<id>.txt` from Project Gutenberg), follow this 3-step workflow. Do NOT skip the dry-run.

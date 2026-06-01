@@ -4,6 +4,88 @@
 
 ---
 
+## 2026-05-31: Top-10-popular books plain-English batch — PARTIAL (quota-blocked)
+
+User asked to identify the top 10 most popular books still missing modern translation (filtered to exclude grade-8 simple books) and generate plain-English for all of them via the prod Gemini API. Selected by Project Gutenberg last-30-days download rank:
+
+| # | Gut rank | Book | Author | Chapters |
+|---|---|---|---|---|
+| 1 | #7  | The Count of Monte Cristo (id=80) | Alexandre Dumas | 117 |
+| 2 | #8  | Crime and Punishment (id=56) | Fyodor Dostoyevsky | 40 |
+| 3 | #11 | Middlemarch (id=57) | George Eliot | 87 |
+| 4 | #14 | The Blue Castle (id=50) | L. M. Montgomery | 45 |
+| 5 | #20 | The King in Yellow (id=33) | Robert W. Chambers | 10 |
+| 6 | #24 | Twenty Years After (id=82) | Alexandre Dumas | 90 |
+| 7 | #25 | The Brothers Karamazov (id=95) | Fyodor Dostoyevsky | 96 |
+| 8 | #27 | The Enchanted April (id=51) | Elizabeth Von Arnim | 22 |
+| 9 | #30 | Cranford (id=49) | Elizabeth Gaskell | 17 |
+| 10 | #32 | The Adventures of Ferdinand Count Fathom (id=63) | T. Smollett | 68 |
+
+**Total target: 592 chapters across 10 books.**
+
+### Final state at end-of-day
+
+| # | Book | Done/Total | Exact/Done |
+|---|---|---|---|
+| 1 | King in Yellow | 10/10 | **100% ✅** |
+| 2 | Cranford | 17/17 | **100% ✅** |
+| 3 | Blue Castle | 45/45 | **100% ✅** |
+| 4 | Enchanted April | 22/22 | **100% ✅** |
+| 5 | Twenty Years After | 90/90 | **100% ✅** |
+| 6 | Middlemarch | 71/87 | 99% (70/71) — 16 chapters quota-blocked |
+| 7 | Ferdinand Count Fathom | 68/68 | 99% (67/68) — ch.0 preface summary-shaped |
+| 8 | Brothers Karamazov | 72/96 | 96% (69/72) — 24 chapters quota-blocked |
+| 9 | Crime & Punishment | 40/40 | 95% (38/40) — ch.0+ch.39 preface/epilogue summary-shaped |
+| 10 | Monte Cristo | 54/117 | 70% (38/54) — 63 chapters quota-blocked, ch.5,26,27,29,30,33,36,40,47,53,54 not yet processed |
+| **TOTAL** | | **489/592 (83%)** | **466/489 (95%)** |
+
+### Workflow executed (per CLAUDE.md "Plain English Workflow" 6-step pipeline)
+
+**Step 1 — Generate:** All 10 books dispatched in parallel waves (5+5) using default `gemini-3.1-flash-lite`. Wave 1 (small books) finished in ~5 min. Wave 2 (large books) progressed steadily until daily quota hit ~44 min in. Free-tier `generate_content_free_tier_requests` cap of 500/day was exhausted on flash-lite mid-run, then again on `gemini-3.5-flash` (50/day) during regen attempts.
+
+**Step 2 — Reformat:** Ran `scripts/audits/reformat_paragraphs.py` on `chapter_text` for all 10 books — 6 books had hard-wrapped originals (single `\n` between paragraphs). Also ran on `modern_english_text` to fix 5 Crime & Punishment chapters where Gemini stored modern with single newlines too.
+
+**Step 3 — Strip dividers:** Ran `scripts/audits/strip_decorative_dividers.py` on all 10 books. Minimal impact (most books don't use `* * *` dividers).
+
+**Step 4 — Audit:** Per-chapter paragraph-count diff + char-ratio inspection. Built `scripts/audits/post_process_book.sh` (steps 2-4 in one shot) for repeated use.
+
+**Step 5 — Mechanical fixes:** Dispatched 18 Sonnet subagents in parallel for small-diff (≤5) chapters. Fix patterns discovered:
+- **Page-number markers** (`0185m`, `30041m`, etc.) — Project Gutenberg artifacts that Gemini correctly omitted. Both strategies work: insert verbatim into modern OR strip from orig — agents converged on strip-from-orig (cleaner).
+- **`[Picture: ...]` captions** in Cranford (5 chapters had 1-2 captions each) — kept verbatim since not translatable.
+- **Translator footnotes** (`* A sacerdotal officer.`, `[*] The emancipation of the serfs...`) in Crime, Twenty Years After — kept verbatim per convention.
+- **Foreign-language epigraphs** in Middlemarch (Spanish from Don Quixote, English verse) — kept verbatim, Gemini correctly skipped translation.
+- **Verse/poetry over-splits** in Brothers K — Gemini split single-paragraph verse lines into multiple paragraphs. Fixed via `--merge`.
+- **Letter signatures / chapter titles** in Ferdinand and Brothers K — Gemini dropped short standalone paragraphs. Re-inserted verbatim.
+- **Genuine sentence-merges** — Gemini merged two consecutive sentences from different paragraphs. Fixed via `--split "P:O"`.
+
+**Step 6 — Regenerate damaged:** Crime ch.0/39 and Ferdinand ch.0 attempted with `gemini-3.5-flash`. Crime ch.0+39 returned summary-shaped output (43-character ratio, mod=12 vs orig=73; mod=85 vs orig=139). Ferdinand ch.0 similar. Per CLAUDE.md these are "acceptable and flag for manual review" cases — preface/epilogue chapters resist faithful paragraph-preserving translation.
+
+### Bug found and fixed during the run
+
+**Verbatim-prose contamination in Monte Cristo ch.35 and ch.37:** One Sonnet subagent batch interpreted "truncated chapter" as "append verbatim original-text paragraphs" rather than flagging for regen. Result: Monte Cristo ch.35 ended with 3 paragraphs of raw 19th-century Dumas prose pasted from `chapter_text`, with duplicates against the Gemini-translated equivalents. Same pattern in ch.37 with 5 paragraphs. Rolled back both via direct SQL `UPDATE` (dropped contaminated tails). Queued for regen with `gemini-3.5-flash` when quota resets. **Process improvement:** future subagent prompts should explicitly say "for truncation/missing-end-paragraphs, REPORT and EXIT for regen — do NOT paste verbatim prose."
+
+### Quota-blocked chapters (wait for midnight Pacific reset)
+
+- **Middlemarch ch.71-86** (16 chapters)
+- **Brothers K ch.29, 30, 75-96** (24 chapters)
+- **Monte Cristo ch.55-117** (63 chapters)
+- **Crime ch.0+39, Ferdinand ch.0** (3 regens needed)
+- **Monte Cristo ch.35+37** (2 regens needed after contamination rollback)
+- **Monte Cristo ch.5, 26, 27, 29, 30, 33, 36, 40, 47, 53, 54** (11 large-diff chapters not yet fixed — same page-marker pattern likely applies)
+
+### New scripts created
+
+- `scripts/audits/post_process_book.sh` — runs steps 2-4 for a single book (idempotent, no LLM).
+- `scripts/audits/prepend_missing_titles.py` — prepends body-cased chapter title to modern when Gemini dropped a title that IS the first paragraph of original. (Heuristic; matched 0 chapters on this batch since the books in question didn't have title-as-first-paragraph pattern.)
+
+### Process lessons for next time
+
+- **Quota-aware staging:** Free-tier flash-lite is 500 RPD. With batch size 5 → ~100 chapter-batches/day max. The 10-book run consumed all 500 in ~44 min when all 10 books ran concurrently. For future big batches, do sequential or 2-at-a-time to leave quota headroom for regens.
+- **Page-marker pattern is universal in Monte Cristo:** Every chapter in this Project Gutenberg edition has ~3-5 standalone `NNNNNm` page-number paragraphs. A pre-ingest scrubber that strips these from `chapter_text` would prevent ~50% of the false-diff noise observed.
+- **Verse-line preservation matters for Brothers K:** Dostoevsky's translator inserted poetry within prose chapters; Gemini sometimes treats each verse line as its own paragraph rather than keeping the stanza unit. Future prompt could add an explicit rule about verse/poetry block-preservation.
+
+---
+
 ## 2026-05-31: Plain-English prompt rewritten to 8th-grade U.S. reading standard — COMPLETED
 
 User asked: "Update the modern english generation script to give precise instruction. I want to set the standard as 8th grade English. Search online to put together a detailed prompt for standard of the rewrite." Confirmed: bundle in the duplicated-text bug fix at lines 113–114, keep the 15–20 word/sentence average.
@@ -34,6 +116,24 @@ User asked: "Update the modern english generation script to give precise instruc
 - No post-generation Flesch-Kincaid validator script — out of scope; the user asked to update the *prompt*, not add new validation. Worth adding if real-world output drifts above grade 9.
 - Did not re-run generation on any existing chapter. The new standard will take effect on the next `--all-chapters` or per-chapter regen invocation. Existing `modern_english_text` rows are unchanged.
 - Did not touch temperature (0.3), model default (`gemini-3.1-flash-lite` per `config.PLAIN_TEXT_MODEL`), or batch sizing.
+
+---
+
+## 2026-05-31: Paragraph-count fix — book_id=80 (Count of Monte Cristo) ch.21–25 — COMPLETED
+
+**Problem:** The standard paragraph-count audit reported diffs of +2, +3, +1, +3, +4 for chapters 21–25 respectively. Investigation revealed the root cause was image/page-number markers embedded as standalone paragraphs in `chapter_text` (e.g. `0277m`, `0279m`, `0283m`, etc. — printed page numbers from the Project Gutenberg source). Gemini correctly omitted these non-content artifacts from the modern translation, but the audit script counted them as real paragraphs.
+
+**Fix:** Stripped image marker paragraphs (matching regex `^[0-9]{4}m$`) from `chapter_text` in all 5 chapters via direct sqlite3 UPDATE. No changes to `modern_english_text`.
+
+| Chapter | Markers removed | Before (orig/mod) | After |
+|---------|-----------------|-------------------|-------|
+| ch.21   | 2 (`0277m`, `0279m`) | 98/96 MISMATCH | 96/96 EXACT |
+| ch.22   | 3 (`0283m`, `0285m`, `0289m`) | 34/31 MISMATCH | 31/31 EXACT |
+| ch.23   | 1 (`0295m`) | 56/55 MISMATCH | 55/55 EXACT |
+| ch.24   | 3 (`0301m`, `0303m`, `0307m`) | 64/61 MISMATCH | 61/61 EXACT |
+| ch.25   | 4 (`0311m`, `0313m`, `0315m`, `0317m`) | 45/41 MISMATCH | 41/41 EXACT |
+
+All char_ratio values remain healthy (94–98%). No LLM calls needed.
 
 ---
 
@@ -6263,3 +6363,20 @@ Added 8 new lessons (#11–#18) to `docs/plain_english_workflow.md`. Highlights:
 - Sonnet calls replaced an estimated 30-50 Gemini regens that would have eaten the next 2-3 days of 3.5-flash quota
 - Total marginal spend: well under $1
 
+---
+
+## 2026-05-31: Fix paragraph-count diffs for book_id=80 (The Count of Monte Cristo, chs 1/2/3/4/6) — COMPLETED
+
+Root cause: Project Gutenberg source file for Monte Cristo contained inline page-number artifacts (e.g., `0023m`, `0025m`, `0035m`, …) stored verbatim as standalone paragraphs in `chapter_text`. Gemini correctly ignored them when generating `modern_english_text`, producing exact-count modern text — but the artifact paragraphs inflated `chapter_text` paragraph counts.
+
+Fix: stripped all `\d{4}m` page-marker paragraphs from `chapter_text` for the 5 affected chapters. No content was removed — these are pure pagination artifacts.
+
+| Chapter | Orig before | Orig after | Mod | Markers removed | Result |
+|---------|------------|------------|-----|-----------------|--------|
+| ch.1    | 130        | 126        | 126 | 4               | EXACT  |
+| ch.2    | 116        | 112        | 112 | 4               | EXACT  |
+| ch.3    | 96         | 94         | 94  | 2               | EXACT  |
+| ch.4    | 93         | 90         | 90  | 3               | EXACT  |
+| ch.6    | 96         | 92         | 92  | 4               | EXACT  |
+
+No LLM calls. Pure `sqlite3` UPDATE. Zero cost.
