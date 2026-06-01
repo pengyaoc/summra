@@ -5,6 +5,15 @@
     box-sizing: border-box;
 }
 
+html {
+    /* Why: iOS Safari/Chrome (WebKit) rescales text on fixed-position elements
+       when the URL bar collapses/expands during scroll, lagging behind the
+       viewport resize. Pinning to 100% disables that autosizing pass so the
+       sticky reading header resizes deterministically with the viewport. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 :root {
     --primary-color: #2c3e50;
     --secondary-color: #3498db;

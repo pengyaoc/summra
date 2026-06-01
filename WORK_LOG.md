@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-05-31: Fix iOS Safari sticky header text-resize bug (TDD)
+
+**Bug.** On iPadOS Safari (and iOS Chrome, which uses WebKit) the chapter reading page's sticky settings bar visually jumps down whenever the top URL bar resizes from collapsed → expanded, but the text inside the bar doesn't resize in lockstep. Not reproducible on desktop Mac.
+
+**Root cause.** WebKit's default `-webkit-text-size-adjust: auto` re-runs text autosizing on `position: fixed` elements when the visual viewport changes (URL-bar expand). The autosizing pass lags behind the layout-viewport reflow, so the bar slides down while text stays at the stale scale for a beat.
+
+**Fix.** Single CSS rule on `html`: `-webkit-text-size-adjust: 100%; text-size-adjust: 100%;`. Disables the autosizing pass entirely so text is fully deterministic from CSS.
+
+**TDD loop.**
+1. Wrote `tests/e2e/text_size_adjust.mjs` that loads `/` in Playwright Chromium and reads computed `text-size-adjust` on `<html>`, asserting `100%`.
+2. Ran it on un-patched CSS → FAIL (`computed = "auto"`), confirming the WebKit default was in play.
+3. Added the rule to `frontend/static/css/style.css` (right after the `*` reset).
+4. Re-ran test → PASS.
+5. Ran `smoke.mjs` across `/`, book index, chapter pages → all 200, no regressions.
+
+**Notes.** `tests/e2e/sticky_overlap.mjs` was failing before this change too (waitForFunction timeout on `.pagination-wrapper`); unrelated, flagging for a separate look. Manual iOS-device verification still needed — desktop Chromium can't reproduce the WebKit symptom, so the test only guards against accidental removal of the rule.
+
+---
+
 ## 2026-05-31: Top-10-popular books plain-English batch — PARTIAL (quota-blocked)
 
 User asked to identify the top 10 most popular books still missing modern translation (filtered to exclude grade-8 simple books) and generate plain-English for all of them via the prod Gemini API. Selected by Project Gutenberg last-30-days download rank:
