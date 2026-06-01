@@ -4971,12 +4971,22 @@ class SummraApp {
         // Get all block elements (paragraphs, headings, lists, etc.)
         // For side-by-side view, treat each row as an atomic block
         let blocks;
+        // Side-by-side: pull the column-headers banner out of the paginated
+        // blocks so it doesn't consume a whole page by itself. We re-prepend
+        // its HTML to every page below, and shrink the per-page budget by its
+        // height so the rows still fit underneath.
+        let sxsHeadersHTML = '';
         if (containerElement.classList.contains('chapter-side-by-side')) {
-            // For side-by-side view: use headers and rows as blocks (don't break apart grid structure)
-            blocks = Array.from(containerElement.querySelectorAll('.side-by-side-headers, .side-by-side-row'));
-            console.log('[calculatePages] Side-by-side mode, found blocks:', blocks.length);
-            console.log('[calculatePages] First block class:', blocks[0]?.className);
-            console.log('[calculatePages] First block HTML (first 200 chars):', blocks[0]?.outerHTML.substring(0, 200));
+            const headersEl = containerElement.querySelector('.side-by-side-headers');
+            if (headersEl) {
+                sxsHeadersHTML = headersEl.outerHTML;
+                this.pagination.containerHeight -= headersEl.offsetHeight;
+            }
+            // For side-by-side view: rows are the atomic blocks
+            blocks = Array.from(containerElement.querySelectorAll('.side-by-side-row'));
+            console.log('[calculatePages] Side-by-side mode, found blocks:', blocks.length,
+                        'headers pulled out:', !!sxsHeadersHTML,
+                        'adjusted containerHeight:', this.pagination.containerHeight);
         } else {
             // For regular views: use paragraphs and headings as blocks
             blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol'));
@@ -5154,6 +5164,12 @@ class SummraApp {
 
         // Store pages
         this.pagination.pages = pages.length > 0 ? pages : [containerElement.innerHTML];
+
+        // Side-by-side: re-prepend the headers banner to every page so column
+        // labels stay visible (and page 1 isn't just the banner alone).
+        if (sxsHeadersHTML) {
+            this.pagination.pages = this.pagination.pages.map((p) => sxsHeadersHTML + p);
+        }
 
         // Prepend illustration as page 0 if available
         if (this.pagination.illustrationData) {
