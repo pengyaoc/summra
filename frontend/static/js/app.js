@@ -467,6 +467,14 @@ class SummraApp {
             footer.classList.toggle('hidden', onChapter);
         }
 
+        // Toggle body class for chapter/medium reading pages. CSS uses this to
+        // hide the site .header deterministically (replaces a body:has() rule
+        // whose WebKit re-evaluation can lag a frame on iOS, leaking the site
+        // nav over the chapter text after pushState navigation).
+        const onReadingPage = showArray.includes('chapter-detail-section') ||
+                              showArray.includes('medium-detail-section');
+        document.body.classList.toggle('on-chapter-page', onReadingPage);
+
         // Only modify sections if they're not already in the correct state
         // This prevents flash when server-side rendered page is already showing correct section
         this.ALL_SECTIONS.forEach(sectionId => {

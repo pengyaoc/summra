@@ -4,6 +4,31 @@
 
 ---
 
+## 2026-05-31: Fix site-nav overlap race on chapter-page pushState nav (TDD)
+
+**Bug.** User reported: on mobile (iOS Safari + iOS Chrome), clicking a chapter from the book page lands on the chapter reading page with the site nav bar overlaid on top of the chapter text about half the time.
+
+**Root cause.** The site `.header` was hidden purely via a CSS `:has()` selector:
+```css
+body:has(.chapter-detail-section:not(.hidden)) .header { display: none; }
+```
+On WebKit, `body:has()` ancestor-selector invalidation can defer to the next style recalc. On pushState nav (`showChapterDetail` → `showOnlySections`), the chapter section's `hidden` class is removed in the same tick as several other style mutations, and the `:has()` re-eval lagged a frame — so the relative-positioned site `.header` paint-rendered above the chapter content for one frame.
+
+The race reproduces on desktop Chromium too, in a tighter form: the failing test showed `.header` was still `display: block` ~800ms after `showChapterDetailPage(1)` resolved when the selector relied on `:has()`. Not just a "one-frame iOS quirk" — `:has()` re-eval here is genuinely deferred.
+
+**Fix.** Replaced the `:has()` rule with a deterministic body class toggle. CSS: `body.on-chapter-page .header { display: none; }`. JS: `showOnlySections` toggles `body.on-chapter-page` based on whether the target is `chapter-detail-section` or `medium-detail-section` (mirroring the original `:has()` coverage). Server template (`index.html`) also sets the class on `<body>` for direct chapter URL loads so there's no flash on first paint.
+
+Kept the theme `:has()` rules (`body:has(.chapter-detail-section[data-theme=...])`) — those control background color, where a one-frame lag is invisible.
+
+**TDD loop.**
+1. Wrote `tests/e2e/chapter_header_hidden.mjs` with 6 assertions: direct URL nav has `body.on-chapter-page` + `.header` hidden; book-page baseline has `.header` visible; pushState nav from book page sets `body.on-chapter-page` + hides `.header`.
+2. Ran un-patched code → 3 of 6 FAIL, including the actual user symptom (`.header is display:none after pushState nav from book page — actual: "block"`).
+3. Applied fix (CSS + JS + template).
+4. Re-ran → 6/6 PASS.
+5. Ran `smoke.mjs` (home, book, chapter) + `text_size_adjust.mjs` → all pass, no regressions.
+
+---
+
 ## 2026-05-31: Fix iOS Safari sticky header text-resize bug (TDD)
 
 **Bug.** On iPadOS Safari (and iOS Chrome, which uses WebKit) the chapter reading page's sticky settings bar visually jumps down whenever the top URL bar resizes from collapsed → expanded, but the text inside the bar doesn't resize in lockstep. Not reproducible on desktop Mac.

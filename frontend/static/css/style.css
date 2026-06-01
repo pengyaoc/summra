@@ -57,9 +57,13 @@ body {
     margin-right: -50vw;
 }
 
-/* Hide header when on chapter or medium summary pages */
-body:has(.chapter-detail-section:not(.hidden)) .header,
-body:has(.medium-detail-section:not(.hidden)) .header {
+/* Hide header when on chapter or medium summary pages.
+   Why: the `body:has(...)` form has a known WebKit timing quirk where
+   ancestor-selector invalidation can defer to the next style recalc,
+   so for one frame after pushState navigation the site nav can paint
+   over the chapter text. The deterministic .on-chapter-page class
+   (toggled in showOnlySections) sidesteps that race. */
+body.on-chapter-page .header {
     display: none;
 }
 
