@@ -4,6 +4,63 @@
 
 ---
 
+## 2026-06-01: Top-10 next-popular plain-English batch — IN PROGRESS
+
+**Goal.** Translate next 10 most popular untranslated books to grade-8 plain English.
+
+**Selection** (from 36 zero-coverage candidates, filtered per `docs/plain_english_workflow.md`):
+
+| Rank | id | Book | Author | Chs |
+|---|---|---|---|---|
+| 1 | 46 | The Adventures of Tom Sawyer | Mark Twain | 36 |
+| 2 | 83 | The Three Musketeers | Alexandre Dumas | 69 |
+| 3 | 67 | Twenty Thousand Leagues Under the Sea | Jules Verne | 46 |
+| 4 | 70 | Gulliver's Travels | Jonathan Swift | 40 |
+| 5 | 93 | Bleak House | Charles Dickens | 68 |
+| 6 | 69 | A Journey to the Centre of the Earth | Jules Verne | 45 |
+| 7 | 90 | Around the World in Eighty Days | Jules Verne | 37 |
+| 8 | 104 | The Turn of the Screw | Henry James | 25 |
+| 9 | 109 | The Man Who Was Thursday | G. K. Chesterton | 16 |
+| 10 | 72 | Carmilla | Joseph Sheridan Le Fanu | 17 |
+
+Total = 399 chapters.
+
+**Excluded** per workflow:
+- A2-B1 fairy tale collections (62 Grimms, 78 Andersen) — already at/below grade-8.
+- C2 dense philosophy/economics (3, 7, 8, 9, 61) — abstract argumentative prose translates poorly.
+- Deferred (do later in dedicated runs): 45 War & Peace (349 ch), 52 Anna Karenina (239 ch), 79 Tom Jones (209 ch), 98 Don Quixote (127 ch) — too big for batch.
+- Dumas sequels 84/85/86/87 and Verne sequel 92 — niche follow-ups.
+
+**Execution.** Following the 6-step workflow. 2 books in parallel max (rate-limit math: 5 RPM ÷ 60-180s/batch). Books 46+83 launched first.
+
+### Final state — 8 of 10 books COMPLETED at 100% EXACT (286/286 chapters)
+
+User decision mid-batch: skip the 2 books that had not yet started Gemini generation (93 Bleak House, 69 Journey to Centre).
+
+| Book | Chs | Result | Fix notes |
+|---|---|---|---|
+| 46 Tom Sawyer | 36/36 | ✅ | Stripped 3 `[*]` translator footnotes from `chapter_text` (chs 1, 10, 21) — same §5e/§9 pattern as Twain's Huck Finn |
+| 67 20K Leagues Under the Sea | 46/46 | ✅ | First-pass perfect — Verne clean |
+| 70 Gulliver's Travels | 40/40 | ✅ | Stripped 18th-century chapter synopsis paragraphs from 10 chapters (orig p0 = "The country described. A proposal for correcting modern maps…" was treated by Gemini as non-content). 1 chapter (21) had figure caption "The frame" stripped. Ch.39 had Latin verses + editorial footnotes (`[301] A stang is a pole…`) stripped from chapter_text. |
+| 72 Carmilla | 17/17 | ✅ | 5 Sonnet subagents fixed merges (abs(diff)≤3) — included an `A.D. / 1698.` split, dialogue merges, poem reconstructions, and a footer book-list split |
+| 83 Three Musketeers | 69/69 | ✅ | Killed at 28/69 after 28-min rate-limit stall (workflow §8 confirmed AGAIN — 2-book parallel is the real ceiling). Resumed missing 41 ch. After: stripped injected `CHAPTER N (Book Chapter X: …)` markdown headers from chs 58/59/60 (§16 pattern). Stripped 2 footnotes from ch.25 chapter_text. 6 Sonnet subagents fixed remaining merges; ch.53 had 3 psalm stanzas over-split into individual lines (merged back). |
+| 90 80 Days | 37/37 | ✅ | Stripped 7 Verne uppercase title-fragment p0 paragraphs (`'FOGG DEAR'`, `''CHANGE'`, `'HIM'`, `'REASON'`, full chapter-summary titles). 1 Sonnet subagent merged 9-row itinerary table that Gemini split into separate paragraphs (ch.3 over-split -9). |
+| 104 Turn of the Screw | 25/25 | ✅ | First-pass perfect — Henry James clean |
+| 109 Man Who Was Thursday | 16/16 | ✅ | First-pass perfect — Chesterton clean |
+| ~~93 Bleak House (68 ch)~~ | — | SKIPPED | Not started before user instruction to skip |
+| ~~69 Journey to Centre (45 ch)~~ | — | SKIPPED | Not started before user instruction to skip |
+
+### Lessons confirmed / new
+
+- **Workflow §8 (2-book parallel) confirmed AGAIN** — book 83 hit a 28-minute rate-limit stall during parallel-with-67 phase. Process appeared alive (no errors logged) but Gemini SDK was in exponential backoff. Killing + resuming with explicit `--chapters N,...` worked cleanly because chapter writes are committed per-chapter.
+- **Verne consistently uses uppercase title fragments as orig p0** (`'FOGG DEAR'`, etc.) — these are continuations of chapter-title from the source's wrapped TOC entry. Gemini correctly omits them. Bulk-strip via "is short + all uppercase" predicate works.
+- **Gulliver's Travels** uses 18th-century chapter synopses as orig p0 (long paragraphs with periods between clauses: `"The country described. A proposal for correcting modern maps. The king's palace; and a conversation between the author and a principal secretary..."`). Detection: low word-overlap with mod p0 (<30%) is a reliable signal.
+- **§5e footnote pattern is everywhere in Dumas + Twain + Swift** — `* Haberdasher`, `[* If Mr. Harbison...]`, `[301] A stang...`. Prefer strip-from-orig per §9; subagents tend to want to insert-into-mod, which works but produces inconsistent behavior across the book (some chapters have footnotes in modern, others don't).
+- **Subagent verbatim-insertion of footnotes goes through despite "blocked" reports** — observed on book 83 ch.25: subagent reported "I cannot proceed without authorization" but the DB write had already committed. Then my strip-from-orig flipped the diff sign. Sweep both columns for footnote presence to detect this double-touch case (workflow §20 pattern).
+- **`--merge` syntax in `split_modern_paragraphs.py`** is the right tool for over-split fixes (diff < 0). Sonnet subagents discovered and used it correctly for ch.26 (Aramis poem 5-way split), ch.53 (3 psalm stanzas), and book 90 ch.3 (itinerary table).
+
+---
+
 ## 2026-05-31: Fix side-by-side page 1 showing only column headers (TDD)
 
 **Bug.** User on iPad/tablet reported: navigating book page → chapter in side-by-side mode lands on what looks like an empty view ("sometimes"). The page footer shows `Page 1 of 62` but the body is blank below the "Original | Plain English" column banner.
