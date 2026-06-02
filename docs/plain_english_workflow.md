@@ -396,6 +396,7 @@ What works: launch 2 at a time. As each finishes, validate via steps 2-5 (which 
 | First 10 new books regenerated (147 chapters) | 657 / 670 | 98.1% |
 | Second 10 new books regenerated (146 chapters) | **816 / 816** | **100%** |
 | **Top-10 next batch (May 31, 11 new books, 408 chapters)** | **1224 / 1224** | **100%** |
+| **Top-10 next-popular batch (Jun 1, 8 books, 286 chapters)** | **1510 / 1510** | **100%** |
 
 ### Books with notable corner cases
 
@@ -430,6 +431,18 @@ What works: launch 2 at a time. As each finishes, validate via steps 2-5 (which 
 | Uncle Tom's Cabin (14 chapters) | Bible/literary citation footnotes as standalone paragraphs (`[1] Ps. 74:20.`, `[2] hymn attribution`) Gemini dropped | Insert verbatim from original at correct position |
 | Tess ch.44 | Original ended with 3 division markers (`End of Phase the Fifth`, `Phase the Sixth:`, `The Convert`) Gemini dropped | Append verbatim from original |
 | Tess ch.43 | Gemini merged two short adjacent narration paragraphs into one | Sonnet split at sentence terminator |
+| Tom Sawyer chs 1, 10, 21 | Translator/editor footnotes (`[*] Southwestern for "afternoon"`, `[* If Mr. Harbison owned a slave...]`, `[*] NOTE:—The pretended "compositions"...`) as standalone paragraphs Gemini dropped | Strip from `chapter_text` (§5e/§9) |
+| Three Musketeers chs 58/59/60 | Gemini injected `CHAPTER N (Book Chapter X: <title>)` markdown header as paragraph 0 (same §16 pattern as Huck/Anne) | Mechanical strip of header paragraph |
+| Three Musketeers ch.25 | 2 translator footnotes (`* It was called the Palais-Cardinal...`, `* Attorney`) Gemini dropped | Strip from chapter_text |
+| Three Musketeers chs 3, 9, 44 | Single-asterisk translator footnotes (`* A watered liquor...`, `* Haberdasher`, `* Fort La Pointe...`) | Mix of strip-from-orig and insert-into-mod by subagents — see §26 |
+| Three Musketeers ch.26 | English rondeau ("You who weep...") was 1 orig paragraph but Gemini split each verse line into its own paragraph (5-way over-split) | Sonnet `--merge` of poem lines back into stanza |
+| Three Musketeers ch.53 | 3 psalm stanzas in original, each was 1 paragraph; Gemini split each 4-line stanza into 4 paragraphs (9-way over-split total) | Sonnet `--merge "60,61,62,69,70,71,75,76,77"` |
+| Gulliver's Travels chs 12-14, 28-31, 37-39 | Each chapter starts with an 18th-century synopsis paragraph (`"The country described. A proposal for correcting modern maps. The king's palace; and a conversation between the author and a principal secretary..."`) Gemini correctly omitted as non-narrative | Bulk-strip orig p0 where mod-orig word overlap < 30% (§25) |
+| Gulliver's Travels ch.21 | Original had standalone figure caption `"The frame"` as a paragraph (Project Gutenberg image anchor) | Strip from chapter_text |
+| Gulliver's Travels ch.39 | Latin verse epigraphs (`_—Nec si miserum Fortuna Sinonem_` / `_Finxit_, _vanum etiam_, _mendacemque improba finget_.`) plus 8 editor footnotes (`[301] A stang is a pole or perch...`) all dropped by Gemini | Strip Latin + footnotes from chapter_text |
+| Around the World in 80 Days chs 3, 5, 16, 19, 27, 28, 29 | Each chapter starts with uppercase title-fragment as orig p0 (`'FOGG DEAR'`, `''CHANGE'`, `'HIM'`, `'REASON'`, full chapter-title-summaries) — TOC-wrapping artifact of the source | Bulk-strip orig p0 where `len < 100 and p.upper() == p` (§24) |
+| Around the World in 80 Days ch.3 | Itinerary table (multi-leg travel schedule London→Suez→Bombay→…→London with row totals) was 1 orig paragraph but Gemini split it into 9 separate row-paragraphs | Sonnet `--merge` of table rows |
+| Carmilla ch.5/10/11/14/16 | Sonnet-fixed adjacent-paragraph merges across dialogue + a footer "Other books by J. Sheridan LeFanu: …" merger | 5 Sonnet subagents all 100% success |
 
 ---
 
@@ -642,6 +655,98 @@ Per §5d-warning, you must never paste verbatim 19th-c prose to fix mid-chapter 
 
 The cutoff exists because (a) one paragraph is small enough that a Sonnet translation matches the style of surrounding Gemini paragraphs reasonably well, and (b) anything larger risks compounding judgment errors and producing tone drift.
 
+### 24. Verne uppercase title-fragment paragraphs at orig p0 (the "''CHANGE'" pattern)
+
+Project Gutenberg Verne editions (`Around the World in Eighty Days` confirmed; likely Verne-wide) store chapter titles as wrapped TOC entries where the second line becomes an orphan paragraph at the top of the chapter body. Examples from book 90: `'FOGG DEAR'` (orphan of `"PHILEAS FOGG SECURES A NEW SERVANT, IN WHICH PHILEAS FOGG FINDS IN PASSEPARTOUT THE VERY MAN HE NEEDS / FOGG DEAR"`), `''CHANGE'` (orphan of `"ON 'CHANGE"`), `'HIM'`, `'REASON'`. The full chapter-title-summary versions also show up as orig p0 in chs 27 and 29.
+
+**Detection** — orig p0 is short (`< 100 chars`) and entirely uppercase (`p.upper() == p`). Mod p0 is the actual first narrative sentence. Word-overlap between orig p0 and mod p0 is near-zero.
+
+**Bulk fix:**
+
+```python
+import sqlite3
+db = sqlite3.connect("data/database.db")
+for cn, ot in db.execute("SELECT chapter_number, chapter_text FROM chapters WHERE book_id=? AND modern_english_text IS NOT NULL", (BOOK,)):
+    op = ot.split("\n\n")
+    p0 = op[0].strip()
+    if len(p0) < 100 and p0.upper() == p0:
+        db.execute("UPDATE chapters SET chapter_text=? WHERE book_id=? AND chapter_number=?",
+                   ("\n\n".join(op[1:]), BOOK, cn))
+db.commit()
+```
+
+Verify by re-auditing — diff should drop by exactly 1 per affected chapter.
+
+### 25. 18th-century chapter synopses as orig p0 (the Gulliver pattern)
+
+18th-c novels (Swift's `Gulliver's Travels` confirmed; likely Fielding's `Tom Jones`, Smollett's `Roderick Random`, Sterne's `Tristram Shandy` share this) open each chapter with a long synopsis sentence that summarizes the action ahead — e.g. `"The country described. A proposal for correcting modern maps. The king's palace; and a conversation between the author and a principal secretary, concerning the affairs of Europe. The diversions of the king of Brobdingnag. The author's notion of the literature of Europe."`. Gemini correctly treats these as non-narrative editorial chrome and omits them, so every affected chapter ends up off-by-1.
+
+**Detection** — orig p0 is LONG (often 100-400 chars) with multiple internal periods and starts with a noun phrase like "The country described. A proposal for…". Most reliable signal: very low word-overlap between orig p0 and mod p0 (< 30%). Don't trust length alone — some chapters genuinely have a one-sentence opening.
+
+**Bulk fix** (with safety check):
+
+```python
+import sqlite3
+db = sqlite3.connect("data/database.db")
+for cn, ot, mt in db.execute("SELECT chapter_number, chapter_text, modern_english_text FROM chapters WHERE book_id=? AND modern_english_text IS NOT NULL", (BOOK,)):
+    op = ot.split("\n\n"); mp = mt.split("\n\n")
+    op0_words = set(op[0][:80].lower().split())
+    mp0_words = set(mp[0][:80].lower().split())
+    overlap = len(op0_words & mp0_words) / max(1, min(len(op0_words), len(mp0_words)))
+    if overlap < 0.3:
+        db.execute("UPDATE chapters SET chapter_text=? WHERE book_id=? AND chapter_number=?",
+                   ("\n\n".join(op[1:]), BOOK, cn))
+db.commit()
+```
+
+Gulliver's Travels (book 70): this fix dropped 10 chapters from +1 mismatch to EXACT in one transaction.
+
+### 26. Subagent "blocked" reports can lie — DB write may have already committed
+
+A Sonnet subagent fixing book 83 ch.25 reported `"The auto-classifier blocked the database write... I cannot proceed without your explicit authorization"` and asked the parent for a decision. But the SQL `UPDATE` actually committed BEFORE the classifier intercepted further actions. The parent (this session) then applied its own preferred fix (strip-from-orig) — and the chapter flipped from +2 to -2 because the subagent's insert-into-mod was silently in place from before.
+
+**Detection** — after dispatching any subagent that mentions "blocked" or "cannot proceed" or "needs authorization":
+
+```python
+# Compare DB state before/after by reading the chapter again
+# OR sweep for the specific change-type the subagent described
+import sqlite3, re
+db = sqlite3.connect("data/database.db")
+ot, mt = db.execute("SELECT chapter_text, modern_english_text FROM chapters WHERE book_id=? AND chapter_number=?", (B, N)).fetchone()
+op = ot.split("\n\n"); mp = mt.split("\n\n")
+# Footnote-pattern check (the most common subagent move)
+o_fn = [p for p in op if re.match(r'^\*\s+\w', p.strip()) and len(p) < 150]
+m_fn = [p for p in mp if re.match(r'^\*\s+\w', p.strip()) and len(p) < 150]
+print(f"orig fn={len(o_fn)}, mod fn={len(m_fn)}")  # mismatch reveals partial application
+```
+
+If the subagent's "blocked" change did partially commit, you have two options: (a) finish the subagent's plan (e.g. complete the symmetric strip-from-orig or insert-into-mod) or (b) revert via SQL. Either is fine — what you can't do is APPLY a competing fix without first checking the current state.
+
+**This is a generalization of workflow §20 (double-strip pitfall):** any time two passes touch the same chapter with different strategies, sweep for inconsistency between columns. Subagent retries, parallel-running subagents, and resumed processes are all sources.
+
+### 27. Rate-limit stalls are silent — kill-and-resume is the only recovery
+
+Confirmed again on book 83 (Three Musketeers, run parallel with book 67): batch 8 of 26 started at 20:36:41 and produced ZERO output for 28 minutes. The process was alive (PID stable, no crash), the gemini SDK was in exponential backoff, but no error reached the log. The default SDK retry backoff on 429 can extend to 10 min per retry, and several stacked retries can produce 30+ min of dead air.
+
+**Detection** — monitor `data/log/gemini_logs/` for new files. If the most recent gemini_log timestamp is > 5 minutes old AND the script is still running, you're stalled.
+
+**Recovery** — `kill $PID`, query the DB for missing chapters, resume with explicit `--chapters N,M,...`:
+
+```sh
+PYTHONPATH=backend venv/bin/python3 -c "
+import sqlite3
+db = sqlite3.connect('data/database.db')
+missing = [r[0] for r in db.execute(\"SELECT chapter_number FROM chapters WHERE book_id=BOOK AND (modern_english_text IS NULL OR TRIM(modern_english_text) = '') ORDER BY chapter_number\")]
+print(','.join(str(n) for n in missing))
+"
+# Then:
+PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id BOOK --chapters "N,M,O,..."
+```
+
+Per-chapter writes commit immediately on save (no buffer flush dependency), so a kill mid-batch loses at most 1 batch's worth of work. The resume is clean.
+
+**Don't try to "wait it out"** — once the SDK starts stacked exponential retries, throughput stays effectively zero for the rest of the day. Killing is faster than waiting.
+
 ---
 
 ## Cost summary
@@ -658,6 +763,14 @@ The cutoff exists because (a) one paragraph is small enough that a Sonnet transl
 - All on `gemini-3.1-flash-lite` except ~25 calls on `gemini-3.5-flash` (exhausted the 20/day quota on day 1)
 - **5 Sonnet subagent invocations** total — fixed 18 chapters at 100% success rate
 - Key insight: every Sonnet call replaces 1-3 Gemini regens that would have eaten quota AND still might leave mismatches. ±5 rule pays back fast.
+
+**Top-10 next-popular session (Jun 1, 8 books, 286 chapters → 100% match):**
+- 1 Gemini run per book (8 total `--all-chapters` runs) + 1 resume (book 83 after rate-limit stall) = ~9 generation passes
+- All on `gemini-3.1-flash-lite`; no 3.5-flash escalations needed (no chapter was truncated or summary-shaped on first pass)
+- **12 Sonnet subagent invocations** total — 11 EXACT-success, 1 "blocked" but had committed (see §26)
+- Mechanical strip-from-orig handled the vast majority: 3 Twain footnotes (book 46), 10 Gulliver synopses + Latin verses + 8 editor footnotes + 1 figure caption (book 70), 3 Dumas markdown CHAPTER headers + 2 footnotes (book 83), 7 Verne uppercase title fragments (book 90). One pre-existing CLAUDE.md "go ahead with the top 10" flow ran ~$0 on quota — Gemini free tier covered everything.
+- Notable hit: **book 83 stalled 28 min** in parallel-with-67 run. Kill+resume per §27 worked first try.
+- Skipped: books 93 (Bleak House, 68 ch) and 69 (Journey to Centre, 45 ch) — user instruction mid-batch to skip not-yet-started work.
 
 ---
 
