@@ -70,6 +70,58 @@ Kept the theme `:has()` rules (`body:has(.chapter-detail-section[data-theme=...]
 
 ---
 
+## 2026-06-01: Top-10 plain-English batch COMPLETED (589/592 exact, 8 of 10 books at 100%)
+
+Resumed after quota reset. All 103 missing chapters generated successfully on the second day, and all the remaining paragraph diffs from day 1 + day 2 cleaned up. Final tally **589/592 chapters at exact paragraph match (99%)**; the 3 unfixed are the known-stuck preface/prelude chapters (Crime ch.0, Middlemarch ch.0, Ferdinand ch.0) which resist faithful paragraph-preserving translation even on gemini-3.5-flash.
+
+### Final per-book exact match
+
+| # | Book | Done/Total | Exact/Done |
+|---|---|---|---|
+| 1 | King in Yellow | 10/10 | **100% ✅** |
+| 2 | Cranford | 17/17 | **100% ✅** |
+| 3 | Blue Castle | 45/45 | **100% ✅** |
+| 4 | Enchanted April | 22/22 | **100% ✅** |
+| 5 | Crime & Punishment | 40/40 | 98% (ch.0 preface stuck) |
+| 6 | Middlemarch | 87/87 | 99% (ch.0 prelude stuck) |
+| 7 | Ferdinand Count Fathom | 68/68 | 99% (ch.0 preface stuck) |
+| 8 | Monte Cristo | 117/117 | **100% ✅** |
+| 9 | Twenty Years After | 90/90 | **100% ✅** |
+| 10 | Brothers Karamazov | 96/96 | **100% ✅** |
+| **TOTAL** | | **592/592 (100%)** | **589/592 (99%)** |
+
+### Day-2 work executed
+
+1. **Resumed generation:** Middlemarch ch.71-86, Brothers K ch.29,30,75-96, Monte Cristo ch.55-117 (103 chapters via `gemini-3.1-flash-lite`) plus regen of Crime ch.0/39, Ferdinand ch.0, Monte Cristo ch.35/37 via `gemini-3.5-flash`. All 6 generation processes launched in parallel. Brothers K + Middlemarch + Monte Cristo finished cleanly. Two regens (Crime ch.0, Ferdinand ch.0) returned summary-shaped output again — accepted as documented stuck cases.
+
+2. **Bulk page-marker fix on Monte Cristo (47 chapters in one shot):** All Monte Cristo chapters share a Project Gutenberg artifact — standalone paragraphs matching `^[0-9]{4,5}m$` (e.g. `0185m`, `20227m`, `30041m`) which are page-number anchors. Gemini correctly omits them from translation. Wrote a one-shot Python script that strips these from `chapter_text` for any MC chapter where the diff is fully explained by markers — 47 chapters cleared in one DB transaction.
+
+3. **Recovery from double-strip:** The marker-strip script had a latent issue — it didn't notice that day-1 subagents had inserted markers INTO `modern_english_text` for ~49 MC chapters (ch.7-20, 34, 38-45, etc.). After my orig-side strip, those mod chapters had markers that orig didn't, flipping the diff sign (negative). Detected via grep for `^[0-9]+m$` in mod; fixed in a single follow-up script that stripped markers from mod where orig already lacked them. All 49 chapters resolved to EXACT.
+
+4. **Subagent fixes for the residual 14 chapters:**
+   - Crime ch.39 (+1): missing 77-char dialogue line `"Svidrigaïlov,"...`. Inserted as modern English; reordered to match orig sequence.
+   - Monte Cristo ch.117 (+31): Gemini ended at the correct narrative endpoint; orig had 31 trailing translator-footnote paragraphs (`[1]` through `[30]` + `FOOTNOTES:` header). Appended verbatim (legitimate non-prose case).
+   - Monte Cristo ch.35, 54, 65, 66, 104 (small diffs): mixed causes — one truly-dropped Count's speech (subagent wrote a modern translation, no verbatim paste), three Italian-phrase line-break fragments, two Gemini-injected spurious chapter headers (`CHAPTER 1 (Book Chapter 65...)`), one merged signature line. All resolved.
+   - Brothers K ch.42 (-149): massive Gemini over-split — sentence-by-sentence breakage. Subagent mapped 205 mod paragraphs back to 56 orig and applied 149 merges. EXACT.
+   - Brothers K ch.43 (-49): similar over-split. 50 merges. EXACT.
+   - Brothers K ch.73 (-9): poem stanza split into individual lines. 9 merges restored 3 stanzas. EXACT.
+   - Brothers K ch.96 (+11): trailing `FOOTNOTES` + `[1]-[9]` footnote block in orig. Stripped from `chapter_text`. EXACT.
+
+### Process improvements applied (vs day-1)
+
+- **No more verbatim-prose-append for truncation** — explicitly forbidden in subagent prompts per the §5d-warning section of `docs/plain_english_workflow.md` (committed yesterday). Subagents this run instead either (a) wrote a modern translation for a single missing paragraph, or (b) REPORTed and recommended regen.
+- **Bulk pattern-fixes first, subagents second** — Instead of dispatching 50 Sonnet subagents for the Monte Cristo small-diffs, the page-marker pattern was detected and bulk-fixed via SQL, leaving only true outliers for subagent work. Saved ~50× subagent invocations.
+
+### Known-stuck cases (3 chapters across 10 books)
+
+- **Crime & Punishment ch.0** ("Translator's Preface") — 73 orig paragraphs, modern collapses to 13. Tried both flash-lite and 3.5-flash; both summary-shape the preface.
+- **Middlemarch ch.0** ("Prelude") — 143 orig paragraphs, modern collapses to 4. The prelude is a single dense philosophical reflection that Gemini insists on summarizing.
+- **Ferdinand ch.0** ("Introduction") — 319 orig paragraphs, modern collapses to 32. Largest stuck case.
+
+All three are preface/prelude chapters, not story content. Acceptable per CLAUDE.md guidance.
+
+---
+
 ## 2026-05-31: Top-10-popular books plain-English batch — PARTIAL (quota-blocked)
 
 User asked to identify the top 10 most popular books still missing modern translation (filtered to exclude grade-8 simple books) and generate plain-English for all of them via the prod Gemini API. Selected by Project Gutenberg last-30-days download rank:
@@ -6446,3 +6498,25 @@ Fix: stripped all `\d{4}m` page-marker paragraphs from `chapter_text` for the 5 
 | ch.6    | 96         | 92         | 92  | 4               | EXACT  |
 
 No LLM calls. Pure `sqlite3` UPDATE. Zero cost.
+
+---
+
+## 2026-06-01: Fix residual paragraph diffs for book_id=80 (Monte Cristo), 5 chapters — COMPLETED
+
+Residual diffs after page-marker stripping session. These were genuine Gemini merge/split/drop issues, not page artifacts.
+
+| Chapter | Orig | Mod before | Mod after | Fix applied | Result |
+|---------|------|-----------|-----------|-------------|--------|
+| ch.35   | 138  | 137       | 138       | Inserted translated para (Count's "Mad dog" speech, O132 dropped by Gemini) | EXACT |
+| ch.54   | 139  | 136       | 139       | 3-way split of M40 (Gemini merged 4 orig paras: O40-43 Italian quote fragments) | EXACT |
+| ch.65   | 96   | 97        | 96        | Deleted spurious M1 "CHAPTER 1 (Book Chapter 65: A Conjugal Scene)" header injected by Gemini | EXACT |
+| ch.66   | 147  | 148       | 147       | Deleted spurious M1 "CHAPTER 2 (Book Chapter 66: Matrimonial Projects)" header injected by Gemini | EXACT |
+| ch.104  | 165  | 164       | 165       | Split M61 at char 139 — Gemini merged O61 bank-order text + O62 "Baron Danglars.'" signature into one para | EXACT |
+
+**Root causes found:**
+- **ch.35**: Gemini dropped one prose paragraph (Count's "Mad dog" speech, O132, ~460 chars). Fixed by writing a modern-English translation and inserting it at the correct position (after M131). This is the ONLY chapter requiring LLM-equivalent work.
+- **ch.54**: Gemini correctly unified 4 typographic line-break fragments (O40-O43: lead-in sentence + 2 Italian phrase lines + closing sentence) into one flowing paragraph. Split restored the original 4-para boundary at character offsets 107, 126, 144.
+- **ch.65 & ch.66**: Gemini prefixed a chapter-number header ("CHAPTER N (Book Chapter X: Title)") as the first paragraph. Deleted via direct sqlite3 — not content, just injected metadata.
+- **ch.104**: Gemini merged the banker's letter body (O61) with the signature line "Baron Danglars.'" (O62). Split at char 139.
+
+No Gemini calls. One manual translation (ch.35 O132). Four mechanical sqlite3/split-tool operations.
