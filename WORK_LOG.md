@@ -70,9 +70,9 @@ Kept the theme `:has()` rules (`body:has(.chapter-detail-section[data-theme=...]
 
 ---
 
-## 2026-06-01: Top-10 plain-English batch COMPLETED (589/592 exact, 8 of 10 books at 100%)
+## 2026-06-01: Top-10 plain-English batch COMPLETED — 592/592 EXACT (100% across all 10 books)
 
-Resumed after quota reset. All 103 missing chapters generated successfully on the second day, and all the remaining paragraph diffs from day 1 + day 2 cleaned up. Final tally **589/592 chapters at exact paragraph match (99%)**; the 3 unfixed are the known-stuck preface/prelude chapters (Crime ch.0, Middlemarch ch.0, Ferdinand ch.0) which resist faithful paragraph-preserving translation even on gemini-3.5-flash.
+Resumed after quota reset. All 103 missing chapters generated successfully on the second day, all paragraph diffs from day 1 + day 2 cleaned up, and the 3 "known-stuck" ch.0 preface/prelude chapters finally fixed too. Final tally **592/592 chapters at exact paragraph match (100%)** — every chapter of every book in the top-10 batch is now perfectly aligned.
 
 ### Final per-book exact match
 
@@ -82,13 +82,13 @@ Resumed after quota reset. All 103 missing chapters generated successfully on th
 | 2 | Cranford | 17/17 | **100% ✅** |
 | 3 | Blue Castle | 45/45 | **100% ✅** |
 | 4 | Enchanted April | 22/22 | **100% ✅** |
-| 5 | Crime & Punishment | 40/40 | 98% (ch.0 preface stuck) |
-| 6 | Middlemarch | 87/87 | 99% (ch.0 prelude stuck) |
-| 7 | Ferdinand Count Fathom | 68/68 | 99% (ch.0 preface stuck) |
+| 5 | Crime & Punishment | 40/40 | **100% ✅** |
+| 6 | Middlemarch | 87/87 | **100% ✅** |
+| 7 | Ferdinand Count Fathom | 68/68 | **100% ✅** |
 | 8 | Monte Cristo | 117/117 | **100% ✅** |
 | 9 | Twenty Years After | 90/90 | **100% ✅** |
 | 10 | Brothers Karamazov | 96/96 | **100% ✅** |
-| **TOTAL** | | **592/592 (100%)** | **589/592 (99%)** |
+| **TOTAL** | | **592/592 (100%)** | **592/592 (100%)** |
 
 ### Day-2 work executed
 
@@ -112,13 +112,29 @@ Resumed after quota reset. All 103 missing chapters generated successfully on th
 - **No more verbatim-prose-append for truncation** — explicitly forbidden in subagent prompts per the §5d-warning section of `docs/plain_english_workflow.md` (committed yesterday). Subagents this run instead either (a) wrote a modern translation for a single missing paragraph, or (b) REPORTed and recommended regen.
 - **Bulk pattern-fixes first, subagents second** — Instead of dispatching 50 Sonnet subagents for the Monte Cristo small-diffs, the page-marker pattern was detected and bulk-fixed via SQL, leaving only true outliers for subagent work. Saved ~50× subagent invocations.
 
-### Known-stuck cases (3 chapters across 10 books)
+### Known-stuck cases (3 chapters across 10 books) — FIXED
 
-- **Crime & Punishment ch.0** ("Translator's Preface") — 73 orig paragraphs, modern collapses to 13. Tried both flash-lite and 3.5-flash; both summary-shape the preface.
-- **Middlemarch ch.0** ("Prelude") — 143 orig paragraphs, modern collapses to 4. The prelude is a single dense philosophical reflection that Gemini insists on summarizing.
-- **Ferdinand ch.0** ("Introduction") — 319 orig paragraphs, modern collapses to 32. Largest stuck case.
+Initially all 3 ch.0 preface/prelude chapters resisted faithful paragraph-preserving translation even on gemini-3.5-flash:
+- **Crime & Punishment ch.0** ("Translator's Preface") — 73 orig vs 13 mod
+- **Middlemarch ch.0** ("Prelude") — 143 orig vs 4 mod
+- **Ferdinand ch.0** ("Introduction") — 319 orig vs 32 mod
 
-All three are preface/prelude chapters, not story content. Acceptable per CLAUDE.md guidance.
+**Root cause (user-spotted):** the ORIGINAL `chapter_text` was hard-wrapped from Project Gutenberg at ~70 chars per line, with every line stored as a separate paragraph (`\n\n` between lines). Modern translations correctly produced one paragraph per actual paragraph; the audit just compared against the inflated hard-wrap count. Middlemarch ch.0 also had a 96-paragraph TOC entry absorbed into ch.0 before the prelude prose proper.
+
+**Fix applied:** Wrote a reflow heuristic that merges hard-wrapped lines back into real paragraphs (current line lacks sentence-terminator → merge with next; next line starts lowercase → merge; short title-only lines stay separate). Detects all-caps title paragraphs even when they end in `.` (e.g. `PRELUDE.`). For Middlemarch ch.0, additionally stripped the TOC before reflowing.
+
+| Chapter | orig before | orig after | mod | result |
+|---|---|---|---|---|
+| Crime ch.0 | 73 | 13 | 13 | EXACT |
+| Middlemarch ch.0 | 143 | 4 | 4 | EXACT |
+| Ferdinand ch.0 | 319 | 32 | 32 | EXACT |
+
+Also caught 3 hidden misalignments where prior subagent fixes produced count-matches but wrong content alignment:
+- **Brothers K ch.42**: subagent's 149 merges fixed count but split O4 into two mod paragraphs (M4 ended at "light-mindedness and vanity"; M5 started with "Nevertheless, it was particularly unpleasant" — both halves of orig O4). Fixed via `--split` on M5 then `--merge` M4+new-M5.
+- **Cranford ch.5 and ch.12**: missing `[Picture: ...]` captions plus over-splits elsewhere produced count match (count off-set canceled out) but mid-chapter alignment was wrong. Fixed via merge + caption insert.
+- **Crime ch.12**: prior subagent fix split M27 at an arbitrary char offset to absorb a +1 diff, mis-aligning everything after. Reverted the split and inserted the translator footnote at its true position.
+
+The hidden-misalignment scan (`for each chapter where orig_count == mod_count, look for paragraph pairs where length ratio is >2.5x or <0.4x — flag for inspection`) is now part of the post-process audit.
 
 ---
 
