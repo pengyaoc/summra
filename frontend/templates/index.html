@@ -271,6 +271,11 @@
                     <div class="book-detail-info">
                         <h2 id="book-title"></h2>
                         <p class="book-author" id="book-author"></p>
+                        <!-- Coming-soon banner shown when the book has no modern English translation yet. -->
+                        <div class="plain-english-coming-soon hidden" id="plain-english-coming-soon" role="status">
+                            <span class="plain-english-coming-soon-icon" aria-hidden="true">✨</span>
+                            <span class="plain-english-coming-soon-text">Plain English version coming soon</span>
+                        </div>
                         {% if feature_auth %}
                         <button class="save-offline-btn hidden" id="save-offline-btn">
                             <svg class="offline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -361,7 +366,7 @@
 
                     <!-- Chapters List -->
                     <div class="chapters-section" id="chapters-section">
-                        <h3>Chapters in Plain English</h3>
+                        <h3 id="chapters-section-heading">Chapters in Plain English</h3>
                         <div class="chapters-list" id="chapters-list"></div>
                     </div>
 

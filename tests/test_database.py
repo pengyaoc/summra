@@ -346,6 +346,33 @@ class TestDatabase:
         assert temp_db.get_summary(book_id, 'concise') is None
         assert len(temp_db.get_chapters(book_id)) == 0
 
+    def test_book_has_modern_english_no_chapters(self, temp_db):
+        """A book with no chapters at all has no modern English."""
+        book_id = temp_db.add_book("Empty", "Author", "empty.txt", full_text="x")
+        assert temp_db.book_has_modern_english(book_id) is False
+
+    def test_book_has_modern_english_all_null(self, temp_db):
+        """A book whose chapters all have NULL modern_english_text returns False."""
+        book_id = temp_db.add_book("NoMod", "Author", "no_mod.txt", full_text="x")
+        temp_db.add_chapter(book_id, 1, "Ch 1", "summary", chapter_text="text")
+        temp_db.add_chapter(book_id, 2, "Ch 2", "summary", chapter_text="text")
+        assert temp_db.book_has_modern_english(book_id) is False
+
+    def test_book_has_modern_english_one_set(self, temp_db):
+        """A book with at least one chapter that has non-empty modern_english_text returns True."""
+        book_id = temp_db.add_book("HasMod", "Author", "has_mod.txt", full_text="x")
+        temp_db.add_chapter(book_id, 1, "Ch 1", "summary", chapter_text="text")
+        temp_db.add_chapter(book_id, 2, "Ch 2", "summary", chapter_text="text",
+                            modern_english_text="A plain English version of chapter 2.")
+        assert temp_db.book_has_modern_english(book_id) is True
+
+    def test_book_has_modern_english_whitespace_only_is_false(self, temp_db):
+        """Whitespace-only modern_english_text should not count as having a translation."""
+        book_id = temp_db.add_book("Blank", "Author", "blank.txt", full_text="x")
+        temp_db.add_chapter(book_id, 1, "Ch 1", "summary", chapter_text="text",
+                            modern_english_text="   \n\t  ")
+        assert temp_db.book_has_modern_english(book_id) is False
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -943,7 +943,8 @@ def get_chapters(book_id):
             'success': True,
             'book': book_data,
             'has_sections': book_structure['has_sections'],
-            'sections': book_structure['sections']
+            'sections': book_structure['sections'],
+            'has_modern_english': db.book_has_modern_english(book_id)
         })
 
     except Exception as e:

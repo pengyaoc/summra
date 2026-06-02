@@ -607,6 +607,26 @@ class Database:
 
         return [dict(row) for row in rows]
 
+    def book_has_modern_english(self, book_id: int) -> bool:
+        """True iff at least one chapter for this book has non-empty modern_english_text.
+
+        Treats any whitespace-only value (spaces, tabs, newlines, carriage returns)
+        as empty — SQLite's bare TRIM() strips only spaces, so we pass an explicit
+        whitespace character set.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 1 FROM chapters
+            WHERE book_id = ?
+              AND modern_english_text IS NOT NULL
+              AND LENGTH(TRIM(modern_english_text, char(32) || char(9) || char(10) || char(13))) > 0
+            LIMIT 1
+        ''', (book_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return row is not None
+
     def get_chapter(self, book_id: int, chapter_number: int) -> Optional[Dict]:
         """Get a single chapter by book ID and chapter number"""
         conn = self.get_connection()
