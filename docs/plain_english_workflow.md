@@ -531,6 +531,117 @@ When the original has narration → poetry quote → continuation as three parag
 
 Pattern observed in: Anne ch.19, Anne ch.33, Little Women ch.47.
 
+### 19. Project Gutenberg page-number markers (`0185m`, `30041m`) appear as standalone paragraphs
+
+A specific Project Gutenberg edition format — all 117 chapters of Monte Cristo (book_id 80) had paragraphs matching `^[0-9]{4,5}m$` (e.g. `0023m`, `20227m`, `30041m`) — these are page-image anchors. Gemini correctly omits them from translation, so the count diff shows up everywhere.
+
+**Bulk fix (one SQL transaction, 47 chapters in one shot):**
+
+```python
+import re, sqlite3
+db = sqlite3.connect("data/database.db")
+MARKER = re.compile(r"^[0-9]{4,5}m$")
+for n, ot, mt in db.execute("SELECT chapter_number, chapter_text, modern_english_text FROM chapters WHERE book_id=80 AND modern_english_text IS NOT NULL"):
+    op = ot.strip().split("\n\n")
+    mp = mt.strip().split("\n\n")
+    non_markers = [p for p in op if not MARKER.match(p.strip())]
+    if len(non_markers) == len(mp):  # only fix if diff fully explained by markers
+        db.execute("UPDATE chapters SET chapter_text=? WHERE book_id=80 AND chapter_number=?", ("\n\n".join(non_markers), n))
+db.commit()
+```
+
+Always prefer **strip-from-orig** over insert-into-mod: it leaves `modern_english_text` clean and makes the audit truthful. Run BEFORE dispatching subagents — saves ~50× Sonnet invocations on a single MC-style book.
+
+### 20. Double-strip pitfall — orig-side AND mod-side markers can coexist
+
+If day-N subagents inserted page markers into `modern_english_text` (the "insert-into-mod" approach from §19's alternative), then a later day-N+1 orig-side strip removes them from orig but leaves mod with the markers — flipping the diff sign to negative. Detection: any chapter where `mod_has_markers and not orig_has_markers`. Fix: strip from mod too.
+
+```python
+import re, sqlite3
+MARKER = re.compile(r"^[0-9]{4,5}m$")
+db = sqlite3.connect("data/database.db")
+for n, ot, mt in db.execute("SELECT chapter_number, chapter_text, modern_english_text FROM chapters WHERE book_id=? AND modern_english_text IS NOT NULL", (BOOK,)):
+    op = ot.strip().split("\n\n"); mp = mt.strip().split("\n\n")
+    orig_has = any(MARKER.match(p.strip()) for p in op)
+    mod_has = any(MARKER.match(p.strip()) for p in mp)
+    if mod_has and not orig_has:
+        new_mp = [p for p in mp if not MARKER.match(p.strip())]
+        db.execute("UPDATE chapters SET modern_english_text=? WHERE book_id=? AND chapter_number=?", ("\n\n".join(new_mp), BOOK, n))
+db.commit()
+```
+
+**Process rule:** pick ONE side to strip markers from per book (preferably orig). If you ever mix strategies across runs, sweep with this double-strip detector before declaring done.
+
+### 21. Hidden misalignment — count matches, content shifted
+
+A count-matched chapter (`len(op) == len(mp)`) can still be wrong if a prior fix (or generation accident) split or merged paragraphs at the wrong place. The diff shows zero but mod paragraph K corresponds to orig paragraph K+1 (or K-1) for a stretch in the middle.
+
+**Detection — scan for length-ratio outliers across paragraph pairs:**
+
+```python
+import sqlite3
+db = sqlite3.connect("data/database.db")
+def cnt(t): return len(t.strip().split("\n\n")) if t and t.strip() else 0
+for bid in BOOKS:
+    for n, ot, mt in db.execute("SELECT chapter_number, chapter_text, modern_english_text FROM chapters WHERE book_id=? AND modern_english_text IS NOT NULL", (bid,)):
+        op = ot.strip().split("\n\n"); mp = mt.strip().split("\n\n")
+        if len(op) != len(mp): continue  # only check count-aligned
+        bad = sum(1 for o,m in zip(op,mp) if len(o) >= 30 and not 0.4 <= len(m)/max(1,len(o)) <= 2.5)
+        if bad >= 2:
+            print(f"book {bid} ch.{n}: {bad} paragraphs with suspicious length ratios — INSPECT")
+```
+
+Run this AFTER every batch of subagent fixes — it caught Brothers K ch.42 (subagent's 149-merge fix had count-match but split O4 across M4+M5), Cranford ch.5+ch.12 (missing `[Picture: ...]` cancelled out by over-splits elsewhere), and Crime ch.12 (subagent split M27 at an arbitrary char offset to absorb +1 diff, mis-aligning everything after).
+
+**Fix pattern:** find the transition where the offset starts, undo the bad operation (merge an over-split or split an under-split), and apply the correct fix (usually insert a missing structural paragraph like `[Picture: ...]`).
+
+### 22. Hard-wrapped originals masquerading as paragraphs (ch.0 preface gotcha)
+
+Project Gutenberg preface/prelude/introduction chapters are often hard-wrapped at ~70 chars per line, with every line stored as a separate `\n\n`-delimited paragraph. Modern translations correctly produce one paragraph per *real* paragraph, so the count diff looks catastrophic (e.g. Crime ch.0: 73 orig "paragraphs" vs 13 mod). The standard `reformat_paragraphs.py` step targets a different format (single-`\n` paragraph breaks → `\n\n`) and doesn't catch this.
+
+**Symptom:** `chapter_text` has `double \n\n count` >> `single \n count`, median paragraph length 15-70 chars, max ~70-72 chars (PG default column width). Almost always preface/prelude/intro chapters.
+
+**Fix — reflow heuristic** (merge lines back into paragraphs):
+
+```python
+def reflow_hard_wrap(text):
+    def is_title(s):
+        core = s.rstrip(".")
+        return len(s) < 50 and core.upper() == core and len(core) > 0
+    paras = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
+    out, buf = [], paras[0] if paras else ""
+    for nxt in paras[1:]:
+        bs = buf.rstrip(); last = bs[-1] if bs else ""; first = nxt[0] if nxt else ""
+        if is_title(bs):
+            out.append(bs); buf = nxt; continue
+        if is_title(nxt):
+            out.append(bs); buf = nxt; continue
+        if first.islower():
+            buf = bs + " " + nxt; continue           # definite continuation
+        if last not in '.!?":”’\')]':
+            buf = bs + " " + nxt; continue            # buf ended mid-sentence
+        if len(bs) < 25:
+            buf = bs + " " + nxt; continue            # buf too short to be real para
+        out.append(bs); buf = nxt
+    out.append(buf.rstrip())
+    return "\n\n".join(out)
+```
+
+**The user's insight was load-bearing:** *"merge the original text according to the modern translation"* — the modern is the structural truth, not the original. When orig has bogus paragraph breaks and mod doesn't, fix orig, don't try to make mod match orig. Cleared the last 3 stuck preface chapters (Crime ch.0 73→13, Middlemarch ch.0 143→4 with TOC strip, Ferdinand ch.0 319→32) without any Gemini calls.
+
+**Special case — Middlemarch ch.0:** the chapter parser had absorbed a 96-paragraph TOC entry (PRELUDE + BOOK I-VIII + CHAPTER I-LXXXVI + FINALE) into ch.0 before the prelude prose itself starts at orig index 97. Strip the TOC slice first (`op[97:]`), then reflow.
+
+### 23. Subagent verbatim-prose alternative — write a real modern translation when only one paragraph is missing
+
+Per §5d-warning, you must never paste verbatim 19th-c prose to fix mid-chapter truncation. But for **single-paragraph drops** (Gemini omitted one specific narrative paragraph from the middle of a chapter, no surrounding damage), the subagent can write a modern-English translation of that single paragraph and insert it at the right index. Worked cleanly for Monte Cristo ch.35 (the Count's "Mad dog" speech ~460 chars) — the result is indistinguishable from a single-paragraph regen but doesn't burn a Gemini quota slot.
+
+**Subagent prompt rule of thumb:**
+- 1 paragraph missing → write a translation in modern English, insert via direct SQL
+- 2-5 paragraphs missing → REPORT and recommend regen of just that chapter
+- >5 paragraphs missing → certainly regen with gemini-3.5-flash
+
+The cutoff exists because (a) one paragraph is small enough that a Sonnet translation matches the style of surrounding Gemini paragraphs reasonably well, and (b) anything larger risks compounding judgment errors and producing tone drift.
+
 ---
 
 ## Cost summary
