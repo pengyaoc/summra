@@ -1898,6 +1898,12 @@ class SummraApp {
                     }
                 });
 
+                // Toggle "Chapters in Plain English" → "Chapters" + coming-soon
+                // banner based on whether ANY chapter has a modern translation.
+                // The chapters-list endpoint omits per-chapter modern text for
+                // payload size, so trust the top-level has_modern_english flag.
+                this.updatePlainEnglishUi(data.has_modern_english);
+
                 chaptersList.innerHTML = '';
 
                 // Check if book has two-level structure (multiple sections)
@@ -2001,6 +2007,22 @@ class SummraApp {
         } catch (error) {
             console.error('Error loading chapters:', error);
             chaptersList.innerHTML = '<p class="error">Error loading chapters</p>';
+        }
+    }
+
+    // Adapts the chapters-section header and shows a "coming soon" banner
+    // based on whether this book has any modern English chapter translation.
+    // Books with at least one modern chapter keep the "Chapters in Plain English"
+    // framing; books with none get a plain "Chapters" header plus a notice.
+    updatePlainEnglishUi(hasModernEnglish) {
+        const heading = document.getElementById('chapters-section-heading');
+        const banner = document.getElementById('plain-english-coming-soon');
+        const hasAnyModern = !!hasModernEnglish;
+        if (heading) {
+            heading.textContent = hasAnyModern ? 'Chapters in Plain English' : 'Chapters';
+        }
+        if (banner) {
+            banner.classList.toggle('hidden', hasAnyModern);
         }
     }
 

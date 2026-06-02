@@ -1235,6 +1235,47 @@ body.on-chapter-page .header {
     margin: 16px 0 32px 0;
 }
 
+/* "Plain English version coming soon" pill — shown on books that don't
+   have a modern English translation yet. Toggled by app.js based on
+   whether any chapter has modern_english_text. */
+.plain-english-coming-soon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 0 0;
+    padding: 6px 14px 6px 12px;
+    background-color: rgba(52, 152, 219, 0.08);
+    border: 1px solid rgba(52, 152, 219, 0.20);
+    border-radius: 999px;
+    color: var(--text-light);
+    font-size: 0.9rem;
+    line-height: 1.2;
+    /* Single line on desktop; allow wrap on narrow viewports where the
+       pill would otherwise overflow the (cover-sharing) info column. */
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* On narrow viewports, the book-detail-info column shrinks (cover takes
+   ~40% of the row), so the pill needs to wrap and behave like a rounded
+   rectangle rather than a single-line stadium. */
+@media (max-width: 600px) {
+    .plain-english-coming-soon {
+        white-space: normal;
+        border-radius: 14px;
+        padding: 6px 12px;
+    }
+}
+
+.plain-english-coming-soon.hidden {
+    display: none;
+}
+
+.plain-english-coming-soon-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
 /* Related Books Section */
 .related-books-section {
     margin-bottom: 48px;

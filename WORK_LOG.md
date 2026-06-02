@@ -4,6 +4,71 @@
 
 ---
 
+## 2026-06-01: Summaries + covers for 6 previously-empty books — DONE
+
+**Books touched:** 108 (Frederick Douglass), 109 (Man Who Was Thursday), 110 (Augustine), 111 (Tess), 112 (Mississippi), 114 (Udolpho). All six had been ingested but had no `summaries` rows and only generic placeholder cover images.
+
+**Summaries.** Ran `scripts/content/generate_summaries.py <pg-file>.txt --regenerate-overall` for each book. All 6 fell through the fallback chain from `gemini-3.5-flash` (rate-limited / 503) to `gemini-3-flash-preview` automatically — existing chain handled it without code change. Result: 12 new rows in `summaries` (concise + medium per book; 449–2170 words each).
+
+**Cover prompts.** Assembled per-book prompts from the template in `scripts/images/generate_illustrations.py:178-199` (with `clean_title_for_prompt()` applied) using each book's freshly-generated `medium_summary`. Output dropped to `/tmp/cover_prompt_book_<id>.txt` for paste into AI Studio (Nano Banana). Mississippi needed three re-rolls — model misspelled "MISSISSIPPI" on the first two attempts; spelling guard recommended in prompt for future runs.
+
+**Cover install.** For each generated image: auto-detected content bbox (corner-pixel background sample, Euclidean threshold of 15), cropped tight, forced exact 2:3 by trimming the long axis. Saved as `frontend/static/covers/<id>.jpg` (JPEG q=88, progressive) and regenerated `.webp` via `cwebp -q 85`. Book 112's final image was already 2:3 (1342×2000, aspect 0.6710) so installed full-bleed without cropping.
+
+| ID | Title | Final size | JPG | WebP |
+|---|---|---|---|---|
+| 108 | Frederick Douglass | 567×850 | 97 KB | 60 KB |
+| 109 | Man Who Was Thursday | 545×817 | 170 KB | 149 KB |
+| 110 | Augustine | 599×898 | 193 KB | 169 KB |
+| 111 | Tess | 683×1024 | 160 KB | 115 KB |
+| 112 | Mississippi | 1342×2000 | 765 KB | 673 KB |
+| 114 | Udolpho | 683×1024 | 160 KB | 105 KB |
+
+**DB metadata cleanup.** Two author/title strings disagreed with the new covers and were fixed:
+- `authors.name` (id=69) and `books.author` (id=110): `"Saint of Hippo Augustine"` → `"Augustine of Hippo"` (cover renders "Augustine of Hippo")
+- `books.title` (id=111): `"Tess of the D'urbervilles"` → `"Tess of the D'Urbervilles"` (slug `tess-of-the-durbervilles` unchanged — no URL break)
+
+**Prod sync.** Local-only. The DB changes and the 12 cover files need to be copied to the VM per the workflow in `CLAUDE.md` (database scp + place under `/var/www/summra/frontend/static/covers/`; nginx serves covers directly, no service restart needed for the static assets).
+
+---
+
+## 2026-06-01: Life on the Mississippi chapter titles — DONE
+
+**Problem.** All 60 non-preface chapters of book 112 (`pg245.txt`) had corrupted titles like `"The Mississippi Is Well Worth Reading About.--it Is"`, `"In Thg Tract Business.--effects of the Rise.--plantations"`, `"A Question of Veracity.--a Little Unpleasantness.--i Have"`. These were truncated summary blurbs scraped from the TOC (lines 44–293 of the source), not real titles.
+
+**Root cause.** Twain's book uses a two-line heading in the body: a bare `CHAPTER N` line, blank line, then the real title on the next line ("The River and Its History"). The ingester's chapter detector matched the first-occurring `CHAPTER N` lines (the TOC versions, which DO have inline text) before reaching the bare body markers, so the TOC blurbs ended up persisted as titles.
+
+**Fix (data-only, no parser change).** Extracted the real titles by scanning `data/books/pg245.txt` for lines matching `^CHAPTER (\d+)$` and grabbing the next non-blank line. Got all 60 cleanly. Updated `chapters.chapter_title` for `book_id=112, chapter_number 1..60`. Chapter 0 (Preface) untouched.
+
+DB snapshot: `data/database.db.bak-pre-mississippi-titles-20260601-220831`.
+
+**Verified.** `/books/life-on-the-mississippi` now renders titles like "The River and Its History", "I Want to be a Cub-pilot", "Frescoes from the Past". Playwright smoke + screenshot read confirms visual.
+
+**Not fixed (flagged for later):** chapter 60 still has ~85K chars — appendices A/B/C/D (source lines 13697–14847) were appended to the last chapter during ingestion. Separate from the title issue. No parser change made today because user only asked about titles.
+
+---
+
+## 2026-06-01: "Chapters" header + "Plain English coming soon" banner — DONE
+
+**Goal.** When a book has no modern English translation yet, change the chapter-list header from "Chapters in Plain English" to plain "Chapters" and surface a subtle pill banner above the summary tabs telling users a plain-English version is on the way.
+
+**Current state.** 62/90 books have at least one chapter translated. The other 28 were silently mislabeled "Chapters in Plain English" even though no plain-English text exists for them.
+
+**Changes:**
+- `backend/models.py` — added `Database.book_has_modern_english(book_id)`. Single-row `LIMIT 1` query with explicit whitespace TRIM set (SQLite `TRIM()` only strips spaces by default).
+- `backend/app_base.py` — `/api/books/<id>/chapters` now returns `has_modern_english: bool` at the top level. Per-chapter payloads unchanged.
+- `frontend/templates/index.html` — gave `<h3>` an `id="chapters-section-heading"`; added a `.plain-english-coming-soon` pill (hidden by default) directly under the author line inside `.book-detail-info`.
+- `frontend/static/css/style.css` — added subtle pill styling (rgba blue tint, rounded, muted text, ✨ icon).
+- `frontend/static/js/app.js` — new `updatePlainEnglishUi(hasModernEnglish)` method called from `loadChapters()` after the API responds. Toggles the H3 text and banner visibility.
+- `frontend/static/js/app.min.js` — regenerated via esbuild.
+
+**Tests (TDD):**
+- `tests/e2e/plain_english_banner.mjs` — 7 assertions: with-modern book keeps "Chapters in Plain English" + hidden banner; without-modern book shows "Chapters" + visible banner. Written failing first, then green.
+- `tests/test_database.py` — 4 new asserts on `book_has_modern_english`: no chapters, all-null, one set, whitespace-only (regression on TRIM behavior). All pass. Full `test_database.py` suite still 18/18.
+
+**Files touched:** `backend/models.py`, `backend/app_base.py`, `frontend/templates/index.html`, `frontend/static/css/style.css`, `frontend/static/js/app.js`, `frontend/static/js/app.min.js`, `tests/e2e/plain_english_banner.mjs`, `tests/test_database.py`, `WORK_LOG.md`.
+
+---
+
 ## 2026-06-01: Top-10 next-popular plain-English batch — IN PROGRESS
 
 **Goal.** Translate next 10 most popular untranslated books to grade-8 plain English.
