@@ -35,7 +35,7 @@
 - [ ] **Step 1: Confirm existing tests pass before the rename**
 
 ```bash
-cd /Users/pengyao/Documents/dev/summra
+cd <LOCAL_REPO_PATH>
 python -m pytest tests/test_gemini_illustrations.py -v 2>&1 | tail -20
 ```
 
@@ -1256,8 +1256,8 @@ Expected: 4 passed.
 - [ ] **Step 5: Add a `.gitignore` for the brief cache directory**
 
 ```bash
-mkdir -p /Users/pengyao/Documents/dev/summra/data/character_briefs
-printf '*\n!.gitignore\n' > /Users/pengyao/Documents/dev/summra/data/character_briefs/.gitignore
+mkdir -p <LOCAL_REPO_PATH>/data/character_briefs
+printf '*\n!.gitignore\n' > <LOCAL_REPO_PATH>/data/character_briefs/.gitignore
 ```
 
 - [ ] **Step 6: Confirm no regression**
@@ -1903,7 +1903,7 @@ EOF
 
 ```bash
 grep -rn "generate_gemini_illustrations" \
-    /Users/pengyao/Documents/dev/summra \
+    <LOCAL_REPO_PATH> \
     --include="*.md" --include="*.sh" --include="*.py" 2>/dev/null \
     | grep -v __pycache__ \
     | grep -v node_modules \
@@ -1921,7 +1921,7 @@ For each file from Step 1, replace `generate_gemini_illustrations.py` with `gene
 
 ```bash
 grep -rn "generate_gemini_illustrations" \
-    /Users/pengyao/Documents/dev/summra \
+    <LOCAL_REPO_PATH> \
     --include="*.md" --include="*.sh" --include="*.py" 2>/dev/null \
     | grep -v __pycache__ \
     | grep -v node_modules \

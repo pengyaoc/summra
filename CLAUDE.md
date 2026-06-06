@@ -161,7 +161,7 @@ git worktree remove .claude/worktrees/<name>   # cleanup
 
 **Subagent worktree discipline:** Subagents inherit the parent's CWD but can `cd` anywhere and use absolute paths. A subagent spawned from a worktree can silently write to the main checkout (or commit to `main`) if not constrained. Always:
 - **Brief explicitly** — subagents don't see conversation context. State the worktree path and branch in the prompt: "You are in worktree `.claude/worktrees/feature-x` on branch `feature-x`. Do NOT `cd` to the main checkout or use absolute paths outside this worktree."
-- **Use relative paths** in subagent prompts (`backend/app.py`, not `/Users/pengyao/Documents/dev/summra/backend/app.py`).
+- **Use relative paths** in subagent prompts (`backend/app.py`, not an absolute path to your local checkout).
 - **For truly independent work, spawn with `isolation: "worktree"`** — the Agent tool creates a fresh worktree just for that subagent.
 - **Verify before committing** — end subagent prompts with: "Before committing, run `pwd && git branch --show-current` and confirm it matches the expected worktree. If not, stop and report."
 - **If a subagent writes to main unexpectedly:** `cd` to the main checkout, `git status` / `git log -5 main` to assess, then `git reset --hard HEAD~N` (local only) or `git revert <sha>` (if pushed). Re-do the work in the correct worktree.
@@ -354,21 +354,21 @@ PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --
 
 ## Deploying to Production (GCP VM)
 
-Production runs on a GCP VM serving **https://summrabook.com** (NOT `summra.com` — that's a stale parked domain still referenced in code comments and `app_base.py` sitemap entries; ignore those when verifying prod).
+Production runs on a GCP VM serving the public production domain (`<PROD_DOMAIN>`). Concrete identifiers — project, instance name, zone, external IP, Linux user, absolute paths — are stored locally in **`.prod-metadata.local.md`** (gitignored). Read that file to fill in any `<PLACEHOLDER>` token below before running a command. If `.prod-metadata.local.md` is missing, stop and recreate it from a password-manager note; never commit the real values.
 
-**VM facts:**
-- Project: `project-7f192cbf-77f3-4f7a-acc`, instance `instance-20251125-033837`, zone `us-west1-b`, external IP `34.82.3.27`
-- Repo at `/var/www/summra` (owned `pengyaoc:www-data`, group-writable)
-- venv at `/var/www/summra/venv/` (Python 3.11)
-- systemd unit `summra.service` runs gunicorn as `www-data`: `-c deploy/gunicorn_config.py backend.app_prod:app`, bound to `:5000`
-- nginx terminates TLS for `summrabook.com` and proxies to `:5000`
-- DB at `/var/www/summra/data/database.db` (`pengyaoc:www-data`, mode `664`)
-- Pull/git work runs as `pengyaoc`; service work needs `sudo`
+**VM facts (generic shape):**
+- GCP project `<GCP_PROJECT_ID>`, instance `<GCP_INSTANCE>`, zone `<GCP_ZONE>`, external IP `<VM_EXTERNAL_IP>`
+- Repo at `<REMOTE_REPO_PATH>` (owned `<VM_USER>:<SERVICE_USER>`, group-writable)
+- venv at `<REMOTE_REPO_PATH>/venv/` (Python 3.11)
+- systemd unit `<SYSTEMD_UNIT>` runs gunicorn as `<SERVICE_USER>`: `-c deploy/gunicorn_config.py backend.app_prod:app`, bound to `:5000`
+- nginx terminates TLS for `<PROD_DOMAIN>` and proxies to `:5000`
+- DB at `<REMOTE_DB_PATH>` (`<VM_USER>:<SERVICE_USER>`, mode `664`)
+- Pull/git work runs as `<VM_USER>`; service work needs `sudo`
 
 All commands below assume you're driving the VM remotely via `gcloud compute ssh ... --command="..."`. The base SSH invocation:
 
 ```sh
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="<remote command>"
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="<remote command>"
 ```
 
 ### 1. Pull latest `main` on the VM
@@ -376,13 +376,13 @@ gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="<remote
 Always check status first; if behind, fast-forward only (never merge unknown VM-local changes):
 
 ```sh
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="sudo -u pengyaoc bash -c 'cd /var/www/summra && git fetch origin --quiet && BEHIND=\$(git rev-list --count HEAD..origin/main) && echo BEHIND=\$BEHIND && if [ \$BEHIND -gt 0 ]; then git log --oneline HEAD..origin/main && git pull --ff-only; else echo Already up-to-date; fi'"
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo -u <VM_USER> bash -c 'cd <REMOTE_REPO_PATH> && git fetch origin --quiet && BEHIND=\$(git rev-list --count HEAD..origin/main) && echo BEHIND=\$BEHIND && if [ \$BEHIND -gt 0 ]; then git log --oneline HEAD..origin/main && git pull --ff-only; else echo Already up-to-date; fi'"
 ```
 
 **If the pull fails with "your local changes would be overwritten":** the VM has uncommitted state. Do NOT `git stash` or `--hard reset` blindly. Run `git diff HEAD -- backend/` to see if any divergence is prod-only (env-specific config, hot-patches). If it's truly safe to discard, snapshot first to a backup branch:
 
 ```sh
-sudo -u pengyaoc bash -c 'cd /var/www/summra && git checkout -b vm-state-backup-$(date +%Y%m%d-%H%M%S) && git add -A && git commit -m "snapshot VM working state before reset" && git checkout main && git reset --hard origin/main'
+sudo -u <VM_USER> bash -c 'cd <REMOTE_REPO_PATH> && git checkout -b vm-state-backup-$(date +%Y%m%d-%H%M%S) && git add -A && git commit -m "snapshot VM working state before reset" && git checkout main && git reset --hard origin/main'
 ```
 
 The backup branch survives so you can cherry-pick anything that turns out to matter.
@@ -395,25 +395,25 @@ The backup branch survives so you can cherry-pick anything that turns out to mat
 | `backend/requirements.txt` | **Yes** + `pip install -r backend/requirements.txt` inside the venv first |
 | `backend/models.py` schema changes | **Yes** — `Database.__init__` runs idempotent ALTER-TABLE migrations on boot |
 | `deploy/gunicorn_config.py` | **Yes** |
-| `/etc/systemd/system/summra.service` | **Yes** + `sudo systemctl daemon-reload` first |
+| `/etc/systemd/system/<SYSTEMD_UNIT>` | **Yes** + `sudo systemctl daemon-reload` first |
 | `frontend/templates/**` | No — Flask re-reads templates per request |
 | `frontend/static/**` (CSS, JS, images) | No — nginx serves directly. Bump cache-busting query string in `index.html` if you need clients to pull a new asset |
 | `data/books/**` raw text | No — only used during ingestion, not at request time |
 | `docs/**`, `WORK_LOG.md`, `README.md`, `tests/**` | No |
 
 ```sh
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="sudo systemctl restart summra.service && sleep 3 && sudo systemctl is-active summra.service && curl -sS -o /dev/null -w 'local HTTP %{http_code}\n' http://127.0.0.1:5000/ && sudo journalctl -u summra.service --since '1 minute ago' --no-pager | grep -iE 'error|exception|traceback' | grep -v 'sent SIGTERM' | tail -5 || echo no errors"
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo systemctl restart <SYSTEMD_UNIT> && sleep 3 && sudo systemctl is-active <SYSTEMD_UNIT> && curl -sS -o /dev/null -w 'local HTTP %{http_code}\n' http://127.0.0.1:5000/ && sudo journalctl -u <SYSTEMD_UNIT> --since '1 minute ago' --no-pager | grep -iE 'error|exception|traceback' | grep -v 'sent SIGTERM' | tail -5 || echo no errors"
 ```
 
 ### 3. Verify public site after deploy
 
 ```sh
-curl -sSL -o /dev/null -w 'GET /         HTTP %{http_code}  time=%{time_total}s\n' https://summrabook.com/
-curl -sSL -o /dev/null -w 'GET /books    HTTP %{http_code}  time=%{time_total}s\n' https://summrabook.com/books
-curl -sSL -o /dev/null -w 'GET /api/books HTTP %{http_code}  time=%{time_total}s\n' https://summrabook.com/api/books
+curl -sSL -o /dev/null -w 'GET /         HTTP %{http_code}  time=%{time_total}s\n' https://<PROD_DOMAIN>/
+curl -sSL -o /dev/null -w 'GET /books    HTTP %{http_code}  time=%{time_total}s\n' https://<PROD_DOMAIN>/books
+curl -sSL -o /dev/null -w 'GET /api/books HTTP %{http_code}  time=%{time_total}s\n' https://<PROD_DOMAIN>/api/books
 ```
 
-All should return 200 in under ~1s. If any return 500, check `sudo journalctl -u summra.service --no-pager | tail -50` on the VM.
+All should return 200 in under ~1s. If any return 500, check `sudo journalctl -u <SYSTEMD_UNIT> --no-pager | tail -50` on the VM.
 
 ### 4. Copy local `database.db` to VM and activate it
 
@@ -422,10 +422,10 @@ The VM's DB is the live source of truth for prod. Replacing it is destructive �
 **Pre-flight (always):**
 ```sh
 # row counts side-by-side
-sqlite3 /Users/pengyao/Documents/dev/summra/data/database.db "SELECT 'books='||COUNT(*) FROM books UNION ALL SELECT 'chapters='||COUNT(*) FROM chapters UNION ALL SELECT 'authors='||COUNT(*) FROM authors;"
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="sudo -u www-data /var/www/summra/venv/bin/python3 -c \"
+sqlite3 <LOCAL_DB_PATH> "SELECT 'books='||COUNT(*) FROM books UNION ALL SELECT 'chapters='||COUNT(*) FROM chapters UNION ALL SELECT 'authors='||COUNT(*) FROM authors;"
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo -u <SERVICE_USER> <REMOTE_REPO_PATH>/venv/bin/python3 -c \"
 import sqlite3
-c = sqlite3.connect('/var/www/summra/data/database.db').cursor()
+c = sqlite3.connect('<REMOTE_DB_PATH>').cursor()
 for tbl in ('books','chapters','authors'): print(f'{tbl}=' + str(c.execute(f'SELECT COUNT(*) FROM {tbl}').fetchone()[0]))
 \""
 ```
@@ -435,29 +435,29 @@ If VM counts are higher than local for anything other than `blog_posts`, STOP �
 **Copy and activate:**
 ```sh
 # 1. Snapshot VM's current DB
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="sudo cp /var/www/summra/data/database.db /var/www/summra/data/database.db.bak-pre-copy-\$(date +%Y%m%d-%H%M%S) && ls -lh /var/www/summra/data/database.db*"
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo cp <REMOTE_DB_PATH> <REMOTE_DB_PATH>.bak-pre-copy-\$(date +%Y%m%d-%H%M%S) && ls -lh <REMOTE_DB_PATH>*"
 
-# 2. SCP local DB to /tmp on VM (can't scp directly into /var/www — perms)
-gcloud compute scp /Users/pengyao/Documents/dev/summra/data/database.db instance-20251125-033837:/tmp/database.db.new --zone=us-west1-b
+# 2. SCP local DB to /tmp on VM (can't scp directly into <REMOTE_REPO_PATH> — perms)
+gcloud compute scp <LOCAL_DB_PATH> <GCP_INSTANCE>:/tmp/database.db.new --zone=<GCP_ZONE>
 
 # 3. Verify checksums match (paranoid but cheap)
-md5 -q /Users/pengyao/Documents/dev/summra/data/database.db
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="md5sum /tmp/database.db.new"
+md5 -q <LOCAL_DB_PATH>
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="md5sum /tmp/database.db.new"
 
 # 4. Stop service, move into place with correct ownership, restart
-gcloud compute ssh instance-20251125-033837 --zone=us-west1-b --command="sudo systemctl stop summra.service && sudo mv /tmp/database.db.new /var/www/summra/data/database.db && sudo chown pengyaoc:www-data /var/www/summra/data/database.db && sudo chmod 664 /var/www/summra/data/database.db && sudo systemctl start summra.service && sleep 3 && sudo systemctl is-active summra.service"
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo systemctl stop <SYSTEMD_UNIT> && sudo mv /tmp/database.db.new <REMOTE_DB_PATH> && sudo chown <VM_USER>:<SERVICE_USER> <REMOTE_DB_PATH> && sudo chmod 664 <REMOTE_DB_PATH> && sudo systemctl start <SYSTEMD_UNIT> && sleep 3 && sudo systemctl is-active <SYSTEMD_UNIT>"
 ```
 
 **Why stop/start instead of just restart:** gunicorn workers hold open SQLite file handles. A live `mv` over the DB leaves workers reading the old (now unlinked) inode until they're recycled — better to take the request path down for ~5s and bring it back on a clean file.
 
-**Why chmod 664 + group www-data:** Flask runs as `www-data`. The DB needs to be group-readable; the group-write bit lets future writes (if FEATURE_AUTH ever flips on) work without a re-chown.
+**Why chmod 664 + group `<SERVICE_USER>`:** Flask runs as `<SERVICE_USER>`. The DB needs to be group-readable; the group-write bit lets future writes (if FEATURE_AUTH ever flips on) work without a re-chown.
 
 **Verify the new DB is live:**
 ```sh
 # Confirm a row only present in the new DB resolves publicly. Replace <new-slug>
 # with a book that exists locally but did NOT exist on the VM pre-copy.
-curl -sSL -o /dev/null -w 'GET /books/<new-slug> HTTP %{http_code}\n' https://summrabook.com/books/<new-slug>
-curl -sSL https://summrabook.com/api/books | python3 -c "import sys, json; d=json.load(sys.stdin); books=d.get('books', d); print(f'total: {len(books)}')"
+curl -sSL -o /dev/null -w 'GET /books/<new-slug> HTTP %{http_code}\n' https://<PROD_DOMAIN>/books/<new-slug>
+curl -sSL https://<PROD_DOMAIN>/api/books | python3 -c "import sys, json; d=json.load(sys.stdin); books=d.get('books', d); print(f'total: {len(books)}')"
 ```
 
-**Backups accumulate.** `data/database.db.bak-pre-copy-*` on the VM is root-owned and ~170M each. Periodically: `sudo rm /var/www/summra/data/database.db.bak-pre-copy-*` after you're sure the deploy is healthy (keep at most the last 1–2).
+**Backups accumulate.** `<REMOTE_DB_PATH>.bak-pre-copy-*` on the VM is root-owned and ~170M each. Periodically: `sudo rm <REMOTE_DB_PATH>.bak-pre-copy-*` after you're sure the deploy is healthy (keep at most the last 1–2).

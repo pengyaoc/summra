@@ -3,6 +3,7 @@
 
 import re
 import json
+from pathlib import Path
 
 def analyze_chapters(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -75,7 +76,7 @@ def analyze_chapters(filepath):
     return chapters
 
 if __name__ == '__main__':
-    filepath = '/Users/pengyao/Documents/dev/summra/data/books/Thus_Spake_Zarathustra.txt'
+    filepath = str(Path(__file__).resolve().parents[2] / 'data' / 'books' / 'Thus_Spake_Zarathustra.txt')
     chapters = analyze_chapters(filepath)
 
     print(f"Total chapters found: {len(chapters)}\n")
