@@ -6657,4 +6657,38 @@ Residual diffs after page-marker stripping session. These were genuine Gemini me
 - **ch.65 & ch.66**: Gemini prefixed a chapter-number header ("CHAPTER N (Book Chapter X: Title)") as the first paragraph. Deleted via direct sqlite3 — not content, just injected metadata.
 - **ch.104**: Gemini merged the banker's letter body (O61) with the signature line "Baron Danglars.'" (O62). Split at char 139.
 
+---
+
+## 2026-06-05: Production VM security hardening — DONE
+
+**Trigger.** Ran `deploy/HARDENING.md` audit scripts against the GCP VM for the first time after installing gcloud CLI.
+
+### Findings and fixes
+
+**[FAIL] Port 5000 publicly bound (gunicorn)**
+- `deploy/gunicorn_config.py` had `bind = "0.0.0.0:5000"` — gunicorn was reachable on any interface, bypassing nginx and serving plain HTTP to the world.
+- Fix: changed to `bind = "127.0.0.1:5000"`. Copied config to VM via `gcloud compute scp`, restarted `summra.service`. Verified with `ss -tlnp | grep 5000` → `127.0.0.1:5000` only.
+- Committed: `34f88b2 Bind gunicorn to loopback only (127.0.0.1:5000)`
+
+**[WARN] GCP firewall: `default-allow-rdp` (tcp:3389 → 0.0.0.0/0)**
+- A GCP default firewall rule left Windows RDP open to the world on a Linux VM — no legitimate use.
+- Fix: deleted via `gcloud compute firewall-rules delete default-allow-rdp`.
+
+**"Not Secure" browser warning on `summrabook.com`**
+- Root cause: no `Strict-Transport-Security` header. Without HSTS, Chrome starts each apex-domain visit with `http://` (since it has no memory to force HTTPS), triggering the "Not Secure" indicator before the 301 redirect fires.
+- Why `www.summrabook.com` wasn't affected: nginx port-80 block only covers the apex domain; `http://www.summrabook.com` returns 404 so Chrome never enters the insecure HTTP state for it.
+- Fix: added `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;` to the nginx 443 server block on the VM via `sed` + `nginx -t` + `systemctl reload nginx`. Confirmed `Strict-Transport-Security` present in response headers.
+- Also updated `deploy/nginx-summra.conf` template to document the HSTS requirement for future setups.
+- Committed: `8754c46 Add HSTS header to nginx SSL config (fix Not Secure warning)`
+
+### Remaining WARNs (accepted / not auto-fixed)
+
+| Item | Status |
+|---|---|
+| `default-allow-ssh` tcp:22 → 0.0.0.0/0 | Accepted per policy (SSH from variable networks) |
+| `ssh-rsa` key in `authorized_keys` | Low priority; migrate to `ed25519` when rotating keys |
+| Ports 20201/20202 (GCP Ops Agent), 5355/53 (systemd-resolve), 25 (exim4) | GCP-managed infra; not actionable |
+| `nginx not found` in hardening check | Script looks for nginx binary by name — nginx IS running (`Server: nginx/1.22.1`); check script path needs updating |
+| TLS cert: 63 days remaining | Certbot auto-renews; no action needed |
+
 No Gemini calls. One manual translation (ch.35 O132). Four mechanical sqlite3/split-tool operations.
