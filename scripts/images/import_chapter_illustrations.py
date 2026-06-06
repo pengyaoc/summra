@@ -10,13 +10,13 @@ The script:
 
 Usage:
     # Import files (auto-resizes images >1.5MB)
-    python scripts/images/import_chapter_illustrations.py --book-id 1 /Users/pengyao/Downloads/1_*.png
+    python scripts/images/import_chapter_illustrations.py --book-id 1 ~/Downloads/1_*.png
 
     # Custom resize thresholds
     python scripts/images/import_chapter_illustrations.py --book-id 1 --max-size 2.0 --target-size 1.5 /path/to/images/*.png
 
     # Dry run (show what would be done without making changes)
-    python scripts/images/import_chapter_illustrations.py --book-id 1 --dry-run /Users/pengyao/Downloads/1_*.png
+    python scripts/images/import_chapter_illustrations.py --book-id 1 --dry-run ~/Downloads/1_*.png
 """
 
 import sys
@@ -370,7 +370,7 @@ def main():
         print("  --max-size MB          Max file size before auto-resize (default: 1.5)")
         print("  --target-size MB       Target size for resized images (default: 1.0)")
         print("\nExamples:")
-        print("  python scripts/images/import_chapter_illustrations.py --book-id 1 /Users/pengyao/Downloads/1_*.png")
+        print("  python scripts/images/import_chapter_illustrations.py --book-id 1 ~/Downloads/1_*.png")
         print("  python scripts/images/import_chapter_illustrations.py --book-id 1 --dry-run /path/to/images/*.png")
         print("  python scripts/images/import_chapter_illustrations.py --book-id 1 --max-size 2.0 --target-size 1.5 *.png")
         print("\nNaming convention:")

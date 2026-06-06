@@ -27,7 +27,7 @@
 - `authors.name` (id=69) and `books.author` (id=110): `"Saint of Hippo Augustine"` → `"Augustine of Hippo"` (cover renders "Augustine of Hippo")
 - `books.title` (id=111): `"Tess of the D'urbervilles"` → `"Tess of the D'Urbervilles"` (slug `tess-of-the-durbervilles` unchanged — no URL break)
 
-**Prod sync.** Local-only. The DB changes and the 12 cover files need to be copied to the VM per the workflow in `CLAUDE.md` (database scp + place under `/var/www/summra/frontend/static/covers/`; nginx serves covers directly, no service restart needed for the static assets).
+**Prod sync.** Local-only. The DB changes and the 12 cover files need to be copied to the VM per the workflow in `CLAUDE.md` (database scp + place under `<REMOTE_REPO_PATH>/frontend/static/covers/`; nginx serves covers directly, no service restart needed for the static assets).
 
 ---
 
@@ -418,7 +418,7 @@ The helper file is loaded via plain `<script>` before `app.min.js` in `frontend/
 - `tests/e2e/node_modules` symlinked to main.
 - Flask `FLASK_PORT` is hardcoded to 5001 in `backend/config.py`; running parallel sessions requires overriding the port in a Python wrapper, e.g.:
   ```sh
-  /Users/pengyao/Documents/dev/summra/venv/bin/python -c "
+  <LOCAL_REPO_PATH>/venv/bin/python -c "
   import config; config.FLASK_PORT = 5005
   import app_base
   app_base.app.run(host='0.0.0.0', port=5005, debug=False, use_reloader=False)
@@ -456,7 +456,7 @@ The helper file is loaded via plain `<script>` before `app.min.js` in `frontend/
 - Updated 24 rows in `chapters` table (prepend title to `modern_english_text`)
 - Updated 1 row in `chapters` table (ch 23: corrected `chapter_title` case)
 
-All changes committed to `/Users/pengyao/Documents/dev/summra/data/database.db`.
+All changes committed to `<LOCAL_REPO_PATH>/data/database.db`.
 
 ---
 
@@ -551,7 +551,7 @@ This issue mirrors book_id=6 (Wizard of Oz) and book_id=65 (Winnie-the-Pooh), wh
 **Database changes:**
 - Updated 21 rows in `chapters` table (prepend title to `modern_english_text`)
 
-All changes committed to `/Users/pengyao/Documents/dev/summra/data/database.db`.
+All changes committed to `<LOCAL_REPO_PATH>/data/database.db`.
 
 **Top-10 carousel section heading** (`hero-discover` → `hero-banner-heading`)
 - BEFORE: `Discover Classics the Modern Way`
@@ -884,7 +884,7 @@ Behaves identically to the old script (subject to Gemini free-tier availability)
 
 **Objective:** Surgical trim of the site to sharpen the value proposition around "Plain English" (no-fear / plain-English rewrites of classic books, every sentence preserved). Three feature gates + local TTS removal + homepage copy pass + chapter tab rename. No pages cut, no structural changes — only the four surgical changes the user approved.
 
-Plan: `/Users/pengyao/.claude/plans/i-need-to-trim-kind-peach.md`
+Plan: `<LOCAL_CLAUDE_HOME>/plans/i-need-to-trim-kind-peach.md`
 
 #### Changes shipped
 
@@ -1047,7 +1047,7 @@ The third section heading was changed to the original hero copy (which had been 
 - **159 doc references + 104 script self-references** updated from `scripts/X.py` → `scripts/<group>/X.py` via `/tmp/update_script_paths.py` (Python script with a `{filename → subfolder}` dict — bash 3.2 on macOS doesn't have associative arrays).
 - **6 package-style imports** updated: `from scripts.generate_summaries` → `from scripts.content.generate_summaries`, same for `scripts.generate_gemini_illustrations` → `scripts.images.generate_gemini_illustrations`. Also updated the matching `patch('scripts.X.Y')` strings in 4 test files (mock targets resolve by import path, not source location).
 - **`tests/conftest.py`** auto-adds every `scripts/<group>/` and `backend/` to `sys.path`. This kept the existing bare-module style (`from generate_summaries import ...`, used in ~15 test files via per-file `sys.path.insert(..., '../scripts')`) working without editing every test.
-- **`deploy/systemd-summra*.service`** `ExecStart` now references `deploy/gunicorn_config*.py` (paths are relative to `WorkingDirectory=/var/www/summra`). Same fix in `deploy/DEPLOY.md`, `deploy/README.md`, `backend/app_prod.py` comment, `README.md` (tree diagram + script invocation examples), `setup.sh`, `CLAUDE.md` (PRD/ERD references now point at `docs/`).
+- **`deploy/systemd-summra*.service`** `ExecStart` now references `deploy/gunicorn_config*.py` (paths are relative to `WorkingDirectory=<REMOTE_REPO_PATH>`). Same fix in `deploy/DEPLOY.md`, `deploy/README.md`, `backend/app_prod.py` comment, `README.md` (tree diagram + script invocation examples), `setup.sh`, `CLAUDE.md` (PRD/ERD references now point at `docs/`).
 
 #### Deletions (untracked debris)
 `coverage.json`, `.coverage`, `htmlcov/`, `WORK_LOG.md.bak`, root `summra.db` (real one at `backend/summra.db`), `audit_results*.csv`, root `__pycache__/`, `data/pg18857.txt`, `data/pg209.txt` (raw Gutenberg downloads, user confirmed), `tests/*.bak` (3 files), `scripts/generate_summaries.py.bak{,2}`.
@@ -1056,7 +1056,7 @@ The third section heading was changed to the original hero copy (which had been 
 - `pytest tests/` → **248 passed, 1 deselected** (identical to pre-reorg baseline).
 - `from app import app` loads cleanly with 48 routes.
 - Both import styles verified at the Python REPL: bare-module `from generate_summaries import SummaryGenerator` works, and package-style `from scripts.content.generate_summaries import SummaryGenerator` works.
-- `BATCH_JOBS_DIR` resolves to `/Users/pengyao/Documents/dev/summra/data/batch_jobs` in both `scripts/content/generate_summaries.py` and `scripts/images/generate_gemini_illustrations.py`.
+- `BATCH_JOBS_DIR` resolves to `<LOCAL_REPO_PATH>/data/batch_jobs` in both `scripts/content/generate_summaries.py` and `scripts/images/generate_gemini_illustrations.py`.
 - `git status` shows 42 pure renames + 52 rename-with-edit — history preserved through `git mv`.
 - e2e smoke (`node smoke.mjs` on `/`) returns 200.
 
@@ -1111,12 +1111,12 @@ The third section heading was changed to the original hero copy (which had been 
 #### Problem
 - SSL certificate expired 2026-03-01 (71 days overdue)
 - Site completely inaccessible — all resources failing with `ERR_CERT_AUTHORITY_INVALID`
-- `certbot renew` failing due to: (1) standalone authenticator conflicting with nginx on port 80, (2) dead `summra.pengyaochen.com` cert with deleted DNS blocking renewal
+- `certbot renew` failing due to: (1) standalone authenticator conflicting with nginx on port 80, (2) dead `<OLD_DEAD_DOMAIN>` cert with deleted DNS blocking renewal
 - No nginx reload hook — even successful renewals wouldn't take effect
 
 #### Fix
 1. Force-renewed cert using nginx plugin: `sudo certbot certonly --nginx -d summrabook.com -d www.summrabook.com --force-renewal`
-2. Deleted dead `summra.pengyaochen.com` cert: `sudo certbot delete --cert-name summra.pengyaochen.com`
+2. Deleted dead `<OLD_DEAD_DOMAIN>` cert: `sudo certbot delete --cert-name <OLD_DEAD_DOMAIN>`
 3. Added nginx reload hook at `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh`
 4. Verified auto-renewal: `sudo certbot renew --dry-run` — all simulated renewals succeeded
 
@@ -3913,13 +3913,13 @@ Multiple elements controlling the same visual property:
 #### Changes Implemented:
 
 **1. Database Schema:**
-- Added `blog_posts` table to `/Users/pengyao/Documents/dev/summra/backend/models.py`
+- Added `blog_posts` table to `<LOCAL_REPO_PATH>/backend/models.py`
 - Fields: id, slug (unique), title, content (markdown), excerpt, author, published_date, updated_date, created_at
 - Methods: `add_blog_post()`, `get_all_blog_posts()`, `get_blog_post_by_slug()`
 - **Files:** `backend/models.py:263-276,1552-1602`
 
 **2. Blog Import Script:**
-- Created `/Users/pengyao/Documents/dev/summra/backend/import_blog_posts.py`
+- Created `<LOCAL_REPO_PATH>/backend/import_blog_posts.py`
 - Reads markdown files from `data/blog/` directory
 - Extracts title from first H1, generates slug from filename
 - Extracts first 200 characters as excerpt

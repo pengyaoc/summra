@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Update The Time Machine cover image"""
 
+import argparse
 import sys
 import shutil
 from pathlib import Path
@@ -13,8 +14,19 @@ sys.path.insert(0, str(project_root / "backend"))
 from models import Database
 
 def main():
-    # Paths
-    source_image = Path("/Users/pengyao/Downloads/9EDF63EA-B2FB-4B48-91AC-E55312121C63.png")
+    parser = argparse.ArgumentParser(description="Update The Time Machine cover image")
+    parser.add_argument(
+        "source_image",
+        type=Path,
+        help="Path to the new cover image file (e.g. ~/Downloads/cover.png)",
+    )
+    args = parser.parse_args()
+
+    source_image = args.source_image.expanduser().resolve()
+    if not source_image.is_file():
+        print(f"ERROR: source image not found: {source_image}")
+        return 1
+
     covers_dir = Path(__file__).parent.parent.parent / "frontend" / "static" / "covers"
     dest_image = covers_dir / "time_machine_custom.png"
 

@@ -40,7 +40,7 @@ Complete guide for deploying Summra to Google Cloud Platform. Covers both e2-mic
 Internet
     |
 Nginx (Port 80/443)
-    ├── Static files → /var/www/summra/frontend/static/
+    ├── Static files → <REMOTE_REPO_PATH>/frontend/static/
     ├── API requests → Gunicorn (Port 5000)
     └── TTS requests → Gunicorn (Port 5000, 5min timeout)
            |
@@ -171,10 +171,10 @@ gcloud compute scp --recurse . summra:/tmp/summra --zone=us-west1-b
 
 **On the VM:**
 ```bash
-sudo mkdir -p /var/www/summra
-sudo chown $USER:$USER /var/www/summra
-cp -r /tmp/summra/* /var/www/summra/
-cd /var/www/summra
+sudo mkdir -p <REMOTE_REPO_PATH>
+sudo chown $USER:$USER <REMOTE_REPO_PATH>
+cp -r /tmp/summra/* <REMOTE_REPO_PATH>/
+cd <REMOTE_REPO_PATH>
 
 # For e2-micro (no TTS)
 chmod +x deploy/setup-e2micro.sh
@@ -190,10 +190,10 @@ The script prompts for domain name and Gemini API key, then automatically instal
 ### Fix Permissions
 
 ```bash
-sudo chown -R www-data:www-data /var/www/summra
-sudo chmod -R 775 /var/www/summra/data
-sudo chmod -R 775 /var/www/summra/frontend/static/audio
-sudo chown -R $USER:$USER /var/www/summra/.git
+sudo chown -R www-data:www-data <REMOTE_REPO_PATH>
+sudo chmod -R 775 <REMOTE_REPO_PATH>/data
+sudo chmod -R 775 <REMOTE_REPO_PATH>/frontend/static/audio
+sudo chown -R $USER:$USER <REMOTE_REPO_PATH>/.git
 ```
 
 ---
@@ -205,17 +205,17 @@ sudo chown -R $USER:$USER /var/www/summra/.git
 cd /path/to/summra
 
 # Database
-gcloud compute scp data/database.db summra:/var/www/summra/data/ --zone=us-west1-b
+gcloud compute scp data/database.db summra:<REMOTE_REPO_PATH>/data/ --zone=us-west1-b
 
 # Audio files
-gcloud compute scp --recurse frontend/static/audio/ summra:/var/www/summra/frontend/static/ --zone=us-west1-b
+gcloud compute scp --recurse frontend/static/audio/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-west1-b
 
 # Cover images
-gcloud compute scp --recurse frontend/static/covers/ summra:/var/www/summra/frontend/static/ --zone=us-west1-b
+gcloud compute scp --recurse frontend/static/covers/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-west1-b
 
 # Fix permissions after upload
 gcloud compute ssh summra --zone=us-west1-b -- \
-    "sudo chown -R www-data:www-data /var/www/summra/data /var/www/summra/frontend/static"
+    "sudo chown -R www-data:www-data <REMOTE_REPO_PATH>/data <REMOTE_REPO_PATH>/frontend/static"
 ```
 
 ---
@@ -397,7 +397,7 @@ sudo tail -f /var/log/nginx/error.log
 ### Update Application Code
 
 ```bash
-cd /var/www/summra
+cd <REMOTE_REPO_PATH>
 git pull origin main
 sudo systemctl restart summra
 curl http://localhost:5000/health
@@ -445,7 +445,7 @@ sudo reboot
 sudo journalctl -u summra -n 100 --no-pager
 
 # Test manually
-cd /var/www/summra
+cd <REMOTE_REPO_PATH>
 source venv/bin/activate
 gunicorn -c deploy/gunicorn_config.py backend.app_prod:app  # e2-micro
 gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app  # e2-small
@@ -470,8 +470,8 @@ sudo systemctl restart summra
 ### Permission Denied Errors
 
 ```bash
-sudo chown -R www-data:www-data /var/www/summra
-sudo chmod -R 775 /var/www/summra/data
+sudo chown -R www-data:www-data <REMOTE_REPO_PATH>
+sudo chmod -R 775 <REMOTE_REPO_PATH>/data
 ```
 
 ### Out of Memory (OOM)
@@ -504,7 +504,7 @@ gcloud compute instances add-metadata INSTANCE_NAME --zone=ZONE --metadata=enabl
 ### Static Files Return 404
 
 ```bash
-ls -la /var/www/summra/frontend/static/
+ls -la <REMOTE_REPO_PATH>/frontend/static/
 grep "location /static" /etc/nginx/sites-available/summra
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -552,20 +552,20 @@ sudo dpkg-reconfigure --priority=low unattended-upgrades
 ### Automated Daily Backups
 
 ```bash
-cat > /var/www/summra/backup.sh << 'SCRIPT'
+cat > <REMOTE_REPO_PATH>/backup.sh << 'SCRIPT'
 #!/bin/bash
-BACKUP_DIR="/var/www/summra/backups"
+BACKUP_DIR="<REMOTE_REPO_PATH>/backups"
 DATE=$(date +%Y%m%d)
 mkdir -p $BACKUP_DIR
-cp /var/www/summra/data/database.db $BACKUP_DIR/database_$DATE.db
-cp /var/www/summra/.env $BACKUP_DIR/env_$DATE
+cp <REMOTE_REPO_PATH>/data/database.db $BACKUP_DIR/database_$DATE.db
+cp <REMOTE_REPO_PATH>/.env $BACKUP_DIR/env_$DATE
 find $BACKUP_DIR -type f -mtime +7 -delete
 echo "Backup complete: $DATE"
 SCRIPT
-chmod +x /var/www/summra/backup.sh
+chmod +x <REMOTE_REPO_PATH>/backup.sh
 
 # Run daily at 3 AM
-(crontab -l 2>/dev/null; echo "0 3 * * * /var/www/summra/backup.sh") | crontab -
+(crontab -l 2>/dev/null; echo "0 3 * * * <REMOTE_REPO_PATH>/backup.sh") | crontab -
 ```
 
 ### Off-Site Backups to GCS
@@ -611,7 +611,7 @@ gcloud compute instances set-machine-type summra \
 gcloud compute instances start summra --zone=us-west1-b
 
 # SSH in and update service config
-sudo cp /var/www/summra/deploy/systemd-summra-e2small.service /etc/systemd/system/summra.service
+sudo cp <REMOTE_REPO_PATH>/deploy/systemd-summra-e2small.service /etc/systemd/system/summra.service
 sudo systemctl daemon-reload
 sudo systemctl restart summra
 ```
@@ -643,27 +643,27 @@ Buffer:             ~200 MB
 ### Current Production Setup
 
 - **Domain:** summrabook.com
-- **VM:** instance-20251125-033837
+- **VM:** <GCP_INSTANCE>
 - **Zone:** us-west1-b
-- **Project:** project-7f192cbf-77f3-4f7a-acc
-- **IP:** 34.82.3.27
+- **Project:** <GCP_PROJECT_ID>
+- **IP:** <VM_EXTERNAL_IP>
 - **Machine type:** e2-micro
 - **OS:** Debian 12 (bookworm)
 
 ### SSH Command
 
 ```bash
-gcloud compute ssh instance-20251125-033837 \
+gcloud compute ssh <GCP_INSTANCE> \
     --zone=us-west1-b \
-    --project=project-7f192cbf-77f3-4f7a-acc
+    --project=<GCP_PROJECT_ID>
 ```
 
 ### Key File Locations (on VM)
 
 ```
-Application:     /var/www/summra/
-Database:        /var/www/summra/data/database.db
-Environment:     /var/www/summra/.env
+Application:     <REMOTE_REPO_PATH>/
+Database:        <REMOTE_REPO_PATH>/data/database.db
+Environment:     <REMOTE_REPO_PATH>/.env
 Nginx config:    /etc/nginx/sites-available/summra
 Service file:    /etc/systemd/system/summra.service
 SSL certs:       /etc/letsencrypt/live/summrabook.com/
@@ -682,7 +682,7 @@ App logs:        sudo journalctl -u summra
 
 **Root cause:** Let's Encrypt certificate for `summrabook.com` expired 2026-03-01. Auto-renewal failed for two reasons:
 1. The `summrabook.com` cert was configured with the **standalone authenticator** (which needs port 80 free), but nginx was already running on port 80. Error: `Could not bind TCP port 80 because it is already in use`.
-2. A dead certificate for `summra.pengyaochen.com` (old domain, DNS deleted) was also failing renewal with `NXDOMAIN`, causing `certbot renew` to report failures and exit early.
+2. A dead certificate for `<OLD_DEAD_DOMAIN>` (old domain, DNS deleted) was also failing renewal with `NXDOMAIN`, causing `certbot renew` to report failures and exit early.
 
 **Fix applied:**
 ```bash
@@ -691,7 +691,7 @@ sudo certbot certonly --nginx -d summrabook.com -d www.summrabook.com --force-re
 sudo systemctl reload nginx
 
 # 2. Deleted dead certificate blocking future renewals
-sudo certbot delete --cert-name summra.pengyaochen.com --non-interactive
+sudo certbot delete --cert-name <OLD_DEAD_DOMAIN> --non-interactive
 
 # 3. Added nginx reload hook (was missing — nginx wouldn't pick up renewed certs)
 sudo sh -c 'printf "#!/bin/bash\nsystemctl reload nginx\n" > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh'

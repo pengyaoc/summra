@@ -46,17 +46,17 @@ gcloud compute instances create summra \
 
 **Step 2: Upload Code**
 ```bash
-cd /Users/pengyao/Documents/dev/summra
+cd <LOCAL_REPO_PATH>
 gcloud compute scp --recurse . summra:/tmp/summra --zone=us-central1-a
 ```
 
 **Step 3: SSH and Run Setup**
 ```bash
 gcloud compute ssh summra --zone=us-central1-a
-sudo mkdir -p /var/www/summra
-sudo chown $USER:$USER /var/www/summra
-cp -r /tmp/summra/* /var/www/summra/
-cd /var/www/summra
+sudo mkdir -p <REMOTE_REPO_PATH>
+sudo chown $USER:$USER <REMOTE_REPO_PATH>
+cp -r /tmp/summra/* <REMOTE_REPO_PATH>/
+cd <REMOTE_REPO_PATH>
 chmod +x deploy/setup-e2small.sh
 ./deploy/setup-e2small.sh
 ```
@@ -64,9 +64,9 @@ chmod +x deploy/setup-e2small.sh
 **Step 4: Upload Data**
 ```bash
 # From local machine
-gcloud compute scp data/database.db summra:/var/www/summra/data/ --zone=us-central1-a
-gcloud compute scp --recurse frontend/static/audio/ summra:/var/www/summra/frontend/static/ --zone=us-central1-a
-gcloud compute scp --recurse frontend/static/covers/ summra:/var/www/summra/frontend/static/ --zone=us-central1-a
+gcloud compute scp data/database.db summra:<REMOTE_REPO_PATH>/data/ --zone=us-central1-a
+gcloud compute scp --recurse frontend/static/audio/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-central1-a
+gcloud compute scp --recurse frontend/static/covers/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-central1-a
 ```
 
 **Step 5: Set Up SSL**
@@ -149,7 +149,7 @@ gevent==24.2.1
 Internet
     ↓
 Nginx (Port 80/443)
-    ├── Static files → /var/www/summra/frontend/static/
+    ├── Static files → <REMOTE_REPO_PATH>/frontend/static/
     ├── API requests → Gunicorn (Port 5000)
     └── TTS requests → Gunicorn (Port 5000, 5min timeout)
            ↓
@@ -228,8 +228,8 @@ sudo tail -f /var/log/nginx/error.log
 
 ### Application Won't Start
 1. Check logs: `sudo journalctl -u summra -n 50`
-2. Test manually: `cd /var/www/summra && source venv/bin/activate && gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app`
-3. Check permissions: `ls -la /var/www/summra`
+2. Test manually: `cd <REMOTE_REPO_PATH> && source venv/bin/activate && gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app`
+3. Check permissions: `ls -la <REMOTE_REPO_PATH>`
 
 ### Out of Memory
 1. Check usage: `free -h`
@@ -264,7 +264,7 @@ See `DEPLOYMENT_E2SMALL.md` for backup configuration.
 
 ### Update Application
 ```bash
-cd /var/www/summra
+cd <REMOTE_REPO_PATH>
 git pull
 source venv/bin/activate
 pip install -r requirements-prod.txt

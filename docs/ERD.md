@@ -4751,7 +4751,7 @@ if (bookCoverEl) {  // ✅ Defensive check
 
 **Local Development:**
 ```bash
-cd /Users/pengyao/Documents/dev/summra
+cd <LOCAL_REPO_PATH>
 source venv/bin/activate
 python backend/app.py  # or: python -m backend.app
 # Server runs on http://localhost:5001
@@ -4764,7 +4764,7 @@ cd /path/to/summra
 git pull origin main
 sudo systemctl restart summra
 sudo systemctl status summra
-# Server runs behind Nginx on http://summra.pengyaochen.com
+# Server runs behind Nginx on http://<OLD_DEAD_DOMAIN>
 ```
 
 **Production Stack:**
@@ -4783,22 +4783,22 @@ sudo systemctl status summra
 ```bash
 gcloud auth login
 gcloud compute scp \
-    /Users/pengyao/Documents/dev/summra/data/database.db \
-    instance-20251125-033837:/tmp/database.db \
+    <LOCAL_REPO_PATH>/data/database.db \
+    <GCP_INSTANCE>:/tmp/database.db \
     --zone=us-west1-b \
-    --project=project-7f192cbf-77f3-4f7a-acc
+    --project=<GCP_PROJECT_ID>
 ```
 
 **Step 2: Move to production directory and set permissions** (run on remote VM)
 ```bash
 # Backup existing database (optional but recommended)
-sudo cp /var/www/summra/data/database.db /var/www/summra/data/database.db.backup
+sudo cp <REMOTE_REPO_PATH>/data/database.db <REMOTE_REPO_PATH>/data/database.db.backup
 
 # Move new database to production location
-sudo mv /tmp/database.db /var/www/summra/data/database.db
+sudo mv /tmp/database.db <REMOTE_REPO_PATH>/data/database.db
 
 # Set correct ownership (www-data is the Nginx/Gunicorn user)
-sudo chown www-data:www-data /var/www/summra/data/database.db
+sudo chown www-data:www-data <REMOTE_REPO_PATH>/data/database.db
 
 # Restart the application to use new database
 sudo systemctl restart summra
@@ -4810,10 +4810,10 @@ sudo systemctl status summra
 **Step 3: Verify deployment**
 ```bash
 # Check database file size
-ls -lh /var/www/summra/data/database.db
+ls -lh <REMOTE_REPO_PATH>/data/database.db
 
 # Check database integrity
-sudo -u www-data sqlite3 /var/www/summra/data/database.db "PRAGMA integrity_check;"
+sudo -u www-data sqlite3 <REMOTE_REPO_PATH>/data/database.db "PRAGMA integrity_check;"
 # Should output: ok
 
 # Test the application
@@ -4824,13 +4824,13 @@ curl http://localhost:5000/api/books | jq length
 **Alternative: Using rsync for incremental updates**
 ```bash
 # More efficient for large files with small changes
-gcloud compute ssh instance-20251125-033837 \
+gcloud compute ssh <GCP_INSTANCE> \
     --zone=us-west1-b \
-    --project=project-7f192cbf-77f3-4f7a-acc
+    --project=<GCP_PROJECT_ID>
 
 # On remote VM, rsync from local (requires SSH access)
 rsync -avz --progress \
-    pengyao@<LOCAL_IP>:/Users/pengyao/Documents/dev/summra/data/database.db \
+    pengyao@<LOCAL_IP>:<LOCAL_REPO_PATH>/data/database.db \
     /tmp/database.db
 
 # Then move and set permissions as above
@@ -8083,8 +8083,8 @@ python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-1
 1. **Static Files:**
    ```bash
    # Copy generated images to production server
-   rsync -av frontend/static/covers/ user@server:/var/www/summra/frontend/static/covers/
-   rsync -av frontend/static/illustrations/ user@server:/var/www/summra/frontend/static/illustrations/
+   rsync -av frontend/static/covers/ user@server:<REMOTE_REPO_PATH>/frontend/static/covers/
+   rsync -av frontend/static/illustrations/ user@server:<REMOTE_REPO_PATH>/frontend/static/illustrations/
    ```
 
 2. **Database:**

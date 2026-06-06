@@ -18,7 +18,7 @@ The TTS library (Coqui TTS) currently only supports Python 3.9 - 3.11. If you're
 
 3. **Create a new virtual environment with Python 3.11**:
    ```bash
-   cd /Users/pengyao/Documents/dev/summra
+   cd <LOCAL_REPO_PATH>
    pyenv local 3.11.9
    rm -rf venv  # Remove old venv
    python -m venv venv

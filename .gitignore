@@ -19,6 +19,10 @@ build/
 .env
 .env.local
 
+# Local-only metadata (prod runbook concrete values, etc.)
+.prod-metadata.local.md
+*.local.md
+
 # IDEs
 .vscode/
 .idea/
