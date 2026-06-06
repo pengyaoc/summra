@@ -4830,7 +4830,7 @@ gcloud compute ssh <GCP_INSTANCE> \
 
 # On remote VM, rsync from local (requires SSH access)
 rsync -avz --progress \
-    pengyao@<LOCAL_IP>:<LOCAL_REPO_PATH>/data/database.db \
+    <LOCAL_USER>@<LOCAL_IP>:<LOCAL_REPO_PATH>/data/database.db \
     /tmp/database.db
 
 # Then move and set permissions as above
