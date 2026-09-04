@@ -41,7 +41,7 @@ def generate_tts():
             logger.info(f"Using cached audio: {cached_audio['provider']}")
             return jsonify({
                 'success': True,
-                'audio_url': cached_audio['audio_url'],
+                'audio_url': request.script_root + cached_audio['audio_url'],
                 'streaming': False,
                 'cached': cached_audio['cached'],
                 'provider': cached_audio['provider']

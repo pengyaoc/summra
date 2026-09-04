@@ -15,6 +15,7 @@
     <script>
         window.FEATURE_AUTH = {{ (feature_auth | default(false)) | tojson }};
         window.FEATURE_BLOG = {{ (feature_blog | default(false)) | tojson }};
+        window.APP_BASE_PATH = {{ (base_path | default('')) | tojson }};
     </script>
 
     <meta charset="UTF-8">
@@ -26,22 +27,22 @@
     <meta name="keywords" content="classic books, book summaries, literature summaries, AI summaries, public domain books, chapter summaries, {{ meta_keywords|default('') }}">
     <meta name="author" content="Summra">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="{{ canonical_url|default('https://summra.com/') }}">
+    <link rel="canonical" href="{{ canonical_url|default(site_origin ~ '/') }}">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{{ og_type|default('website') }}">
-    <meta property="og:url" content="{{ canonical_url|default('https://summra.com/') }}">
+    <meta property="og:url" content="{{ canonical_url|default(site_origin ~ '/') }}">
     <meta property="og:title" content="{{ meta_title|default('Summra — Read the Classics in Plain English') }}">
     <meta property="og:description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free.') }}">
-    <meta property="og:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
+    <meta property="og:image" content="{{ og_image|default(site_origin ~ '/static/images/og-image.png') }}">
     <meta property="og:site_name" content="Summra">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="{{ canonical_url|default('https://summra.com/') }}">
+    <meta name="twitter:url" content="{{ canonical_url|default(site_origin ~ '/') }}">
     <meta name="twitter:title" content="{{ meta_title|default('Summra — Read the Classics in Plain English') }}">
     <meta name="twitter:description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English.') }}">
-    <meta name="twitter:image" content="{{ og_image|default('https://summra.com/static/images/og-image.png') }}">
+    <meta name="twitter:image" content="{{ og_image|default(site_origin ~ '/static/images/og-image.png') }}">
 
     <!-- Favicons -->
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon-32.png') }}">
@@ -50,7 +51,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}">
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="manifest" href="{{ url_for('manifest') }}">
     <meta name="theme-color" content="#000000">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -97,7 +98,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <a href="/" class="header-link" id="header-home-link">
+                <a href="{{ base_path }}/" class="header-link" id="header-home-link">
                     <picture>
                         <source srcset="{{ url_for('static', filename='images/icon.webp') }}" type="image/webp">
                         <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
@@ -105,11 +106,11 @@
                     <h1 class="logo">Summra</h1>
                 </a>
                 <div class="header-nav-buttons">
-                    <a href="/discover" class="header-nav-btn" id="discover-nav-btn">Discover</a>
-                    <a href="/books" class="header-nav-btn" id="books-nav-btn">Books</a>
-                    <a href="/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
+                    <a href="{{ base_path }}/discover" class="header-nav-btn" id="discover-nav-btn">Discover</a>
+                    <a href="{{ base_path }}/books" class="header-nav-btn" id="books-nav-btn">Books</a>
+                    <a href="{{ base_path }}/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
                     {% if feature_blog %}
-                    <a href="/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
+                    <a href="{{ base_path }}/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
                     {% endif %}
                 </div>
                 {% if feature_auth %}

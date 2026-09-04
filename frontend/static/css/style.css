@@ -2406,7 +2406,7 @@ body.on-chapter-page .header {
 .hero-main {
     background:
         linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),
-        url('/static/images/library_view.webp');
+        url('../images/library_view.webp');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -2415,11 +2415,11 @@ body.on-chapter-page .header {
 }
 
 /* Fallback for browsers that don't support WebP */
-@supports not (background-image: url('/static/images/library_view.webp')) {
+@supports not (background-image: url('../images/library_view.webp')) {
     .hero-main {
         background:
             linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),
-            url('/static/images/library_view.jpg');
+            url('../images/library_view.jpg');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
