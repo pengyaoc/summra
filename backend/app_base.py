@@ -36,10 +36,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class PrefixMiddleware:
+    """WSGI middleware letting this app be reverse-proxied under a URL prefix
+    (e.g. Apache's `ProxyPass /summrabook/ http://127.0.0.1:5001/`, which strips
+    the prefix before forwarding to the backend). Reads X-Forwarded-Prefix (set
+    by the proxy) and applies it as SCRIPT_NAME, so url_for() and
+    request.script_root automatically produce correctly-prefixed URLs
+    everywhere. No effect when the header is absent (root deployment, local dev).
+    """
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get('HTTP_X_FORWARDED_PREFIX', '')
+        if prefix:
+            environ['SCRIPT_NAME'] = prefix
+            path_info = environ.get('PATH_INFO', '')
+            if path_info.startswith(prefix):
+                environ['PATH_INFO'] = path_info[len(prefix):] or '/'
+        return self.wsgi_app(environ, start_response)
+
+
 # Create Flask app
 app = Flask(__name__,
             static_folder='../frontend/static',
             template_folder='../frontend/templates')
+app.wsgi_app = PrefixMiddleware(app.wsgi_app)
 
 # Configure session
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -76,7 +99,18 @@ def inject_environment():
         'is_development': app.config.get('IS_DEVELOPMENT', False),
         'feature_auth': config.FEATURE_AUTH,
         'feature_blog': config.FEATURE_BLOG,
+        'base_path': request.script_root,
+        'site_origin': site_origin(),
     }
+
+
+def site_origin() -> str:
+    """Scheme + host + base path, for absolute URLs (sitemap, canonical links,
+    OG tags, JSON-LD). Derived from the live request via PrefixMiddleware so
+    it's correct under any deployment (root domain, /summrabook proxy, local
+    dev) without hardcoding a domain.
+    """
+    return request.url_root.rstrip('/')
 
 
 # Cache-busting helper for static assets.
@@ -270,7 +304,7 @@ def breadcrumbs_to_schema(breadcrumbs):
                 "@type": "ListItem",
                 "position": crumb['position'],
                 "name": crumb['name'],
-                "item": f"https://summra.com{crumb['url']}" if crumb['position'] < len(breadcrumbs) else None
+                "item": f"{site_origin()}{crumb['url']}" if crumb['position'] < len(breadcrumbs) else None
             }
             for crumb in breadcrumbs
         ]
@@ -321,16 +355,31 @@ def discover():
 
 @app.route('/robots.txt')
 def robots():
-    """Serve robots.txt for SEO"""
-    return send_from_directory(app.static_folder, 'robots.txt')
+    """Render robots.txt with the live URL prefix and origin baked in, so its
+    Allow/Disallow rules and Sitemap line stay correct under any deployment."""
+    response = app.make_response(render_template('robots.txt'))
+    response.headers['Content-Type'] = 'text/plain'
+    return response
+
+
+@app.route('/manifest.json')
+def manifest():
+    """Render the PWA manifest with the live URL prefix baked into start_url,
+    scope, and icon paths — required so its `scope` never overreaches beyond
+    this app's own subpath when reverse-proxied alongside another site."""
+    response = app.make_response(render_template('manifest.json'))
+    response.headers['Content-Type'] = 'application/manifest+json'
+    return response
 
 
 @app.route('/service-worker.js')
 def service_worker():
-    """Serve service worker from static folder with correct MIME type"""
-    response = send_from_directory(app.static_folder, 'service-worker.js')
+    """Render the service worker with the live URL prefix (base_path) baked in,
+    so its cache route matchers work whether this app is deployed at the
+    domain root or reverse-proxied under a subpath (e.g. /summrabook)."""
+    response = app.make_response(render_template('service-worker.js'))
     response.headers['Content-Type'] = 'application/javascript'
-    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Service-Worker-Allowed'] = request.script_root + '/'
     return response
 
 
@@ -349,7 +398,7 @@ def sitemap():
 
     # Home page
     pages.append({
-        'loc': 'https://summra.com/',
+        'loc': f'{site_origin()}/',
         'lastmod': datetime.now().strftime('%Y-%m-%d'),
         'changefreq': 'daily',
         'priority': '1.0'
@@ -364,7 +413,7 @@ def sitemap():
 
         # Book detail page
         pages.append({
-            'loc': f'https://summra.com/books/{slug}',
+            'loc': f'{site_origin()}/books/{slug}',
             'lastmod': book.get('updated_at', datetime.now().strftime('%Y-%m-%d')),
             'changefreq': 'weekly',
             'priority': '0.8'
@@ -374,20 +423,20 @@ def sitemap():
     categories = db.get_all_categories()
     for category in categories:
         pages.append({
-            'loc': f'https://summra.com/categories/{category["id"]}',
+            'loc': f'{site_origin()}/categories/{category["id"]}',
             'changefreq': 'weekly',
             'priority': '0.7'
         })
 
     # All books and categories listing pages
     pages.append({
-        'loc': 'https://summra.com/books',
+        'loc': f'{site_origin()}/books',
         'changefreq': 'daily',
         'priority': '0.9'
     })
 
     pages.append({
-        'loc': 'https://summra.com/categories',
+        'loc': f'{site_origin()}/categories',
         'changefreq': 'weekly',
         'priority': '0.8'
     })
@@ -396,7 +445,7 @@ def sitemap():
     # the sitemap while routes 404 would actively hurt SEO.
     if config.FEATURE_BLOG:
         pages.append({
-            'loc': 'https://summra.com/blog',
+            'loc': f'{site_origin()}/blog',
             'changefreq': 'weekly',
             'priority': '0.6'
         })
@@ -405,7 +454,7 @@ def sitemap():
             if not slug:
                 continue
             pages.append({
-                'loc': f'https://summra.com/blog/{slug}',
+                'loc': f'{site_origin()}/blog/{slug}',
                 'lastmod': post.get('published_date') or post.get('created_at'),
                 'changefreq': 'monthly',
                 'priority': '0.5'
@@ -434,13 +483,13 @@ def book_detail(slug):
     # Prepare meta tags
     meta_title = f"{book['title']} by {book['author']} - Summary | Summra"
     meta_description = f"Read AI-generated summaries of {book['title']} by {book['author']}. {summary_text}..."
-    canonical_url = f"https://summra.com/books/{slug}"
+    canonical_url = f"{site_origin()}/books/{slug}"
 
     # Get cover image URL
     cover_url = book.get('cover_image_url', '')
     if cover_url and not cover_url.startswith('http'):
-        cover_url = f"https://summra.com/static/{cover_url}"
-    og_image = cover_url if cover_url else 'https://summra.com/static/images/og-image.png'
+        cover_url = f"{site_origin()}/static/{cover_url}"
+    og_image = cover_url if cover_url else f'{site_origin()}/static/images/og-image.png'
 
     # Schema.org structured data for Book
     structured_data = {
@@ -505,13 +554,13 @@ def book_summary_detail(slug):
     # Prepare meta tags
     meta_title = f"{book['title']} - Full Summary | Summra"
     meta_description = f"Read the complete AI-generated summary of {book['title']} by {book['author']}. {summary_text}..."
-    canonical_url = f"https://summra.com/books/{slug}/summary"
+    canonical_url = f"{site_origin()}/books/{slug}/summary"
 
     # Get cover image URL
     cover_url = book.get('cover_image_url', '')
     if cover_url and not cover_url.startswith('http'):
-        cover_url = f"https://summra.com/static/{cover_url}"
-    og_image = cover_url if cover_url else 'https://summra.com/static/images/og-image.png'
+        cover_url = f"{site_origin()}/static/{cover_url}"
+    og_image = cover_url if cover_url else f'{site_origin()}/static/images/og-image.png'
 
     # Schema.org structured data for Book
     structured_data = {
@@ -574,13 +623,13 @@ def book_chapter_detail(slug, chapter_number):
     # Prepare meta tags
     meta_title = f"{book['title']} - Chapter {chapter_number}: {chapter_title} | Summra"
     meta_description = f"Read Chapter {chapter_number} of {book['title']} by {book['author']}. {chapter_summary}..."
-    canonical_url = f"https://summra.com/books/{slug}/chapters/{chapter_number}"
+    canonical_url = f"{site_origin()}/books/{slug}/chapters/{chapter_number}"
 
     # Get cover image URL
     cover_url = book.get('cover_image_url', '')
     if cover_url and not cover_url.startswith('http'):
-        cover_url = f"https://summra.com/static/{cover_url}"
-    og_image = cover_url if cover_url else 'https://summra.com/static/images/og-image.png'
+        cover_url = f"{site_origin()}/static/{cover_url}"
+    og_image = cover_url if cover_url else f'{site_origin()}/static/images/og-image.png'
 
     # Schema.org structured data for Book Chapter
     structured_data = {
@@ -638,7 +687,7 @@ def category_detail(category_id):
     # Prepare meta tags
     meta_title = f"{category['name']} - Classic Books | Summra"
     meta_description = f"Explore {book_count} classic {category['name']} books with AI-generated summaries. Browse timeless literature with concise and comprehensive analyses."
-    canonical_url = f"https://summra.com/categories/{category_id}"
+    canonical_url = f"{site_origin()}/categories/{category_id}"
 
     # Pass initial data
     initial_data = {
@@ -665,7 +714,7 @@ def categories_list():
     # Prepare meta tags
     meta_title = "Browse Categories - Classic Book Summaries | Summra"
     meta_description = f"Browse {len(categories)} categories of classic literature. Discover timeless books organized by genre, theme, and literary movement with AI-generated summaries."
-    canonical_url = "https://summra.com/categories"
+    canonical_url = f"{site_origin()}/categories"
 
     # Pass initial data
     initial_data = {
@@ -692,7 +741,7 @@ def all_books():
     # Prepare meta tags
     meta_title = f"Browse {book_count} Classic Books - Free Summaries | Summra"
     meta_description = f"Browse our complete collection of {book_count} classic books with free summaries. From Shakespeare to Tolstoy, explore timeless literature with concise and comprehensive analyses."
-    canonical_url = "https://summra.com/books"
+    canonical_url = f"{site_origin()}/books"
 
     # Pass initial data
     initial_data = {
@@ -1341,7 +1390,7 @@ def author_page(author_slug):
     if author.get('short_bio'):
         meta_description = author['short_bio'][:160]
 
-    canonical_url = f"https://summra.com/authors/{author_slug}"
+    canonical_url = f"{site_origin()}/authors/{author_slug}"
 
     # Schema.org structured data for Person (Author)
     structured_data = {
@@ -1392,7 +1441,7 @@ if config.FEATURE_BLOG:
         """Server-side rendering for blog index (SEO)"""
         meta_title = "Blog - Classic Literature Guides | Summra"
         meta_description = "Read our guides on classic literature, ESL learning, and book recommendations. Learn how to read classics as a non-native English speaker."
-        canonical_url = "https://summra.com/blog"
+        canonical_url = f"{site_origin()}/blog"
 
         # Get all blog posts for SEO
         posts = db.get_all_blog_posts()
@@ -1441,7 +1490,7 @@ if config.FEATURE_BLOG:
         # Extract first 160 chars for description
         meta_description = post.get('excerpt', '')[:160] if post.get('excerpt') else post['title']
 
-        canonical_url = f"https://summra.com/blog/{slug}"
+        canonical_url = f"{site_origin()}/blog/{slug}"
 
         # Schema.org structured data for BlogPosting
         structured_data = {

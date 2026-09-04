@@ -10,6 +10,11 @@
 
 if (window.FEATURE_AUTH) {
 
+// Loads before app.js, so it can't rely on app.js's summraBasePath() helper —
+// reads window.APP_BASE_PATH directly instead. See app.js for the full explanation
+// of how this supports being reverse-proxied under a URL prefix (e.g. /summrabook).
+const API_BASE = (window.APP_BASE_PATH || '') + '/api';
+
 // Auth state
 let currentUser = null;
 let authInitialized = false;
@@ -69,7 +74,7 @@ function setCurrentUser(user) {
  */
 async function checkAuthStatus() {
     try {
-        const response = await fetch('/api/auth/check', {
+        const response = await fetch(`${API_BASE}/auth/check`, {
             credentials: 'include'
         });
 
@@ -217,7 +222,7 @@ async function handleLogin(e) {
     clearFormError('login');
 
     try {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -268,7 +273,7 @@ async function handleRegister(e) {
     }
 
     try {
-        const response = await fetch('/api/auth/register', {
+        const response = await fetch(`${API_BASE}/auth/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -304,7 +309,7 @@ async function handleRegister(e) {
  */
 async function handleLogout() {
     try {
-        await fetch('/api/auth/logout', {
+        await fetch(`${API_BASE}/auth/logout`, {
             method: 'POST',
             credentials: 'include'
         });
@@ -357,7 +362,7 @@ async function updateAccountView() {
 
     // Fetch and update reading stats
     try {
-        const response = await fetch('/api/progress/all', {
+        const response = await fetch(`${API_BASE}/progress/all`, {
             credentials: 'include'
         });
 
@@ -420,7 +425,7 @@ async function saveReadingProgress(bookId, chapterNumber, pageNumber = 0, scroll
     if (currentUser) {
         // Save to server
         try {
-            await fetch('/api/progress/save', {
+            await fetch(`${API_BASE}/progress/save`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -476,7 +481,7 @@ async function markChapterComplete(bookId, chapterNumber, completed = true) {
     if (currentUser) {
         // Save to server
         try {
-            await fetch('/api/progress/chapter/complete', {
+            await fetch(`${API_BASE}/progress/chapter/complete`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -611,7 +616,7 @@ async function syncOfflineProgress() {
             return;
         }
 
-        const response = await fetch('/api/progress/sync', {
+        const response = await fetch(`${API_BASE}/progress/sync`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

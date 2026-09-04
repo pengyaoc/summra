@@ -11,10 +11,24 @@
 // 3. Add routing logic to handleRoute()
 //
 // This prevents bugs where sections from one page leak into another page.
+//
+// URL PREFIX: window.APP_BASE_PATH (injected by the base template from Flask's
+// request.script_root) lets this app be reverse-proxied under a path prefix
+// (e.g. /summrabook) without any other code changes. summraBasePath() reads it;
+// withBasePath() prefixes a root-relative path, leaving absolute/external URLs alone.
+function summraBasePath() {
+    return window.APP_BASE_PATH || '';
+}
+function withBasePath(path) {
+    if (!path || path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) {
+        return path;
+    }
+    return summraBasePath() + path;
+}
 
 class SummraApp {
     constructor() {
-        this.apiBase = '/api';
+        this.apiBase = withBasePath('/api');
         this.currentBook = null;
         this.currentCategory = null;
         this.currentSummaryType = null;
@@ -98,7 +112,7 @@ class SummraApp {
         // Register service worker for PWA functionality
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
+                navigator.serviceWorker.register(withBasePath('/service-worker.js'))
                     .then((registration) => {
                         console.log('✅ Service Worker registered successfully:', registration.scope);
 
@@ -240,7 +254,7 @@ class SummraApp {
             }
 
             // Handle clean URLs
-            if (href.startsWith('/') && !href.startsWith('/api/') && !href.startsWith('/static/')) {
+            if (href.startsWith('/') && !href.startsWith(withBasePath('/api/')) && !href.startsWith(withBasePath('/static/'))) {
                 e.preventDefault();
                 window.history.pushState(null, '', href);
                 this.handleRoute();
@@ -252,8 +266,10 @@ class SummraApp {
     }
 
     async handleRoute() {
-        // Use pathname for routing (clean URLs)
-        const path = window.location.pathname;
+        // Use pathname for routing (clean URLs), stripped of any deploy-time base path
+        const rawPath = window.location.pathname;
+        const base = summraBasePath();
+        const path = (base && rawPath.startsWith(base)) ? (rawPath.slice(base.length) || '/') : rawPath;
 
         // Home page
         if (!path || path === '/') {
@@ -525,12 +541,12 @@ class SummraApp {
     updateURL(book, page = null) {
         // Use slug from backend if available, fallback to generating from title
         const slug = book.slug || this.slugify(book.title);
-        let newPath = `/books/${slug}`;
+        let newPath = withBasePath(`/books/${slug}`);
 
         if (page === 'summary') {
-            newPath = `/books/${slug}/summary`;
+            newPath = withBasePath(`/books/${slug}/summary`);
         } else if (typeof page === 'number') {
-            newPath = `/books/${slug}/chapters/${page}`;
+            newPath = withBasePath(`/books/${slug}/chapters/${page}`);
         }
 
         if (window.location.pathname !== newPath) {
@@ -1007,9 +1023,9 @@ class SummraApp {
 
         // Add View All link (except for "All Books" carousel, discover page, or popular carousel)
         const viewAllLink = !isDiscoverPage && category.id !== 'all' && category.id !== 'popular'
-            ? `<a href="/categories/${category.id}" class="view-all-link">View All →</a>`
+            ? `<a href="${withBasePath(`/categories/${category.id}`)}" class="view-all-link">View All →</a>`
             : category.id === 'all' && !isDiscoverPage
-                ? `<a href="/books" class="view-all-link">View All →</a>`
+                ? `<a href="${withBasePath('/books')}" class="view-all-link">View All →</a>`
                 : '';
 
         header.innerHTML = `
@@ -1359,7 +1375,7 @@ class SummraApp {
         if (bookTitle) bookTitle.textContent = book.title;
         if (bookAuthor) {
             const authorSlug = this.slugify(book.author);
-            bookAuthor.innerHTML = `by <a href="/authors/${authorSlug}" class="author-link">${this.escapeHtml(book.author)}</a>`;
+            bookAuthor.innerHTML = `by <a href="${withBasePath(`/authors/${authorSlug}`)}" class="author-link">${this.escapeHtml(book.author)}</a>`;
         }
 
         // Fetch full book data to get metadata (about_text, relevance_now, author info)
@@ -1383,6 +1399,7 @@ class SummraApp {
             } else if (book.cover_image_url.startsWith('covers/')) {
                 fullImageUrl = '/static/' + book.cover_image_url;
             }
+            fullImageUrl = withBasePath(fullImageUrl);
 
             // Get base URL without extension for WebP/JPG support
             const urlWithoutExt = fullImageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
@@ -1503,7 +1520,7 @@ class SummraApp {
 
         if (bookAuthor) {
             const countryText = hasCountry ? ` (${book.author_country})` : '';
-            bookAuthor.innerHTML = `by <a href="/authors/${authorSlug}" class="author-link">${this.escapeHtml(authorName)}</a>${countryText}`;
+            bookAuthor.innerHTML = `by <a href="${withBasePath(`/authors/${authorSlug}`)}" class="author-link">${this.escapeHtml(authorName)}</a>${countryText}`;
         }
 
         // Update author "Learn more" button
@@ -2438,7 +2455,7 @@ class SummraApp {
             let illustrationUrl = chapter.illustration_url;
             // Convert local path to URL if needed
             if (!illustrationUrl.startsWith('http') && !illustrationUrl.startsWith('/static/')) {
-                illustrationUrl = `/static/${illustrationUrl}`;
+                illustrationUrl = withBasePath(`/static/${illustrationUrl}`);
             }
 
             // Generate optimized image URLs (WebP and JPG)
@@ -2466,7 +2483,7 @@ class SummraApp {
                         type: 'book',
                         bookId: book.id,
                         bookSlug: book.slug
-                    }, '', `/books/${book.slug}`);
+                    }, '', withBasePath(`/books/${book.slug}`));
                     this.handleRoute();
                 };
             }
@@ -3080,9 +3097,9 @@ class SummraApp {
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
-                                        <source srcset="/static/images/infographic.webp" type="image/webp">
-                                        <source srcset="/static/images/infographic.jpg" type="image/jpeg">
-                                        <img src="/static/images/infographic.jpg" alt="Visual guides with color and interactivity" class="learn-feature-image">
+                                        <source srcset="${summraBasePath()}/static/images/infographic.webp" type="image/webp">
+                                        <source srcset="${summraBasePath()}/static/images/infographic.jpg" type="image/jpeg">
+                                        <img src="${summraBasePath()}/static/images/infographic.jpg" alt="Visual guides with color and interactivity" class="learn-feature-image">
                                     </picture>
                                 </div>
                                 <h3 class="learn-feature-title">Beautiful Illustrations</h3>
@@ -3093,9 +3110,9 @@ class SummraApp {
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
-                                        <source srcset="/static/images/summary.webp" type="image/webp">
-                                        <source srcset="/static/images/summary.jpg" type="image/jpeg">
-                                        <img src="/static/images/summary.jpg" alt="Comprehensive book summaries" class="learn-feature-image">
+                                        <source srcset="${summraBasePath()}/static/images/summary.webp" type="image/webp">
+                                        <source srcset="${summraBasePath()}/static/images/summary.jpg" type="image/jpeg">
+                                        <img src="${summraBasePath()}/static/images/summary.jpg" alt="Comprehensive book summaries" class="learn-feature-image">
                                     </picture>
                                 </div>
                                 <h3 class="learn-feature-title">Audio Summary</h3>
@@ -3106,9 +3123,9 @@ class SummraApp {
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
-                                        <source srcset="/static/images/chapter_view.webp" type="image/webp">
-                                        <source srcset="/static/images/chapter_view.jpg" type="image/jpeg">
-                                        <img src="/static/images/chapter_view.jpg" alt="Accessible reading experience" class="learn-feature-image">
+                                        <source srcset="${summraBasePath()}/static/images/chapter_view.webp" type="image/webp">
+                                        <source srcset="${summraBasePath()}/static/images/chapter_view.jpg" type="image/jpeg">
+                                        <img src="${summraBasePath()}/static/images/chapter_view.jpg" alt="Accessible reading experience" class="learn-feature-image">
                                     </picture>
                                 </div>
                                 <h3 class="learn-feature-title">For Every Reader</h3>
@@ -3153,7 +3170,7 @@ class SummraApp {
                     }
 
                     // Use pushState for client-side navigation (preserves audio)
-                    window.history.pushState(null, '', `/${route}`);
+                    window.history.pushState(null, '', withBasePath(`/${route}`));
                     this.handleRoute();
                 });
             });
@@ -3501,7 +3518,7 @@ class SummraApp {
 
         // Fetch carousel data
         try {
-            const response = await fetch('/api/discover/carousels');
+            const response = await fetch(withBasePath('/api/discover/carousels'));
             const data = await response.json();
 
             if (!data.success) {
@@ -3528,7 +3545,7 @@ class SummraApp {
                 <div class="error-message">
                     <h2>Error loading page</h2>
                     <p>Could not load the discover page. Please try again later.</p>
-                    <button onclick="window.location.href='/'">Go Home</button>
+                    <button onclick="window.location.href='${summraBasePath()}/'">Go Home</button>
                 </div>
             `;
         }
@@ -3799,6 +3816,7 @@ class SummraApp {
         } else if (imageUrl.startsWith('covers/')) {
             fullImageUrl = '/static/' + imageUrl;
         }
+        fullImageUrl = withBasePath(fullImageUrl);
 
         // Get base URL without extension
         const urlWithoutExt = fullImageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
@@ -4370,7 +4388,7 @@ class SummraApp {
                 // Intermediate items - with links
                 return `
                     <li class="breadcrumb-item">
-                        <a href="${crumb.url}" class="breadcrumb-link">${this.escapeHtml(crumb.name)}</a>
+                        <a href="${withBasePath(crumb.url)}" class="breadcrumb-link">${this.escapeHtml(crumb.name)}</a>
                         <span class="breadcrumb-separator">›</span>
                     </li>
                 `;
@@ -5635,7 +5653,7 @@ class SummraApp {
             this.showChapterDetail(this.currentBook, nextChapter.chapter_number, false);
 
             // Update URL
-            const newUrl = `/books/${this.currentBook.slug}/chapters/${nextChapter.chapter_number}`;
+            const newUrl = withBasePath(`/books/${this.currentBook.slug}/chapters/${nextChapter.chapter_number}`);
             window.history.pushState({
                 type: 'chapter',
                 bookId: this.currentBook.id,
@@ -5675,7 +5693,7 @@ class SummraApp {
             this.showChapterDetail(this.currentBook, prevChapter.chapter_number, false);
 
             // Update URL
-            const newUrl = `/books/${this.currentBook.slug}/chapters/${prevChapter.chapter_number}`;
+            const newUrl = withBasePath(`/books/${this.currentBook.slug}/chapters/${prevChapter.chapter_number}`);
             window.history.pushState({
                 type: 'chapter',
                 bookId: this.currentBook.id,
@@ -5952,7 +5970,7 @@ class HeroSearch {
 
     async fetchBooks() {
         try {
-            const response = await fetch('/api/books');
+            const response = await fetch(withBasePath('/api/books'));
             const data = await response.json();
             this.allBooks = data.books || [];
         } catch (error) {
@@ -6000,7 +6018,7 @@ class HeroSearch {
             const bookSlug = book.slug || this.slugify(book.title);
             return `
                 <div class="hero-search-result-item" data-slug="${bookSlug}">
-                    <img src="/static/covers/${book.cover_image}"
+                    <img src="${summraBasePath()}/static/covers/${book.cover_image}"
                          alt="${book.title}"
                          class="hero-search-result-cover"
                          onerror="this.style.display='none'">
@@ -6018,7 +6036,7 @@ class HeroSearch {
         this.searchResults.querySelectorAll('.hero-search-result-item').forEach(item => {
             item.addEventListener('click', () => {
                 const slug = item.dataset.slug;
-                window.history.pushState(null, '', `/books/${slug}`);
+                window.history.pushState(null, '', withBasePath(`/books/${slug}`));
                 // Trigger the app's router to handle the new route
                 if (window.summraApp) {
                     window.summraApp.handleRoute();
@@ -6067,7 +6085,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Use pushState for client-side navigation (preserves audio)
-            window.history.pushState(null, '', `/${route}`);
+            window.history.pushState(null, '', withBasePath(`/${route}`));
             window.summraApp.handleRoute();
         });
     });

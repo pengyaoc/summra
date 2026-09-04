@@ -57,7 +57,7 @@ def generate_tts():
             logger.info(f"Using cached audio: {cached_audio['provider']}")
             return jsonify({
                 'success': True,
-                'audio_url': cached_audio['audio_url'],
+                'audio_url': request.script_root + cached_audio['audio_url'],
                 'streaming': False,
                 'cached': cached_audio['cached'],
                 'provider': cached_audio['provider']
@@ -166,7 +166,7 @@ def generate_tts():
                 audio_path = config.TTS_OUTPUT_DIR / f"chunk_{chunk_hash}.wav"
                 chunk_file_paths.append(str(audio_path))
                 relative_path = str(audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
-                audio_urls.append(f'/static/{relative_path}')
+                audio_urls.append(request.script_root + f'/static/{relative_path}')
 
             # Track chunk files for cleanup if user stops playback
             if audio_id:
@@ -189,7 +189,7 @@ def generate_tts():
                 relative_path = str(Path(audio_path).relative_to(config.BASE_DIR / 'frontend' / 'static'))
                 return jsonify({
                     'success': True,
-                    'audio_url': f'/static/{relative_path}',
+                    'audio_url': request.script_root + f'/static/{relative_path}',
                     'streaming': False
                 })
             else:

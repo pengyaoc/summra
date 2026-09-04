@@ -1,0 +1,20 @@
+# Summra - Classic Book Summaries
+# robots.txt
+
+User-agent: *
+Allow: {{ base_path }}/
+
+# Sitemap location
+Sitemap: {{ site_origin }}/sitemap.xml
+
+# Don't crawl API endpoints (save crawl budget)
+Disallow: {{ base_path }}/api/
+
+# Don't crawl audio files (save crawl budget, these are large files)
+Disallow: {{ base_path }}/static/audio/
+
+# Allow crawling of covers and other static assets
+Allow: {{ base_path }}/static/covers/
+Allow: {{ base_path }}/static/css/
+Allow: {{ base_path }}/static/js/
+Allow: {{ base_path }}/static/images/

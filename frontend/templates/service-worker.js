@@ -3,6 +3,12 @@
 
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-sw.js');
 
+// Deploy-time URL prefix (e.g. '/summrabook' when reverse-proxied under a
+// subpath, '' at the root) — injected by Flask's service_worker() route from
+// request.script_root. All cache route matchers below must account for it
+// since url.pathname includes the live prefix.
+const BASE_PATH = "{{ base_path }}";
+
 if (workbox) {
     console.log('Workbox loaded successfully');
 
@@ -20,8 +26,8 @@ if (workbox) {
     // Precache app shell and critical resources
     // Note: In production, you would generate this list with workbox-build
     precacheAndRoute([
-        { url: '/', revision: '1.0.1' },
-        { url: '/offline', revision: '1.0.1' }
+        { url: BASE_PATH + '/', revision: '1.0.1' },
+        { url: BASE_PATH + '/offline', revision: '1.0.1' }
     ]);
 
     // Cache CSS files - Stale While Revalidate (serve cache instantly, refresh
@@ -100,7 +106,7 @@ if (workbox) {
     // Cache auth check endpoint - Network First with long-lived cache for offline support
     // Extended cache duration to support extended offline PWA usage (30 days)
     registerRoute(
-        ({ url }) => url.pathname === '/api/auth/check',
+        ({ url }) => url.pathname === BASE_PATH + '/api/auth/check',
         new NetworkFirst({
             cacheName: 'auth-cache',
             plugins: [
@@ -118,7 +124,7 @@ if (workbox) {
 
     // Cache book data API - Network First (fresh when online, cached fallback)
     registerRoute(
-        ({ url }) => url.pathname.startsWith('/api/books/') && url.pathname.match(/\/api\/books\/\d+$/),
+        ({ url }) => url.pathname.startsWith(BASE_PATH + '/api/books/') && url.pathname.match(/\/api\/books\/\d+$/),
         new NetworkFirst({
             cacheName: 'book-data-cache',
             plugins: [
@@ -172,9 +178,9 @@ if (workbox) {
 
     // Cache book lists and categories - Stale While Revalidate (fast + fresh)
     registerRoute(
-        ({ url }) => url.pathname === '/api/books' ||
-                     url.pathname.startsWith('/api/categories') ||
-                     url.pathname.startsWith('/api/discover'),
+        ({ url }) => url.pathname === BASE_PATH + '/api/books' ||
+                     url.pathname.startsWith(BASE_PATH + '/api/categories') ||
+                     url.pathname.startsWith(BASE_PATH + '/api/discover'),
         new StaleWhileRevalidate({
             cacheName: 'lists-cache',
             plugins: [
@@ -191,7 +197,7 @@ if (workbox) {
 
     // Cache author data - Stale While Revalidate
     registerRoute(
-        ({ url }) => url.pathname.startsWith('/api/authors/'),
+        ({ url }) => url.pathname.startsWith(BASE_PATH + '/api/authors/'),
         new StaleWhileRevalidate({
             cacheName: 'authors-cache',
             plugins: [
@@ -208,7 +214,7 @@ if (workbox) {
 
     // Cache blog posts - Stale While Revalidate
     registerRoute(
-        ({ url }) => url.pathname.startsWith('/api/blog'),
+        ({ url }) => url.pathname.startsWith(BASE_PATH + '/api/blog'),
         new StaleWhileRevalidate({
             cacheName: 'blog-cache',
             plugins: [
@@ -225,13 +231,13 @@ if (workbox) {
 
     // Never cache TTS generation requests - Network Only
     registerRoute(
-        ({ url }) => url.pathname.startsWith('/api/tts/'),
+        ({ url }) => url.pathname.startsWith(BASE_PATH + '/api/tts/'),
         new NetworkOnly()
     );
 
     // Never cache admin endpoints - Network Only
     registerRoute(
-        ({ url }) => url.pathname.startsWith('/api/admin/'),
+        ({ url }) => url.pathname.startsWith(BASE_PATH + '/api/admin/'),
         new NetworkOnly()
     );
 
@@ -254,7 +260,7 @@ if (workbox) {
         // Only handle navigation requests (page loads)
         if (event.request.mode === 'navigate') {
             const cache = await caches.open('pages-cache');
-            const cachedResponse = await cache.match('/offline');
+            const cachedResponse = await cache.match(BASE_PATH + '/offline');
             return cachedResponse || Response.error();
         }
 

@@ -6692,3 +6692,76 @@ Residual diffs after page-marker stripping session. These were genuine Gemini me
 | TLS cert: 63 days remaining | Certbot auto-renews; no action needed |
 
 No Gemini calls. One manual translation (ch.35 O132). Four mechanical sqlite3/split-tool operations.
+
+---
+
+## 2026-09-03: Production VM disk full — git history rewrite to reclaim space — DONE
+
+**Trigger.** User asked for a memory/disk profile of the VM. Found `/dev/sda1` at 100% used, 0 bytes free.
+
+### Diagnosis
+
+`.git/objects` on the VM was 2.2G (repo total 2.9G) despite `data/database.db` and generated `frontend/static/audio/*.wav` files being **untracked in the current tree** — the bloat was entirely historical:
+- 15 old commits of `data/database.db` (~1.08GB uncompressed) — leftover from an early deploy flow that must have committed the DB instead of `scp`-ing it directly (current CLAUDE.md workflow uses `scp` only).
+- 116 generated `book_N_*.wav` narration files across various naming patterns (~2.28GB uncompressed) — removed from tracking at some point but never purged from history.
+- `.gitignore` had `# frontend/static/audio/*.wav` / `*.mp3` commented out, so nothing was stopping this from recurring.
+
+### Fix
+
+1. Backed up full mirror clone locally: `~/Documents/dev/summra-git-backups/summra-backup-20260903-230845.git` (kept in case anything needed recovering post-rewrite).
+2. Ran `git filter-repo --invert-paths --path data/database.db --path-glob 'frontend/static/audio/book_*.wav' --path-glob 'frontend/static/audio/chunk_*.wav'` locally. Deliberately scoped the glob to exclude `test*.wav` (small fixtures still tracked and live in the working tree) — a blanket `*.wav` filter would have deleted those from the current tree too.
+3. Re-added `origin` remote (filter-repo strips it as a safety measure) and force-pushed: `git push origin main --force`. All commit SHAs after the purge point changed.
+4. On the VM: `sudo rm -rf .git` (frees ~2.2G immediately — safe since `database.db` and the 3 tracked test `.wav`s are plain files, untouched by removing `.git`), then `git init -b main` + `git remote add origin` + `git fetch origin main` + `git reset --hard origin/main` as the correct deploy user (`pengyaoc`, not `pengyao` — two similarly-named accounts exist on this VM/gcloud, see `gcloud-access.local.md`).
+5. Verified: service stayed up throughout (no restart needed — pure git-history operation, no code changed), `HTTP 200` locally on VM, `database.db` (208M, live) and all 3 test `.wav`s intact, working tree clean at same commit content as before.
+
+**Result:** VM disk 100% full (0 free) → 83% used (1.7G free). Local `.git` 2.2G → 566M; VM `.git` 2.2G → 567M.
+
+### Follow-up not yet done
+- `.gitignore`'s commented-out audio-ignore lines should be uncommented to prevent this recurring, and the deploy workflow should be double-checked to confirm `database.db` is never committed (only `scp`'d per CLAUDE.md's documented flow).
+- Anyone with an existing local clone of `summra` needs to re-clone or hard-reset to `origin/main` — old SHAs are gone from origin.
+
+---
+
+## 2026-09-04: Consolidate onto wordpress-2-vm — URL-prefix refactor for `/summrabook` deployment — IN PROGRESS
+
+**Trigger.** User doesn't want a dedicated VM for Summra (currently `instance-20251125-033837`, ~985Mi RAM e2-micro) and wants it folded into the existing personal-site VM (`wordpress-2-vm`, see vault note `wordpress-vm-pages-setup.md`), served at `pengyaochen.com/summrabook` rather than its own domain.
+
+### Memory/disk footprint findings (informed the "yes, this fits" decision)
+- Summra's actual app footprint is tiny: gunicorn (1 worker, gevent, preload_app) measures **~22.5MB RSS total** (1.3MB master + 21MB worker). Everything else on its current dedicated VM (~213MB Ops Agent stack, guest agents, exim4) is VM-level overhead unrelated to the app, and wordpress-2-vm already carries its own copy of that regardless of what apps run on it.
+- Disk needed to migrate: ~700MB (87MB venv, rebuilt fresh not copied — same precedent as OpenReader's `uv sync` — + 212MB `data/` incl. the 208MB live DB + ~410MB `frontend/static`).
+- wordpress-2-vm has ~414MB RAM available and ~25GB free disk post-migration-cleanup — comfortably fits, same reverse-proxy pattern already proven there for OpenIReader (`/reader/` → Apache `ProxyPass` → local uvicorn/gunicorn on 127.0.0.1).
+
+### Why a subdomain (summra.pengyaochen.com) was rejected in favor of the harder `/summrabook` path prefix
+Initially recommended a subdomain — zero code changes needed, since the app would still think it's served from `/`. User explicitly wants the path-prefix form instead, so did the full refactor.
+
+### Scope discovered: NOT a trivial reverse-proxy
+`app.js` (SPA-style client router) and `auth.js` hardcode dozens of root-relative absolute paths — `fetch('/api/...')`, `window.history.pushState(null, '', '/books/...')`, `<a href="/discover">`, cover/illustration image `src`, the service worker registration call. Under a naive `ProxyPass /summrabook/ → gunicorn` with no code changes, the page would load but every API call, internal nav link, and asset would resolve against `pengyaochen.com/api/...` (WordPress's root) instead of `pengyaochen.com/summrabook/api/...` — a broken site, not a working one. Backend also had 23 instances of a **pre-existing, unrelated bug**: canonical URLs / OG tags / JSON-LD / sitemap all hardcoded `https://summra.com` — not even this app's real domain.
+
+### Fix — one mechanism, applied consistently top to bottom
+
+**Backend (`backend/app_base.py`):**
+- `PrefixMiddleware` (new WSGI middleware, wraps `app.wsgi_app`): reads `X-Forwarded-Prefix` (to be set by Apache's proxy config) and applies it as `SCRIPT_NAME`, so `url_for()` and `request.script_root` produce correctly-prefixed URLs everywhere automatically. Zero effect when the header is absent — root deployment and local dev are byte-for-byte unchanged (covered by `test_root_deployment_is_unaffected`).
+- `base_path` (= `request.script_root`) and `site_origin()` (= `request.url_root.rstrip('/')`, replaces the hardcoded `summra.com`) added to the global Jinja context processor.
+- All 23 hardcoded `https://summra.com` occurrences (sitemap, canonical/OG/Twitter meta, JSON-LD breadcrumbs) replaced with `{site_origin()}` via a scripted regex pass, not manual edits.
+- `manifest.json` and `robots.txt` moved from `frontend/static/` to `frontend/templates/` (were plain static files; now need per-request prefix injection) with new `/manifest.json` and updated `/robots.txt` routes rendering them as templates. `service-worker.js` likewise moved to `templates/` (was already a Flask route, just switched `send_from_directory` → `render_template`) with a `BASE_PATH` JS const injected at the top, used in every cache route matcher and the precache list. `Service-Worker-Allowed` header now `request.script_root + '/'` instead of hardcoded `'/'` — important since manifest's `scope`/SW's allowed-scope must not overreach into WordPress's territory at the domain root.
+- `tts_utils.py` (provider-agnostic audio-caching utility) deliberately left untouched — kept it decoupled from Flask. Instead prefixed `audio_url`/`audio_urls` at the three call sites in `app.py`/`app_prod.py` (`request.script_root + ...`), where a real Flask request context is guaranteed. `cover_image_url`/`illustration_url` API fields deliberately left un-prefixed server-side — that prefixing is owned by the frontend (see below) — so nothing double-prefixes.
+
+**Frontend (`app.js`, 6000+ lines):**
+- Added `summraBasePath()` (reads `window.APP_BASE_PATH`, injected by `index.html` from `base_path`) and `withBasePath(path)` (prefixes a root-relative path, leaves absolute/external URLs alone) near the top of the file.
+- Every hardcoded absolute path wrapped: `this.apiBase`, the SPA router's click-intercept exclusion checks, `handleRoute()` (strips the prefix from `location.pathname` before its regex matching so the rest of the function stays prefix-agnostic), `updateURL()`, all 6 `pushState` call sites, the service worker registration call, cover/illustration image `src`/`srcset` (including a hardcoded 3-image marketing block and a `HeroSearch` class that's separate from the main `SummraApp` class — used the global functions specifically to avoid `this`-binding assumptions across classes), breadcrumb nav links (fixed once at render time in `renderBreadcrumbs`, covering ~8 push sites upstream), the two raw `fetch('/api/...')` calls that weren't already going through `this.apiBase`, and the "Go Home" error-state button.
+- `app.min.js` regenerated from source via the documented `esbuild --minify` command (never hand-edited the minified bundle).
+
+**Frontend (`auth.js`, loads before `app.js`):** can't use `app.js`'s helpers (load order) — added an independent `API_BASE` const reading `window.APP_BASE_PATH` directly, replaced all 8 `fetch('/api/...')` calls programmatically (regex script, not manual edits, to avoid transcription errors across 8 near-identical call sites).
+
+**Templates:** `window.APP_BASE_PATH` injected in `index.html` next to the existing `FEATURE_AUTH`/`FEATURE_BLOG` pattern. 4 hardcoded nav `<a href>`s (discover/books/categories/blog) plus `offline.html`'s "Try Again" link switched to `{{ base_path }}/...`. `<link rel="manifest">` switched from a static `url_for` to the new `url_for('manifest')` route.
+
+**CSS:** 3 hardcoded `url('/static/images/library_view.webp|jpg')` background-image refs in `style.css` — fixed by making them *relative* (`../images/...`) instead of prefix-aware, since CSS `url()` already resolves relative to the CSS file's own location, not the page. Simpler than templatizing CSS and correct under any prefix automatically.
+
+### Tests
+New `tests/test_url_prefix.py` (8 tests, all passing) — covers the no-header backward-compat case, header-present prefixing of `url_for()` links/static assets/service-worker/manifest/robots.txt, `PrefixMiddleware` correctly routing a prefixed request (not 404), and a regression guard that `summra.com` never appears in sitemap output again. Full existing suite (365 tests, excluding one pre-existing unrelated `PIL`-import failure in `test_illustrations.py`) still passes — no regressions.
+
+### Not yet done (next steps)
+- Apache vhost on wordpress-2-vm: `ProxyPass /summrabook/ http://127.0.0.1:<port>/` + `ProxyPassReverse` + must set the `X-Forwarded-Prefix: /summrabook` header (e.g. `RequestHeader set X-Forwarded-Prefix /summrabook`) and **`ProxyPreserveHost On`** (required for `site_origin()`/`request.host` to reflect `pengyaochen.com` rather than `127.0.0.1:<port>` — otherwise sitemap/canonical/OG URLs would be wrong again).
+- Deploy Summra's code/data to wordpress-2-vm: fresh `git clone` (not copy) + fresh venv via `pip install` (not copied, matching the OpenReader precedent) + copy `data/database.db` and `frontend/static/{covers,illustrations,audio}` (untracked, not in git) + new systemd unit for gunicorn bound to a free local port.
+- Manual smoke test on the live proxy path before flipping anything user-facing: home page, book/chapter navigation, search, audio playback, PWA install (manifest scope), service worker registration — the automated tests cover the URL-generation logic but not an actual browser session through the real Apache proxy.
+- Decide fate of the dedicated Summra VM (`instance-20251125-033837`) after cutover is verified — stop-and-hold for a rollback window before deleting, per the pattern used in the WordPress Debian 10→13 migration.
