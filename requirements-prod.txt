@@ -4,4 +4,3 @@ Flask-CORS==4.0.0
 google-genai>=0.1.0
 python-dotenv==1.0.0
 gunicorn==21.2.0
-gevent==24.2.1

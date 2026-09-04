@@ -2,6 +2,16 @@
 
 Complete guide for deploying Summra to Google Cloud Platform. Covers both e2-micro (FREE) and e2-small (~$13/month) instance types.
 
+> **This guide predates the isolated-service convention now used for the actual production
+> deployment** (`wordpress-2-vm`, cohosted with WordPress and OpenReader — see the vault note
+> `01-projects/personal-brand/vm-service-convention.md` and `wordpress-vm-pages-setup.md`).
+> That deployment uses `deploy/install.sh`, a dedicated `summra` Linux user under `/opt/summra`,
+> a `systemd --user` unit with `ProtectSystem=strict` sandboxing, and `gunicorn`'s `gthread`
+> worker (not `gevent` — see `deploy/gunicorn_config.py`). The steps below still describe a
+> valid **standalone**, single-dedicated-VM path (`www-data`, `/var/www/summra`, system-scope
+> systemd unit), but if you're deploying to a box that already runs other services, use
+> `deploy/install.sh --prefix /your-path` instead and read `deploy/README.md` first.
+
 ---
 
 ## Table of Contents
@@ -176,16 +186,13 @@ sudo chown $USER:$USER <REMOTE_REPO_PATH>
 cp -r /tmp/summra/* <REMOTE_REPO_PATH>/
 cd <REMOTE_REPO_PATH>
 
-# For e2-micro (no TTS)
-chmod +x deploy/setup-e2micro.sh
-./deploy/setup-e2micro.sh
-
-# For e2-small (with TTS)
-chmod +x deploy/setup-e2small.sh
-./deploy/setup-e2small.sh
+# Both instance types use the same installer now — see deploy/install.sh
+sudo deploy/install.sh
 ```
 
-The script prompts for domain name and Gemini API key, then automatically installs dependencies, creates the Python venv, configures Nginx, sets up the systemd service, enables swap, and starts the application.
+`deploy/install.sh` creates the dedicated `summra` user, `/opt/summra`, the Python venv, a
+`service.env` from `deploy/service.env.example`, and a `systemd --user` unit — see
+`deploy/README.md` for the full flow, including the `--prefix`/`--bind` flags for cohosting.
 
 ### Fix Permissions
 
@@ -447,8 +454,9 @@ sudo journalctl -u summra -n 100 --no-pager
 # Test manually
 cd <REMOTE_REPO_PATH>
 source venv/bin/activate
-gunicorn -c deploy/gunicorn_config.py backend.app_prod:app  # e2-micro
-gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app  # e2-small
+gunicorn -c deploy/gunicorn_config.py backend.app_prod:app
+# One config for both instance sizes now — GUNICORN_WORKERS/GUNICORN_THREADS
+# in service.env control concurrency, not a separate e2-small config file.
 ```
 
 ### 502 Bad Gateway
@@ -610,10 +618,12 @@ gcloud compute instances set-machine-type summra \
 # Start instance
 gcloud compute instances start summra --zone=us-west1-b
 
-# SSH in and update service config
-sudo cp <REMOTE_REPO_PATH>/deploy/systemd-summra-e2small.service /etc/systemd/system/summra.service
-sudo systemctl daemon-reload
-sudo systemctl restart summra
+# SSH in and raise the memory ceiling for the bigger instance —
+# see deploy/systemd/override.example.conf (MemoryMax lives in a drop-in,
+# not the main unit, since it's the one value that's genuinely per-host)
+sudo -u summra $EDITOR ~/.config/systemd/user/summra.service.d/override.conf
+sudo -u summra env XDG_RUNTIME_DIR=/run/user/$(id -u summra) systemctl --user daemon-reload
+sudo -u summra env XDG_RUNTIME_DIR=/run/user/$(id -u summra) systemctl --user restart summra
 ```
 
 ### Memory Usage

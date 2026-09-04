@@ -10,6 +10,7 @@ BASE_DIR = Path(__file__).parent.parent
 
 # Database
 DATABASE_PATH = BASE_DIR / 'data' / 'database.db'
+USER_DATABASE_PATH = BASE_DIR / 'data' / 'summra.db'
 
 # Data directories
 BOOKS_DIR = BASE_DIR / 'data' / 'books'

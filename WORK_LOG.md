@@ -6760,8 +6760,121 @@ Initially recommended a subdomain — zero code changes needed, since the app wo
 ### Tests
 New `tests/test_url_prefix.py` (8 tests, all passing) — covers the no-header backward-compat case, header-present prefixing of `url_for()` links/static assets/service-worker/manifest/robots.txt, `PrefixMiddleware` correctly routing a prefixed request (not 404), and a regression guard that `summra.com` never appears in sitemap output again. Full existing suite (365 tests, excluding one pre-existing unrelated `PIL`-import failure in `test_illustrations.py`) still passes — no regressions.
 
-### Not yet done (next steps)
-- Apache vhost on wordpress-2-vm: `ProxyPass /summrabook/ http://127.0.0.1:<port>/` + `ProxyPassReverse` + must set the `X-Forwarded-Prefix: /summrabook` header (e.g. `RequestHeader set X-Forwarded-Prefix /summrabook`) and **`ProxyPreserveHost On`** (required for `site_origin()`/`request.host` to reflect `pengyaochen.com` rather than `127.0.0.1:<port>` — otherwise sitemap/canonical/OG URLs would be wrong again).
-- Deploy Summra's code/data to wordpress-2-vm: fresh `git clone` (not copy) + fresh venv via `pip install` (not copied, matching the OpenReader precedent) + copy `data/database.db` and `frontend/static/{covers,illustrations,audio}` (untracked, not in git) + new systemd unit for gunicorn bound to a free local port.
-- Manual smoke test on the live proxy path before flipping anything user-facing: home page, book/chapter navigation, search, audio playback, PWA install (manifest scope), service worker registration — the automated tests cover the URL-generation logic but not an actual browser session through the real Apache proxy.
-- Decide fate of the dedicated Summra VM (`instance-20251125-033837`) after cutover is verified — stop-and-hold for a rollback window before deleting, per the pattern used in the WordPress Debian 10→13 migration.
+### Deploy to wordpress-2-vm — DONE (same session)
+
+Committed (`73db87d`) and pushed to `main`, then deployed to **both** VMs:
+
+1. **Production VM (`instance-20251125-033837`, unaffected root deployment)** — pulled, restarted `summra.service`, verified `summrabook.com` end-to-end (home/books/discover/api/manifest/robots/sitemap all 200; `window.APP_BASE_PATH = ""`, nav links unprefixed — confirms backward compatibility). Bonus: this also live-verified the `summra.com` → real-domain sitemap fix (previously broken, now shows `https://summrabook.com/...`).
+
+2. **wordpress-2-vm (new `/summrabook` deployment):**
+   - Created dedicated Linux user `summra` (uid 1002, `loginctl enable-linger`), matching OpenReader's isolation pattern — not `www-data`, not root.
+   - Fresh `git clone` (public repo, no auth needed) to `/opt/summra` — needed to `apt-get install git` first (not present on this VM's base image).
+   - Fresh venv: `pip install -r requirements-prod.txt` mostly worked, but **`gevent==24.2.1` has no prebuilt wheel for this VM's Python 3.13.5 and fails to compile from source** (Cython/`.pyx` incompatibility, not a missing system dependency — installing build tools would not have helped). Fixed by installing everything else pinned, then `pip install "gevent>=24.11"` unpinned (resolved to 26.8.0, has a 3.13 wheel). Scoped to this venv only — did not touch the shared `requirements-prod.txt` (the original prod VM's Python version already has a working prebuilt wheel for the pinned version).
+   - systemd `--user` unit at `/home/summra/.config/systemd/user/summra.service`, same shape as `openreader.service`. Port and prefix are VM-specific and NOT baked into the shared repo: `gunicorn --bind 127.0.0.1:5001` overrides `deploy/gunicorn_config.py`'s default `127.0.0.1:5000` via a CLI flag, config file itself untouched. `MemoryMax=200M` (measured actual usage ~50MB).
+   - Apache vhost (`/etc/apache2/sites-available/wordpress-https.conf` on wordpress-2-vm, backed up before editing, `apache2ctl configtest` run before every reload): added `ProxyPreserveHost On` at the vhost level (was unset/Off — needed for `site_origin()` to see the real `Host: pengyaochen.com` instead of the proxy target; confirmed doesn't affect OpenReader, which doesn't build Host-derived URLs) and a new `<Location /summrabook/>` block (`ProxyPass`/`ProxyPassReverse` to `127.0.0.1:5001`, `RequestHeader set X-Forwarded-Prefix /summrabook`).
+   - **Bug hit and fixed**: sitemap/canonical/OG URLs initially came back `http://` instead of `https://`. Root cause: unlike nginx (used on the original prod VM, which sets `X-Forwarded-Proto` by convention), **Apache's `mod_proxy` does not set `X-Forwarded-Proto` automatically** — gunicorn already trusts `127.0.0.1` for forwarded headers by default, so it just needed the header to actually exist. Fixed with one more line: `RequestHeader set X-Forwarded-Proto "https"` in the same `<Location>` block. No backend code change needed — confirms `PrefixMiddleware` didn't need to handle scheme itself, gunicorn's built-in forwarded-header trust already covers it once Apache sends the header.
+   - Data transfer (`data/database.db` 208M + untracked production `frontend/static/audio/*` 307M compressed — `covers/`/`illustrations/` didn't need transferring, they're tracked in git and came with the clone) routed through the local machine: `gcloud compute scp` VM→local→VM (no direct VM-to-VM path available). Hit a `/tmp` tmpfs size limit (483M) on wordpress-2-vm mid-transfer — fixed by moving the DB to its final destination first to free tmpfs space before retrying the audio tarball, rather than a bigger tmpfs (would need a VM restart) or routing around `/tmp` entirely.
+   - **Final verification, real public HTTPS path** (not loopback/spoofed-Host): all of `/summrabook/{,books,discover,api/books,manifest.json,robots.txt,sitemap.xml,service-worker.js}` return 200 on `pengyaochen.com`; `window.APP_BASE_PATH`, nav hrefs, manifest `scope`/`start_url`, sitemap `<loc>`, and canonical/OG tags all correctly show `/summrabook` and `https://`; 90 books load via `/summrabook/api/books`; WordPress homepage and `/reader/` (OpenReader) both still 200 throughout — no regression to either existing app on the shared VM.
+
+Browser smoke test done via automated Chrome tooling (desktop + iPhone-sized viewport): book grid at `/summrabook/books` renders all 90 books with covers, chapter reading page renders and paginates correctly, no console errors, no failed network requests. One pre-existing, unrelated cosmetic bug spotted: book id 92's `cover_image_url` produces a double-slash in its static path (`/static//covers/92.webp`) — still loads fine (200), a malformed DB value, not a refactor regression.
+
+### Not yet done
+- Decide fate of the dedicated Summra VM (`instance-20251125-033837`) now that wordpress-2-vm serves the same content — likely stop-and-hold for a rollback window before deleting, per the pattern used in the WordPress Debian 10→13 migration. Not stopped yet — both are currently live in parallel.
+- No public link to `/summrabook` exists yet anywhere on `pengyaochen.com` (by design, not yet asked for) — it's reachable only if you know the URL.
+
+### Known issue (pre-existing, NOT caused by this refactor) — chapter text cut off under sticky header on iOS
+Reported 2026-09-04 on iOS Chrome: opening a chapter page shows the top line of body text partially hidden behind the black sticky reading header. **Confirmed present on both the original `summrabook.com` and the new `/summrabook` deployment**, and confirmed by the user to happen immediately on page load (not triggered by scrolling or starting audio playback) — rules out today's URL-prefix work as the cause.
+
+Could not reproduce via automated Chrome tooling (desktop viewport or an emulated 390×844 iPhone viewport) — both render cleanly, full first paragraph visible right below the header. That's expected: iOS Chrome/Safari use WebKit under Apple's App Store rules, not Blink, so this is likely a WebKit-specific `position: fixed` + `transform` interaction (the sticky header uses `transform: translateY(-100%)` for its hide/show animation — see `.sticky-reading-header` / `.sticky-reading-header.hidden` in `style.css`) rather than a CSS logic error. The 51px header height and the corresponding `padding: 51px 0 0 0` content offset (`style.css` line ~1651) do match numerically, so this isn't a simple padding mismatch.
+
+**Needs real iOS hardware (or BrowserStack/similar) to debug further** — flagging for a dedicated follow-up session rather than guessing at a fix blind.
+
+---
+
+## 2026-09-04: Isolated-service `deploy/` convention + `.env` leak fix on wordpress-2-vm — IN PROGRESS
+
+Follow-up to the same-day `/summrabook` consolidation above. That deploy got the app running
+but skipped the isolation/portability bar OpenReader (the VM's other cohosted service) already
+meets — `deploy/`'s committed files described a deployment (`www-data`, `/var/www/summra`,
+nginx, `gevent`) that didn't match what was actually running (`summra` user, `/opt/summra`,
+Apache, hand-patched `gevent`). Full plan: `.claude/plans/difference-in-openreader-and-stateless-snowglobe.md`.
+
+**Security fix, live on the VM (verified):** `/opt/summra/.env` was mode `664` — confirmed via
+direct test that both `www-data` and the `openreader` service account could read it, exposing
+`GEMINI_API_KEY`. Fix was deletion, not tightening: `app_prod.py` never calls Gemini (TTS is
+pre-generated, disabled in prod), so the key was never needed on the box at all. Removed the
+key from the VM's `.env`, `chmod 600`, restarted (`systemctl --user` under the `summra`
+account — note the `sudo -u summra XDG_RUNTIME_DIR=/run/user/$(id -u summra) systemctl --user
+...` invocation needed; `systemctl --user -M summra@` failed with a machine-transport error on
+this VM). Verified both cross-service reads now fail, and confirmed prod is otherwise
+unaffected: `/summrabook/api/books` still returns 90 books, and a live cached-audio fetch
+(`book_38_medium_gemini.opus`, 7.2MB) returns 200. Rotated `GEMINI_API_KEY` locally — new key
+lives only in the repo's gitignored `.env`, never shipped to any server.
+
+**Repo changes (TDD — failing tests written first, `tests/test_deploy_config.py`):**
+- `backend/config.py`: added `USER_DATABASE_PATH = BASE_DIR / 'data' / 'summra.db'`.
+  `user_models.UserDatabase()` previously defaulted to `summra.db` in the repo root
+  (`Path(__file__).parent.parent`) — found by inspecting the live VM (`/opt/summra/summra.db`
+  existed there, 40KB). Under the sandbox's planned `ProtectSystem=strict`, that default would
+  crash-loop the service: the install root becomes read-only, and SQLite can't be granted
+  write access to just the one file since it needs `-wal`/`-shm` siblings in the same
+  directory. `app_base.py`'s single `UserDatabase()` call site now passes the path explicitly.
+- `deploy/gunicorn_config.py`: `bind` now reads `GUNICORN_BIND` (default unchanged,
+  `127.0.0.1:5000`) instead of hardcoding it — removes the `--bind` CLI override that was
+  baked into the live systemd unit's `ExecStart`. `worker_class` changed `gevent` → `gthread`
+  (stdlib threading, `threads` from `GUNICORN_THREADS`, default 4). The app has zero
+  `async def` in `backend/` — gevent's cooperative sockets bought nothing for its SQLite+Jinja
+  request pattern, and its only real payoff (not blocking on large audio-file streaming) is
+  superseded by static assets moving to the front-end proxy (see below). `preload_app = True`
+  is now actually safe — no monkey-patching to race against.
+- `requirements-prod.txt`: removed `gevent==24.2.1` entirely (not just unpinned) — nothing in
+  the repo imports it directly, it was gunicorn-worker-class-only. This retires the VM's
+  hand-patched `gevent>=24.11` workaround for good; no `requirements-vm.txt` override needed.
+- New `tests/test_deploy_config.py` (6 tests): `USER_DATABASE_PATH` resolves under `data/`,
+  `app_base.user_db.db_path` matches it, gunicorn bind/worker-class/threads all read from env
+  with the right defaults. Full suite still green: 371 passed (excluding the pre-existing,
+  unrelated `PIL`-import failure in `test_illustrations.py`).
+
+**`deploy/` restructure** (paths conventional so they can be literal and committed; the one
+thing that varies per host is `service.env`, never git-tracked):
+- Deleted: `systemd-summra.service`, `systemd-summra-e2small.service`,
+  `gunicorn_config_e2small.py`, `nginx-summra.conf`, `setup-e2micro.sh`, `setup-e2small.sh` —
+  all described a `www-data`/`/var/www/summra` deployment that was never actually used.
+- New `deploy/systemd/summra.service` — `systemd --user` unit, literal `/opt/summra` paths,
+  `ProtectSystem=strict`/`ProtectHome=read-only`/`ReadWritePaths=/opt/summra/data` (only
+  `data/` needs write access — `static/audio/` stays read-only since prod never generates TTS).
+- New `deploy/systemd/override.example.conf` — `MemoryMax` drop-in template (200M cohosted,
+  400M dedicated — the one genuinely per-host systemd value, can't come from `EnvironmentFile`).
+- New `deploy/service.env.example` — the per-host `EnvironmentFile` template. No
+  `GEMINI_API_KEY` field at all (see above).
+- New `deploy/apache/summra.conf` — the cohosted `<Location>` + static-file fragment, using
+  `${SUMMRA_PREFIX}` so the mount point is the one value the host-owned vhost supplies via
+  `Define`, not a hardcoded path.
+- New `deploy/install.sh` — idempotent installer replacing the deleted setup scripts; creates
+  the user, clones fresh (matching the OpenReader precedent — not a copy of a working tree),
+  sets up venv/`service.env`/systemd unit, and (with `--prefix`) the Apache fragment. Migrates
+  a legacy root-level `summra.db` into `data/` if found.
+- Fixed `nginx-summra-common.conf`'s `/var/www/summra` → `/opt/summra` (the standalone nginx
+  path was already the right *design* — front-end serves static, Flask serves the app — just
+  had stale paths).
+- `deploy/README.md` rewritten to match; `deploy/DEPLOY.md` got a top-of-file note plus fixes
+  to broken references to now-deleted scripts (kept as a valid standalone-VM walkthrough,
+  since cohosting still needs the host-owned vhost documented separately).
+
+### Not yet done (see the plan file for full detail)
+- Apply the new `deploy/` artifacts to `wordpress-2-vm` itself — migrate `summra.db` into
+  `data/`, install the sandboxed unit, verify both write paths and no regression to WordPress/
+  OpenReader, confirm reboot survival.
+- Apache static offload (`Alias /summrabook/static/` → served off disk instead of proxied
+  through gunicorn) — this is a prerequisite for the sandbox to matter in practice (405MB of
+  audio/covers/illustrations currently still flows through gunicorn) and was explicitly
+  planned before the runtime change, not after.
+- Host vhost: add `Define SUMMRA_PREFIX`/`READER_PREFIX` + `IncludeOptional
+  /etc/apache2/service-locations/*.conf` to `wordpress-https.conf`, and record its canonical
+  copy in the vault's `wordpress-vm-pages-setup.md` (decided to live there, not a new repo).
+- New vault note `01-projects/personal-brand/vm-service-convention.md` capturing the isolation/
+  portability rules this work is based on.
+- Backport the same committed structure to OpenReader's own repo — it already meets the
+  isolation bar operationally, but its config only exists as hand-edits on the VM.
+- Portability check: run `deploy/install.sh` on a scratch GCE VM with no prefix and confirm it
+  serves correctly with zero edits to any committed file — the actual test of "portable."
