@@ -6791,7 +6791,7 @@ Could not reproduce via automated Chrome tooling (desktop viewport or an emulate
 
 ---
 
-## 2026-09-04: Isolated-service `deploy/` convention + `.env` leak fix on wordpress-2-vm — IN PROGRESS
+## 2026-09-04: Isolated-service `deploy/` convention + `.env` leak fix on wordpress-2-vm — DONE
 
 Follow-up to the same-day `/summrabook` consolidation above. That deploy got the app running
 but skipped the isolation/portability bar OpenReader (the VM's other cohosted service) already
@@ -6861,20 +6861,60 @@ thing that varies per host is `service.env`, never git-tracked):
   to broken references to now-deleted scripts (kept as a valid standalone-VM walkthrough,
   since cohosting still needs the host-owned vhost documented separately).
 
-### Not yet done (see the plan file for full detail)
-- Apply the new `deploy/` artifacts to `wordpress-2-vm` itself — migrate `summra.db` into
-  `data/`, install the sandboxed unit, verify both write paths and no regression to WordPress/
-  OpenReader, confirm reboot survival.
-- Apache static offload (`Alias /summrabook/static/` → served off disk instead of proxied
-  through gunicorn) — this is a prerequisite for the sandbox to matter in practice (405MB of
-  audio/covers/illustrations currently still flows through gunicorn) and was explicitly
-  planned before the runtime change, not after.
-- Host vhost: add `Define SUMMRA_PREFIX`/`READER_PREFIX` + `IncludeOptional
-  /etc/apache2/service-locations/*.conf` to `wordpress-https.conf`, and record its canonical
-  copy in the vault's `wordpress-vm-pages-setup.md` (decided to live there, not a new repo).
-- New vault note `01-projects/personal-brand/vm-service-convention.md` capturing the isolation/
-  portability rules this work is based on.
+### Applied to wordpress-2-vm and verified (same session, continued)
+
+- **`summra.db` migrated** into `data/`, service pulled the new commit, `gevent` and its full
+  dependency chain (`greenlet`, `zope.event`, `zope.interface`, `cffi`, `pycparser`) uninstalled
+  from the venv.
+- **New sandboxed unit installed and verified against the running process, not just the unit
+  file**: `nsenter`'d into the live gunicorn process's own mount namespace —
+  `/proc/<pid>/mountinfo` showed `/` mounted `ro` with `/opt/summra/data` as the one explicit
+  `rw` bind mount. A write to `data/summra.db` inside that namespace succeeded; a write to
+  `frontend/static/audio/` failed with `OSError: [Errno 30] Read-only file system`. Both halves
+  of the `ReadWritePaths` claim proven against the live sandbox.
+- **Apache static offload shipped, but hit a real bug along the way**: a flat
+  `ProxyPass /summrabook/static/ !` exclusion did not take precedence over the app's
+  `<Location /summrabook/> ProxyPass ...` block — verified empirically that static requests
+  kept reaching gunicorn (`Server: gunicorn` on every response) with either the flat or the
+  fully-`<Location>`-nested exclusion form, both of which are individually documented Apache
+  patterns. Root cause: flat and `<Location>`-scoped `ProxyPass` directives don't appear to
+  share the same longest-prefix-sorted table on this Apache 2.4.68/Debian trixie build. Fixed
+  by making the app's proxy directive flat too — `deploy/apache/summra.conf` now has the full
+  writeup and a warning to re-verify on any future Apache upgrade. Verified post-fix: static
+  responses show `Server: Apache`, `206 Partial Content` on range requests (audio seeking),
+  correct `Cache-Control`/`Expires`; `X-Forwarded-Prefix` still reaches Flask correctly
+  (`manifest.json`'s `start_url`/`scope` and the page's canonical tag both still show
+  `/summrabook/`).
+- **Host vhost restructured**: `wordpress-https.conf` now defines `SUMMRA_PREFIX`/
+  `READER_PREFIX` and ends with `IncludeOptional /etc/apache2/service-locations/*.conf`;
+  Summra's fragment installs there. Canonical copy recorded in the vault
+  (`wordpress-vm-pages-setup.md`) rather than a new repo — decided that file has no natural
+  single-service owner and changes rarely enough that vault documentation plus periodic diffing
+  is the right tradeoff over adding install automation for one file.
+- **Memory measured before/after** (PSS): Summra dropped from 58MB (gevent, static proxied
+  through gunicorn) to 47MB (gthread, static offloaded) — a real improvement, not just a wash.
+  Box-wide available memory also improved slightly (493Mi vs. 450Mi pre-hardening).
+- New vault note `01-projects/personal-brand/vm-service-convention.md` written, capturing the
+  isolation/portability rules and the per-service status table.
+- **Security posture check** (prompted mid-session): confirmed `fail2ban`'s `apache-badbots`/
+  `apache-overflows`/`apache-ratelimit` jails are path-agnostic and already cover `/summrabook`
+  with zero extra config — verified against live scanner traffic hitting the box today (PHP RCE
+  probes, `.git/config` probes, a path-traversal attempt, all absorbed harmlessly). Found two
+  real gaps — `apache-noscript` doesn't extend to proxied backends since it only watches
+  `mod_php`'s own error-log entries, and no endpoint-specific rate limiting survived the
+  standalone-nginx-to-cohosted-Apache move (the old `nginx-summra-common.conf` had explicit
+  `/api/`10r/s and `/api/tts/`2r/min limits that never got ported). Decided, per explicit
+  instruction, to document rather than fix now — `/summrabook` currently gets ~1 request/day and
+  isn't linked from anywhere public, so real exposure is near-zero; revisit when it's actually
+  linked. Full writeup in the vault note's "Security posture check" section.
+
+### Not yet done
+- **Reboot survival test** — deliberately deferred: a full VM reboot affects WordPress and
+  OpenReader too, not just Summra, so this wasn't done unprompted mid-cutover.
+- **Portability check**: run `deploy/install.sh` on a scratch GCE VM with no prefix and confirm
+  it serves correctly with zero edits to any committed file — the actual test of "portable,"
+  not yet performed. Everything verified so far confirms the *cohosted* path works; the
+  standalone path is unverified since the last restructure.
 - Backport the same committed structure to OpenReader's own repo — it already meets the
   isolation bar operationally, but its config only exists as hand-edits on the VM.
-- Portability check: run `deploy/install.sh` on a scratch GCE VM with no prefix and confirm it
-  serves correctly with zero edits to any committed file — the actual test of "portable."
+- The two security gaps above, once `/summrabook` is actually linked publicly.
