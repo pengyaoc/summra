@@ -2454,8 +2454,11 @@ class SummraApp {
         if (chapter.illustration_url && chapter.illustration_url.trim() !== '') {
             let illustrationUrl = chapter.illustration_url;
             // Convert local path to URL if needed
-            if (!illustrationUrl.startsWith('http') && !illustrationUrl.startsWith('/static/')) {
-                illustrationUrl = withBasePath(`/static/${illustrationUrl}`);
+            if (!illustrationUrl.startsWith('http')) {
+                if (!illustrationUrl.startsWith('/static/')) {
+                    illustrationUrl = `/static/${illustrationUrl}`;
+                }
+                illustrationUrl = withBasePath(illustrationUrl);
             }
 
             // Generate optimized image URLs (WebP and JPG)
