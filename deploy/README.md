@@ -1,295 +1,125 @@
 # Deployment Files for Summra
 
-This directory contains all the necessary configuration files for deploying Summra to production.
+This directory contains everything needed to deploy Summra — standalone on its own VM, or
+cohosted alongside other services (the actual production case: `wordpress-2-vm` runs
+WordPress, OpenReader, and Summra together). Both paths use the same committed files; only
+`deploy/service.env` (per-host, never committed) differs.
 
-## Files Overview
+See `01-projects/personal-brand/vm-service-convention.md` in the vault for the isolation and
+portability principles this follows, and `wordpress-vm-pages-setup.md` for the live production
+setup and its host-owned Apache vhost.
 
-### For e2-small Deployment (Recommended)
-
-| File | Purpose |
-|------|---------|
-| `DEPLOYMENT_E2SMALL.md` | **Complete deployment guide** - Start here! |
-| `setup-e2small.sh` | **Automated setup script** - Run on VM |
-| `requirements-prod.txt` | Python dependencies |
-| `gunicorn_config_e2small.py` | Gunicorn config (2 workers) |
-| `systemd-summra-e2small.service` | Systemd service file |
-| `nginx-summra-standalone.conf` | Main nginx config |
-| `nginx-summra-common.conf` | Shared nginx config |
-
-### For e2-micro Deployment (Budget Option)
+## Files
 
 | File | Purpose |
-|------|---------|
-| `DEPLOYMENT.md` | Deployment guide for e2-micro |
-| `requirements-prod.txt` | Python dependencies WITHOUT TTS |
-| `gunicorn_config.py` | Gunicorn config (1 worker) |
-| `systemd-summra.service` | Systemd service file |
-| `nginx-summra.conf` | Nginx config for e2-micro |
-| `backend/app_prod.py` | Flask app with TTS disabled |
+|---|---|
+| `install.sh` | Idempotent installer — creates the `summra` user, `/opt/summra`, venv, `service.env`, systemd unit, and (if `--prefix` given) the Apache fragment |
+| `gunicorn_config.py` | The one gunicorn config for every deployment — reads `GUNICORN_BIND`/`GUNICORN_WORKERS`/`GUNICORN_THREADS` from the environment |
+| `service.env.example` | Template for the per-host `EnvironmentFile` — the installer copies this to `/opt/summra/service.env` (mode `600`, never committed) |
+| `systemd/summra.service` | `systemd --user` unit — sandboxed (`ProtectSystem=strict`), literal `/opt/summra` paths |
+| `systemd/override.example.conf` | Template for the per-host `MemoryMax` drop-in |
+| `apache/summra.conf` | Cohosted reverse-proxy + static-file fragment, installed to `/etc/apache2/service-locations/` when `--prefix` is used |
+| `nginx-summra-standalone.conf` + `nginx-summra-common.conf` | Standalone nginx alternative to the Apache fragment |
+| `requirements-prod.txt` | Python dependencies (no TTS — `app_prod.py` only serves pre-generated audio) |
+| `DEPLOY.md` | Full walkthrough for a dedicated GCP VM (e2-micro/e2-small), predates cohosting — see the note at its top |
+| `hardening_check_vm.sh` / `hardening_check_gcp.sh` / `HARDENING.md` | Security posture checks (SSH, ports, GCP firewall) |
 
-## Quick Start
+## Quick start
 
-### Deploying to e2-small (WITH TTS) - ~$13/month
-
-This is the recommended approach for a production-ready deployment with full TTS support.
-
-**Step 1: Create GCP Instance**
+**Standalone** (Summra is the only thing on the box):
 ```bash
-gcloud compute instances create summra \
-    --machine-type=e2-small \
-    --zone=us-central1-a \
-    --image-family=ubuntu-2204-lts \
-    --image-project=ubuntu-os-cloud \
-    --boot-disk-size=50GB \
-    --tags=http-server,https-server
+git clone <repo> /tmp/summra-src && cd /tmp/summra-src
+sudo deploy/install.sh
 ```
+Serves on `127.0.0.1:5000`. Put nginx (`nginx-summra-standalone.conf` +
+`nginx-summra-common.conf`) or Apache in front of it and point DNS at the box.
 
-**Step 2: Upload Code**
+**Cohosted** (adding Summra to a VM that already runs other services behind Apache):
 ```bash
-cd <LOCAL_REPO_PATH>
-gcloud compute scp --recurse . summra:/tmp/summra --zone=us-central1-a
+sudo deploy/install.sh --prefix /summrabook --bind 127.0.0.1:5001
 ```
+This also drops `deploy/apache/summra.conf` into `/etc/apache2/service-locations/`. The host's
+shared vhost (TLS, `ServerName`, `ProxyPreserveHost`, `Define SUMMRA_PREFIX`,
+`IncludeOptional /etc/apache2/service-locations/*.conf`) is **not** installed by this script —
+it's host-level config owned outside any single service's repo. See
+`wordpress-vm-pages-setup.md` for the live example.
 
-**Step 3: SSH and Run Setup**
+Either way, then copy in data:
 ```bash
-gcloud compute ssh summra --zone=us-central1-a
-sudo mkdir -p <REMOTE_REPO_PATH>
-sudo chown $USER:$USER <REMOTE_REPO_PATH>
-cp -r /tmp/summra/* <REMOTE_REPO_PATH>/
-cd <REMOTE_REPO_PATH>
-chmod +x deploy/setup-e2small.sh
-./deploy/setup-e2small.sh
+gcloud compute scp data/database.db <vm>:/tmp/database.db --zone=<zone>
+gcloud compute scp --recurse frontend/static/audio frontend/static/covers <vm>:/tmp/ --zone=<zone>
+# on the VM, as the summra user, move these into /opt/summra/data and
+# /opt/summra/frontend/static/ respectively
 ```
 
-**Step 4: Upload Data**
-```bash
-# From local machine
-gcloud compute scp data/database.db summra:<REMOTE_REPO_PATH>/data/ --zone=us-central1-a
-gcloud compute scp --recurse frontend/static/audio/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-central1-a
-gcloud compute scp --recurse frontend/static/covers/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-central1-a
-```
-
-**Step 5: Set Up SSL**
-```bash
-gcloud compute ssh summra --zone=us-central1-a
-sudo certbot --nginx -d summra.yourdomain.com
-```
-
-Done! Your app is live at `https://summra.yourdomain.com`
-
-### Deploying to e2-micro (WITHOUT TTS) - FREE
-
-For budget deployments or to run alongside a blog on the free tier.
-
-Follow `DEPLOYMENT.md` for detailed instructions.
-
-## Files Explained
-
-### Configuration Files
-
-**Gunicorn Config (`gunicorn_config_e2small.py`)**
-- Production WSGI server configuration
-- 2 workers for e2-small (2 GB RAM)
-- Gevent async workers for better concurrency
-- 5-minute timeout for TTS generation
-- Automatic worker restarts to prevent memory leaks
-
-**Nginx Config (`nginx-summra-standalone.conf` + `nginx-summra-common.conf`)**
-- Reverse proxy to Gunicorn
-- Static file serving (saves Flask resources)
-- Rate limiting (10 req/s for API, 2 req/min for TTS)
-- Gzip compression
-- SSL/TLS support (after certbot setup)
-- Long caching for static assets
-
-**Systemd Service (`systemd-summra-e2small.service`)**
-- Runs application as service
-- Auto-restart on failure
-- Memory limits (max 1.5GB for app)
-- CPU limits (max 150% to leave room for system)
-- Runs as www-data user for security
-
-### Scripts
-
-**Setup Script (`setup-e2small.sh`)**
-- Automated installation of all dependencies
-- Python environment setup
-- Nginx configuration
-- Systemd service setup
-- Firewall configuration
-- Permissions setup
-
-### Requirements Files
-
-**Production (`requirements-prod.txt`)**
-```
-Flask==3.0.0
-Flask-CORS==4.0.0
-google-genai>=0.1.0
-python-dotenv==1.0.0
-gunicorn==21.2.0
-gevent==24.2.1
-TTS>=0.22.0  # <-- Includes TTS
-```
-
-**Production without TTS (`requirements-prod.txt`)**
-```
-Flask==3.0.0
-Flask-CORS==4.0.0
-google-genai>=0.1.0
-python-dotenv==1.0.0
-gunicorn==21.2.0
-gevent==24.2.1
-# NO TTS library - saves ~800MB memory
-```
-
-## Architecture
+## Runtime shape
 
 ```
 Internet
-    ↓
-Nginx (Port 80/443)
-    ├── Static files → <REMOTE_REPO_PATH>/frontend/static/
-    ├── API requests → Gunicorn (Port 5000)
-    └── TTS requests → Gunicorn (Port 5000, 5min timeout)
-           ↓
-    Gunicorn (2 workers)
-           ↓
-    Flask Application
-           ↓
-    ├── SQLite Database
-    ├── Gemini API (summaries)
-    └── TTS Model (audio generation)
+    |
+Apache or nginx (443, shared with other cohosted services)
+    ├── <prefix>/static/ → served directly from /opt/summra/frontend/static/
+    └── <prefix>/        → proxied to gunicorn on 127.0.0.1:<port>
+                                |
+                        gunicorn (gthread, 1 worker, 4 threads)
+                                |
+                        Flask (backend/app_prod.py)
+                                |
+                        ├── data/database.db   (content, read-only in prod)
+                        └── data/summra.db     (user/session state, read-write)
 ```
 
-## Resource Usage
+**Why `gthread`, not `gevent`:** the app is synchronous WSGI with zero `async def` anywhere in
+`backend/` — its per-request work is SQLite reads and Jinja rendering, neither of which
+benefits from gevent's cooperative sockets. gevent's only real payoff was not blocking on large
+audio-file transfers, which the Apache/nginx static fragment now handles instead. Dropping it
+also removes a real deploy risk: the pinned `gevent==24.2.1` has no wheel for newer Python and
+fails to build from source, which is what previously forced an unpinned, undocumented install.
 
-### e2-small (Recommended)
-- **CPU:** 2 vCPU (shared) - ~30-50% average, 100% during TTS
-- **RAM:** 2 GB total
-  - System: ~300 MB
-  - Nginx: ~20 MB
-  - Gunicorn (2 workers): ~600-800 MB
-  - TTS generation: ~400-600 MB (temporary spike)
-  - Buffer: ~200 MB
-- **Disk:** 50 GB
-  - OS: ~5 GB
-  - Application: ~500 MB
-  - Database: ~50 MB
-  - Audio files: ~300 MB (grows over time)
-  - Free space: ~44 GB
+**Why no `GEMINI_API_KEY` on the server:** production never generates TTS or calls Gemini for
+anything — `app_prod.py` serves only pre-generated audio from `frontend/static/audio/`, 404ing
+if it's missing. All Gemini calls happen locally during content generation; only the resulting
+audio files and DB rows get deployed. Keep the real key in your local, gitignored `.env` only.
 
-### e2-micro (Budget)
-- **CPU:** 0.25-2 vCPU (burstable)
-- **RAM:** 1 GB total (TIGHT!)
-  - System: ~250 MB
-  - Nginx: ~20 MB
-  - Gunicorn (1 worker): ~150-200 MB
-  - Blog: ~150-200 MB
-  - Buffer: ~200 MB
-- **Disk:** 30 GB
+## Sandbox notes
 
-## Cost Comparison
+`ProtectSystem=strict` + `ProtectHome=read-only` make everything except
+`ReadWritePaths=/opt/summra/data` read-only to the process. This is why all mutable state —
+`data/database.db` and `data/summra.db` — must live under `data/`; `backend/config.py`'s
+`DATABASE_PATH` and `USER_DATABASE_PATH` both resolve there. `static/audio/` is deliberately
+**not** writable in production, since nothing writes to it at runtime.
 
-| Instance Type | Monthly Cost | RAM | vCPU | TTS Support | Best For |
-|---------------|--------------|-----|------|-------------|----------|
-| **e2-small** | ~$13 | 2 GB | 2 | ✅ Yes | Production deployment |
-| **e2-micro** | FREE* | 1 GB | 0.25-2 | ❌ No | Free tier, testing |
-| **e2-medium** | ~$25 | 4 GB | 2 | ✅ Yes | Heavy traffic |
-
-*e2-micro is free in us-central1, us-west1, or us-east1 (1 instance per billing account)
+If you see `Read-only file system` in `journalctl --user -u summra`, something is trying to
+write outside `data/` — check what changed before adding more paths to `ReadWritePaths`, don't
+just widen the sandbox to make the error go away.
 
 ## Monitoring
 
-### Check Application Status
 ```bash
-sudo systemctl status summra
-sudo journalctl -u summra -f
+# as the summra user (or root via sudo -u summra ...):
+export XDG_RUNTIME_DIR=/run/user/$(id -u summra)
+systemctl --user status summra
+journalctl --user -u summra -f
 ```
 
-### Check Resource Usage
-```bash
-htop           # CPU and memory
-free -h        # Memory
-df -h          # Disk space
-```
+## Updating
 
-### Check Logs
 ```bash
-# Application
-sudo journalctl -u summra -n 100
-
-# Nginx
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
+cd /opt/summra
+sudo -u summra git pull
+sudo -u summra venv/bin/pip install -r requirements-prod.txt
+sudo -u summra env XDG_RUNTIME_DIR=/run/user/$(id -u summra) systemctl --user restart summra
 ```
 
 ## Troubleshooting
 
-### Application Won't Start
-1. Check logs: `sudo journalctl -u summra -n 50`
-2. Test manually: `cd <REMOTE_REPO_PATH> && source venv/bin/activate && gunicorn -c deploy/gunicorn_config_e2small.py backend.app:app`
-3. Check permissions: `ls -la <REMOTE_REPO_PATH>`
+**Won't start / crash loop:** `journalctl --user -u summra -n 100 --no-pager`. A
+`Read-only file system` error means the sandbox notes above — something outside `data/` got a
+write attempt.
 
-### Out of Memory
-1. Check usage: `free -h`
-2. Enable swap: See `DEPLOYMENT_E2SMALL.md`
-3. Reduce workers: `sudo nano /etc/systemd/system/summra.service`
+**502 / connection refused from the front end:** confirm `service.env`'s `GUNICORN_BIND`
+matches what the Apache/nginx fragment proxies to, and that the unit is actually active.
 
-### Nginx Errors
-1. Test config: `sudo nginx -t`
-2. Check logs: `sudo tail -100 /var/log/nginx/error.log`
-
-## Security
-
-The deployment includes:
-- Firewall (ufw) with only necessary ports open
-- Rate limiting on API endpoints
-- TTS endpoint rate limiting (prevent abuse)
-- Memory and CPU limits (prevent resource exhaustion)
-- Runs as www-data user (not root)
-- SSL/TLS support with Let's Encrypt
-- Automatic security updates (via unattended-upgrades)
-
-## Backup
-
-Backups are critical! The setup script includes:
-- Daily automated database backups (kept 7 days)
-- Optional Google Cloud Storage backups
-- Easy restoration process
-
-See `DEPLOYMENT_E2SMALL.md` for backup configuration.
-
-## Maintenance
-
-### Update Application
-```bash
-cd <REMOTE_REPO_PATH>
-git pull
-source venv/bin/activate
-pip install -r requirements-prod.txt
-sudo systemctl restart summra
-```
-
-### Update System
-```bash
-sudo apt update
-sudo apt upgrade -y
-sudo systemctl restart summra  # If needed
-```
-
-### Renew SSL Certificate
-```bash
-sudo certbot renew
-# Automatic renewal is configured via cron
-```
-
-## Support
-
-For deployment issues:
-1. Check the detailed guides: `DEPLOYMENT_E2SMALL.md` or `DEPLOYMENT.md`
-2. Review logs for errors
-3. Verify all steps completed successfully
-4. Check the troubleshooting sections
-
-Happy deploying! 🚀
+**Out of memory:** check `journalctl --user -u summra` for OOM kills, then raise
+`~/.config/systemd/user/summra.service.d/override.conf`'s `MemoryMax` — see
+`systemd/override.example.conf` for the standalone-vs-cohosted guidance.

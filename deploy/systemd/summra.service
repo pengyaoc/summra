@@ -1,0 +1,40 @@
+# Summra systemd --user unit.
+#
+# Installed by deploy/install.sh to:
+#   ~/.config/systemd/user/summra.service
+# for a dedicated `summra` Linux user (not www-data — see deploy/README.md
+# for the isolation rationale shared with this VM's other services).
+#
+# Paths are literal (/opt/summra) by convention: the installer always
+# creates the service under a dedicated user at /opt/<service>, so this
+# file needs no per-host templating. The one thing that legitimately
+# varies per host (bind port, thread count, prefix-specific env) lives in
+# service.env — see service.env.example. Host-specific memory limits live
+# in a systemd drop-in — see systemd/override.example.conf — since
+# MemoryMax can't come from an EnvironmentFile.
+
+[Unit]
+Description=Summra Book Summary Application
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/summra
+EnvironmentFile=/opt/summra/service.env
+ExecStart=/opt/summra/venv/bin/gunicorn -c deploy/gunicorn_config.py backend.app_prod:app
+Restart=on-failure
+RestartSec=5
+
+# Sandbox: only data/ needs to be writable at runtime (database.db and its
+# -wal/-shm siblings). static/audio/ stays read-only — app_prod.py never
+# generates TTS, it only serves the pre-generated cache. A missing entry
+# here surfaces as a "Read-only file system" crash loop under Debian
+# 13's systemd, which (unlike Debian 10's) actually enforces these
+# directives for --user units.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/summra/data
+
+[Install]
+WantedBy=default.target

@@ -76,7 +76,7 @@ CORS(app, supports_credentials=True)
 
 # Initialize databases
 db = models.Database()
-user_db = user_models.UserDatabase()
+user_db = user_models.UserDatabase(config.USER_DATABASE_PATH)
 
 # Set user_db in auth and progress routes
 auth_routes.user_db = user_db
