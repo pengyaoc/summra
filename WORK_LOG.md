@@ -7421,6 +7421,38 @@ of thing CLAUDE.md's "no abstractions for single-use code" principle explicitly 
 
 Full suite: 513 passed (up from 507 at the start of this sub-phase).
 
-### Next: same as above (the `SummaryGenerator` class breakup), plus whatever of Phase 4b
-(`reader.js`/`audio.js` extraction), Phase 4d (page-controller abstraction), and Phase 4f (CSS
-token/breakpoint consolidation) the user wants to prioritize next.
+### Phase 4f (partial, continued) — hex-literal-to-token cleanup (DONE for exact-match cases, commit `7f2e852`)
+Chose this over Phase 4b (`reader.js`/`audio.js`) and 4d (page-controller abstraction) because the
+plan itself flags those as behavioral/control-flow refactors with real regression risk across 7+
+different page types — CSS custom-property substitution is comparatively mechanical and safe: same
+resolved value, so visually identical by construction, unless a usage sits inside a themed override
+block.
+
+Found and fixed 27 selectors hardcoding a hex value that exactly matches one of the 8 existing
+`:root` tokens (`#2c3e50` → `var(--primary-color)`, 14 sites; `#7f8c8d` → `var(--text-light)`, 8
+sites; `#3498db`/`#ecf0f1`/`#ffffff`/`#bdc3c7` → their tokens, 5 sites combined). Verified zero
+resolved-value change is possible by construction, then confirmed no visual regression via
+screenshots of home/discover/categories (cover art, nav, category titles, search-result text all
+rendered identically) plus the full pytest suite (513, unchanged) and JS unit suite (29/29,
+unchanged).
+
+**Deliberately excluded 2 occurrences even though they matched:** `.chapter-detail-section[data-
+theme="light"]` and `.medium-detail-section[data-theme="light"]` both set `color: #2c3e50` for the
+reading-theme "light" mode — a separate, per-reader-stored preference (light/dark/sepia) that only
+coincidentally shares today's site-wide `--text-color` value. Tying it to that token would silently
+change the reading theme's color if the global site chrome is ever restyled independently — kept
+as a literal on purpose, not missed.
+
+**Scoped down from the plan's larger ask:** "219 hardcoded hex literals" total exist, but only 27
+were exact duplicates of an existing token — the other ~165 are single-use or don't match any
+current token, so turning them into tokens means inventing new token names/groupings, a design
+decision rather than a mechanical dedup. Left for the user to weigh in on before inventing a naming
+scheme. Breakpoint consolidation (10 → 3-4) also not attempted — same reasoning: it's a design
+decision (which breakpoints survive, min- vs max-width direction) with real cross-device visual
+risk, not a same-value substitution.
+
+### Next: the `SummaryGenerator` class breakup (largest remaining task, deferred to a dedicated
+session — see above), Phase 4b's `reader.js`/`audio.js` extraction, Phase 4d's page-controller
+abstraction, and the remainder of Phase 4f (new CSS tokens, breakpoint consolidation) — the last
+three all need either a design decision or live e2e verification across every affected page, so
+best taken up explicitly with the user rather than guessed at.
