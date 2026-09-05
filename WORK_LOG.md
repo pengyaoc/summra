@@ -7136,4 +7136,58 @@ bugs, but is a huge mechanical diff across the whole file), a row-serializer for
 conversions, and collapsing the near-duplicate method pairs (`get_chapters`/`get_chapters_metadata`,
 etc.). `backend/models.py` split into a `backend/models/` package by concern is also not done.
 
-### Next: remaining Phase 3d items, Phase 4 (frontend), Phase 5 (scripts/ library), Phase 6 (Tier C table)
+### Phase 6 — Tier C evidence table (DONE, presented to user, no deletions)
+Produced the evidence table for `scripts/migrations/`, `scripts/backfills/`, `scripts/book_fixes/`
+covering what each does, hardcoded assumptions, idempotency, and whether its effect is already
+visible in the current `data/database.db` (checked directly: 90/90 books have slugs and
+`author_id`, 61/90 have `cefr_level`, 8 blog posts present — all consistent with these having
+already run). Flagged `fix_time_machine_chapters.py` as genuinely unsafe to rerun blindly (applies
+a fixed chapter mapping unconditionally rather than checking current state). Recommended archiving
+over deleting; user has not yet given a deletion/move decision — **no Tier C file touched.**
+
+### Phase 4a — real build step for app.min.js (DONE, commit `861a8ef`)
+Added root `package.json` (`npm run build`, `npm run build:check`), `frontend/static/js/
+check-build-fresh.mjs` (rebuilds fresh, diffs against committed `app.min.js`, fails non-zero on
+mismatch — verified it actually catches a deliberately staled bundle), wired into CI. Bumped
+esbuild to 0.28.2 (0 vulnerabilities vs. an irrelevant dev-server-only advisory in 0.24.x).
+
+### Phase 4c (partial) — fixed all 6 missing-withBasePath bugs (DONE, commit `8c3991c`)
+Fixed the 2 author-page fetches + 1 admin PUT in `app.js`, plus `components/BlogIndex.js`'s fetch
++ card link and `components/BlogPost.js`'s fetch + back-link — all previously raw paths, not
+`withBasePath()`-wrapped. Required moving `withBasePath`/`summraBasePath` out of `app.js` (which
+loads *after* the Blog Components) into `route_utils.js` (which already loads first), and
+reordering `index.html` so `route_utils.js` precedes the Blog Components block. Latent only —
+prod is at root domain — but real under the documented `/summrabook` prefix mode. Deferred the
+full `apiGet`/`apiPost` consolidation (21 call sites, most already correct via `this.apiBase`) —
+documented as a Phase 4b companion, not rushed here.
+
+### Phase 4g — cache-busting correctness (DONE, commit `09cc9cd`)
+`asset_v()` switched from mtime to a `zlib.crc32` content hash — mtime is preserved/reset
+inconsistently across deploy paths (git checkout, rsync, plain copy) and can miss a real change or
+churn on a no-op one. **Caught a bug in my own first attempt**: an mtime-keyed cache to avoid
+re-hashing reintroduced the exact flaw being fixed (same mtime, different content, served a stale
+cached hash) — caught by the test I wrote for this change, fixed by dropping the cache (files here
+are small enough that hashing every call is cheap). Added `asset_v()` to the 4 scripts and all 14
+image refs + 3 manifest icons that lacked it. Replaced the hardcoded, never-bumped `precacheAndRoute`
+revision `'1.0.1'` with a real hash of the two precached templates — **hit a second bug** doing
+this: `current_app.template_folder` is relative (unlike `static_folder`, which Flask resolves to
+absolute), so naively `Path()`-wrapping it resolved against the wrong directory and silently
+produced revision `'0'`; caught by manual live-server verification (pytest's Flask test client
+happened not to reproduce the CWD-dependent bug). Both bugs are now regression-tested.
+
+### Phase 4e — killed the hero-section duplication (DONE, commit `6585722`)
+`index.html` now always renders the real ~115-line hero markup, toggling `hidden` instead of
+swapping an empty placeholder for it; `showHomeSection()` lost its ~150-line JS-rebuilt duplicate
+entirely (it had already drifted from the SSR copy — different hero title/subtitle text). Writing
+an e2e test for this surfaced a real, independent pre-existing bug: `#header-home-link` had a
+dedicated click handler *in addition to* the generic delegated one, both firing on every click and
+racing two concurrent `showHomeSection()` calls — intermittently observable as the hero staying
+hidden after navigating home. Removed the redundant handler; verified 5/5 stable e2e runs
+afterward (was previously ~4/5).
+
+**Still open:** 4b (module split — deferred, largest remaining risk/effort), 4d (page-controller
+abstraction for the 7 `showX` methods), 4f (CSS token system + dead-selector purge), the full
+Phase 3d model-layer items (connection context manager, row serializer, near-duplicate collapse),
+and Phase 5 (scripts/ shared library, generate_summaries.py further split).
+
+### Next: Phase 4f (CSS cleanup) or Phase 5 (scripts/ library), by remaining time/priority
