@@ -24,9 +24,6 @@ Available voices: Puck, Charon, Kore, Fenrir, Aoede, Sulafat
 
 import sys
 import argparse
-from pathlib import Path
-
-project_root = Path(__file__).parent.parent.parent
 
 
 from backend.models import Database

@@ -8,7 +8,6 @@ title case formatting.
 
 from pathlib import Path
 
-backend_dir = Path(__file__).parent.parent.parent / 'backend'
 
 import sqlite3
 

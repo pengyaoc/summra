@@ -10,13 +10,9 @@ Tests cover:
 6. Early return behavior after regeneration
 """
 
-import os
-import sys
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts')
 
 
 from scripts.content.generate_summaries import SummaryGenerator

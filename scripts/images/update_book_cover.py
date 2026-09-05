@@ -9,12 +9,10 @@ Usage:
 """
 
 import sys
-import os
 import shutil
 import argparse
 from pathlib import Path
 
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
 
 from backend import models
 

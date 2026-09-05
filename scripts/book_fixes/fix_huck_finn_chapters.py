@@ -6,9 +6,6 @@ No LLM calls - just parse TOC and update database.
 
 import sys
 import re
-from pathlib import Path
-
-project_root = Path(__file__).parent.parent.parent
 
 
 from backend.models import Database
