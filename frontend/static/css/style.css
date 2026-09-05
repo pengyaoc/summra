@@ -901,7 +901,7 @@ body.on-chapter-page .header {
 }
 
 .learn-more-btn {
-    color: #3498db;
+    color: var(--secondary-color);
     text-decoration: none;
     font-size: 0.95rem;
     font-weight: 500;
@@ -1211,7 +1211,7 @@ body.on-chapter-page .header {
 .related-book-title {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--primary-color);
     margin: 0;
     line-height: 1.3;
     display: -webkit-box;
@@ -2689,13 +2689,13 @@ body.on-chapter-page .header {
 .hero-search-result-title {
     font-size: 1rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--primary-color);
     margin: 0;
 }
 
 .hero-search-result-author {
     font-size: 0.875rem;
-    color: #7f8c8d;
+    color: var(--text-light);
     margin: 0;
 }
 
@@ -2707,7 +2707,7 @@ body.on-chapter-page .header {
 .hero-search-no-results {
     padding: 2rem;
     text-align: center;
-    color: #7f8c8d;
+    color: var(--text-light);
     font-size: 1rem;
 }
 
@@ -2771,7 +2771,7 @@ body.on-chapter-page .header {
 .category-title {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--primary-color);
     margin: 0;
 }
 
@@ -2881,7 +2881,7 @@ body.on-chapter-page .header {
 .carousel-book-title {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--primary-color);
     margin: 0;
     line-height: 1.3;
     display: -webkit-box;
@@ -3551,7 +3551,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 .sticky-back-btn {
     background: #333333;
     border: 1px solid #666666;
-    color: #ffffff !important;
+    color: var(--card-background) !important;
     border-radius: 6px;
     padding: 6px 12px;
     font-size: 0.9rem;
@@ -3566,7 +3566,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 .sticky-chapter-title {
-    color: #ffffff;
+    color: var(--card-background);
     font-size: 0.9rem;
     font-weight: 400;
     white-space: nowrap;
@@ -3607,7 +3607,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
 .unified-view-btn.active {
     background: #444444;
-    color: #ffffff;
+    color: var(--card-background);
 }
 
 /* TTS and settings buttons */
@@ -3615,7 +3615,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 .sticky-settings-btn {
     background: transparent;
     border: 1px solid #666666;
-    color: #ffffff !important;
+    color: var(--card-background) !important;
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 1rem;
@@ -4191,7 +4191,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
 .admin-textarea:focus {
     outline: none;
-    border-color: #3498db;
+    border-color: var(--secondary-color);
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
@@ -5035,19 +5035,19 @@ body.pagination-active {
 }
 
 .user-modal-close:hover {
-    color: #2c3e50;
+    color: var(--primary-color);
 }
 
 /* Modal title */
 .user-modal-title {
     margin: 0 0 0.5rem 0;
     font-size: 1.75rem;
-    color: #2c3e50;
+    color: var(--primary-color);
 }
 
 .user-modal-subtitle {
     margin: 0 0 2rem 0;
-    color: #7f8c8d;
+    color: var(--text-light);
     font-size: 0.95rem;
 }
 
@@ -5067,7 +5067,7 @@ body.pagination-active {
 .form-group label {
     font-weight: 500;
     font-size: 0.9rem;
-    color: #2c3e50;
+    color: var(--primary-color);
 }
 
 .form-group input {
@@ -5125,8 +5125,8 @@ body.pagination-active {
 }
 
 .btn-secondary {
-    background: #ecf0f1;
-    color: #2c3e50;
+    background: var(--background-color);
+    color: var(--primary-color);
     padding: 0.75rem 1.5rem;
     border: none;
     border-radius: 6px;
@@ -5137,20 +5137,20 @@ body.pagination-active {
 }
 
 .btn-secondary:hover {
-    background: #bdc3c7;
+    background: var(--border-color);
 }
 
 /* Modal footer */
 .user-modal-footer {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #ecf0f1;
+    border-top: 1px solid var(--background-color);
     text-align: center;
 }
 
 .user-modal-footer p {
     margin: 0;
-    color: #7f8c8d;
+    color: var(--text-light);
     font-size: 0.9rem;
 }
 
@@ -5182,7 +5182,7 @@ body.pagination-active {
     display: flex;
     justify-content: space-between;
     padding: 0.75rem 0;
-    border-bottom: 1px solid #ecf0f1;
+    border-bottom: 1px solid var(--background-color);
 }
 
 .account-item:last-child {
@@ -5191,11 +5191,11 @@ body.pagination-active {
 
 .account-label {
     font-weight: 500;
-    color: #7f8c8d;
+    color: var(--text-light);
 }
 
 .account-value {
-    color: #2c3e50;
+    color: var(--primary-color);
 }
 
 /* Account stats */
@@ -5209,13 +5209,13 @@ body.pagination-active {
 .account-stats h3 {
     margin: 0 0 0.5rem 0;
     font-size: 1.1rem;
-    color: #2c3e50;
+    color: var(--primary-color);
 }
 
 .account-stats-description {
     margin: 0 0 1rem 0;
     font-size: 0.9rem;
-    color: #7f8c8d;
+    color: var(--text-light);
 }
 
 .account-stat-item {
@@ -5225,7 +5225,7 @@ body.pagination-active {
 }
 
 .stat-label {
-    color: #7f8c8d;
+    color: var(--text-light);
 }
 
 .stat-value {
