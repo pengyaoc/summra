@@ -371,6 +371,22 @@ class TestDatabase:
                             modern_english_text="   \n\t  ")
         assert temp_db.book_has_modern_english(book_id) is False
 
+    def test_get_book_by_slug_returns_same_shape_as_get_book(self, temp_db):
+        book_id = temp_db.add_book(
+            title="Sluggy", author="Author", filename="sluggy.txt",
+            full_text="x", gutenberg_id=999, cover_image_url="covers/pg999.jpg"
+        )
+        temp_db.update_book_slug(book_id, "sluggy")
+
+        by_id = temp_db.get_book(book_id)
+        by_slug = temp_db.get_book_by_slug("sluggy")
+
+        assert by_slug is not None
+        assert by_slug == by_id
+
+    def test_get_book_by_slug_returns_none_for_unknown_slug(self, temp_db):
+        assert temp_db.get_book_by_slug("does-not-exist") is None
+
     def test_get_book_structure_no_sections_flat_chapter_list(self, temp_db):
         book_id = temp_db.add_book("Flat", "Author", "flat.txt", full_text="x")
         temp_db.add_chapter(book_id, 1, "Ch 1", "summary", chapter_text="full text 1")

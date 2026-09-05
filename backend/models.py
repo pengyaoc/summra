@@ -324,23 +324,36 @@ class Database:
         conn.commit()
         conn.close()
 
-    def get_book(self, book_id: int) -> Optional[Dict]:
-        """Get book by ID with author metadata"""
+    # WHERE-clause fragments for _get_book_with_author_by — an allowlist, not
+    # a caller-supplied column name, so no SQL-injection surface even though
+    # the query string is built with an f-string.
+    _BOOK_LOOKUP_WHERE = {
+        'id': 'b.id = ?',
+        'slug': 'b.slug = ?',
+    }
+
+    def _get_book_with_author_by(self, lookup: str, value) -> Optional[Dict]:
+        """Shared query for get_book/get_book_by_slug — identical author-join
+        SELECT, differing only in which books column is matched."""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT b.*, a.country as author_country, a.other_books as author_other_books, a.short_bio as author_bio
             FROM books b
             LEFT JOIN authors a ON b.author_id = a.id
-            WHERE b.id = ?
-        ''', (book_id,))
+            WHERE {self._BOOK_LOOKUP_WHERE[lookup]}
+        ''', (value,))
         row = cursor.fetchone()
         conn.close()
 
         if row:
             return dict(row)
         return None
+
+    def get_book(self, book_id: int) -> Optional[Dict]:
+        """Get book by ID with author metadata"""
+        return self._get_book_with_author_by('id', book_id)
 
     def get_book_by_filename(self, filename: str) -> Optional[Dict]:
         """Get book by filename"""
@@ -357,21 +370,7 @@ class Database:
 
     def get_book_by_slug(self, slug: str) -> Optional[Dict]:
         """Get book by slug (SEO-friendly URL identifier) with author metadata"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT b.*, a.country as author_country, a.other_books as author_other_books, a.short_bio as author_bio
-            FROM books b
-            LEFT JOIN authors a ON b.author_id = a.id
-            WHERE b.slug = ?
-        ''', (slug,))
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
-            return dict(row)
-        return None
+        return self._get_book_with_author_by('slug', slug)
 
     def update_book_slug(self, book_id: int, slug: str):
         """Update book's slug for SEO-friendly URLs"""
