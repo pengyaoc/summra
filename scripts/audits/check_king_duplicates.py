@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Check for duplicate King in Yellow entries in database"""
-import sqlite3
+from scripts.lib.db import get_connection
 
-# Connect directly to database
-conn = sqlite3.connect('data/database.db')
-conn.row_factory = sqlite3.Row  # Enable column access by name
+conn = get_connection()
 cursor = conn.cursor()
 
 # Find all books with "King in Yellow" in title

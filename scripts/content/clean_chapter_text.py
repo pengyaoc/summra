@@ -15,8 +15,8 @@ Usage:
 
 import argparse
 import re
-import sqlite3
-from pathlib import Path
+
+from scripts.lib.db import get_connection
 
 
 def clean_text(text: str) -> str:
@@ -139,8 +139,7 @@ def main():
         parser.error('Must specify either --book-id or --all')
 
     # Connect to database
-    db_path = Path(__file__).parent.parent.parent / 'data' / 'database.db'
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cursor = conn.cursor()
 
     try:

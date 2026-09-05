@@ -5,12 +5,13 @@ Anomalies include:
 - Length outliers (one very long/short compared to others)
 """
 
-import sqlite3
 from collections import defaultdict
 import statistics
 
+from scripts.lib.db import get_connection
+
 def analyze_chapter_names():
-    conn = sqlite3.connect('data/database.db')
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Get all books with their chapters
