@@ -7070,4 +7070,41 @@ keys, or PII introduced.
 test coverage, exactly as the audit claimed. Repo-wide grep for all five deleted class/function
 names: zero references anywhere, before or after. Security-scanned the diff: clean.
 
-### Next: Phase 3 — backend restructure (route characterization tests first, then blueprint split)
+### Phase 3e — move non-app scripts out of backend/ (DONE, commit `4a2dd43`)
+Moved `add_cefr_levels.py`, `import_blog_posts.py` → `scripts/migrations/`;
+`add_missing_book_links.py`, `audit_all_book_references.py`, `validate_blog_links.py` →
+`scripts/audits/`. Fixed their hardcoded `DB_PATH`/`BLOG_DIR` (each recomputed
+`Path(__file__).parent.parent`, which breaks one directory level deeper) to use
+`config.DATABASE_PATH`/new `config.BLOG_DIR`. Updated `docs/ERD.md` and `scripts/README.md`
+(the latter's "how tests import" section was still describing the sys.path injection Phase 1
+removed — a real doc bug my own earlier change caused and hadn't caught until now).
+
+### Phase 3a — route characterization tests (DONE, commit `52e32c1`)
+43 tests in `tests/test_api_routes_characterization.py` covering all 28 routes against a seeded
+temp DB — the safety net for 3b. Rewrote `tests/test_app_prod.py` (was a print-based smoke script,
+zero asserts, hit the real prod DB) — surfaced a real pre-existing fragility in the process:
+`app_prod`'s routes register lazily on first import, and Flask refuses new routes once the shared
+app has served a request; fixed by importing at module level so it happens during collection.
+
+### Phase 3b — split app_base.py into route blueprints (DONE, commit `3154b87`)
+1,726 lines → app factory only. New `backend/routes/{common,system,pages,books,taxonomy,discover,
+authors,blog}.py`. `common.py` holds shared `db`/`config` (injected by `app_base.py` after creation
+— avoids a circular import, same pattern as `auth_routes.user_db`) plus the helper functions
+(`site_origin`, `slug_to_author_name`, `build_breadcrumbs`, etc.) that used to close over
+app_base's `db`. Pure structural move — one real fix needed: blueprint registration namespaces
+endpoint names, so `index.html`'s `url_for('manifest')` became `url_for('system.manifest')`.
+
+Two of my own earlier tests needed updating for the new architecture (route handlers now read
+`common.db`, not `app_base.db`): the characterization suite's fixtures patch both; the Phase 0
+error-handling test's `patch.object()` target moved to `common.db` to match what the code
+actually reads — this was caught by an intermittent full-suite failure (passed in isolation,
+failed in the full run) traced to a stale object reference left by another test's module-reload
+teardown, not a flaky test.
+
+**Verification for 3a/3b/3e together:** `pytest` 485 passed, run twice for stability. Live dev
+server smoke-tested by hand (`/`, `/robots.txt`, `/manifest.json`, `/sitemap.xml`, `/api/books`,
+`/api/discover/carousels`, a real book page, cover serving, an author API route — all 200).
+`backend.app_prod` and `backend.app` each verified to register their full route set in isolation.
+e2e `smoke.mjs` + `breadcrumb_navigate.mjs` pass.
+
+### Next: Phase 3c (dedupe app_base.py/blueprints) and 3d (models.py restructure)
