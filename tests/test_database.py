@@ -371,6 +371,74 @@ class TestDatabase:
                             modern_english_text="   \n\t  ")
         assert temp_db.book_has_modern_english(book_id) is False
 
+    def test_get_book_structure_no_sections_flat_chapter_list(self, temp_db):
+        book_id = temp_db.add_book("Flat", "Author", "flat.txt", full_text="x")
+        temp_db.add_chapter(book_id, 1, "Ch 1", "summary", chapter_text="full text 1")
+        temp_db.add_chapter(book_id, 2, "Ch 2", "summary", chapter_text="full text 2")
+
+        structure = temp_db.get_book_structure(book_id)
+
+        assert structure['has_sections'] is False
+        assert len(structure['sections']) == 1
+        section = structure['sections'][0]
+        assert section['id'] is None
+        assert section['type'] is None
+        assert section['title'] == 'Chapters'
+        assert [c['chapter_number'] for c in section['chapters']] == [1, 2]
+        # Full get_chapters() includes chapter_text (unlike the metadata variant)
+        assert section['chapters'][0]['chapter_text'] == 'full text 1'
+
+    def test_get_book_structure_metadata_no_sections_omits_chapter_text(self, temp_db):
+        book_id = temp_db.add_book("Flat2", "Author", "flat2.txt", full_text="x")
+        temp_db.add_chapter(book_id, 1, "Ch 1", "summary", chapter_text="full text 1")
+
+        structure = temp_db.get_book_structure_metadata(book_id)
+
+        assert structure['has_sections'] is False
+        chapters = structure['sections'][0]['chapters']
+        assert len(chapters) == 1
+        assert 'chapter_text' not in chapters[0]
+        assert chapters[0]['chapter_title'] == 'Ch 1'
+
+    def test_get_book_structure_with_sections_and_preface(self, temp_db):
+        book_id = temp_db.add_book("Sectioned", "Author", "sectioned.txt", full_text="x")
+        # Preface chapter with no section_id
+        temp_db.add_chapter(book_id, 1, "Preface", "summary", chapter_text="preface text")
+        section_id = temp_db.add_book_section(book_id, "PART", 1, "The Beginning")
+        temp_db.add_chapter(book_id, 2, "Ch 2", "summary", chapter_text="ch2 text",
+                            section_id=section_id)
+
+        structure = temp_db.get_book_structure(book_id)
+
+        assert structure['has_sections'] is True
+        assert len(structure['sections']) == 2
+        preface_section, part_section = structure['sections']
+        assert preface_section['type'] == 'PREFACE'
+        assert preface_section['title'] == 'Preface'
+        assert [c['chapter_number'] for c in preface_section['chapters']] == [1]
+        assert part_section['type'] == 'PART'
+        assert part_section['title'] == 'The Beginning'
+        assert [c['chapter_number'] for c in part_section['chapters']] == [2]
+
+    def test_get_book_structure_metadata_with_sections_matches_structure_shape(self, temp_db):
+        book_id = temp_db.add_book("Sectioned2", "Author", "sectioned2.txt", full_text="x")
+        temp_db.add_chapter(book_id, 1, "Preface", "summary", chapter_text="preface text")
+        section_id = temp_db.add_book_section(book_id, "PART", 1, "The Beginning")
+        temp_db.add_chapter(book_id, 2, "Ch 2", "summary", chapter_text="ch2 text",
+                            section_id=section_id)
+
+        structure = temp_db.get_book_structure(book_id)
+        metadata = temp_db.get_book_structure_metadata(book_id)
+
+        assert metadata['has_sections'] == structure['has_sections']
+        assert len(metadata['sections']) == len(structure['sections'])
+        for full_section, meta_section in zip(structure['sections'], metadata['sections']):
+            assert full_section['type'] == meta_section['type']
+            assert full_section['title'] == meta_section['title']
+            assert [c['chapter_number'] for c in full_section['chapters']] == \
+                   [c['chapter_number'] for c in meta_section['chapters']]
+            assert 'chapter_text' not in meta_section['chapters'][0]
+
     def test_get_audio_file_closes_connection_when_neither_id_given(self, temp_db):
         """get_audio_file opens a connection unconditionally, but its
         `else: return None` guard (neither summary_id nor chapter_id passed)

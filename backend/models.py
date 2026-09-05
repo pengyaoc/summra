@@ -771,6 +771,65 @@ class Database:
 
         return [dict(row) for row in rows]
 
+    def _build_book_structure(self, book_id: int, metadata_only: bool) -> Dict:
+        """Shared control flow for get_book_structure/get_book_structure_metadata —
+        the two differ only in which chapter-fetch variant (full vs metadata-only)
+        they call at each of the three chapter-loading points below."""
+        if metadata_only:
+            fetch_without_section = self.get_chapters_metadata_without_section
+            fetch_by_section = self.get_chapters_metadata_by_section
+            fetch_flat = self.get_chapters_metadata
+        else:
+            fetch_without_section = self.get_chapters_without_section
+            fetch_by_section = self.get_chapters_by_section
+            fetch_flat = self.get_chapters
+
+        sections = self.get_book_sections(book_id)
+
+        if sections:
+            # Book has sections - return hierarchical structure
+            result = {
+                'has_sections': True,
+                'sections': []
+            }
+
+            # First, add any chapters without section_id (preface/introduction)
+            preface_chapters = fetch_without_section(book_id)
+            if preface_chapters:
+                result['sections'].append({
+                    'id': None,
+                    'type': 'PREFACE',
+                    'number': 0,
+                    'title': preface_chapters[0].get('chapter_title', 'Preface'),
+                    'chapters': preface_chapters
+                })
+
+            # Then add regular sections
+            for section in sections:
+                chapters = fetch_by_section(section['id'])
+                result['sections'].append({
+                    'id': section['id'],
+                    'type': section['section_type'],
+                    'number': section['section_number'],
+                    'title': section['section_title'],
+                    'chapters': chapters
+                })
+
+            return result
+        else:
+            # Book has no sections - return flat chapter list
+            chapters = fetch_flat(book_id)
+            return {
+                'has_sections': False,
+                'sections': [{
+                    'id': None,
+                    'type': None,
+                    'number': 1,
+                    'title': 'Chapters',
+                    'chapters': chapters
+                }]
+            }
+
     def get_book_structure(self, book_id: int) -> Dict:
         """
         Get complete book structure including sections and chapters.
@@ -792,51 +851,7 @@ class Database:
 
         If book has no sections, returns flat chapter list under a single default section.
         """
-        sections = self.get_book_sections(book_id)
-
-        if sections:
-            # Book has sections - return hierarchical structure
-            result = {
-                'has_sections': True,
-                'sections': []
-            }
-
-            # First, add any chapters without section_id (preface/introduction)
-            preface_chapters = self.get_chapters_without_section(book_id)
-            if preface_chapters:
-                result['sections'].append({
-                    'id': None,
-                    'type': 'PREFACE',
-                    'number': 0,
-                    'title': preface_chapters[0].get('chapter_title', 'Preface'),
-                    'chapters': preface_chapters
-                })
-
-            # Then add regular sections
-            for section in sections:
-                chapters = self.get_chapters_by_section(section['id'])
-                result['sections'].append({
-                    'id': section['id'],
-                    'type': section['section_type'],
-                    'number': section['section_number'],
-                    'title': section['section_title'],
-                    'chapters': chapters
-                })
-
-            return result
-        else:
-            # Book has no sections - return flat chapter list
-            chapters = self.get_chapters(book_id)
-            return {
-                'has_sections': False,
-                'sections': [{
-                    'id': None,
-                    'type': None,
-                    'number': 1,
-                    'title': 'Chapters',
-                    'chapters': chapters
-                }]
-            }
+        return self._build_book_structure(book_id, metadata_only=False)
 
     def get_book_structure_metadata(self, book_id: int) -> Dict:
         """
@@ -858,51 +873,7 @@ class Database:
             ]
         }
         """
-        sections = self.get_book_sections(book_id)
-
-        if sections:
-            # Book has sections - return hierarchical structure
-            result = {
-                'has_sections': True,
-                'sections': []
-            }
-
-            # First, add any chapters without section_id (preface/introduction)
-            preface_chapters = self.get_chapters_metadata_without_section(book_id)
-            if preface_chapters:
-                result['sections'].append({
-                    'id': None,
-                    'type': 'PREFACE',
-                    'number': 0,
-                    'title': preface_chapters[0].get('chapter_title', 'Preface'),
-                    'chapters': preface_chapters
-                })
-
-            # Then add regular sections
-            for section in sections:
-                chapters = self.get_chapters_metadata_by_section(section['id'])
-                result['sections'].append({
-                    'id': section['id'],
-                    'type': section['section_type'],
-                    'number': section['section_number'],
-                    'title': section['section_title'],
-                    'chapters': chapters
-                })
-
-            return result
-        else:
-            # Book has no sections - return flat chapter list
-            chapters = self.get_chapters_metadata(book_id)
-            return {
-                'has_sections': False,
-                'sections': [{
-                    'id': None,
-                    'type': None,
-                    'number': 1,
-                    'title': 'Chapters',
-                    'chapters': chapters
-                }]
-            }
+        return self._build_book_structure(book_id, metadata_only=True)
 
     # Category-related methods
 
