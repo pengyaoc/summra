@@ -7190,4 +7190,33 @@ abstraction for the 7 `showX` methods), 4f (CSS token system + dead-selector pur
 Phase 3d model-layer items (connection context manager, row serializer, near-duplicate collapse),
 and Phase 5 (scripts/ shared library, generate_summaries.py further split).
 
-### Next: Phase 4f (CSS cleanup) or Phase 5 (scripts/ library), by remaining time/priority
+### Phase 4f (partial) — removed dead CSS selectors (DONE, commit `fd3f89c`)
+Extracted every class selector in `style.css` (379 unique), searched all JS/HTML/template files
+for a whole-word occurrence of each — 67 had zero matches anywhere (whole removed features: old
+author-page, old chapter UI, old view-mode toggle, old skeleton system, a progress-summary widget,
+assorted singles). Removed 85 whole-dead rule blocks + surgically removed 19 partially-dead
+comma-separated selector parts (kept the rest of those shared rules). Deliberately left compound
+selectors mixing a dead class with a still-live one alone (e.g. `.chapter-toggle.expanded`) —
+proving those are *also* unreachable needs confirming the live half is never applied elsewhere
+too, out of scope here. 5,962 → 5,384 lines (-578, -9.7%), braces still balanced. Visually verified
+via e2e screenshots on 5 pages (home, book detail, chapter reader, discover, categories) — no
+layout regression. **Not done:** `:root` token expansion, breakpoint consolidation, the 16
+doubly-defined-but-live selectors (real duplication, different problem than dead code).
+
+### Status after this session's work: Phases 0–3 (mostly) and 4 (mostly) done, verified throughout
+17 commits on `refactor/modularize-and-harden`. Every commit left `pytest` (486, up from 430
+baseline) and the e2e suite green. Multiple real bugs were found and fixed *by the refactor itself*
+— not just structural moves — several of them only surfaced by the tests written to guard the
+refactor (documented inline in each phase above): the double-click-handler race in Phase 4e, the
+mtime-cache and CWD-relative-path bugs in Phase 4g, the stale-object-reference test failure in
+Phase 3b, the app_prod route-registration ordering fragility in Phase 3a.
+
+**Remaining, not yet done:** Phase 4b (module split — `app.js`'s 137-method `SummraApp` class into
+`router.js`/`pagination.js`/`reader.js`/`audio.js`/etc. — largest remaining risk/effort in the
+whole plan), Phase 4d (page-controller abstraction for the 7 `showX` methods), Phase 4f's
+remaining CSS work (token system, breakpoints, live duplicates), Phase 3d's `models.py`
+connection-context-manager/row-serializer/near-duplicate-method work, and Phase 5 in full
+(`scripts/lib/` shared library for the 16 hardcoded DB paths / 9 Gemini clients / 6 retry
+implementations, plus splitting `generate_summaries.py` along its natural seams).
+
+### Next: Phase 5 (scripts/ shared library) or remaining Phase 4/3d items, by priority
