@@ -267,9 +267,7 @@ class SummraApp {
 
     async handleRoute() {
         // Use pathname for routing (clean URLs), stripped of any deploy-time base path
-        const rawPath = window.location.pathname;
-        const base = summraBasePath();
-        const path = (base && rawPath.startsWith(base)) ? (rawPath.slice(base.length) || '/') : rawPath;
+        const path = currentAppPath();
 
         // Home page
         if (!path || path === '/') {
@@ -277,7 +275,8 @@ class SummraApp {
             return;
         }
 
-        // Parse routes:
+        // Parse routes (shared with buildBreadcrumbs() via parseAppRoute —
+        // see route_utils.js):
         // /books/{slug} - Book detail
         // /books/{slug}/summary - Medium summary detail
         // /books/{slug}/chapters/{num} - Chapter detail
@@ -288,16 +287,10 @@ class SummraApp {
         // /authors/{name} - Author detail
         // /blog - Blog index
         // /blog/{slug} - Blog post
-        const bookMatch = path.match(/^\/books\/([^\/]+)$/);
-        const mediumMatch = path.match(/^\/books\/([^\/]+)\/summary$/);
-        const chapterMatch = path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/);
-        const categoryMatch = path.match(/^\/categories\/(\d+)$/);
-        const categoriesMatch = path === '/categories';
-        const allBooksMatch = path === '/books';
-        const discoverMatch = path === '/discover';
-        const authorMatch = path.match(/^\/authors\/(.+)$/);
-        const blogMatch = path === '/blog';
-        const blogPostMatch = path.match(/^\/blog\/([^\/]+)$/);
+        const {
+            bookMatch, mediumMatch, chapterMatch, categoryMatch, categoriesMatch,
+            allBooksMatch, discoverMatch, authorMatch, blogMatch, blogPostMatch
+        } = parseAppRoute(path);
 
         // Routes that don't need books data - proceed immediately
         if (blogPostMatch) {
@@ -4239,19 +4232,15 @@ class SummraApp {
             { name: 'Home', url: '/', position: 1 }
         ];
 
-        const path = window.location.pathname;
+        const path = currentAppPath();
 
-        // Parse different page types
-        const bookMatch = path.match(/^\/books\/([^\/]+)$/);
-        const summaryMatch = path.match(/^\/books\/([^\/]+)\/summary$/);
-        const chapterMatch = path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/);
-        const categoryMatch = path.match(/^\/categories\/(\d+)$/);
-        const categoriesMatch = path === '/categories';
-        const allBooksMatch = path === '/books';
-        const discoverMatch = path === '/discover';
-        const blogMatch = path === '/blog';
-        const blogPostMatch = path.match(/^\/blog\/([^\/]+)$/);
-        const authorMatch = path.match(/^\/authors\/([^\/]+)$/);
+        // Parse different page types (shared with handleRoute() via
+        // parseAppRoute — see route_utils.js)
+        const {
+            bookMatch, mediumMatch: summaryMatch, chapterMatch, categoryMatch,
+            categoriesMatch, allBooksMatch, discoverMatch, blogMatch,
+            blogPostMatch, authorMatch
+        } = parseAppRoute(path);
 
         if (discoverMatch) {
             breadcrumbs.push({ name: 'Discover', url: '/discover', position: 2 });

@@ -793,6 +793,10 @@
     <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
     {% endif %}
 
+    {# route_utils.js exposes window.{currentAppPath,parseAppRoute,stripBasePath}
+       and, like view_mode.js, must load before app.js / app.min.js. #}
+    <script src="{{ url_for('static', filename='js/route_utils.js') }}{{ asset_v('js/route_utils.js') }}"></script>
+
     {# view_mode.js exposes window.resolveInitialChapterViewMode and must
        load before app.js / app.min.js. #}
     <script src="{{ url_for('static', filename='js/view_mode.js') }}{{ asset_v('js/view_mode.js') }}"></script>

@@ -30,6 +30,11 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
     monkeypatch.setattr(_config, 'FEATURE_BLOG', feature_blog, raising=False)
+    if feature_auth:
+        # app_base now requires SECRET_KEY to be set when FEATURE_AUTH is on
+        # (see tests/test_secret_key_config.py) — supply a dummy one here so
+        # this fixture keeps testing route registration, not that guard.
+        monkeypatch.setenv('SECRET_KEY', 'test-secret-key')
     # Ensure the freshly-imported app_base sees the patched values
     sys.modules['config'] = _config
 

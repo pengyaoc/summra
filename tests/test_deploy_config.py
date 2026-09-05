@@ -57,6 +57,25 @@ def test_user_database_uses_configured_path():
     )
 
 
+def test_user_database_class_default_matches_configured_path():
+    """UserDatabase()'s own default (used by any caller that doesn't pass a
+    path explicitly — e.g. a script or a future test) must match
+    config.USER_DATABASE_PATH (data/summra.db), not fall back to a repo-root
+    summra.db. app_base.py's call site already passes the path explicitly
+    (see test_user_database_uses_configured_path above), but the class
+    default was never fixed to match, so any other caller still creates a
+    stray repo-root summra.db."""
+    import config
+    from user_models import UserDatabase
+
+    db = UserDatabase()
+    assert db.db_path == config.USER_DATABASE_PATH, (
+        f"UserDatabase()'s default db_path is {db.db_path!r}, expected "
+        f"{config.USER_DATABASE_PATH!r} — the class default in "
+        "user_models.py must use config.USER_DATABASE_PATH."
+    )
+
+
 def test_gunicorn_bind_defaults_to_5000_when_unset():
     """Standalone deploys (no GUNICORN_BIND set) must keep binding :5000."""
     env = {k: v for k, v in os.environ.items() if k != "GUNICORN_BIND"}
