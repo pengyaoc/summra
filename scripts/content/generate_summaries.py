@@ -167,234 +167,27 @@ except ModuleNotFoundError:
 
 
 # ============================================================================
-# CONSTANTS - Configuration values extracted for maintainability
+# CONSTANTS - moved to scripts/content/constants.py; re-exported here so
+# existing `from scripts.content.generate_summaries import X` call sites
+# (30+ across scripts/ and tests/) keep working unchanged.
 # ============================================================================
-
-class SummaryConstants:
-    """Word count targets for summary generation"""
-    CONCISE_TARGET_WORDS = 500
-    MEDIUM_MIN_WORDS = 2000
-    MEDIUM_MAX_WORDS = 3000
-    ABOUT_MIN_WORDS = 75
-    ABOUT_MAX_WORDS = 100
-    RELEVANCE_MIN_WORDS = 75
-    RELEVANCE_MAX_WORDS = 100
-    MIN_WORDS_FOR_CHAPTER_SUMMARY = 500
-    MIN_CHAPTER_SUMMARY_OUTPUT_WORDS = 200
-
-
-class APIConstants:
-    """Gemini API rate limiting and call size constants"""
-    # API limits
-    MAX_CHARS_PER_CALL = 750000  # ~187.5K tokens (free tier: 250K/min)
-    CHARS_PER_TOKEN = 4  # Rough estimation
-    MAX_TOKENS_PER_CALL = MAX_CHARS_PER_CALL // CHARS_PER_TOKEN  # ~187.5K tokens
-
-    # Large call handling
-    LARGE_CALL_THRESHOLD_TOKENS = 100000
-    LARGE_CALL_WAIT_SECONDS = 60
-
-    # Rate limiting windows
-    RATE_LIMIT_WINDOW_SECONDS = 60
-
-    # Retry configuration
-    MAX_RETRIES = 2
-    DEFAULT_RETRY_WAIT_SECONDS = 10
-    RATE_LIMIT_RETRY_WAIT_SECONDS = 60
-
-    # Batch processing
-    MAX_BATCH_CHARS = 400000  # ~100K tokens for batch input
-    MAX_CHAPTERS_PER_BATCH = 10
-    MAX_MEDIUM_SUMMARY_CONTEXT_CHARS = 20000
-    MAX_PREVIOUS_CHAPTER_CONTEXT_CHARS = 100000
-
-
-class ContentThresholds:
-    """Content size validation thresholds"""
-    MIN_PREFACE_WORDS = 100
-    MIN_PREFACE_CHARS = 100
-    MIN_PREFACE_CONTENT_FOR_CREATION = 300
-    MIN_SENTENCE_COUNT_FOR_PREFACE = 3
-
-    MIN_CHAPTER_CHARS_V1 = 100  # Minimum chapter content for chapter detection
-    MIN_AVG_CHAPTER_CHARS = 500
-
-    # Coverage validation
-    MIN_COVERAGE_PERCENT = 90
-    MAX_COVERAGE_PERCENT = 110
-
-    # Title validation
-    MIN_TITLE_LENGTH = 5
-    MAX_TITLE_LENGTH = 60
-    MAX_CHAPTER_TITLE_LENGTH = 150
-
-
-class ChapterDetectionConstants:
-    """Chapter detection and validation thresholds"""
-    MIN_CHAPTER_NUMBER = 1
-    MAX_CHAPTER_NUMBER = 200  # Maximum expected chapter number
-
-    # Content size thresholds for validation
-    MIN_ACCUMULATED_CONTENT_FOR_TOC_END = 1000
-    MIN_LOOKAHEAD_CONTENT_FOR_CHAPTER = 500
-
-    # TOC detection
-    MIN_PARAGRAPH_LENGTH = 40
-    MIN_PARAGRAPH_LINES_FOR_CHAPTER = 3
-    MIN_BLANK_LINES_BEFORE_STANDALONE_NUMBER = 2
-
-    # Lookahead limits for validation
-    LOOKAHEAD_CHAPTER_TITLE_LINES = 5
-    LOOKAHEAD_CONTENT_VALIDATION_LINES = 5
-    LOOKAHEAD_TOC_DETECTION_LINES = 15
-
-    # Book marker context
-    BOOK_MARKER_CONTEXT_RANGE = 3
-
-
-class DisplayConstants:
-    """Output formatting constants"""
-    SEPARATOR_WIDTH = 60
-    CHAPTER_BATCH_SEPARATOR_WIDTH = 80  # For batch processing separators
-    MAX_PROMPT_PREVIEW_CHARS = 10000
-    MAX_ERROR_MESSAGE_CHARS = 100
-
-
-# Batch API configuration
-BATCH_POLL_INTERVAL_SECONDS = 30  # How often to check batch job status
-BATCH_MAX_WAIT_HOURS = 24  # Maximum time to wait for batch completion
-BATCH_JOBS_DIR = Path(__file__).parent.parent.parent / "data" / "batch_jobs"  # Directory to store batch job state
-
-
-class RateLimiter:
-    """Rate limiter for API calls"""
-
-    def __init__(self, max_requests_per_minute: int, max_tokens_per_minute: int):
-        self.max_requests = max_requests_per_minute
-        self.max_tokens = max_tokens_per_minute
-        self.request_times = []
-        self.token_counts = []
-
-    def wait_if_needed(self, estimated_tokens: int = 0):
-        """Wait if we're approaching rate limits"""
-        current_time = time.time()
-
-        # Remove requests older than 1 minute
-        window = APIConstants.RATE_LIMIT_WINDOW_SECONDS
-        self.request_times = [t for t in self.request_times if current_time - t < window]
-        self.token_counts = [
-            (t, count) for t, count in self.token_counts if current_time - t < window
-        ]
-
-        # Check request limit
-        if len(self.request_times) >= self.max_requests:
-            sleep_time = window - (current_time - self.request_times[0]) + 1
-            print(f"Rate limit: Waiting {sleep_time:.1f}s for request quota...")
-            time.sleep(sleep_time)
-            self.request_times = []
-
-        # Check token limit
-        total_tokens = sum(count for _, count in self.token_counts)
-        if total_tokens + estimated_tokens > self.max_tokens:
-            if self.token_counts:
-                sleep_time = window - (current_time - self.token_counts[0][0]) + 1
-                print(f"Rate limit: Waiting {sleep_time:.1f}s for token quota...")
-                time.sleep(sleep_time)
-            self.token_counts = []
-
-        # Record this request
-        self.request_times.append(current_time)
-        if estimated_tokens > 0:
-            self.token_counts.append((current_time, estimated_tokens))
-
-
-# ============================================================================
-# Batch Job State Management
-# ============================================================================
-
-def save_batch_job_state(book_id: int, job_name: str, book_title: str,
-                        request_metadata: List[Dict]) -> Path:
-    """Save batch job state to disk for later resumption
-
-    Args:
-        book_id: Book ID being processed
-        job_name: Gemini batch job name/ID
-        book_title: Title of the book
-        request_metadata: List of metadata for each request (type, chapter_num, etc.)
-
-    Returns:
-        Path to the saved state file
-    """
-    BATCH_JOBS_DIR.mkdir(parents=True, exist_ok=True)
-
-    state = {
-        'book_id': book_id,
-        'book_title': book_title,
-        'job_name': job_name,
-        'request_metadata': request_metadata,
-        'status': 'pending',
-        'created_at': time.time(),
-        'updated_at': time.time()
-    }
-
-    state_file = BATCH_JOBS_DIR / f"book_{book_id}_{int(time.time())}.json"
-    with open(state_file, 'w') as f:
-        json.dump(state, f, indent=2)
-
-    print(f"  💾 Saved batch job state: {state_file}")
-    return state_file
-
-
-def load_batch_job_state(state_file: Path) -> Dict:
-    """Load batch job state from disk
-
-    Args:
-        state_file: Path to the state file
-
-    Returns:
-        Dictionary with job state
-    """
-    with open(state_file, 'r') as f:
-        return json.load(f)
-
-
-def update_batch_job_state(state_file: Path, status: str, **kwargs):
-    """Update batch job state file
-
-    Args:
-        state_file: Path to the state file
-        status: New status value
-        **kwargs: Additional fields to update
-    """
-    state = load_batch_job_state(state_file)
-    state['status'] = status
-    state['updated_at'] = time.time()
-    state.update(kwargs)
-
-    with open(state_file, 'w') as f:
-        json.dump(state, f, indent=2)
-
-
-def list_pending_batch_jobs() -> List[Dict]:
-    """List all pending batch jobs
-
-    Returns:
-        List of job state dictionaries
-    """
-    if not BATCH_JOBS_DIR.exists():
-        return []
-
-    pending_jobs = []
-    for state_file in BATCH_JOBS_DIR.glob("book_*.json"):
-        try:
-            state = load_batch_job_state(state_file)
-            if state.get('status') in ['pending', 'running']:
-                state['state_file'] = str(state_file)
-                pending_jobs.append(state)
-        except Exception as e:
-            print(f"  ⚠️  Error loading {state_file}: {e}")
-
-    return sorted(pending_jobs, key=lambda x: x.get('created_at', 0))
+from scripts.content.constants import (
+    SummaryConstants,
+    APIConstants,
+    ContentThresholds,
+    ChapterDetectionConstants,
+    DisplayConstants,
+    BATCH_POLL_INTERVAL_SECONDS,
+    BATCH_MAX_WAIT_HOURS,
+    BATCH_JOBS_DIR,
+)
+from scripts.content.rate_limiter import RateLimiter
+from scripts.content.batch_state import (
+    save_batch_job_state,
+    load_batch_job_state,
+    update_batch_job_state,
+    list_pending_batch_jobs,
+)
 
 
 class SummaryGenerator:
