@@ -60,12 +60,13 @@ from backend import config
 
 # Import Google GenAI
 try:
-    from google import genai
     from google.genai import types
 except ImportError:
     print("Error: google-genai package not found.")
     print("Install it with: pip install google-genai")
     sys.exit(1)
+
+from scripts.lib.llm import get_gemini_client
 
 
 # Configuration for Gemini Image models
@@ -141,7 +142,7 @@ class GeminiImageGenerator(ImageGeneratorBase):
             api_key: Google API key for Gemini
             model: Model to use for image generation
         """
-        self.client = genai.Client(api_key=api_key)
+        self.client = get_gemini_client(api_key)
         self.model = model
         self.last_request_time = 0
 
@@ -577,7 +578,7 @@ class ImagenImageGenerator(ImageGeneratorBase):
     supports_reference_image = False
 
     def __init__(self, api_key: str):
-        self.client = genai.Client(api_key=api_key)
+        self.client = get_gemini_client(api_key)
         self.last_request_time = 0
 
     def _wait_for_rate_limit(self):
@@ -843,7 +844,7 @@ Output as plain text, not JSON. Keep each section short.
 Book summary:
 {medium_summary}"""
 
-    client = genai.Client(api_key=config.GEMINI_API_KEY)
+    client = get_gemini_client()
     response = client.models.generate_content(model=CHARACTER_BRIEF_MODEL, contents=prompt)
     return (response.text or "").strip()
 

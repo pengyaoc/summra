@@ -16,8 +16,8 @@ import json
 
 from backend.models import Database
 from backend import config
-from google import genai
 from google.genai import types
+from scripts.lib.llm import get_gemini_client
 
 
 def generate_master_categories():
@@ -89,7 +89,7 @@ Only respond with valid JSON, no additional text."""
 
     # Call Gemini API
     try:
-        client = genai.Client(api_key=config.GEMINI_API_KEY)
+        client = get_gemini_client()
 
         response = client.models.generate_content(
             model=config.SUMMARY_CONFIGS['combined']['model'],

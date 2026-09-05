@@ -3,16 +3,15 @@
 Regenerate medium summary for a specific book from database.
 """
 
-import os
 import sys
 import time
 import re
 
 
-from google import genai
 from dotenv import load_dotenv
 from backend import models
 from backend import config
+from scripts.lib.llm import get_gemini_client
 
 def regenerate_medium_summary(book_id: int):
     """Regenerate medium summary for a book."""
@@ -20,14 +19,12 @@ def regenerate_medium_summary(book_id: int):
     # Load environment variables
     load_dotenv()
 
-    # Get API key
-    api_key = os.getenv('GEMINI_API_KEY')
-    if not api_key:
+    # Initialize Gemini client
+    try:
+        client = get_gemini_client()
+    except ValueError:
         print("Error: GEMINI_API_KEY not found in environment variables")
         sys.exit(1)
-
-    # Initialize Gemini client
-    client = genai.Client(api_key=api_key)
 
     # Initialize database
     db = models.Database()

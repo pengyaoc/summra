@@ -20,15 +20,14 @@ Usage:
     python categorize_books_bulk_backfill.py --batch-size 5
 """
 
-import os
 import sys
 import argparse
 
-from google import genai
 from dotenv import load_dotenv
 from backend import config
 from backend import models
 from scripts.categorization import categorization
+from scripts.lib.llm import get_gemini_client
 
 
 def main():
@@ -41,14 +40,12 @@ def main():
     # Load environment variables
     load_dotenv()
 
-    # Get API key
-    api_key = os.getenv('GEMINI_API_KEY')
-    if not api_key:
+    # Initialize client and database
+    try:
+        client = get_gemini_client()
+    except ValueError:
         print("Error: GEMINI_API_KEY not found in environment variables")
         sys.exit(1)
-
-    # Initialize client and database
-    client = genai.Client(api_key=api_key)
     db = models.Database()
 
     # Get all categories from database
