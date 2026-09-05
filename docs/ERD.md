@@ -33,12 +33,11 @@ The Flask app is split into a shared base module + two entry points so the produ
 | `backend/app_prod.py` | **Prod entry point.** Replaces `POST /api/tts/generate` with a pre-generated-only lookup (no live generation). Adds `/health`. Served by Gunicorn behind Nginx in production. |
 | `backend/config.py` | Single source of truth for paths, models, rate limits, summary configs, feature flags. |
 | `backend/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection. |
-| `backend/user_models.py` | User database layer (`summra.db` at project root) — users, reading_progress, chapter_completion. SHA-256 + salt password hashing. Sessions are Flask permanent sessions (30 days). |
+| `backend/user_models.py` | User database layer (`data/summra.db`, per `config.USER_DATABASE_PATH`) — users, reading_progress, chapter_completion. SHA-256 + salt password hashing. Sessions are Flask permanent sessions (30 days). |
 | `backend/auth_routes.py` | Auth blueprint (register / login / logout / me). Conditionally registered behind `FEATURE_AUTH`. |
 | `backend/progress_routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete). Conditionally registered behind `FEATURE_AUTH`. |
 | `backend/gemini_tts_handler.py` | Gemini 2.5 Flash TTS client + per-key rate limiter (`GEMINI_TTS_MAX_REQUESTS_PER_MINUTE`, `…_TOKENS_PER_MINUTE`). Owns voice selection, chunking, retries. |
 | `backend/tts_utils.py` | Provider-agnostic helpers: `clean_text_for_speech`, chunk-by-words, WAV stitching, on-disk cache lookup. Cache lookup probes Opus → Gemini WAV → legacy `*_vits.wav` → legacy `*_complete.wav` so older audio still resolves. |
-| `backend/add_cefr_levels.py`, `backend/add_missing_book_links.py`, `backend/audit_all_book_references.py`, `backend/validate_blog_links.py`, `backend/import_blog_posts.py` | One-shot maintenance scripts kept next to the models they touch. |
 
 **Feature flags** (`backend/config.py`):
 - `FEATURE_AUTH` (default `False`) — gates auth routes, progress routes, the Account button, and active Save-for-Offline.

@@ -15,6 +15,7 @@ USER_DATABASE_PATH = BASE_DIR / 'data' / 'summra.db'
 # Data directories
 BOOKS_DIR = BASE_DIR / 'data' / 'books'
 SUMMARIES_DIR = BASE_DIR / 'data' / 'summaries'
+BLOG_DIR = BASE_DIR / 'data' / 'blog'
 COVERS_DIR = BASE_DIR / 'frontend' / 'static' / 'covers'
 ILLUSTRATIONS_DIR = BASE_DIR / 'frontend' / 'static' / 'illustrations'
 

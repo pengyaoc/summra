@@ -10,11 +10,11 @@ One-shot CLI tools, batch jobs, and data-maintenance scripts. Grouped by purpose
 | `audio/` | TTS generation (offline Gemini, batch concise/medium, single-chapter), audio-metadata backfill, audio-filename migration. |
 | `images/` | Book covers, chapter illustrations (Gemini batch + sync), hero images, app icons, guide images, generic resize/recompress. |
 | `categorization/` | Book-category assignment (single, batch, bulk-backfill) and master-category generation. |
-| `migrations/` | One-shot schema or filename migrations (books, authors, covers, titles, JSON migration). Audio migration lives in `audio/`. |
+| `migrations/` | One-shot schema or filename migrations (books, authors, covers, titles, JSON migration, blog-post import). Audio migration lives in `audio/`. |
 | `backfills/` | Backfill existing rows after a schema or field change (slugs, chapter title case, chapter title normalization). |
-| `audits/` | Read-only inspections: chapter-text audits, name analyses, book-list checks, duplicate finders. Safe to run anytime. |
+| `audits/` | Mostly read-only inspections (chapter-text audits, name analyses, book-list checks, duplicate finders, blog-link validation), but **not all** — `reformat_paragraphs.py`, `strip_decorative_dividers.py`, `split_modern_paragraphs.py`, `strip_illustration_captions.py`, and `prepend_missing_titles.py` write to the DB. Read the script before assuming it's safe to run. |
 | `book_fixes/` | Per-book one-shot fixes (Huck Finn chapters, Invisible Man titles, Time Machine chapters, Roman-numeral normalization). Most are historical. |
-| `blog/` | Blog-post management — adding/updating the Frankenstein AI article and assigning header images. |
+| `blog/` | Blog-post management — updating the Frankenstein AI article (`update_frankenstein_article_v3.py` is the current version; v1/v2 were superseded and deleted) and assigning header images. |
 | `archive/` | Dead-end or superseded scripts (debug helpers, one-shot test-fixers, destructive cleanup like `delete_test_books.py`). Do not run without re-reading first. |
 
 ## Cross-listed scripts (single home, mentioned in multiple categories)
@@ -29,13 +29,15 @@ One-shot CLI tools, batch jobs, and data-maintenance scripts. Grouped by purpose
 - `migrations/*` — already applied to production; only re-run on a fresh database.
 - `backfills/*` — idempotent in principle, but verify the current schema first.
 
-## How tests import these
+## How tests (and scripts) import these
 
-`tests/conftest.py` adds every `scripts/<group>/` folder to `sys.path` at collection time, so tests can write either:
+`backend` and `scripts` are installed as real, editable packages (see the repo-root
+`pyproject.toml`; `pip install -e .`), so every script and test imports the package style:
 
 ```python
-from generate_summaries import SummaryGenerator                 # bare-module style
-from scripts.content.generate_summaries import SummaryGenerator  # package style
+from scripts.content.generate_summaries import SummaryGenerator
 ```
 
-Both work. New tests should prefer the package style (`scripts.content.generate_summaries`) — it's explicit about which group the script belongs to.
+There is no `sys.path` manipulation anywhere in `scripts/`, `backend/`, or `tests/conftest.py` —
+if you find yourself reaching for `sys.path.insert`, that's a sign the import should be
+`from scripts.<group>.<module> import ...` or `from backend import <module>` instead.

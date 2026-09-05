@@ -5,9 +5,10 @@ Based on research and standard difficulty classifications for classic literature
 """
 
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / 'data' / 'database.db'
+from backend import config
+
+DB_PATH = config.DATABASE_PATH
 
 # CEFR Level mapping based on:
 # - Blog post "10 Classic Books for English Learners by Difficulty"

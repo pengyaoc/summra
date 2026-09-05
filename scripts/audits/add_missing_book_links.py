@@ -5,11 +5,11 @@ Automatically add links to book references in blog posts.
 
 import sqlite3
 import re
-from pathlib import Path
 
-# Database connection
-DB_PATH = Path(__file__).parent.parent / 'data' / 'database.db'
-BLOG_DIR = Path(__file__).parent.parent / 'data' / 'blog'
+from backend import config
+
+DB_PATH = config.DATABASE_PATH
+BLOG_DIR = config.BLOG_DIR
 
 def get_available_books():
     """Get all books with valid slugs from database"""
