@@ -4937,7 +4937,14 @@ class SummraApp {
         // Store reference to current active wrapper
         this.pagination.activeWrapper = paginationWrapper;
 
-        // Prevent body scrolling when pagination is active
+        // Prevent body scrolling when pagination is active.
+        // iOS Safari/Chrome (WebKit) can keep scrolling the <html> element via
+        // elastic/momentum overscroll even when only <body> has overflow:hidden,
+        // which lets residual scroll settle a few px off after the scrollTo(0)
+        // in displayCurrentPage() and cuts off the first line under the sticky
+        // header. Lock both elements.
+        document.documentElement.classList.add('pagination-active');
+        document.documentElement.style.overflow = 'hidden';
         document.body.classList.add('pagination-active');
         document.body.style.overflow = 'hidden';
 
@@ -5905,7 +5912,9 @@ class SummraApp {
         // (but keep it when just switching view modes)
         // We'll handle this by only clearing on chapter navigation
 
-        // Re-enable body scrolling
+        // Re-enable body/html scrolling
+        document.documentElement.classList.remove('pagination-active');
+        document.documentElement.style.overflow = '';
         document.body.classList.remove('pagination-active');
         document.body.style.overflow = '';
     }
