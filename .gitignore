@@ -76,6 +76,9 @@ tests/fixtures/
 # Claude Code
 .claude/
 
+# Node (frontend build tooling — esbuild only, see package.json)
+node_modules/
+
 # Playwright / e2e harness
 tests/e2e/node_modules/
 tests/e2e/screenshots/
