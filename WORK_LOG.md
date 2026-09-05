@@ -7318,7 +7318,33 @@ migrated**, along with the 2 remaining `genai.Client` sites inside `generate_sum
 the repo — folding their client construction into `scripts/lib/llm.py` is better done as part of
 the `generate_summaries.py` module split itself, not as a drive-by change beforehand).
 
-### Next: Phase 5b remainder (fold `generate_summaries.py`'s and `generate_modern_english.py`'s
-own client construction into `scripts/lib/llm.py` as part of splitting those files; `scripts/lib/text.py`
-for the 4 duplicated title/text-normalization implementations), then the `generate_summaries.py`
-module split itself.
+### Phase 5b — `scripts/lib/text.py` shared chapter-title normalization (DONE, commit `f8c2f04`)
+Extracted `SummaryGenerator.normalize_chapter_title` and the module-level
+`fix_roman_numerals_in_text` out of `generate_summaries.py` into `scripts/lib/text.py` as pure
+standalone functions — both were already fully self-contained (zero `self.*` references inside
+`normalize_chapter_title`), just embedded by convention rather than necessity.
+`generate_summaries.py`'s own method/function now delegate to the shared implementation. A
+regression test (`test_normalize_chapter_title_matches_generate_summaries_delegate`) runs 5 sample
+titles through both and asserts identical output — zero behavior change.
+
+Also removed the `SummaryGenerator('dummy_api_key')` instantiate-just-to-reach-a-pure-function hack
+in `backfill_chapter_title_normalization.py` — it now imports the two functions directly from
+`scripts.lib.text` and no longer touches the Gemini client at all (it never actually needed one).
+9 new tests at `tests/test_scripts_lib_text.py`. Full suite: 502 passed (up from 493).
+
+**Left alone, and why:** the other 2 known duplicate `normalize_chapter_title` copies
+(`backfill_chapter_title_case.py`, `fix_invisible_man_titles.py`) have diverged behaviorally over
+time (missing Roman-numeral/dotted-abbreviation handling that the canonical version has) —
+swapping them for the shared function would silently change what those Tier-C one-shot scripts
+produce if run again, which is a judgment call for the user, not a "dedup." The plan's other 4
+`SummaryGenerator('dummy'/'dummy_key')` sites (`audit_chapter_text.py`, `populate_chapter_text.py`,
+`update_chapter_titles.py`, `validate_chapter_split.py` references) call `detect_chapters` /
+`extract_gutenberg_content`, not a pure text function — the plan's framing of these as "just to
+reach a pure text function" doesn't hold on inspection (another overclaim, same class as the
+RateLimiter one above). Those aren't reachable without the actual `generate_summaries.py` module
+split (chapters.py, gutenberg.py, toc.py, etc.) — deferred to that task, not worth a shortcut here.
+
+### Next: the `generate_summaries.py` module split (`constants.py`, `text_utils.py`, `gutenberg.py`,
+`toc.py`, `chapters.py`, `llm_client.py`, `prompts.py`, `pipeline.py`, `cli.py`) — the largest
+remaining single task in Phase 5, and the point where the deferred `RateLimiter`/client-construction
+consolidation and the `detect_chapters`/`extract_gutenberg_content` dedup naturally land.
