@@ -5,9 +5,13 @@ and reading progress tracking.
 """
 
 from flask import Blueprint, jsonify, request, session
-from functools import wraps
 from typing import Optional
 import logging
+
+try:
+    from .auth_utils import login_required
+except ImportError:
+    from backend.auth_utils import login_required
 
 # Will be set by app_base.py
 user_db = None
@@ -16,16 +20,6 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
-
-
-def login_required(f):
-    """Decorator to require authentication for routes."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Authentication required'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 def get_current_user_id() -> Optional[int]:
