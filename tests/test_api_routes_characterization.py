@@ -68,7 +68,12 @@ def db(test_db_path):
 @pytest.fixture
 def client(db, monkeypatch):
     from backend import app_base
+    from backend.routes import common
+    # Route handlers live in backend/routes/*.py and read common.db (injected
+    # by app_base.py at import time) rather than app_base.db directly — see
+    # backend/routes/common.py — so both must be patched for a full swap.
     monkeypatch.setattr(app_base, 'db', db)
+    monkeypatch.setattr(common, 'db', db)
     app_base.app.testing = True
     return app_base.app.test_client()
 
@@ -317,7 +322,12 @@ def blog_client(db, monkeypatch):
     sys.modules['backend.config'] = _config
 
     app_base = importlib.import_module('backend.app_base')
+    from backend.routes import common
+    # Reloading app_base re-executes `db = models.Database()` (a fresh
+    # instance pointing at the REAL config.DATABASE_PATH) and re-injects it
+    # into common.db — patch that too, or route handlers read real data.
     monkeypatch.setattr(app_base, 'db', db)
+    monkeypatch.setattr(common, 'db', db)
     app_base.app.testing = True
     yield app_base.app.test_client()
 

@@ -28,9 +28,12 @@ def test_get_author_returns_json_500_when_lookup_raises(client):
     """Reproduces the bug: slug_to_author_name() raising must not crash the
     except handler with UnboundLocalError. The response must be the intended
     clean JSON 500, not an unhandled exception."""
-    from backend import app_base
+    # The authors.py blueprint reads backend.routes.common.db (injected by
+    # app_base.py at import time), not app_base.db directly — see
+    # backend/routes/common.py.
+    from backend.routes import common
 
-    with patch.object(app_base.db, 'get_all_authors', side_effect=RuntimeError("db exploded")):
+    with patch.object(common.db, 'get_all_authors', side_effect=RuntimeError("db exploded")):
         resp = client.get('/api/authors/some-author')
 
     assert resp.status_code == 500
@@ -40,9 +43,9 @@ def test_get_author_returns_json_500_when_lookup_raises(client):
 
 
 def test_get_author_books_returns_json_500_when_lookup_raises(client):
-    from backend import app_base
+    from backend.routes import common
 
-    with patch.object(app_base.db, 'get_all_authors', side_effect=RuntimeError("db exploded")):
+    with patch.object(common.db, 'get_all_authors', side_effect=RuntimeError("db exploded")):
         resp = client.get('/api/authors/some-author/books')
 
     assert resp.status_code == 500
