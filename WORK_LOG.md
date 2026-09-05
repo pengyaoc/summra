@@ -7034,4 +7034,40 @@ script (confirmed present before my changes via `git stash`). `tests/e2e/smoke.m
 Security-scanned the full diff (requested standing instruction for this session): no secrets,
 keys, or PII introduced.
 
-### Next: Phase 2 — delete provable dead code (Tier A + B only; Tier C needs user review)
+### Phase 2 — delete provable dead code, Tier A + B (DONE, commit `cf97948`)
+- Deleted the stalled-refactor v2 parser architecture from `generate_summaries.py`
+  (`TOCStructure`/`TOCDetector`/`ContentParser`/`ChapterMarkerFinder`/`detect_chapters_v2`) —
+  8,111 → 6,786 lines. `docs/archive/REFACTORING_PROGRESS.md` updated to record Phase 4
+  ("swap it in") as abandoned rather than completed, and why: completing it now would mean
+  re-validating detect_chapters_v2 against every book class the live v1 parser already handles,
+  the exact risk that doc's own Phase 4 section flagged.
+- Deleted 3 dead `scripts/archive/` files (`enhance_tests.py` — body is a string constant and two
+  prints, does nothing; `debug_chapter_test.py` + `_detailed.py` — no `__main__`, never imported,
+  and `debug_chapter_test.py` turned out to have an unrelated pre-existing tuple-unpacking bug
+  too, confirmed via `git stash` to predate this session).
+- Deleted 3 per-book cover scripts hardcoded to a single book ID
+  (`update_christmas_carol_cover.py` id=38, `update_odyssey_cover.py` id=11,
+  `update_time_machine_cover.py`) — superseded by the general `update_book_cover.py`. Updated
+  `docs/ERD.md`'s "Custom Covers" section, which used the odyssey script as its worked example.
+- Deleted `update_frankenstein_article.py` + `_v2.py` (superseded by `_v3.py`; three
+  filename-versioned copies of edits to one blog post, `FEATURE_BLOG` off).
+- **Explicitly did not touch** `scripts/categorization/categorization.py` — this is the one file
+  that invalidated the original "~35 dead files" estimate (see 2026-09-05 entry above): it looks
+  unreferenced by the same "not mentioned in docs" heuristic, but is a live, imported (2×) shared
+  library with no `__main__`. Recording this so the correction stays visible.
+- Cleaned up ~14 more orphaned `backend_dir`/`project_root`/`scripts_dir` path-prep variables
+  (and their now-dead `os`/`sys`/`Path` imports) that Phase 1's transform missed — its check only
+  catches an import when *every* use is gone, and a variable whose sole remaining "use" was its
+  own now-pointless assignment doesn't trip that. Left every pre-existing unrelated unused import
+  (`MagicMock`, `json`, `pytest`, `wave`, `datetime`, `re`, `sqlite3`, `PIL.Image`, `Optional`,
+  `quote`) untouched — not mine to fix.
+- `docs/PROJECT_OVERVIEW.md` also references the now-deleted `update_odyssey_cover.py`, but that
+  doc is already broadly stale (references a `tts_handler.py` module removed in an earlier
+  session, wrong line counts throughout) — fixing one line wouldn't make it accurate, so left as
+  a known gap rather than a token edit. Worth a full pass separately if this doc still matters.
+
+**Verification:** `pytest tests/` 438 passed (unchanged) — confirms the deleted code had zero
+test coverage, exactly as the audit claimed. Repo-wide grep for all five deleted class/function
+names: zero references anywhere, before or after. Security-scanned the diff: clean.
+
+### Next: Phase 3 — backend restructure (route characterization tests first, then blueprint split)
