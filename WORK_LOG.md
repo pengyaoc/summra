@@ -7107,4 +7107,33 @@ server smoke-tested by hand (`/`, `/robots.txt`, `/manifest.json`, `/sitemap.xml
 `backend.app_prod` and `backend.app` each verified to register their full route set in isolation.
 e2e `smoke.mjs` + `breadcrumb_navigate.mjs` pass.
 
-### Next: Phase 3c (dedupe app_base.py/blueprints) and 3d (models.py restructure)
+### Phase 3c (partial) — dedupe login_required (DONE, commit `35e7129`)
+Extracted the byte-identical `login_required` decorator from `auth_routes.py`/`progress_routes.py`
+into new `backend/auth_utils.py`. Deliberately deferred (documented in the commit, not silently
+skipped): unifying the 3 slugify implementations (risks 404ing already-published book/author
+URLs without a full diff-audit first), unifying the auth/progress bare `{'error':...}` envelope
+with the rest of the API's `{'success': False, 'error':...}` (a real response-shape change, not a
+pure dedup), collapsing the 21 `except Exception` copies into one `@app.errorhandler` (loses
+per-route log context unless done carefully — better paired with 3d's connection-handling pass),
+and indexing `slug_to_author_name`'s per-call full-table scan (not a hot path; a cache needs an
+invalidation story given content ingestion writes to the DB outside the running Flask process).
+
+### Phase 3d (partial) — consolidate models.py migrations (DONE, commit `24d1525`)
+Replaced 18 copy-pasted `try: ALTER TABLE ... / except OperationalError: pass` blocks (scattered
+across ~230 lines, interleaved with CREATE TABLE statements) with one data-driven
+`_COLUMN_MIGRATIONS` list applied in a single loop. Verified behaviorally identical three ways:
+fresh temp DB (all 18 are no-ops, matching before), a simulated old-schema DB (migration path
+actually adds columns), and a disposable copy of the real 90-book `data/database.db` (PRAGMA
+`table_info()` byte-for-byte unchanged before/after — never touched the real file).
+
+Noted a pre-existing gap while doing this (not a regression, left as-is): `books.cefr_level` has
+never had an ALTER TABLE migration, only a CREATE TABLE declaration — any DB predating that column
+would still lack it. Confirmed via `git show` on the pre-refactor file.
+
+**Deferred to a later pass** (larger, riskier, deserve dedicated attention): the
+`@contextmanager get_connection()` retrofit across 55 call sites (fixes real leak-on-exception
+bugs, but is a huge mechanical diff across the whole file), a row-serializer for ~35 `dict(row)`
+conversions, and collapsing the near-duplicate method pairs (`get_chapters`/`get_chapters_metadata`,
+etc.). `backend/models.py` split into a `backend/models/` package by concern is also not done.
+
+### Next: remaining Phase 3d items, Phase 4 (frontend), Phase 5 (scripts/ library), Phase 6 (Tier C table)
