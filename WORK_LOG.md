@@ -7288,4 +7288,37 @@ untouched, out of scope.
 
 Full suite: 490 passed (up from 486 baseline — the 4 new `test_scripts_lib_db.py` tests).
 
-### Next: Phase 5b (`scripts/lib/llm.py`, `scripts/lib/text.py`, then the `generate_summaries.py` split)
+### Phase 5b — `scripts/lib/llm.py` shared Gemini client factory (PARTIAL, commit `1b2a679`)
+`scripts/lib/llm.py` exposes `get_gemini_client(api_key=None)`, backed by
+`backend.config.GEMINI_API_KEY`, replacing 6 of the plan's 8 identified `genai.Client(api_key=...)`
+construction sites: `scripts/categorization/categorize_books_bulk_backfill.py`,
+`categorize_books_batch.py`, `generate_master_categories.py`,
+`scripts/images/generate_illustrations.py` (2 sites — `GeminiImageGenerator.__init__` and
+`ImagenGenerator.__init__`, both take `api_key` as a constructor param, preserved),
+`scripts/content/populate_author_bios.py`, `regenerate_medium_summary.py`. Raises `ValueError`
+immediately on a missing key rather than deferring to an opaque API error later; call sites that
+previously printed-and-exited on a missing key wrap the call in `try/except ValueError` to keep
+that exact behavior. `populate_author_bios.py` had a lazy `from google import genai` guarded by a
+module-level `genai = None` sentinel, apparently to avoid importing the package in `--dry-run`
+mode — turned out unnecessary: `google-genai` is an unconditional dependency
+(`backend/requirements.txt`), already imported eagerly by every other script in this batch.
+Verified each site via `--help` / dry-run / direct construction (e.g. `AuthorBioGenerator(dry_run=True)`
+still short-circuits `client=None` correctly) — no site's behavior changed except the fail-fast
+error path. 3 new tests at `tests/test_scripts_lib_llm.py`. Full suite: 493 passed (up from 490).
+
+**Correction to the plan, found on inspection (same class of overclaim as the earlier "~35 dead
+scripts" estimate):** the plan describes the `RateLimiter` classes in `generate_summaries.py` and
+`backend/gemini_tts_handler.py` as "verbatim copies." They are not — different window-tracking
+logic (one recursive with a hardcoded `60`, the other iterative using
+`APIConstants.RATE_LIMIT_WINDOW_SECONDS`). `backend/gemini_tts_handler.py` is live production TTS
+code, not a one-off script, so consolidating it carries real deploy risk (systemd restart,
+behavior change in a hot path) disproportionate to the dedup benefit. Deliberately **not
+migrated**, along with the 2 remaining `genai.Client` sites inside `generate_summaries.py`'s and
+`generate_modern_english.py`'s own generator classes (both are the largest, highest-risk files in
+the repo — folding their client construction into `scripts/lib/llm.py` is better done as part of
+the `generate_summaries.py` module split itself, not as a drive-by change beforehand).
+
+### Next: Phase 5b remainder (fold `generate_summaries.py`'s and `generate_modern_english.py`'s
+own client construction into `scripts/lib/llm.py` as part of splitting those files; `scripts/lib/text.py`
+for the 4 duplicated title/text-normalization implementations), then the `generate_summaries.py`
+module split itself.
