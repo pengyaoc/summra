@@ -7253,4 +7253,39 @@ row-serializer/near-duplicate-method work, and Phase 5 in full (`scripts/lib/` s
 the 16 hardcoded DB paths / 9 Gemini clients / 6 retry implementations, plus splitting
 `generate_summaries.py` along its natural seams).
 
-### Next: Phase 5 (scripts/ shared library)
+### Phase 5a — `scripts/lib/db.py` shared connection helper (DONE, commit `e1150dd`)
+Created `scripts/lib/` (the pre-existing `__init__.py` files were 0 bytes — this was never
+actually built out). `scripts/lib/db.py` exposes one `get_connection(db_path=None)`, backed by
+`backend.config.DATABASE_PATH`, replacing 13 individually hardcoded `sqlite3.connect('data/database.db')`
+/ `Path(__file__).parent.parent.parent / 'data' / 'database.db'` call sites across
+`scripts/audits/` (6 files), `scripts/migrations/` (2), `scripts/backfills/` (2),
+`scripts/book_fixes/` (1), `scripts/content/` (1).
+
+**Real regression caught mid-migration:** the first version of `get_connection()` took no
+arguments and always connected to `config.DATABASE_PATH`. Migrating 4 `scripts/audits/` files to
+call it bare broke their existing test suites — those tests do
+`patch.object(module, "DB_PATH", tmp_path)` to redirect to an isolated temp DB, and a bare
+`get_connection()` silently ignored that, reconnecting to the *real* production DB inside test
+runs (caught because the tests' assertions then saw real book titles like "Alice's Adventures in
+Wonderland" instead of the expected fixture data). Fixed by giving `get_connection()` an optional
+`db_path` override; all call sites now read their own module-level `DB_PATH` constant and pass it
+explicitly (`get_connection(DB_PATH)`). Added a regression test,
+`test_get_connection_honors_explicit_db_path_override`, at `tests/test_scripts_lib_db.py`.
+
+Category-C scripts (`migrate_other_books_to_json.py`, `backfill_chapter_title_normalization.py`)
+take `db_path` as a function parameter with a hardcoded default — per the plan, only the default
+was changed to `config.DATABASE_PATH`; the override parameter itself is untouched, so any caller
+that already passes an explicit path keeps working identically.
+
+Every one of the 13 migrated scripts was re-run individually after the change (dry-run or
+read-only mode where available, e.g. `analyze_chapter_names.py` — found 1070 anomalies across 78
+books, matching pre-migration output; `backfill_chapter_title_case.py --dry-run` — would update
+240/4159 chapters, matching pre-migration; `migrate_other_books_to_json.py` — 0/50 need
+conversion, matching pre-migration) — none were run in a way that mutates the real database.
+`scripts/audits/check_king_duplicates.py` has a pre-existing, unrelated `no such column:
+cover_image` error (confirmed via `git stash` to fail identically before this migration) — left
+untouched, out of scope.
+
+Full suite: 490 passed (up from 486 baseline — the 4 new `test_scripts_lib_db.py` tests).
+
+### Next: Phase 5b (`scripts/lib/llm.py`, `scripts/lib/text.py`, then the `generate_summaries.py` split)
