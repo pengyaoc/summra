@@ -32,14 +32,21 @@ body {
     background-color: var(--card-background);
     color: var(--text-color);
     line-height: 1.6;
-    min-height: 100vh;
+    /* Why: 100vh on iOS WebKit resolves to the LARGE viewport (toolbar fully
+       collapsed), taller than what's actually visible when the toolbar is
+       showing. That makes body/html genuinely scrollable by the difference,
+       and since nothing prevents native touch-scroll on the reading page,
+       iOS can rubber-band into that slack and rest a few px off 0 instead of
+       snapping back — shifting content up under the fixed sticky header.
+       100svh (small viewport height) is never taller than what's visible. */
+    min-height: 100svh;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
-    min-height: 100vh;
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
 }
