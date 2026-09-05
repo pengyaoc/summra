@@ -659,6 +659,7 @@ class Database:
         elif chapter_id:
             cursor.execute('SELECT * FROM audio_files WHERE chapter_id = ?', (chapter_id,))
         else:
+            conn.close()
             return None
 
         row = cursor.fetchone()

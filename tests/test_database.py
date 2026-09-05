@@ -371,6 +371,32 @@ class TestDatabase:
                             modern_english_text="   \n\t  ")
         assert temp_db.book_has_modern_english(book_id) is False
 
+    def test_get_audio_file_closes_connection_when_neither_id_given(self, temp_db):
+        """get_audio_file opens a connection unconditionally, but its
+        `else: return None` guard (neither summary_id nor chapter_id passed)
+        returned before conn.close() — a real leak on that code path, not
+        just on exception."""
+        import sqlite3
+        real_connect = sqlite3.connect
+        connections = []
+
+        def spy_connect(*args, **kwargs):
+            conn = real_connect(*args, **kwargs)
+            connections.append(conn)
+            return conn
+
+        import unittest.mock
+        with unittest.mock.patch("sqlite3.connect", side_effect=spy_connect):
+            result = temp_db.get_audio_file()
+
+        assert result is None
+        assert len(connections) == 1
+        # sqlite3.Connection has no public `.closed` — collecting affected
+        # cursors is the reliable observable: a closed connection raises
+        # ProgrammingError on any further operation.
+        with pytest.raises(sqlite3.ProgrammingError):
+            connections[0].execute("SELECT 1")
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
