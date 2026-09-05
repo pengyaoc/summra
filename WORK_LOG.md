@@ -7344,7 +7344,41 @@ reach a pure text function" doesn't hold on inspection (another overclaim, same 
 RateLimiter one above). Those aren't reachable without the actual `generate_summaries.py` module
 split (chapters.py, gutenberg.py, toc.py, etc.) — deferred to that task, not worth a shortcut here.
 
-### Next: the `generate_summaries.py` module split (`constants.py`, `text_utils.py`, `gutenberg.py`,
-`toc.py`, `chapters.py`, `llm_client.py`, `prompts.py`, `pipeline.py`, `cli.py`) — the largest
-remaining single task in Phase 5, and the point where the deferred `RateLimiter`/client-construction
-consolidation and the `detect_chapters`/`extract_gutenberg_content` dedup naturally land.
+### Phase 5c — extract the safe, self-contained parts of generate_summaries.py (DONE, commits `bc540cb`, `2df67dd`)
+`generate_summaries.py` was 6,655 lines, ~5,937 of it one `SummaryGenerator` class. The plan's own
+note that `detect_chapters` (1,457 lines) and `_detect_chapters_from_toc_structure` (793 lines) need
+internal decomposition *before* any seam split confirms the full class breakup is a much larger,
+higher-risk task than a normal refactor session — deferred rather than rushed (see "Next" below).
+This phase did the safe, mechanical part: everything that was already a free function/class with
+zero dependency on `SummaryGenerator`'s instance state, just embedded in the file by convention:
+
+- `scripts/content/constants.py` — the 5 tuning-constant classes (`SummaryConstants`,
+  `APIConstants`, `ContentThresholds`, `ChapterDetectionConstants`, `DisplayConstants`) + 3 batch-API
+  module constants. Confirmed unused anywhere outside this file before moving.
+- `scripts/content/rate_limiter.py` — `RateLimiter` (kept distinct from, NOT consolidated with,
+  `backend/gemini_tts_handler.py`'s differently-behaved copy — production TTS code, see Phase 5b).
+- `scripts/content/batch_state.py` — the 4 batch-job-state persistence functions. Noted, not fixed:
+  `scripts/images/generate_illustrations.py` has its own independent copy tracking different
+  fields — a separate task.
+- `scripts/lib/text.py` gained `normalize_book_title` — found to be a **byte-identical verbatim
+  copy** (confirmed via `diff`) between `generate_summaries.py` and
+  `scripts/migrations/migrate_book_titles.py`. Both now delegate to the shared function.
+
+`generate_summaries.py` re-exports every moved name under its original identifier, so the 30+
+existing `from scripts.content.generate_summaries import X` call sites across `scripts/` and
+`tests/` keep working unchanged. Verified via the full suite, a live `--dry-run` against a real book
+(`Frankenstein.txt` — parsed and batched identically to before), and standalone imports of each new
+module without pulling in the rest of the file. File: 6,655 → 6,448 lines (modest — the actual class
+is still one piece; see below). Full suite: 506 passed (up from 502, +4 new delegate-equivalence
+tests for `normalize_book_title`).
+
+### Next: the actual `SummaryGenerator` class breakup — the large remaining task. Per the plan:
+`detect_chapters` (1,457 lines) and `_detect_chapters_from_toc_structure` (793 lines) need internal
+decomposition first, then split along natural seams (`gutenberg.py`, `toc.py`, `chapters.py`,
+`llm_client.py`, `prompts.py`, `pipeline.py`, `cli.py`). This is where the deferred `RateLimiter`/
+client-construction consolidation (Phase 5b) and the `detect_chapters`/`extract_gutenberg_content`
+dedup (the 4 remaining `SummaryGenerator('dummy'/'dummy_key')` sites, Phase 5b) naturally land —
+both need the class already broken into composable pieces to do safely. Given the size (~5,700
+lines in one class) and the real cost of a subtle regression here (this script drives real,
+paid Gemini API ingestion), this deserves a dedicated, carefully-scoped session rather than being
+compressed into the tail of this one.
