@@ -24,6 +24,7 @@ from backend.models import Database
 from backend import config
 from google import genai
 from google.genai import types
+from scripts.lib.llm import get_gemini_client
 
 
 def categorize_book(db: Database, client: genai.Client, book: dict, categories: list) -> list:
@@ -138,7 +139,7 @@ def categorize_books_batch(book_id: int = None):
     db = Database()
 
     # Initialize Gemini client
-    client = genai.Client(api_key=config.GEMINI_API_KEY)
+    client = get_gemini_client()
 
     # Get all categories
     categories = db.get_all_categories()

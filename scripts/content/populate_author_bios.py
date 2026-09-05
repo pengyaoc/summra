@@ -22,10 +22,7 @@ from typing import Optional, Dict, List
 
 from backend import models
 from backend import config
-
-# Import genai lazily (only when needed)
-genai = None
-
+from scripts.lib.llm import get_gemini_client
 
 class AuthorBioGenerator:
     """Generate author biographies using LLM batch processing"""
@@ -37,16 +34,8 @@ class AuthorBioGenerator:
 
         # Initialize Gemini client (skip in dry-run mode)
         if not dry_run:
-            # Import genai only when needed
-            global genai
-            if genai is None:
-                from google import genai as genai_module
-                genai = genai_module
-
             api_key = os.getenv('GEMINI_API_KEY') or config.GEMINI_API_KEY
-            if not api_key:
-                raise ValueError("GEMINI_API_KEY not set in environment or config")
-            self.client = genai.Client(api_key=api_key)
+            self.client = get_gemini_client(api_key)
         else:
             self.client = None
 
