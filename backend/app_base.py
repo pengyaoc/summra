@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import timedelta
 import os
 import logging
+import zlib
 import secrets
 
 # Handle both direct execution (`python backend/app.py`, dev) and package
@@ -142,12 +143,22 @@ def inject_environment():
 # CacheFirst strategy and a 30-day max-age. If a deploy ships a CSS that's
 # incompatible with the existing HTML/JS, returning users will serve the new
 # HTML over old cached CSS until either the cache expires or the user clears
-# site data. asset_v('css/foo.css') returns '?v=<mtime>' so the URL changes
-# whenever the file changes, forcing a cache miss on the new URL.
+# site data. asset_v('css/foo.css') returns '?v=<content-hash>' so the URL
+# changes whenever the file's *content* changes, forcing a cache miss on the
+# new URL.
 #
-# The mtime is read at the start of each request (cheap stat) so it works
-# under any deploy method. Missing files yield '' so templates degrade
-# gracefully rather than crashing.
+# Content hash, not mtime: mtime is preserved or reset inconsistently by
+# different deploy paths (git checkout, rsync, a straight file copy), so it
+# can fail to change even when content did, or change with no content
+# change at all — either way defeating the point of a cache-busting query
+# string. A hash of the actual bytes is correct regardless of how the file
+# got onto disk. No mtime-keyed cache here on purpose: an earlier version
+# cached the hash keyed by mtime and only recomputed on a mtime change —
+# which reintroduced the exact bug this function exists to avoid (same
+# mtime, different content, due to a deploy tool that doesn't bump it, would
+# silently serve a stale cached hash). Every static asset here is small
+# (KB-scale CSS/JS), so hashing on every call is cheap enough not to need
+# caching at all.
 def _resolve_static_path(filename: str):
     """Return the on-disk path of a static asset, honoring a test override."""
     override = os.environ.get('SUMMRA_STATIC_DIR_OVERRIDE')
@@ -160,7 +171,7 @@ def _resolve_static_path(filename: str):
 
 
 def asset_v(filename: str) -> str:
-    """Return '?v=<mtime>' for an existing static asset, or '' if missing.
+    """Return '?v=<content-hash>' for an existing static asset, or '' if missing.
 
     Composed in templates as:
         href="{{ url_for('static', filename='css/style.css') }}{{ asset_v('css/style.css') }}"
@@ -169,10 +180,10 @@ def asset_v(filename: str) -> str:
     if not path or not path.exists():
         return ''
     try:
-        mtime = int(path.stat().st_mtime)
+        content = path.read_bytes()
     except OSError:
         return ''
-    return f'?v={mtime}'
+    return f'?v={zlib.crc32(content)}'
 
 
 app.jinja_env.globals['asset_v'] = asset_v

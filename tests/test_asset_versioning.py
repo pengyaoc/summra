@@ -14,8 +14,12 @@ explicitly clear site data to evict the SW cache, which also wipes login state
 for every site.
 
 Two complementary fixes ship together:
-  1. asset_v('css/foo.css') returns '?v=<mtime>' so the CSS URL changes
-     whenever style.css changes. Different URL → SW cache miss → fresh fetch.
+  1. asset_v('css/foo.css') returns '?v=<content-hash>' so the CSS URL
+     changes whenever style.css's content changes. Different URL → SW
+     cache miss → fresh fetch. (Originally this was '?v=<mtime>' — switched
+     to a content hash since mtime is preserved or reset inconsistently by
+     different deploy paths, so it can miss a real content change or churn
+     on a no-op one.)
   2. The SW CSS strategy itself was switched from CacheFirst to
      StaleWhileRevalidate (see service-worker.js), so even without URL
      versioning, the cache self-heals within one navigation cycle.
@@ -57,31 +61,42 @@ def test_asset_v_is_stable_between_calls(app_ctx):
     asset_v = app_ctx.jinja_env.globals['asset_v']
     a = asset_v('css/style.css')
     b = asset_v('css/style.css')
-    assert a == b, 'asset_v must be deterministic for the same file mtime'
+    assert a == b, 'asset_v must be deterministic for unchanged file content'
 
 
-def test_asset_v_changes_when_file_mtime_changes(app_ctx, tmp_path, monkeypatch):
-    """Bumping a file's mtime produces a new version string.
+def test_asset_v_changes_when_file_content_changes(app_ctx, tmp_path, monkeypatch):
+    """Editing a file's content produces a new version string, even with the
+    mtime bumped to the exact same value both times.
 
-    This is the property that makes deploys cache-bust correctly: a new
-    style.css with a different mtime gets a different URL, so the service
-    worker treats it as an entirely new resource.
+    This is the actual property that makes deploys cache-bust correctly —
+    and specifically why this is a content hash rather than the mtime
+    itself: a deploy step (git checkout, rsync, a plain file copy) can
+    easily preserve or reset mtimes without regard to whether content
+    actually changed, which would either miss a real change or churn URLs
+    for a no-op one under the old mtime-based scheme.
     """
     asset_v = app_ctx.jinja_env.globals['asset_v']
 
     fake = tmp_path / 'fake.css'
-    fake.write_text('body{}')
-    os.utime(fake, (1700000000, 1700000000))
-
     monkeypatch.setenv('SUMMRA_STATIC_DIR_OVERRIDE', str(tmp_path))
 
+    fake.write_text('body{}')
+    os.utime(fake, (1700000000, 1700000000))
     v1 = asset_v('fake.css')
-    assert v1 == '?v=1700000000', f'unexpected version string: {v1!r}'
+    assert v1.startswith('?v='), f'unexpected version string: {v1!r}'
+    assert v1[3:].isdigit(), f'expected digits after ?v=, got {v1!r}'
 
-    os.utime(fake, (1700000100, 1700000100))
+    # Same mtime, different content — must still produce a different version.
+    fake.write_text('body{color:red}')
+    os.utime(fake, (1700000000, 1700000000))
     v2 = asset_v('fake.css')
-    assert v2 == '?v=1700000100', f'unexpected version string after bump: {v2!r}'
-    assert v1 != v2
+    assert v2 != v1, 'same mtime but different content must still cache-bust'
+
+    # Bumping mtime with unchanged content must NOT force a re-read/re-hash
+    # cache miss to produce a different value — content is what matters.
+    os.utime(fake, (1700000100, 1700000100))
+    v3 = asset_v('fake.css')
+    assert v3 == v2, 'unchanged content must keep the same version even if mtime moves'
 
 
 def test_asset_v_for_missing_file_returns_empty_string(app_ctx):

@@ -23,11 +23,15 @@ if (workbox) {
     const { ExpirationPlugin } = workbox.expiration;
     const { CacheableResponsePlugin } = workbox.cacheableResponse;
 
-    // Precache app shell and critical resources
-    // Note: In production, you would generate this list with workbox-build
+    // Precache app shell and critical resources. `revision` is a content
+    // hash of index.html + offline.html (computed server-side by
+    // backend/routes/system.py's _precache_revision(), baked in here at
+    // render time) rather than a hand-bumped literal, so editing either
+    // template automatically forces Workbox to refetch the precached shell
+    // on the next SW install instead of serving a stale one indefinitely.
     precacheAndRoute([
-        { url: BASE_PATH + '/', revision: '1.0.1' },
-        { url: BASE_PATH + '/offline', revision: '1.0.1' }
+        { url: BASE_PATH + '/', revision: '{{ precache_revision }}' },
+        { url: BASE_PATH + '/offline', revision: '{{ precache_revision }}' }
     ]);
 
     // Cache CSS files - Stale While Revalidate (serve cache instantly, refresh

@@ -2,12 +2,37 @@
 
 Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 """
+import zlib
 from datetime import datetime
+from pathlib import Path
 from flask import Blueprint, current_app, render_template, request
 
 from backend.routes import common
 
 bp = Blueprint('system', __name__)
+
+
+def _precache_revision() -> str:
+    """Content hash of the two precached page shells (index.html,
+    offline.html), so the service worker's precacheAndRoute() only needs
+    fetching the actual current shell when either template's content
+    changes — rather than the hardcoded '1.0.1' that was never bumped, so
+    the precached shell effectively never updated via this path (rescued
+    only by the separate `navigate` NetworkFirst route also caching pages).
+    """
+    # template_folder is relative to root_path (e.g. '../frontend/templates'
+    # relative to backend/) — Path(current_app.template_folder) alone
+    # resolves against the process's CWD, not the app's root, and silently
+    # points nowhere when CWD isn't the app's own directory.
+    template_dir = Path(current_app.root_path) / current_app.template_folder
+    combined = b''
+    for name in ('index.html', 'offline.html'):
+        path = template_dir / name
+        try:
+            combined += path.read_bytes()
+        except OSError:
+            pass
+    return str(zlib.crc32(combined))
 
 
 @bp.route('/robots.txt')
@@ -34,7 +59,9 @@ def service_worker():
     """Render the service worker with the live URL prefix (base_path) baked in,
     so its cache route matchers work whether this app is deployed at the
     domain root or reverse-proxied under a subpath (e.g. /summrabook)."""
-    response = current_app.make_response(render_template('service-worker.js'))
+    response = current_app.make_response(
+        render_template('service-worker.js', precache_revision=_precache_revision())
+    )
     response.headers['Content-Type'] = 'application/javascript'
     response.headers['Service-Worker-Allowed'] = request.script_root + '/'
     return response

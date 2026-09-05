@@ -45,10 +45,10 @@
     <meta name="twitter:image" content="{{ og_image|default(site_origin ~ '/static/images/og-image.png') }}">
 
     <!-- Favicons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon-32.png') }}">
-    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/icon-16.png') }}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icon-180.png') }}">
-    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon-32.png') }}{{ asset_v('images/icon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/icon-16.png') }}{{ asset_v('images/icon-16.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icon-180.png') }}{{ asset_v('images/icon-180.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}{{ asset_v('images/icon-192.png') }}">
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('system.manifest') }}">
@@ -100,8 +100,8 @@
             <div class="header-content">
                 <a href="{{ base_path }}/" class="header-link" id="header-home-link">
                     <picture>
-                        <source srcset="{{ url_for('static', filename='images/icon.webp') }}" type="image/webp">
-                        <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Summra Icon" class="logo-icon">
+                        <source srcset="{{ url_for('static', filename='images/icon.webp') }}{{ asset_v('images/icon.webp') }}" type="image/webp">
+                        <img src="{{ url_for('static', filename='images/icon.png') }}{{ asset_v('images/icon.png') }}" alt="Summra Icon" class="logo-icon">
                     </picture>
                     <h1 class="logo">Summra</h1>
                 </a>
@@ -201,9 +201,9 @@
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
-                                        <source srcset="{{ url_for('static', filename='images/infographic.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/infographic.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/infographic.jpg') }}" alt="Plain English rewrites of every classic" class="learn-feature-image" loading="lazy" decoding="async">
+                                        <source srcset="{{ url_for('static', filename='images/infographic.webp') }}{{ asset_v('images/infographic.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/infographic.jpg') }}{{ asset_v('images/infographic.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/infographic.jpg') }}{{ asset_v('images/infographic.jpg') }}" alt="Plain English rewrites of every classic" class="learn-feature-image" loading="lazy" decoding="async">
                                     </picture>
                                 </div>
                                 <h3 class="learn-feature-title">Plain English Rewrites</h3>
@@ -214,9 +214,9 @@
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
-                                        <source srcset="{{ url_for('static', filename='images/chapter_view.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/chapter_view.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/chapter_view.jpg') }}" alt="Original and plain English side by side" class="learn-feature-image" loading="lazy" decoding="async">
+                                        <source srcset="{{ url_for('static', filename='images/chapter_view.webp') }}{{ asset_v('images/chapter_view.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/chapter_view.jpg') }}{{ asset_v('images/chapter_view.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/chapter_view.jpg') }}{{ asset_v('images/chapter_view.jpg') }}" alt="Original and plain English side by side" class="learn-feature-image" loading="lazy" decoding="async">
                                     </picture>
                                 </div>
                                 <h3 class="learn-feature-title">Side-by-Side Reading</h3>
@@ -227,9 +227,9 @@
                             <div class="learn-feature-card">
                                 <div class="learn-feature-icon">
                                     <picture>
-                                        <source srcset="{{ url_for('static', filename='images/summary.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/summary.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/summary.jpg') }}" alt="Kindle-style reading experience with themes and font controls" class="learn-feature-image" loading="lazy" decoding="async">
+                                        <source srcset="{{ url_for('static', filename='images/summary.webp') }}{{ asset_v('images/summary.webp') }}" type="image/webp">
+                                        <source srcset="{{ url_for('static', filename='images/summary.jpg') }}{{ asset_v('images/summary.jpg') }}" type="image/jpeg">
+                                        <img src="{{ url_for('static', filename='images/summary.jpg') }}{{ asset_v('images/summary.jpg') }}" alt="Kindle-style reading experience with themes and font controls" class="learn-feature-image" loading="lazy" decoding="async">
                                     </picture>
                                 </div>
                                 <h3 class="learn-feature-title">Built for Real Reading</h3>
@@ -780,7 +780,7 @@
     {% endif %}
 
     <!-- Markdown parser -->
-    <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}{{ asset_v('js/vendor/marked.min.js') }}" defer></script>
 
     {# route_utils.js exposes window.{currentAppPath,parseAppRoute,stripBasePath,
        withBasePath} and must load before app.js / app.min.js — and before the
@@ -789,13 +789,13 @@
 
     <!-- Blog Components -->
     {% if feature_blog %}
-    <script src="{{ url_for('static', filename='js/components/BlogIndex.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/BlogIndex.js') }}{{ asset_v('js/components/BlogIndex.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}{{ asset_v('js/components/BlogPost.js') }}"></script>
     {% endif %}
 
     <!-- Authentication module -->
     {% if feature_auth %}
-    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}{{ asset_v('js/auth.js') }}"></script>
     {% endif %}
 
     {# view_mode.js exposes window.resolveInitialChapterViewMode and must
