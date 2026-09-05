@@ -16,7 +16,7 @@ const committedMinPath = join(here, 'app.min.js');
 const freshMinPath = join(tmpdir(), `app.min.fresh.${process.pid}.js`);
 
 execSync(
-  `npx esbuild "${appJs}" --minify --legal-comments=inline --outfile="${freshMinPath}"`,
+  `npx esbuild "${appJs}" --bundle --minify --legal-comments=inline --outfile="${freshMinPath}"`,
   { stdio: 'inherit' }
 );
 

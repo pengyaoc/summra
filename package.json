@@ -3,7 +3,7 @@
   "private": true,
   "description": "Build tooling for frontend/static/js — no runtime Node dependency, only a minifier for the production bundle.",
   "scripts": {
-    "build": "esbuild frontend/static/js/app.js --minify --legal-comments=inline --outfile=frontend/static/js/app.min.js",
+    "build": "esbuild frontend/static/js/app.js --bundle --minify --legal-comments=inline --outfile=frontend/static/js/app.min.js",
     "build:check": "node frontend/static/js/check-build-fresh.mjs"
   },
   "devDependencies": {

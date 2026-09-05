@@ -803,12 +803,17 @@
     <script src="{{ url_for('static', filename='js/view_mode.js') }}{{ asset_v('js/view_mode.js') }}"></script>
 
     {# In dev mode serve the un-minified app.js so source-mapped errors,
-       breakpoints, and edits show up without a rebuild. Prod serves
-       app.min.js. asset_v() appends a content-hash query so the service
-       worker (which caches JS with StaleWhileRevalidate) picks up new
-       builds on the next navigation. #}
+       breakpoints, and edits show up without a rebuild. app.js is
+       `type="module"` because it `import`s sibling files (pagination.js,
+       etc. — see app.js's own module-split comment); browsers load and
+       execute ES modules natively, no bundler needed in dev. Prod serves
+       app.min.js, esbuild's single bundled/minified file with no
+       import/export left in it, so a plain (non-module) script tag.
+       asset_v() appends a content-hash query so the service worker (which
+       caches JS with StaleWhileRevalidate) picks up new builds on the next
+       navigation. #}
     {% if is_development %}
-    <script src="{{ url_for('static', filename='js/app.js') }}{{ asset_v('js/app.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}{{ asset_v('js/app.js') }}"></script>
     {% else %}
     <script src="{{ url_for('static', filename='js/app.min.js') }}{{ asset_v('js/app.min.js') }}"></script>
     {% endif %}
