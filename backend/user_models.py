@@ -23,8 +23,14 @@ class UserDatabase:
             db_path: Path to user database. Defaults to summra.db in project root.
         """
         if db_path is None:
-            # Use summra.db in the project root
-            db_path = Path(__file__).parent.parent / "summra.db"
+            # Default to config.USER_DATABASE_PATH (data/summra.db), matching
+            # DATABASE_PATH's convention so this stays writable under
+            # systemd's ProtectSystem=strict (see tests/test_deploy_config.py).
+            try:
+                from . import config
+            except ImportError:
+                import config
+            db_path = config.USER_DATABASE_PATH
 
         self.db_path = db_path
         self.init_db()

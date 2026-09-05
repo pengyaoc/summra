@@ -65,12 +65,25 @@ app = Flask(__name__,
 app.wsgi_app = PrefixMiddleware(app.wsgi_app)
 
 # Configure session
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    if config.FEATURE_AUTH:
+        # A per-process random key would silently break sessions across
+        # gunicorn workers (each generates a different key, so cookies signed
+        # by one worker fail to validate on another) — fail fast instead.
+        raise RuntimeError(
+            "SECRET_KEY environment variable must be set when FEATURE_AUTH "
+            "is enabled — see deploy/service.env.example."
+        )
+    # FEATURE_AUTH is off, so sessions aren't exercised; a random per-process
+    # key is harmless here and keeps dev/test running without extra setup.
+    _secret_key = secrets.token_hex(32)
+app.config['SECRET_KEY'] = _secret_key
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', '1') == '1'
 app.config['SESSION_PERMANENT'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
-# In production, set SESSION_COOKIE_SECURE = True (requires HTTPS)
 
 CORS(app, supports_credentials=True)
 
@@ -1537,6 +1550,7 @@ if config.FEATURE_BLOG:
 @app.route('/api/authors/<path:author_slug>', methods=['GET'])
 def get_author(author_slug):
     """Get author details by slug"""
+    author_name = None
     try:
         # Convert slug back to author name
         author_name = slug_to_author_name(author_slug)
@@ -1588,6 +1602,7 @@ def get_author(author_slug):
 @app.route('/api/authors/<path:author_slug>/books', methods=['GET'])
 def get_author_books(author_slug):
     """Get all books by an author"""
+    author_name = None
     try:
         # Convert slug back to author name
         author_name = slug_to_author_name(author_slug)
@@ -1685,10 +1700,15 @@ if config.FEATURE_BLOG:
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({
-        'success': False,
-        'error': 'Not found'
-    }), 404
+    # /api/* misses stay JSON for API clients; every other unmatched URL
+    # (a mistyped page route) falls through to the SPA shell so client-side
+    # routing / friendly 404 UI can take over.
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'error': 'Not found'
+        }), 404
+    return render_template('index.html'), 404
 
 
 @app.errorhandler(500)
