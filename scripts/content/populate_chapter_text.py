@@ -4,20 +4,15 @@ Script to populate chapter_text field in database for existing books
 without calling LLM. Uses existing chapter detection logic.
 """
 
-import os
 import sys
 from pathlib import Path
 
-# Add backend directory to path
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
-
-import config
-import models
+from backend import config
+from backend import models
 
 # Import chapter detection from generate_summaries
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_summaries import SummaryGenerator
+
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 def populate_chapter_text_for_book(book_id: int, book_file_path: Path):

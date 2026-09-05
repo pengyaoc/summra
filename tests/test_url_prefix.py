@@ -18,7 +18,7 @@ import pytest
 
 @pytest.fixture
 def client():
-    import app_base
+    from backend import app_base
     return app_base.app.test_client()
 
 

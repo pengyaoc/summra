@@ -9,19 +9,16 @@ both standalone (port 5000) and cohosted (port 5001).
 """
 import importlib
 import os
-import sys
 from pathlib import Path
 
 import pytest
-
-BACKEND_DIR = Path(__file__).parent.parent / "backend"
 
 
 def test_user_database_path_resolves_under_data_dir():
     """UserDatabase's default path must live under data/, matching
     DATABASE_PATH's convention, so it stays writable when the repo root
     becomes read-only under systemd's ProtectSystem=strict."""
-    import config
+    from backend import config
 
     assert hasattr(config, "USER_DATABASE_PATH"), (
         "config.py must define USER_DATABASE_PATH so user_models.UserDatabase() "
@@ -36,19 +33,17 @@ def test_user_database_path_resolves_under_data_dir():
 def test_user_database_uses_configured_path():
     """app_base.py's UserDatabase() call site must pass config.USER_DATABASE_PATH
     explicitly rather than relying on the class's repo-root default."""
-    from user_models import UserDatabase
+    from backend.user_models import UserDatabase
 
     db = UserDatabase.__init__
     # Inspect app_base's actual call site behavior by importing it fresh and
     # checking the resulting user_db.db_path, not just the class default.
-    import config
+    from backend import config
 
-    sys.path.insert(0, str(BACKEND_DIR))
-    if "app_base" in sys.modules:
-        importlib.reload(sys.modules["app_base"])
-        app_base = sys.modules["app_base"]
-    else:
-        import app_base
+    # `from backend import app_base` risks returning a stale cached
+    # attribute rather than the module in sys.modules if another test popped
+    # it; import_module always resolves the real sys.modules entry.
+    app_base = importlib.import_module("backend.app_base")
 
     assert app_base.user_db.db_path == config.USER_DATABASE_PATH, (
         f"app_base.user_db.db_path is {app_base.user_db.db_path!r}, expected "
@@ -65,8 +60,8 @@ def test_user_database_class_default_matches_configured_path():
     (see test_user_database_uses_configured_path above), but the class
     default was never fixed to match, so any other caller still creates a
     stray repo-root summra.db."""
-    import config
-    from user_models import UserDatabase
+    from backend import config
+    from backend.user_models import UserDatabase
 
     db = UserDatabase()
     assert db.db_path == config.USER_DATABASE_PATH, (

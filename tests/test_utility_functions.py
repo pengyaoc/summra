@@ -13,10 +13,8 @@ Tests for:
 import sys
 import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from generate_summaries import (
+from scripts.content.generate_summaries import (
     normalize_book_title,
     fix_roman_numerals_in_text,
     SummaryGenerator

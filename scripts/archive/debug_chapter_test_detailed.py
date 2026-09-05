@@ -4,9 +4,7 @@ import sys
 import os
 import re
 
-# Add backend and scripts to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
-sys.path.insert(0, os.path.dirname(__file__))
+
 
 text = """The Time Machine
 

@@ -8,16 +8,12 @@ Changes:
 """
 
 import os
-import sys
 import shutil
-from pathlib import Path
 
-# Add backend directory to path
 backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
 
-import models
-import config
+from backend import models
+from backend import config
 
 
 def reorganize_illustrations(dry_run=False):

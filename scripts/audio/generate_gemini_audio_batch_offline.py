@@ -27,14 +27,12 @@ import wave
 import subprocess
 from pathlib import Path
 
-# Add parent directory to path for imports
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "backend"))
 
-from models import Database
-from gemini_tts_handler import GeminiTTSHandler
-import tts_utils
+
+from backend.models import Database
+from backend.gemini_tts_handler import GeminiTTSHandler
+from backend import tts_utils
 
 
 def convert_wav_to_opus(wav_path: str, opus_path: str) -> bool:

@@ -17,11 +17,9 @@ import sys
 import os
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 import pytest
-from generate_summaries import SummaryGenerator, normalize_book_title, fix_roman_numerals_in_text
+from scripts.content.generate_summaries import SummaryGenerator, normalize_book_title, fix_roman_numerals_in_text
 
 
 class TestTOCDetection:

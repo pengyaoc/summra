@@ -15,17 +15,13 @@ Options:
     --book-id BOOK_ID    Only categorize the specified book (optional)
 """
 
-import sys
 import json
 import argparse
-from pathlib import Path
 import time
 
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
-from models import Database
-import config
+from backend.models import Database
+from backend import config
 from google import genai
 from google.genai import types
 

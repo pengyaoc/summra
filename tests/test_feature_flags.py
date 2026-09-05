@@ -27,7 +27,7 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
         sys.modules.pop(mod, None)
         sys.modules.pop(f'backend.{mod}', None)
 
-    import config as _config
+    from backend import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
     monkeypatch.setattr(_config, 'FEATURE_BLOG', feature_blog, raising=False)
     if feature_auth:
@@ -36,10 +36,13 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
         # this fixture keeps testing route registration, not that guard.
         monkeypatch.setenv('SECRET_KEY', 'test-secret-key')
     # Ensure the freshly-imported app_base sees the patched values
-    sys.modules['config'] = _config
+    sys.modules['backend.config'] = _config
 
-    import app_base
-    importlib.reload(app_base)
+    # `from backend import app_base` would silently return backend's stale
+    # cached `app_base` attribute (never cleared by the sys.modules.pop above)
+    # instead of re-executing the module — import_module correctly detects
+    # it's missing from sys.modules and re-imports for real.
+    app_base = importlib.import_module('backend.app_base')
     return app_base.app.test_client()
 
 
@@ -92,7 +95,7 @@ def test_templates_receive_feature_flags(monkeypatch):
     to templates so frontend Jinja conditionals can read them.
     Verified via the context processor wiring."""
     client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
-    import app_base
+    from backend import app_base
     # Trigger a request context so context processors run.
     with app_base.app.test_request_context('/'):
         ctx = {}

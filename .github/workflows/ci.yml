@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install ruff pytest
+          pip install -e .
+
+      - name: Ruff (lint — informational only for now)
+        # The repo has never been linted; ruff currently reports ~560
+        # pre-existing findings (mostly F541 f-strings-without-placeholders
+        # and I001 import ordering — style, not bugs). Report but don't fail
+        # the build until that backlog is worked down; pytest is the real gate.
+        run: ruff check . || true
+
+      - name: Pytest
+        run: pytest tests/ -v

@@ -6,11 +6,9 @@ import sys
 import os
 import unittest
 
-# Add backend and scripts to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from generate_summaries import SummaryGenerator
+
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestChapterNumbering(unittest.TestCase):

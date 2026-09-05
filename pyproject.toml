@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "summra"
+version = "0.1.0"
+description = "Read the classics in plain English"
+requires-python = ">=3.11"
+# Runtime dependencies stay in backend/requirements.txt / requirements-prod.txt
+# (installed separately) — this project file exists to make `backend` and
+# `scripts` importable as real packages via `pip install -e .`, replacing the
+# sys.path hacks and try/except ImportError shims that used to be needed for
+# every script and test to find `config`, `models`, and sibling scripts.
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["backend*", "scripts*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = ["scripts/archive", "venv", "data"]
+
+[tool.ruff.lint]
+# Start permissive — this repo has no lint history. Tighten incrementally
+# rather than gating the packaging/CI rollout on a full lint pass.
+select = ["E", "F", "I"]
+ignore = ["E501"]

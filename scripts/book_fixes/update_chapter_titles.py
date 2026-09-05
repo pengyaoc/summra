@@ -10,12 +10,10 @@ import os
 import sys
 from pathlib import Path
 
-# Add backend directory to path
 backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
 
-from generate_summaries import SummaryGenerator
-import models
+from scripts.content.generate_summaries import SummaryGenerator
+from backend import models
 
 def update_chapter_titles(book_id: int, book_file: Path):
     """

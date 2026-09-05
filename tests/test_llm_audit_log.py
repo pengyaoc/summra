@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def captured_log_dir(tmp_path, monkeypatch):
     target = tmp_path / "llm_responses"
     target.mkdir()
     monkeypatch.setattr(
-        "generate_summaries.SummaryGenerator._llm_log_dir",
+        "scripts.content.generate_summaries.SummaryGenerator._llm_log_dir",
         lambda self: target,
         raising=False,
     )

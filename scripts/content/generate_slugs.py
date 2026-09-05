@@ -6,14 +6,10 @@ Usage:
     python scripts/content/generate_slugs.py
 """
 
-import sys
-import os
 import re
 
-# Add backend directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-import models
+from backend import models
 
 
 def slugify(text):

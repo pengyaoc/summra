@@ -6,12 +6,9 @@ This script generates URL-friendly slugs for all books that don't have one yet.
 """
 
 import sys
-import os
 
-# Add backend directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-from models import Database, slugify
+from backend.models import Database, slugify
 
 
 def backfill_slugs(dry_run=True):

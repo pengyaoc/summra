@@ -25,11 +25,9 @@ from pathlib import Path
 import subprocess
 import shutil
 
-# Add parent directory to path to import backend modules
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
-from models import Database
-import config
+from backend.models import Database
+from backend import config
 
 
 def process_guide_image(original_path: Path, output_dir: Path, output_name: str, max_width: int = 1200) -> tuple:

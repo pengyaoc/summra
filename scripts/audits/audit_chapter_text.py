@@ -4,18 +4,14 @@ Audit script to compare database chapter_text with Gutenberg source file extract
 Identifies books with significant discrepancies between stored chapter text and re-extraction.
 """
 
-import sys
-import os
 from pathlib import Path
 import csv
 from typing import Dict, List, Tuple, Optional
 
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+
 
 from backend import models
-import config
+from backend import config
 from scripts.content.generate_summaries import SummaryGenerator
 
 

@@ -5,7 +5,11 @@ import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict
-import config
+
+try:
+    from . import config
+except ImportError:
+    from backend import config
 
 
 def slugify(text: str) -> str:

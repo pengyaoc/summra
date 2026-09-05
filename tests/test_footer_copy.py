@@ -16,14 +16,14 @@ from flask import render_template
 @pytest.fixture
 def client():
     """Flask test client. Imported lazily so the app boots inside the test."""
-    import app_base
+    from backend import app_base
     return app_base.app.test_client()
 
 
 @pytest.fixture
 def app_ctx():
     """Request context — needed because index.html calls url_for() for static assets."""
-    import app_base
+    from backend import app_base
     with app_base.app.test_request_context('/'):
         yield app_base.app
 

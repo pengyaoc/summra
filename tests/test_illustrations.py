@@ -16,10 +16,7 @@ import uuid
 from unittest.mock import Mock, MagicMock, patch, call
 import io
 
-# Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
+
 
 # Import the modules we need to test
 from scripts.images.generate_illustrations import (
@@ -29,7 +26,7 @@ from scripts.images.generate_illustrations import (
     generate_chapter_illustrations_for_book,
     generate_chapter_illustrations_batch
 )
-import models
+from backend import models
 
 
 class TestGeminiIllustrations:

@@ -4,11 +4,7 @@ Quick script to populate illustration_url in database for existing illustration 
 """
 
 import sys
-from pathlib import Path
 
-# Add parent directory to path to import backend modules
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
 from backend.models import Database
 import backend.config as config

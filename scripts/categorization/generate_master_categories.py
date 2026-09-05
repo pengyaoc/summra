@@ -11,15 +11,11 @@ Usage:
     python scripts/categorization/generate_master_categories.py
 """
 
-import sys
 import json
-from pathlib import Path
 
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
-from models import Database
-import config
+from backend.models import Database
+from backend import config
 from google import genai
 from google.genai import types
 

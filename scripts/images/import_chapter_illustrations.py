@@ -24,12 +24,8 @@ import os
 import shutil
 import re
 import glob
-from pathlib import Path
 from PIL import Image
 
-# Add parent directory to path to import backend modules
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
 from backend.models import Database
 import backend.config as config

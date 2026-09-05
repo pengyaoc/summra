@@ -6,8 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from scripts.audits import split_modern_paragraphs as smp
 from scripts.audits.split_modern_paragraphs import (
     apply_splits_and_merges,

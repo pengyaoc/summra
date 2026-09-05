@@ -5,13 +5,16 @@ Imports common routes from app_base and adds production-specific features.
 from flask import jsonify, request
 import os
 
-# Handle both direct execution and module execution
+# Handle both direct execution (dev) and package import (gunicorn's
+# `backend.app_prod:app`, prod) — `backend` is installed as an editable
+# package (see pyproject.toml), so the fallback resolves from anywhere
+# without a sys.path hack.
 try:
     from . import config
     from .app_base import app, logger, ensure_directories
 except ImportError:
-    import config
-    from app_base import app, logger, ensure_directories
+    from backend import config
+    from backend.app_base import app, logger, ensure_directories
 
 # Ensure production mode (IS_DEVELOPMENT = False is already set in app_base)
 app.config['IS_DEVELOPMENT'] = False
@@ -34,7 +37,7 @@ def generate_tts():
         try:
             from . import tts_utils
         except ImportError:
-            import tts_utils
+            from backend import tts_utils
 
         cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.BASE_DIR)
         if cached_audio:

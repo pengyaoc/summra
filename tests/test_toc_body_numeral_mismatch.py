@@ -13,7 +13,7 @@ matching by integer value (roman_to_int / int) — so '1' matches 'I'.
 
 import pytest
 
-from generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 @pytest.fixture
@@ -102,7 +102,7 @@ def test_extract_two_level_toc_dedupes_roman_vs_arabic_volumes():
 
     Bug case: pg3268 (Radcliffe, Mysteries of Udolpho).
     """
-    from generate_summaries import SummaryGenerator
+    from scripts.content.generate_summaries import SummaryGenerator
     g = SummaryGenerator(api_key="dummy")
     # Minimal text mimicking pg3268: TOC with Roman VOLUMEs followed by body Arabic VOLUMEs
     chapters_per_vol_toc = "\n".join(f" CHAPTER {n}" for n in ["I", "II", "III"])

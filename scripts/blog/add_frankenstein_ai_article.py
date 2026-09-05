@@ -5,11 +5,9 @@ Add the Mary Shelley & AI Anxiety article to the Summra blog
 import sys
 from pathlib import Path
 
-# Add backend directory to path
 backend_dir = Path(__file__).parent.parent.parent / 'backend'
-sys.path.insert(0, str(backend_dir))
 
-from models import Database
+from backend.models import Database
 from datetime import datetime
 
 def main():

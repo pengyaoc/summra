@@ -29,7 +29,7 @@ class UserDatabase:
             try:
                 from . import config
             except ImportError:
-                import config
+                from backend import config
             db_path = config.USER_DATABASE_PATH
 
         self.db_path = db_path

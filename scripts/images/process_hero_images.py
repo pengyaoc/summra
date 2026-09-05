@@ -19,10 +19,7 @@ from pathlib import Path
 import subprocess
 from PIL import Image
 
-# Add parent directory to path
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root / "backend"))
-
 
 def process_hero_image(original_path: Path, output_dir: Path, max_width: int = 800):
     """

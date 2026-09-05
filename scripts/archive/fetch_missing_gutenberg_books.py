@@ -11,12 +11,9 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from backend import models
-import config
+from backend import config
 
 
 class GutenbergFetcher:

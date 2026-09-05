@@ -12,16 +12,12 @@ Usage:
 """
 
 import sys
-import os
 import argparse
 import requests
-from pathlib import Path
 
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
-import config
-from models import Database
+from backend import config
+from backend.models import Database
 
 def search_unsplash(query, per_page=1):
     """

@@ -21,10 +21,7 @@ from pathlib import Path
 import subprocess
 from PIL import Image
 
-# Add parent directory to path
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root / "backend"))
-
 
 def process_icon_size(img: Image.Image, size: int, output_dir: Path, name_prefix: str = "icon"):
     """

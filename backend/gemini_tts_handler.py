@@ -4,10 +4,14 @@ import os
 import time
 import hashlib
 import wave
-from pathlib import Path
 from typing import Optional
-import config
-import tts_utils  # Shared TTS utilities (provider-agnostic)
+
+try:
+    from . import config
+    from . import tts_utils  # Shared TTS utilities (provider-agnostic)
+except ImportError:
+    from backend import config
+    from backend import tts_utils
 
 # Google Generative AI SDK
 try:

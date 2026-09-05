@@ -30,7 +30,6 @@ Usage:
 """
 
 import sys
-import os
 import argparse
 import sqlite3
 import re
@@ -39,11 +38,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
-
-import config
+from backend import config
 from backend.models import Database
 
 try:

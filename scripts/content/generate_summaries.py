@@ -170,17 +170,13 @@ import re
 import requests
 from urllib.parse import quote
 
-# Add backend directory to path
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
-
 from google import genai
 from dotenv import load_dotenv
 
-import config
-import models
+from backend import config
+from backend import models
 try:
-    import categorization
+    from scripts.categorization import categorization
 except ModuleNotFoundError:
     categorization = None
 

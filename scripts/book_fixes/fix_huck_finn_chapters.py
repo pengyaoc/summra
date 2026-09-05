@@ -8,12 +8,10 @@ import sys
 import re
 from pathlib import Path
 
-# Add parent directory to path for imports
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "backend"))
 
-from models import Database
+
+from backend.models import Database
 
 
 def roman_to_int(s: str) -> int:

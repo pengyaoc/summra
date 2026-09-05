@@ -6,8 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from scripts.audits import reformat_paragraphs
 from scripts.audits.reformat_paragraphs import reformat_chapter_text
 

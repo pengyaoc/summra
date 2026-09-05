@@ -11,8 +11,6 @@ from pathlib import Path
 import pytest
 from unittest.mock import Mock, patch
 
-# Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.content.generate_summaries import SummaryGenerator
 
@@ -168,7 +166,6 @@ Third paragraph."""
     def test_normalize_excessive_newlines(self, generator):
         """Test that 3+ newlines are reduced to single paragraph break"""
         text = """Paragraph 1.
-
 
 
 Paragraph 2."""
