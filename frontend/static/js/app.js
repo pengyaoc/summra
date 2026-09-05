@@ -800,14 +800,14 @@ class SummraApp {
         // Note: Back buttons have been replaced with breadcrumb navigation
         // Breadcrumbs are updated via updateBreadcrumbs() in each view method
 
-        const headerHomeLink = document.getElementById('header-home-link');
-        if (headerHomeLink) {
-            headerHomeLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.saveScrollPosition();
-                this.showBooksSection();
-            });
-        }
+        // #header-home-link ("<a href="{{ base_path }}/">") needs no listener
+        // of its own — setupRouting()'s delegated `a[href^="/"]` click handler
+        // already intercepts it. A dedicated handler used to live here too,
+        // double-firing showHomeSection() on every click (both handlers
+        // matched the same link) and racing two concurrent async calls —
+        // occasionally observable as the hero section staying hidden after
+        // navigating home. Removed rather than kept in sync with the
+        // delegated handler's logic.
 
         // Setup iOS install banner close button
         const iosBannerClose = document.getElementById('ios-banner-close');
@@ -3003,167 +3003,12 @@ class SummraApp {
         this.setCurrentPage('home');
         this.currentView = 'home';
 
-        // Check if hero section has content (not just a placeholder)
-        const heroSection = document.getElementById('hero-section');
-        const isPlaceholder = heroSection && heroSection.classList.contains('hidden') && heroSection.children.length === 0;
-
-        // If hero section is just a placeholder (from blog/book pages), render it dynamically
-        // instead of doing a full page reload (which would stop audio playback)
-        if (isPlaceholder) {
-            // Render hero section content dynamically
-            heroSection.innerHTML = `
-                <!-- Main Hero Banner -->
-                <section class="hero-banner hero-main">
-                    <div class="hero-banner-content">
-                        <h1 class="hero-banner-title">Classic Literature, Made&nbsp;Easy</h1>
-                        <p class="hero-banner-subtitle">Reading companion that makes you enjoy reading.</p>
-                        <div class="hero-search-container">
-                            <div class="hero-search-wrapper">
-                                <input type="text"
-                                       class="hero-search-input"
-                                       id="hero-search-input"
-                                       placeholder="Search for a book or author..."
-                                       autocomplete="off">
-                                <div class="hero-search-results hidden" id="hero-search-results">
-                                    <!-- Typeahead results will be populated here -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Discover Banner -->
-                <section class="hero-banner hero-discover">
-                    <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Discover Classics the&nbsp;Modern&nbsp;Way</h2>
-                    </div>
-
-                    <!-- Top 10 Books Carousel (direct child of section, breaks out on mobile) -->
-                    <div class="top-10-carousel-wrapper">
-                        <div class="carousel-container top-10-carousel">
-                            <button class="carousel-nav-btn left" id="top-10-nav-left">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M15 18l-6-6 6-6"></path>
-                                </svg>
-                            </button>
-                            <div class="carousel-scroll" id="top-10-scroll">
-                                <!-- Loading skeleton cards (will be replaced when books load) -->
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                            </div>
-                            <button class="carousel-nav-btn right" id="top-10-nav-right">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M9 18l6-6-6-6"></path>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="hero-banner-content">
-                        <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="discover">Explore Classics</a>
-                            <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Learn Banner -->
-                <section class="hero-banner hero-learn">
-                    <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Literature, Beautifully&nbsp;Explained</h2>
-
-                        <!-- 3-Column Features Grid -->
-                        <div class="learn-features-grid">
-                            <!-- Column 1: Beautiful Illustrations -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="${summraBasePath()}/static/images/infographic.webp" type="image/webp">
-                                        <source srcset="${summraBasePath()}/static/images/infographic.jpg" type="image/jpeg">
-                                        <img src="${summraBasePath()}/static/images/infographic.jpg" alt="Visual guides with color and interactivity" class="learn-feature-image">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">Beautiful Illustrations</h3>
-                                <p class="learn-feature-description">Make sense of complex plots and symbolism with beautifully illustrated character maps, timelines, and theme guides.</p>
-                            </div>
-
-                            <!-- Column 2: Audio Summary -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="${summraBasePath()}/static/images/summary.webp" type="image/webp">
-                                        <source srcset="${summraBasePath()}/static/images/summary.jpg" type="image/jpeg">
-                                        <img src="${summraBasePath()}/static/images/summary.jpg" alt="Comprehensive book summaries" class="learn-feature-image">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">Audio Summary</h3>
-                                <p class="learn-feature-description">Help you preview, understand, and enjoy classics at your own pace.</p>
-                            </div>
-
-                            <!-- Column 3: For Every Reader -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="${summraBasePath()}/static/images/chapter_view.webp" type="image/webp">
-                                        <source srcset="${summraBasePath()}/static/images/chapter_view.jpg" type="image/jpeg">
-                                        <img src="${summraBasePath()}/static/images/chapter_view.jpg" alt="Accessible reading experience" class="learn-feature-image">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">For Every Reader</h3>
-                                <p class="learn-feature-description">Kindle-like reading experience enhanced with chapter illustrations, summaries and plain-English version for English learners.</p>
-                            </div>
-                        </div>
-
-                        <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="books/jane-eyre">See Example: Jane Eyre</a>
-                        </div>
-                    </div>
-                </section>
-            `;
-
-            // Re-initialize hero search after rendering
-            if (window.heroSearchInstance) {
-                // Re-query DOM elements in case they changed
-                window.heroSearchInstance.searchInput = document.getElementById('hero-search-input');
-                window.heroSearchInstance.searchResults = document.getElementById('hero-search-results');
-                if (window.heroSearchInstance.searchInput && window.heroSearchInstance.searchResults) {
-                    window.heroSearchInstance.init();
-                }
-            } else {
-                window.heroSearchInstance = new HeroSearch();
-            }
-
-            // Re-attach hero banner CTA listeners
-            const heroCtas = heroSection.querySelectorAll('[data-route]');
-            heroCtas.forEach(cta => {
-                cta.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const route = cta.dataset.route;
-
-                    // Special handling for "Read" CTA
-                    if (cta.id === 'hero-read-cta') {
-                        // Check screen width to determine which view mode to set
-                        const isMobile = window.innerWidth < 1024;
-                        const viewMode = isMobile ? 'modern' : 'side-by-side';
-
-                        // Set the view mode preference before navigation
-                        localStorage.setItem('reading_chapterViewMode', viewMode);
-                    }
-
-                    // Use pushState for client-side navigation (preserves audio)
-                    window.history.pushState(null, '', withBasePath(`/${route}`));
-                    this.handleRoute();
-                });
-            });
-        }
+        // #hero-section is always rendered by index.html (never swapped for an
+        // empty placeholder — see its template comment), so navigating here
+        // client-side from another page only needs to toggle visibility below;
+        // the CTA listeners attached once at bootstrap (DOMContentLoaded) and
+        // HeroSearch's own constructor both already found these elements on
+        // first load and are still wired to them.
 
         // Show only hero section (uses centralized section management)
         this.showOnlySections('hero-section');
