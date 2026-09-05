@@ -70,6 +70,25 @@ def test_service_worker_scope_matches_prefix(client):
     assert "BASE_PATH = \"/summrabook\";" in body
 
 
+def test_service_worker_precache_revision_is_not_the_old_hardcoded_literal(client):
+    """The precached '/' and '/offline' entries' revision must be a real
+    content hash (backend/routes/system.py's _precache_revision()), not the
+    '1.0.1' literal that was never bumped — meaning Workbox never noticed
+    an index.html/offline.html change and refetched the precached shell."""
+    resp = client.get('/service-worker.js')
+    body = resp.get_data(as_text=True)
+    assert "revision: '1.0.1'" not in body
+    import re
+    revisions = re.findall(r"revision: '(\d+)'", body)
+    assert len(revisions) == 2, f"expected 2 precache entries, found: {revisions}"
+    assert revisions[0] == revisions[1], "both precached entries must share one revision"
+    assert revisions[0] != '0', (
+        "revision is '0' — _precache_revision() likely read zero bytes "
+        "(e.g. resolved the wrong directory) rather than hashing real "
+        "template content"
+    )
+
+
 def test_manifest_scope_matches_prefix(client):
     """manifest.json's scope must not overreach beyond this app's own
     subpath — otherwise it would try to claim the whole domain, conflicting
@@ -79,7 +98,9 @@ def test_manifest_scope_matches_prefix(client):
     data = resp.get_json()
     assert data['start_url'] == '/summrabook/'
     assert data['scope'] == '/summrabook/'
-    assert data['icons'][0]['src'] == '/summrabook/static/images/icon-32.png'
+    # icon src is cache-busted with asset_v() (?v=<content-hash>), so check
+    # the prefix rather than an exact match.
+    assert data['icons'][0]['src'].startswith('/summrabook/static/images/icon-32.png?v=')
 
 
 def test_robots_txt_reflects_prefix_and_origin(client):
