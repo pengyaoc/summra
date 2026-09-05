@@ -5,8 +5,8 @@ Reads all .md files from data/blog/ and inserts them into blog_posts table.
 """
 
 import re
-from pathlib import Path
 from datetime import datetime
+from backend import config
 from backend.models import Database
 
 
@@ -52,7 +52,7 @@ def extract_excerpt(content, max_chars=200):
 def main():
     """Import all blog posts from data/blog/ directory"""
     # Get blog directory path
-    blog_dir = Path(__file__).parent.parent / 'data' / 'blog'
+    blog_dir = config.BLOG_DIR
 
     if not blog_dir.exists():
         print(f"Error: Blog directory not found at {blog_dir}")

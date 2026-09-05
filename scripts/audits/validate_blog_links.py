@@ -4,10 +4,10 @@ Validate blog post links to ensure all book links are valid
 """
 import re
 import sqlite3
-from pathlib import Path
 
-# Database path
-DB_PATH = Path(__file__).parent.parent / 'data' / 'database.db'
+from backend import config
+
+DB_PATH = config.DATABASE_PATH
 
 def get_all_book_slugs():
     """Get all valid book slugs from database"""
