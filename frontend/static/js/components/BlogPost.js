@@ -23,7 +23,7 @@ class BlogPost {
                 <div class="blog-error">
                     <h2>Blog post not found</h2>
                     <p>The blog post you're looking for doesn't exist.</p>
-                    <a href="/blog" class="blog-back-link">← Back to blog</a>
+                    <a href="${withBasePath('/blog')}" class="blog-back-link">← Back to blog</a>
                 </div>
             `;
             return;
@@ -80,7 +80,7 @@ class BlogPost {
 
     async loadPost(slug) {
         try {
-            const response = await fetch(`/api/blog/${slug}`);
+            const response = await fetch(withBasePath(`/api/blog/${slug}`));
             const data = await response.json();
 
             if (data.success) {

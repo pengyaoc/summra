@@ -14,17 +14,10 @@
 //
 // URL PREFIX: window.APP_BASE_PATH (injected by the base template from Flask's
 // request.script_root) lets this app be reverse-proxied under a path prefix
-// (e.g. /summrabook) without any other code changes. summraBasePath() reads it;
-// withBasePath() prefixes a root-relative path, leaving absolute/external URLs alone.
-function summraBasePath() {
-    return window.APP_BASE_PATH || '';
-}
-function withBasePath(path) {
-    if (!path || path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) {
-        return path;
-    }
-    return summraBasePath() + path;
-}
+// (e.g. /summrabook) without any other code changes. summraBasePath()/
+// withBasePath() are defined in route_utils.js (loaded before this file, and
+// before components/BlogIndex.js and components/BlogPost.js, which also need
+// withBasePath) rather than duplicated here.
 
 class SummraApp {
     constructor() {
@@ -3456,8 +3449,8 @@ class SummraApp {
         try {
             const authorSlug = this.slugify(authorName);
             const [authorResponse, booksResponse] = await Promise.all([
-                fetch(`/api/authors/${authorSlug}`),
-                fetch(`/api/authors/${authorSlug}/books`)
+                fetch(withBasePath(`/api/authors/${authorSlug}`)),
+                fetch(withBasePath(`/api/authors/${authorSlug}/books`))
             ]);
 
             if (!authorResponse.ok) {
@@ -4743,7 +4736,7 @@ class SummraApp {
                 saveBtn.textContent = 'Saving...';
 
                 try {
-                    const response = await fetch(`/api/admin/chapters/${this.currentBook.id}/${this.currentChapter}`, {
+                    const response = await fetch(withBasePath(`/api/admin/chapters/${this.currentBook.id}/${this.currentChapter}`), {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json'

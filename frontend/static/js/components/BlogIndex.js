@@ -49,7 +49,7 @@ class BlogIndex {
                         <h3 class="blog-card-title">${this.app.escapeHtml(post.title)}</h3>
                         <p class="blog-card-date">${date}</p>
                         <p class="blog-card-excerpt">${this.app.escapeHtml(excerpt)}</p>
-                        <a href="/blog/${this.app.escapeHtml(post.slug)}" class="blog-card-link">
+                        <a href="${withBasePath(`/blog/${this.app.escapeHtml(post.slug)}`)}" class="blog-card-link">
                             Read more →
                         </a>
                     </div>
@@ -80,7 +80,7 @@ class BlogIndex {
 
     async loadPosts() {
         try {
-            const response = await fetch('/api/blog');
+            const response = await fetch(withBasePath('/api/blog'));
             const data = await response.json();
 
             if (data.success) {
