@@ -7382,3 +7382,45 @@ both need the class already broken into composable pieces to do safely. Given th
 lines in one class) and the real cost of a subtle regression here (this script drives real,
 paid Gemini API ingestion), this deserves a dedicated, carefully-scoped session rather than being
 compressed into the tail of this one.
+
+### Phase 3d (continued) — models.py connection leaks and near-duplicate methods (commits `6ae1d88`, `45e7bb8`, `ee5dc73`)
+Before touching anything, statically scanned all 61 `Database` methods that call `get_connection()`
+for a return statement occurring *after* the connection is opened but *before* the connection is
+closed on that path (the "leaks on exception... 55 hand-rolled connections" framing in the plan
+doesn't hold up: `Database.get_connection()` itself is a public API used by 20+ external scripts as
+`conn = db.get_connection()`, not a context manager, so retrofitting it as one would break all of
+them — and the actual scan found exactly **one** real leak, not 55).
+
+- **Fixed the one real bug (TDD):** `get_audio_file(summary_id=None, chapter_id=None)` opened a
+  connection unconditionally, but its `else: return None` guard (neither ID passed) returned before
+  `conn.close()` — a genuine leak on that code path, not just on exception. New regression test
+  spies on `sqlite3.connect` and asserts the returned connection actually rejects further operations
+  after the call — confirmed failing before the fix, passing after.
+- **Collapsed `get_book_structure`/`get_book_structure_metadata`:** identical control flow (build
+  hierarchical-or-flat structure from sections + chapters), differing only in which chapter-fetch
+  variant (full vs metadata-only) each of 3 chapter-loading points called. Neither method had any
+  existing test coverage — added 4 characterization tests first (flat/no-sections and
+  sectioned-with-preface cases, both methods, plus a shape-equivalence test), confirmed they pass
+  against the current implementation, *then* extracted the shared flow into
+  `_build_book_structure(book_id, metadata_only)`.
+- **Collapsed `get_book`/`get_book_by_slug`:** identical author-join `SELECT`, differing only in the
+  `WHERE` column. `get_book_by_slug` had no test coverage — added 2 characterization tests, then
+  extracted `_get_book_with_author_by(lookup, value)`, with the `WHERE` fragment chosen from a fixed
+  internal allowlist dict (never built from caller input) to keep the f-string-built SQL free of any
+  injection surface despite the string interpolation.
+
+Both consolidations verified via the full suite AND a live request against the real external caller
+route (`GET /api/books/<id>/chapters`, `GET /api/books/<id>`, `GET /books/<slug>`) — identical
+response shape before and after in every case.
+
+**Also checked and found NOT worth doing, to avoid over-refactoring:** the plan's "~35 ad-hoc
+`dict(row)` conversions" row-serializer idea — on inspection these are trivial one-line idiomatic
+`dict(row)`/`[dict(row) for row in rows]` calls, not duplicated logic; wrapping Python's own `dict()`
+builtin in another helper function would be an abstraction with no behavior to consolidate, the kind
+of thing CLAUDE.md's "no abstractions for single-use code" principle explicitly warns against.
+
+Full suite: 513 passed (up from 507 at the start of this sub-phase).
+
+### Next: same as above (the `SummaryGenerator` class breakup), plus whatever of Phase 4b
+(`reader.js`/`audio.js` extraction), Phase 4d (page-controller abstraction), and Phase 4f (CSS
+token/breakpoint consolidation) the user wants to prioritize next.
