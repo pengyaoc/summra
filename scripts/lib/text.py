@@ -1,14 +1,18 @@
-"""Shared chapter-title text normalization for scripts.
+"""Shared chapter/book-title text normalization for scripts.
 
 Before this, `normalize_chapter_title` existed as `SummaryGenerator`'s method in
 generate_summaries.py (the canonical, most-evolved version — Roman numeral and
 dotted-abbreviation handling) and as independent, progressively-diverging
 copies in backfill_chapter_title_case.py and fix_invisible_man_titles.py.
-`fix_roman_numerals_in_text` was a free function in the same file. Both are
-pure text transforms with no dependency on SummaryGenerator's state, so they
-live here instead:
+`fix_roman_numerals_in_text` was a free function in the same file.
+`normalize_book_title` was a free function in generate_summaries.py, byte-
+identical to a second copy in scripts/migrations/migrate_book_titles.py. All
+three are pure text transforms with no dependency on SummaryGenerator's
+state, so they live here instead:
 
-    from scripts.lib.text import normalize_chapter_title, fix_roman_numerals_in_text
+    from scripts.lib.text import (
+        normalize_chapter_title, fix_roman_numerals_in_text, normalize_book_title,
+    )
 """
 import re
 
@@ -159,3 +163,77 @@ def fix_roman_numerals_in_text(text):
         return match.group(1).upper()
 
     return re.sub(pattern, replace_with_uppercase, text)
+
+
+def normalize_book_title(title):
+    """
+    Normalize book title to follow consistent formatting rules:
+    1. Title Case (capitalize first letter of each word, except articles/prepositions)
+    2. Truncate at first colon (:) or semicolon (;)
+
+    Examples:
+        "jane eyre: an autobiography" -> "Jane Eyre"
+        "MOBY DICK; Or, The Whale" -> "Moby Dick"
+        "the great gatsby" -> "The Great Gatsby"
+
+    Args:
+        title: Raw book title string
+
+    Returns:
+        Normalized title string
+    """
+    if not title or not title.strip():
+        return title
+
+    # Step 1: Truncate at first colon or semicolon
+    # Find first occurrence of : or ;
+    colon_pos = title.find(':')
+    semicolon_pos = title.find(';')
+
+    # Determine which comes first
+    if colon_pos != -1 and semicolon_pos != -1:
+        truncate_pos = min(colon_pos, semicolon_pos)
+    elif colon_pos != -1:
+        truncate_pos = colon_pos
+    elif semicolon_pos != -1:
+        truncate_pos = semicolon_pos
+    else:
+        truncate_pos = len(title)
+
+    # Truncate title
+    title = title[:truncate_pos].strip()
+
+    # Step 2: Apply Title Case
+    # Words that should remain lowercase (unless first word)
+    lowercase_words = {
+        'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from',
+        'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
+        'up', 'with', 'yet'
+    }
+
+    words = title.split()
+    result = []
+
+    for i, word in enumerate(words):
+        # Handle hyphenated words - capitalize each part
+        if '-' in word:
+            parts = word.split('-')
+            capitalized_parts = []
+            for j, part in enumerate(parts):
+                # First part or parts that aren't lowercase words
+                if j == 0 or part.lower() not in lowercase_words:
+                    capitalized_parts.append(part.capitalize())
+                else:
+                    capitalized_parts.append(part.lower())
+            result.append('-'.join(capitalized_parts))
+        # Always capitalize first word
+        elif i == 0:
+            result.append(word.capitalize())
+        # Keep lowercase words as lowercase (unless after colon/period)
+        elif word.lower() in lowercase_words:
+            result.append(word.lower())
+        # Otherwise capitalize
+        else:
+            result.append(word.capitalize())
+
+    return ' '.join(result)
