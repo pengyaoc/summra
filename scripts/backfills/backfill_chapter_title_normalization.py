@@ -8,7 +8,7 @@ normalization (title casing) that was recently added to generate_summaries.py.
 
 from backend import config
 from scripts.lib.db import get_connection
-from scripts.content.generate_summaries import SummaryGenerator, fix_roman_numerals_in_text
+from scripts.lib.text import normalize_chapter_title, fix_roman_numerals_in_text
 
 def normalize_chapter_titles_for_book(book_id: int, db_path: str = str(config.DATABASE_PATH)):
     """
@@ -43,13 +43,10 @@ def normalize_chapter_titles_for_book(book_id: int, db_path: str = str(config.DA
     chapters = cursor.fetchall()
     print(f"  Found {len(chapters)} chapters")
 
-    # Create a generator instance to use the normalize_chapter_title method
-    generator = SummaryGenerator('dummy_api_key')
-
     updated_count = 0
     for chapter_id, chapter_num, old_title in chapters:
         # Apply normalization
-        normalized_title = generator.normalize_chapter_title(old_title)
+        normalized_title = normalize_chapter_title(old_title)
         normalized_title = fix_roman_numerals_in_text(normalized_title)
 
         # Only update if the title changed

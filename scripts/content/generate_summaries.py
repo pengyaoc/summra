@@ -134,28 +134,12 @@ def normalize_book_title(title):
 
 
 def fix_roman_numerals_in_text(text):
+    """Convert all title-cased Roman numerals in text to uppercase.
+
+    Delegates to scripts.lib.text — see there for the full docstring.
     """
-    Convert all title-cased Roman numerals in text to uppercase.
-
-    This ensures that Roman numerals in chapter/book titles are always uppercase,
-    regardless of whether they were title-cased in the original text.
-
-    Examples:
-        "Book Ii" -> "Book II"
-        "Part Xiv" -> "Part XIV"
-        "Book Xxiii" -> "Book XXIII"
-        "Emperors Theodosius Ii" -> "Emperors Theodosius II"
-    """
-    if not text:
-        return text
-
-    # Pattern matches title-case Roman numerals (e.g., Ii, Iii, Iv, Vi, Vii, etc.)
-    pattern = r'\b(Ii|Iii|Iv|Vi|Vii|Viii|Ix|Xi|Xii|Xiii|Xiv|Xv|Xvi|Xvii|Xviii|Xix|Xx|Xxi|Xxii|Xxiii|Xxiv|Xxv|Xxvi|Xxvii|Xxviii|Xxix|Xxx)\b'
-
-    def replace_with_uppercase(match):
-        return match.group(1).upper()
-
-    return re.sub(pattern, replace_with_uppercase, text)
+    from scripts.lib.text import fix_roman_numerals_in_text as _fix
+    return _fix(text)
 
 
 import os
@@ -175,6 +159,7 @@ from dotenv import load_dotenv
 
 from backend import config
 from backend import models
+from scripts.lib import text as text_lib
 try:
     from scripts.categorization import categorization
 except ModuleNotFoundError:
@@ -1350,127 +1335,11 @@ Focus on contemporary themes, timeless insights, or how it speaks to current iss
         return text
 
     def normalize_chapter_title(self, title: str) -> str:
+        """Normalize chapter title to use consistent title case.
+
+        Delegates to scripts.lib.text — see there for the full docstring.
         """
-        Normalize chapter title to use consistent title case.
-        Converts to title case while preserving certain words in lowercase.
-        Handles special cases:
-        - Words inside quotes are always capitalized (including first word)
-        - Words after em-dashes (—) are capitalized
-        - Words after colons (:) are capitalized
-        - Words after periods (.) are capitalized
-        - Dotted abbreviations (M.D., Ph.D., U.S.A.) keep their uppercase letters
-        """
-        import re
-
-        if not title or not title.strip():
-            return title
-
-        # Words that should remain lowercase in titles (unless first word, after punctuation, or in quotes)
-        lowercase_words = {
-            'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from',
-            'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
-            'up', 'with', 'yet'
-        }
-
-        # Dotted abbreviations like 'M.D.', 'Ph.D.', 'U.S.A.' — at least 2 internal dots
-        # separating short alpha runs. These should never be lowercased by .capitalize().
-        dotted_abbrev_pattern = re.compile(r'^(?:[A-Za-z]{1,3}\.){2,}$')
-
-        def smart_capitalize(word: str) -> str:
-            """Like str.capitalize() but title-cases each dotted segment in abbreviations.
-
-            'M.D.'  -> 'M.D.'
-            'PH.D.' -> 'Ph.D.'
-            'U.S.A.'-> 'U.S.A.'
-            'hello' -> 'Hello'
-            """
-            if dotted_abbrev_pattern.match(word):
-                # Title-case each dot-separated segment: 'PH.D.' -> 'Ph.D.'
-                return '.'.join(seg.capitalize() for seg in word.split('.'))
-            return word.capitalize()
-
-        # First, handle em-dashes by adding spaces around them
-        # This ensures "Huck.—miss" becomes "Huck.— miss" so we can capitalize properly
-        title = title.replace('—', ' — ')
-        # Also handle colons followed directly by letters
-        title = re.sub(r':(\S)', r': \1', title)
-        # Collapse multiple spaces into one
-        title = re.sub(r'\s+', ' ', title).strip()
-
-        # Track whether we're inside quotes and if we need to capitalize next word
-        in_quotes = False
-        capitalize_next = True  # Always capitalize first word
-        result = []
-
-        # Roman numeral detection pattern (case-insensitive)
-        # Matches I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII, etc.
-        roman_pattern = re.compile(r'^[IVXLCDM]+$', re.IGNORECASE)
-
-        # Split on whitespace while preserving spaces
-        words = title.split()
-
-        for i, word in enumerate(words):
-            # Check if word contains quotes (opening or closing)
-            # Handle both straight quotes and curly quotes (U+201C LEFT, U+201D RIGHT)
-            has_quote = '"' in word or '\u201c' in word or '\u201d' in word
-            starts_with_quote = word.startswith('"') or word.startswith('\u201c') or word.startswith('\u201d')
-
-            if has_quote:
-                in_quotes = not in_quotes
-
-            # Handle standalone em-dash
-            if word == '—':
-                result.append(word)
-                capitalize_next = True
-                continue
-
-            # Check if this word is a Roman numeral (case-insensitive)
-            # If so, always uppercase it entirely
-            if roman_pattern.match(word):
-                result.append(word.upper())
-                capitalize_next = False
-                continue
-
-            if starts_with_quote:
-                # Word starts with quote - capitalize first letter after quote
-                # e.g., "it -> "It
-                if len(word) > 1:
-                    # Get the quote character and rest of word
-                    quote_char = word[0]
-                    rest = word[1:]
-                    # Check if rest is a Roman numeral
-                    if roman_pattern.match(rest):
-                        result.append(quote_char + rest.upper())
-                    elif capitalize_next:
-                        result.append(quote_char + rest.capitalize())
-                    else:
-                        # First letter after quote should be capitalized
-                        result.append(quote_char + rest[0].upper() + rest[1:].lower() if len(rest) > 1 else quote_char + rest.upper())
-                else:
-                    result.append(word)
-                capitalize_next = False
-                in_quotes = True  # We're now inside quotes
-            elif capitalize_next or in_quotes:
-                # Capitalize this word
-                result.append(smart_capitalize(word))
-                capitalize_next = False
-            elif word.lower() in lowercase_words:
-                # Keep as lowercase
-                result.append(word.lower())
-            else:
-                # Default: capitalize
-                result.append(smart_capitalize(word))
-
-            # Check if we should capitalize the NEXT word
-            # This happens after colon (:) or period (.)
-            if result[-1].endswith(':') or result[-1].endswith('.'):
-                capitalize_next = True
-
-        # Clean up: remove spaces before em-dashes and after em-dashes when followed by punctuation
-        result_str = ' '.join(result)
-        result_str = result_str.replace(' — ', '—')
-
-        return result_str
+        return text_lib.normalize_chapter_title(title)
 
     def normalize_chapter_text(self, text: str, is_poetry: bool = False) -> str:
         """
