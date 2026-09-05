@@ -60,77 +60,12 @@ Note: --regenerate-chapters requires consecutive chapter numbers (e.g., "1,2,3" 
 
 
 def normalize_book_title(title):
+    """Normalize book title to follow consistent formatting rules.
+
+    Delegates to scripts.lib.text — see there for the full docstring.
     """
-    Normalize book title to follow consistent formatting rules:
-    1. Title Case (capitalize first letter of each word, except articles/prepositions)
-    2. Truncate at first colon (:) or semicolon (;)
-
-    Examples:
-        "jane eyre: an autobiography" -> "Jane Eyre"
-        "MOBY DICK; Or, The Whale" -> "Moby Dick"
-        "the great gatsby" -> "The Great Gatsby"
-
-    Args:
-        title: Raw book title string
-
-    Returns:
-        Normalized title string
-    """
-    if not title or not title.strip():
-        return title
-
-    # Step 1: Truncate at first colon or semicolon
-    # Find first occurrence of : or ;
-    colon_pos = title.find(':')
-    semicolon_pos = title.find(';')
-
-    # Determine which comes first
-    if colon_pos != -1 and semicolon_pos != -1:
-        truncate_pos = min(colon_pos, semicolon_pos)
-    elif colon_pos != -1:
-        truncate_pos = colon_pos
-    elif semicolon_pos != -1:
-        truncate_pos = semicolon_pos
-    else:
-        truncate_pos = len(title)
-
-    # Truncate title
-    title = title[:truncate_pos].strip()
-
-    # Step 2: Apply Title Case
-    # Words that should remain lowercase (unless first word)
-    lowercase_words = {
-        'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from',
-        'in', 'into', 'nor', 'of', 'on', 'or', 'so', 'the', 'to',
-        'up', 'with', 'yet'
-    }
-
-    words = title.split()
-    result = []
-
-    for i, word in enumerate(words):
-        # Handle hyphenated words - capitalize each part
-        if '-' in word:
-            parts = word.split('-')
-            capitalized_parts = []
-            for j, part in enumerate(parts):
-                # First part or parts that aren't lowercase words
-                if j == 0 or part.lower() not in lowercase_words:
-                    capitalized_parts.append(part.capitalize())
-                else:
-                    capitalized_parts.append(part.lower())
-            result.append('-'.join(capitalized_parts))
-        # Always capitalize first word
-        elif i == 0:
-            result.append(word.capitalize())
-        # Keep lowercase words as lowercase (unless after colon/period)
-        elif word.lower() in lowercase_words:
-            result.append(word.lower())
-        # Otherwise capitalize
-        else:
-            result.append(word.capitalize())
-
-    return ' '.join(result)
+    from scripts.lib.text import normalize_book_title as _normalize
+    return _normalize(title)
 
 
 def fix_roman_numerals_in_text(text):
