@@ -26,14 +26,12 @@ import sys
 import argparse
 from pathlib import Path
 
-# Add parent directory to path for imports
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "backend"))
 
-from models import Database
-from gemini_tts_handler import GeminiTTSHandler
-import tts_utils  # Shared TTS utilities
+
+from backend.models import Database
+from backend.gemini_tts_handler import GeminiTTSHandler
+from backend import tts_utils  # Shared TTS utilities
 
 
 def parse_chapter_range(chapter_str: str) -> list:

@@ -2,8 +2,6 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from scripts.audits.strip_decorative_dividers import is_divider_paragraph, strip_dividers
 
 

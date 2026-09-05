@@ -3,11 +3,9 @@
 import sys
 import os
 
-# Add backend and scripts to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
-sys.path.insert(0, os.path.dirname(__file__))
 
-from generate_summaries import SummaryGenerator
+
+from scripts.content.generate_summaries import SummaryGenerator
 
 text = """*** START OF THE PROJECT GUTENBERG EBOOK 35 ***
 

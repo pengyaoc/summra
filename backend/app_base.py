@@ -7,15 +7,14 @@ from flask_cors import CORS
 from pathlib import Path
 from datetime import timedelta
 import os
-import sys
 import logging
 import json
 import secrets
 
-# Add backend directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# Handle both direct execution and module execution
+# Handle both direct execution (`python backend/app.py`, dev) and package
+# import (gunicorn's `backend.app_prod:app`, prod) — `backend` is installed
+# as an editable package (see pyproject.toml), so the fallback resolves from
+# anywhere without a sys.path hack.
 try:
     from . import config
     from . import models
@@ -23,11 +22,11 @@ try:
     from . import auth_routes
     from . import progress_routes
 except ImportError:
-    import config
-    import models
-    import user_models
-    import auth_routes
-    import progress_routes
+    from backend import config
+    from backend import models
+    from backend import user_models
+    from backend import auth_routes
+    from backend import progress_routes
 
 # Configure logging
 logging.basicConfig(

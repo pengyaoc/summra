@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"

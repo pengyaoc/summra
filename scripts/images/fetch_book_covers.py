@@ -7,17 +7,13 @@ This script searches Project Gutenberg by title and retrieves cover images.
 """
 
 import os
-import sys
 import requests
-from pathlib import Path
 from urllib.parse import quote
 import time
 
-# Add backend directory to path
 backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
 
-import models
+from backend import models
 
 
 # Known Gutenberg IDs for common books (to speed up lookups)

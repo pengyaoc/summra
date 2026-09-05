@@ -14,7 +14,6 @@ Exit codes:
 
 import argparse
 import json
-import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -22,12 +21,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / 'backend'))
-sys.path.insert(0, str(REPO_ROOT / 'scripts' / 'content'))
 
-import models  # noqa: E402
-import config  # noqa: E402
-from generate_summaries import SummaryGenerator  # noqa: E402
+
+from backend import models  # noqa: E402
+from backend import config  # noqa: E402
+from scripts.content.generate_summaries import SummaryGenerator  # noqa: E402
 
 
 SNIPPET_LEN = 200

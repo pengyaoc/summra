@@ -4,11 +4,10 @@ Import blog posts from markdown files into the database.
 Reads all .md files from data/blog/ and inserts them into blog_posts table.
 """
 
-import os
 import re
 from pathlib import Path
 from datetime import datetime
-from models import Database
+from backend.models import Database
 
 
 def slugify(text):

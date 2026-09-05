@@ -19,10 +19,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-# Add backend to path
 backend_dir = Path(__file__).parent.parent / 'backend'
-sys.path.insert(0, str(backend_dir))
-
 
 @patch('requests.head')
 @patch('requests.post')

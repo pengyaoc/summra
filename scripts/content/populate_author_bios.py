@@ -15,19 +15,13 @@ Usage:
 """
 
 import os
-import sys
 import time
 import argparse
 import json
-from pathlib import Path
 from typing import Optional, Dict, List
 
-# Add backend directory to path
-backend_dir = Path(__file__).parent.parent.parent / 'backend'
-sys.path.insert(0, str(backend_dir))
-
-import models
-import config
+from backend import models
+from backend import config
 
 # Import genai lazily (only when needed)
 genai = None

@@ -16,11 +16,9 @@ import sys
 import os
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 import pytest
-from generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestPrefaceDetection:
@@ -81,8 +79,6 @@ Chapter 21
 Chapter 22
 Chapter 23
 Chapter 24
-
-
 
 
 Letter 1
@@ -290,8 +286,6 @@ CONTENTS
 Chapter 1
 Chapter 2
 Chapter 3
-
-
 
 
 Actual content before Chapter 1 starts here.

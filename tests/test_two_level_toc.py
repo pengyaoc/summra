@@ -17,10 +17,8 @@ import sys
 import os
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 def test_treasure_island_two_level_structure():

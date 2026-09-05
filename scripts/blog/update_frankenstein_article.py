@@ -5,11 +5,9 @@ Update the Mary Shelley & AI Anxiety article with improved engagement and style
 import sys
 from pathlib import Path
 
-# Add backend directory to path
 backend_dir = Path(__file__).parent.parent.parent / 'backend'
-sys.path.insert(0, str(backend_dir))
 
-from models import Database
+from backend.models import Database
 
 def main():
     db = Database()

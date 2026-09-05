@@ -23,18 +23,14 @@ Usage:
     python scripts/audio/migrate_audio_filenames.py --apply  # Apply changes
 """
 
-import sys
-import os
 import re
 from pathlib import Path
 
-# Add parent directory to path for imports
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / "backend"))
 
-from models import Database
-import config
+
+from backend.models import Database
+from backend import config
 
 
 def find_audio_files():

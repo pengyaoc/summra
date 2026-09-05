@@ -15,25 +15,23 @@ from pathlib import Path
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-# Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-sys.path.insert(0, str(Path(__file__).parent.parent / 'backend'))
 
-from generate_summaries import SummaryGenerator
+
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 # Module-level fixtures to mock dependencies
 @pytest.fixture(autouse=True)
 def mock_database():
     """Mock the Database class to prevent production database access"""
-    with patch('generate_summaries.models.Database') as mock:
+    with patch('scripts.content.generate_summaries.models.Database') as mock:
         yield mock
 
 
 @pytest.fixture(autouse=True)
 def mock_genai_client():
     """Mock the Gemini AI client to prevent API initialization"""
-    with patch('generate_summaries.genai.Client') as mock:
+    with patch('scripts.content.generate_summaries.genai.Client') as mock:
         yield mock
 
 

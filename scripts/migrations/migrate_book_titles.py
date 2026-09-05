@@ -11,19 +11,13 @@ Usage:
     python scripts/migrations/migrate_book_titles.py [--dry-run]
 """
 
-import sys
 import os
-from pathlib import Path
 
-# Add backend directory to path
 backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
 
-# Add scripts directory to path for importing normalize_book_title
 scripts_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, scripts_dir)
 
-import models
+from backend import models
 import argparse
 
 

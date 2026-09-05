@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """Fix chapter numbering for The Time Machine based on TOC"""
-import sys
-import os
 
-# Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-import models
+from backend import models
 
 def main():
     db = models.Database()

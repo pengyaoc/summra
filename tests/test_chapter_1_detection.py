@@ -9,10 +9,8 @@ import unittest
 import sys
 import os
 
-# Add parent directory to path to import the script
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from generate_summaries import SummaryGenerator
+from scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestChapter1Detection(unittest.TestCase):
@@ -42,8 +40,6 @@ Contents
  Chapter 2
  Chapter 3
  Chapter 4
-
-
 
 
 Chapter 1

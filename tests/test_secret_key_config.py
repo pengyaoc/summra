@@ -18,7 +18,7 @@ def _reload_app_base(monkeypatch, feature_auth: bool, secret_key=None, delete_en
         sys.modules.pop(mod, None)
         sys.modules.pop(f'backend.{mod}', None)
 
-    import config as _config
+    from backend import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
 
     if delete_env:
@@ -26,9 +26,12 @@ def _reload_app_base(monkeypatch, feature_auth: bool, secret_key=None, delete_en
     elif secret_key is not None:
         monkeypatch.setenv('SECRET_KEY', secret_key)
 
-    sys.modules['config'] = _config
-    import app_base
-    importlib.reload(app_base)
+    sys.modules['backend.config'] = _config
+    # `from backend import app_base` would silently return backend's stale
+    # cached `app_base` attribute (never cleared by the sys.modules.pop
+    # above) instead of re-executing the module — import_module correctly
+    # detects it's missing from sys.modules and re-imports for real.
+    app_base = importlib.import_module('backend.app_base')
     return app_base
 
 

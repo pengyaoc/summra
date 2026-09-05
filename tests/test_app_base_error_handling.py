@@ -19,7 +19,7 @@ import pytest
 
 @pytest.fixture
 def client():
-    import app_base
+    from backend import app_base
     app_base.app.testing = True
     return app_base.app.test_client()
 
@@ -28,7 +28,7 @@ def test_get_author_returns_json_500_when_lookup_raises(client):
     """Reproduces the bug: slug_to_author_name() raising must not crash the
     except handler with UnboundLocalError. The response must be the intended
     clean JSON 500, not an unhandled exception."""
-    import app_base
+    from backend import app_base
 
     with patch.object(app_base.db, 'get_all_authors', side_effect=RuntimeError("db exploded")):
         resp = client.get('/api/authors/some-author')
@@ -40,7 +40,7 @@ def test_get_author_returns_json_500_when_lookup_raises(client):
 
 
 def test_get_author_books_returns_json_500_when_lookup_raises(client):
-    import app_base
+    from backend import app_base
 
     with patch.object(app_base.db, 'get_all_authors', side_effect=RuntimeError("db exploded")):
         resp = client.get('/api/authors/some-author/books')

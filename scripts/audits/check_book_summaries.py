@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Check summaries for a specific book"""
 import sys
-import os
 
-# Add backend to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
-import models
+from backend import models
 
 def main():
     if len(sys.argv) < 2:

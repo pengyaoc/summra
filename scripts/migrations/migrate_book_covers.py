@@ -10,21 +10,15 @@ This script:
 """
 
 import os
-import sys
 import shutil
 from pathlib import Path
 from PIL import Image
 
-# Add backend directory to path
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
-
-import models
-import config
+from backend import models
+from backend import config
 
 # Import resize function from existing script
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
-from resize_image import resize_image_to_target_size, get_file_size_mb
+from scripts.images.resize_image import resize_image_to_target_size, get_file_size_mb
 
 
 def get_file_extension(filepath):

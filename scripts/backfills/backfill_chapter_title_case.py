@@ -6,13 +6,9 @@ This script updates existing chapter titles in the database to use consistent
 title case formatting.
 """
 
-import os
-import sys
 from pathlib import Path
 
-# Add backend directory to path
 backend_dir = Path(__file__).parent.parent.parent / 'backend'
-sys.path.insert(0, str(backend_dir))
 
 import sqlite3
 

@@ -4,18 +4,14 @@ Simple database audit - compare total chapter text with source file size.
 Much faster than re-parsing chapters, just validates rough character counts.
 """
 
-import sys
-import os
 from pathlib import Path
 import csv
 from typing import Dict, List, Optional
 
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+
 
 from backend import models
-import config
+from backend import config
 
 
 class SimpleChapterAuditor:

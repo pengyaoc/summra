@@ -6,7 +6,7 @@ objects and asserting each check produces the right Finding.
 
 import pytest
 
-from validate_chapter_split import (
+from scripts.audits.validate_chapter_split import (
     Finding,
     ValidationResult,
     check_count_matches_toc,

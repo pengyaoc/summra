@@ -14,20 +14,13 @@ Design principles:
 - Minimizes incorrect categorization through careful prompting
 """
 
-import os
-import sys
 import json
 import time
-from pathlib import Path
 from typing import List, Dict, Optional
 
-# Add backend directory to path
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-sys.path.insert(0, backend_dir)
-
 from google import genai
-import config
-import models
+from backend import config
+from backend import models
 
 
 def categorize_single_book(client: genai.Client, db: models.Database,

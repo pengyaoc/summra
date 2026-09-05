@@ -6,14 +6,10 @@ This script detects chapter names like "Book Ii" and converts them to "Book II".
 """
 
 import re
-import sys
-from pathlib import Path
 
-# Add parent directory to path to import config and models
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'backend'))
 
-import config
-from models import Database
+from backend import config
+from backend.models import Database
 
 
 def contains_title_case_roman_numeral(text):

@@ -31,14 +31,14 @@ import pytest
 @pytest.fixture
 def client():
     """Flask test client. Imported lazily so the app boots inside the test."""
-    import app_base
+    from backend import app_base
     return app_base.app.test_client()
 
 
 @pytest.fixture
 def app_ctx():
     """Request context — index.html calls url_for() and asset_v()."""
-    import app_base
+    from backend import app_base
     with app_base.app.test_request_context('/'):
         yield app_base.app
 

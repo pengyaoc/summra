@@ -10,8 +10,6 @@ import os
 from pathlib import Path
 import pytest
 
-# Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.content.generate_summaries import SummaryGenerator
 

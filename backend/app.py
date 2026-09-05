@@ -5,13 +5,16 @@ Imports common routes from app_base and adds development-specific features.
 from flask import jsonify, request
 from pathlib import Path
 
-# Handle both direct execution and module execution
+# Handle both direct execution (`python backend/app.py`, dev) and package
+# import — `backend` is installed as an editable package (see
+# pyproject.toml), so the fallback resolves from anywhere without a
+# sys.path hack.
 try:
     from . import config
     from .app_base import app, logger, ensure_directories
 except ImportError:
-    import config
-    from app_base import app, logger, ensure_directories
+    from backend import config
+    from backend.app_base import app, logger, ensure_directories
 
 # Set development mode flag
 app.config['IS_DEVELOPMENT'] = True
@@ -40,7 +43,7 @@ def generate_tts():
         try:
             from .gemini_tts_handler import GeminiTTSHandler
         except ImportError:
-            from gemini_tts_handler import GeminiTTSHandler
+            from backend.gemini_tts_handler import GeminiTTSHandler
         import threading
         import hashlib
         import wave
@@ -51,7 +54,7 @@ def generate_tts():
         try:
             from . import tts_utils
         except ImportError:
-            import tts_utils
+            from backend import tts_utils
         cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.BASE_DIR)
         if cached_audio:
             logger.info(f"Using cached audio: {cached_audio['provider']}")
@@ -283,7 +286,7 @@ def update_chapter_admin(book_id, chapter_number):
     try:
         from .models import Database
     except ImportError:
-        from models import Database
+        from backend.models import Database
 
     try:
         data = request.json

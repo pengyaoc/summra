@@ -21,11 +21,9 @@ from pathlib import Path
 import subprocess
 from PIL import Image
 
-# Add parent directory to path
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root / "backend"))
 
-import config
+from backend import config
 
 
 def recompress_guide_image(original_path: Path, output_dir: Path, max_width: int = 1200):
