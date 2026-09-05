@@ -11,11 +11,7 @@ Usage:
     python scripts/migrations/migrate_book_titles.py [--dry-run]
 """
 
-import os
 
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
-
-scripts_dir = os.path.dirname(os.path.abspath(__file__))
 
 from backend import models
 import argparse

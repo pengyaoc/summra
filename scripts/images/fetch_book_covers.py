@@ -6,12 +6,10 @@ and update the database for existing books.
 This script searches Project Gutenberg by title and retrieves cover images.
 """
 
-import os
 import requests
 from urllib.parse import quote
 import time
 
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
 
 from backend import models
 

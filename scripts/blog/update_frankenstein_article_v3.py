@@ -4,9 +4,7 @@ Update the Mary Shelley & AI Anxiety article - more accessible version
 Replace technical jargon with relatable concepts while keeping depth
 """
 import sys
-from pathlib import Path
 
-backend_dir = Path(__file__).parent.parent.parent / 'backend'
 
 from backend.models import Database
 

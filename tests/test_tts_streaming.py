@@ -10,8 +10,6 @@ Tests:
 5. End-to-end streaming flow
 """
 
-import os
-import sys
 import time
 import requests
 import json
@@ -19,7 +17,6 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-backend_dir = Path(__file__).parent.parent / 'backend'
 
 @patch('requests.head')
 @patch('requests.post')

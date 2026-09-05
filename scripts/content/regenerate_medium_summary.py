@@ -8,7 +8,6 @@ import sys
 import time
 import re
 
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
 
 from google import genai
 from dotenv import load_dotenv

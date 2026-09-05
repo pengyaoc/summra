@@ -4523,24 +4523,12 @@ http://localhost:5000/static/covers/pg1727.jpg
 
 **Example:** `odyssey_custom.png`
 
-**Update Script:** `scripts/images/update_odyssey_cover.py`
+**Update Script:** `scripts/images/update_book_cover.py` (generic — replaced three
+per-book scripts hardcoded to a single book ID each: `update_odyssey_cover.py`,
+`update_christmas_carol_cover.py`, `update_time_machine_cover.py`)
 
-```python
-def main():
-    db = models.Database()
-    new_cover_path = "covers/odyssey_custom.png"
-
-    conn = db.get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "UPDATE books SET cover_image_url = ? WHERE id = ?",
-        (new_cover_path, 11)
-    )
-    conn.commit()
-    conn.close()
-
-    print(f"✓ Updated cover to: {new_cover_path}")
+```sh
+python scripts/images/update_book_cover.py --title "The Odyssey" --source /path/to/odyssey_custom.png
 ```
 
 ---

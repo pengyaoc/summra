@@ -10,6 +10,30 @@ This document tracks the systematic refactoring of `scripts/content/generate_sum
 
 ---
 
+## 2026-09-05: Phase 4 abandoned, v2 architecture deleted
+
+Phase 4 (swap `detect_chapters()` for `detect_chapters_v2()`) was never done — the file grew
+from 4,811 to 8,111 lines with the two implementations living side by side, `detect_chapters_v2()`
+never wired to any CLI flag or caller. A full-repo grep (`grep -rln "detect_chapters_v2\|
+TOCDetector\|ContentParser\|ChapterMarkerFinder\|TOCStructure"`) confirmed zero references outside
+this file itself, and zero test coverage of any kind.
+
+Rather than complete Phase 4 (which would mean re-validating `detect_chapters_v2()` against every
+book class this parser already handles — the exact "re-verify all edge cases" risk this doc's own
+Phase 4 section flagged as the blocker), the dead v2 architecture was deleted outright:
+`TOCStructure`, `TOCDetector`, `ContentParser`, `ChapterMarkerFinder`, `detect_chapters_v2()`, and
+the two v2-only constants (`ContentThresholds.MIN_CHAPTER_CHARS_V2`, `MIN_CHAPTER_FOR_TOC_CHARS`).
+`detect_chapters()` (the 1,341-line v1 implementation) remains the sole, live chapter-detection
+path — unchanged.
+
+**Net effect**: 8,111 → 6,786 lines (−1,325 lines). Full test suite unchanged at 438 passed —
+confirming this code had no live callers or test dependents to begin with. Phases 5–7 below
+(extract retry logic, extract pattern matching, split other large functions) are still open and
+are being addressed separately as part of a broader codebase refactor
+(`~/.claude/plans/check-the-codebase-and-declarative-fiddle.md`).
+
+---
+
 ## Completed Refactorings
 
 ### ✅ Phase 1: Extract Magic Numbers to Constants (COMPLETED)

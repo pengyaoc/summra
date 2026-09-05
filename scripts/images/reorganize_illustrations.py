@@ -7,10 +7,8 @@ Changes:
 - TO:   illustrations/1/1.png, illustrations/1/2.png
 """
 
-import os
 import shutil
 
-backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend')
 
 from backend import models
 from backend import config
