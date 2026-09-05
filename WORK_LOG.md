@@ -7451,8 +7451,43 @@ scheme. Breakpoint consolidation (10 → 3-4) also not attempted — same reason
 decision (which breakpoints survive, min- vs max-width direction) with real cross-device visual
 risk, not a same-value substitution.
 
-### Next: the `SummaryGenerator` class breakup (largest remaining task, deferred to a dedicated
-session — see above), Phase 4b's `reader.js`/`audio.js` extraction, Phase 4d's page-controller
-abstraction, and the remainder of Phase 4f (new CSS tokens, breakpoint consolidation) — the last
-three all need either a design decision or live e2e verification across every affected page, so
-best taken up explicitly with the user rather than guessed at.
+### Merged to `main` (commit `dc2bd59`, fast-forward, pushed to origin)
+The `refactor/modularize-and-harden` branch (38 commits, all of Phases 0-5 above) was merged into
+`main` via fast-forward (main had not diverged) and pushed to `origin/main`. Verified on `main`
+post-merge: 513 pytest passed, 29/29 JS unit tests passed. All further work in this log continues
+directly on `main`.
+
+### Phase 4b (continued) — extract `audio.js` (DONE, commit `8afe246`)
+Extracted the 14 audio/TTS methods (`setupPersistentPlayer`, `formatTime`, `stopPlayback`,
+`handleAudioEnded`, `playNextChunk`, `waitForChunk`, `updateSummaryTTSButton`, `generateTTS`,
+`generateChapterTTS`, `updatePlayerInfo`, `updateMediaSessionMetadata`, `startPersistentPlayback`,
+`truncateAtSentenceBoundary`, `cleanTextForTTS`) into `audio.js`, following the same
+`Object.assign(SummraApp.prototype, mixin)` pattern as the 4 prior extractions. This cluster is
+genuinely non-contiguous — 3 separate blocks (567-724, 917-944, 2765-3013) separated by ~2000 lines
+of unrelated rendering/routing/category-loading code — matching the plan's own risk flag.
+
+Given the non-contiguity risk, verified via a **scripted line-by-line diff** (not eyeballing) between
+the original blocks and the extracted mixin body, rather than trusting a manual copy. That caught a
+real transcription bug: `cleanTextForTTS`'s zero-width-character regex used the textual escape
+`​-‍﻿` in the original, but got silently rewritten as literal invisible Unicode
+characters during extraction (functionally equivalent to a JS engine, but a byte-perfect landmine —
+invisible characters in source can be silently stripped or mangled by editors, git, or line-ending
+normalization). Fixed to match the original's escape-text form exactly before proceeding.
+
+`this.currentPlayback` (initialized in the constructor) intentionally stayed in `app.js` — same
+pattern as the earlier 4 extractions, only the methods that read/write it moved.
+
+`app.js`: 4,036 → 3,601 lines. Verified: `npm run build:check` (prod bundle matches), full pytest
+(513, unchanged), JS unit suite (29/29, unchanged), and a **live browser check** via
+claude-in-chrome — confirmed all 14 methods exist as functions on the running `window.summraApp`
+instance, called `formatTime(125)` → `"2:05"`, `cleanTextForTTS(...)` correctly stripped markdown
+and zero-width characters, `truncateAtSentenceBoundary(...)` correctly truncated at a sentence
+boundary, and zero console errors across two page loads of a real book page.
+
+### Next: `reader.js` extraction (`renderMarkdown`, `formatChapterText`, `formatSideBySideText`,
+`showChapterDetailPage`, `showResumeReadingButton`, `showMediumDetail`, `getCurrentViewMode`,
+`applyChapterViewMode`, `showChapterDetail` — also non-contiguous, deliberately kept as a separate
+commit/verification cycle from `audio.js`), then the `SummaryGenerator` class breakup (largest
+remaining task), Phase 4d's page-controller abstraction, and the remainder of Phase 4f (new CSS
+tokens, breakpoint consolidation) — the last two need a design decision, best taken up explicitly
+with the user rather than guessed at.
