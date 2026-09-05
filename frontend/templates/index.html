@@ -124,9 +124,13 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Hero Sections (Apple-style) -->
-            {% if not initial_data or initial_data.type not in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author'] %}
-            <div id="hero-section">
+            {# Hero Sections (Apple-style) — always rendered (not swapped for an
+               empty placeholder on sub-pages) so app.js's showHomeSection() only
+               ever needs to toggle `hidden`, never rebuild this markup from a JS
+               template literal. The two used to drift apart (different hero copy
+               depending on whether you landed on / directly vs navigated here
+               client-side) until they were unified into this one copy. #}
+            <div id="hero-section"{% if initial_data and initial_data.type in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author'] %} class="hidden"{% endif %}>
                 <!-- Main Hero Banner -->
                 <section class="hero-banner hero-main">
                     <div class="hero-banner-content">
@@ -243,10 +247,6 @@
                     </div>
                 </section>
             </div>
-            {% else %}
-            <!-- Hero section placeholder for client-side navigation -->
-            <div id="hero-section" class="hidden"></div>
-            {% endif %}
 
             <!-- Book Detail Section -->
             <section class="summary-section {% if not initial_data or initial_data.type != 'book' %}hidden{% endif %}" id="summary-section">
