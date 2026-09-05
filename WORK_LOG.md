@@ -6932,3 +6932,64 @@ thing that varies per host is `service.env`, never git-tracked):
 - Backport the same committed structure to OpenReader's own repo — it already meets the
   isolation bar operationally, but its config only exists as hand-edits on the VM.
 - The two security gaps above, once `/summrabook` is actually linked publicly.
+
+## 2026-09-05: Codebase-wide refactor — modularize, deduplicate, harden (in progress)
+
+Full audit (3 parallel Explore agents over backend/, frontend/, scripts+tests/) found the
+codebase's four highest-churn files are also its four largest (`app.js` 6,104 lines/46 commits,
+`style.css` 5,962/38, `generate_summaries.py` 8,111/30, `models.py`+`app_base.py` 3,429/36), plus:
+no packaging (123 `sys.path` hacks, a `tests/conftest.py` that injects every `scripts/*/` dir),
+no shared script library (16 hardcoded DB paths, 9 independent Gemini clients, 6 retry
+implementations), and a stalled 2026 refactor leaving ~1,230 lines of dead parser architecture
+(`TOCStructure`/`TOCDetector`/`ContentParser`/`ChapterMarkerFinder`/`detect_chapters_v2` — zero
+callers, verified by grep) inside `generate_summaries.py`. Full plan at
+`~/.claude/plans/check-the-codebase-and-declarative-fiddle.md`, branch
+`refactor/modularize-and-harden`.
+
+**Correction recorded mid-session:** an initial "~35 dead scripts" estimate (from commit-recency
+and doc-reference heuristics) did not survive verification — `scripts/categorization/
+categorization.py` looked dead by that heuristic but is a live, imported (2x) shared library with
+no `__main__`. Re-classified into Tier A (provable dead by grep/read), Tier B (provable single-use
+from the code's own content, e.g. hardcoded book IDs), and Tier C (can't be determined from the
+repo — migrations/backfills/book_fixes; user reviews these before any deletion, no auto-delete).
+
+### Phase 0 — bug fixes (DONE, commit `6b55544`)
+TDD throughout: each fix has a failing-test-first regression.
+- `backend/app_base.py`: `get_author()`/`get_author_books()` raised `UnboundLocalError` in their
+  own `except` handler when `slug_to_author_name()` itself raised (`author_name` was only bound
+  inside the `try`). Fixed by binding before the `try`.
+- `backend/app_base.py`: the global 404 handler returned JSON for every unmatched URL, including
+  page routes (a typo'd `/books/<slug>` returned a bare JSON error instead of the SPA shell).
+  Now `/api/*` misses stay JSON; everything else falls through to `index.html`.
+- `backend/user_models.py`: `UserDatabase()`'s own default path fell back to a repo-root
+  `summra.db` instead of `config.USER_DATABASE_PATH` (`data/summra.db`). `app_base.py`'s call site
+  already passed the path explicitly so this was latent for the running app, but any other caller
+  (script, future test) still produced a stray file. Removed the resulting empty (0-byte, wrongly
+  tracked) `backend/summra.db` and the stale repo-root `summra.db`; `data/summra.db` (has real
+  schema: `users`/`reading_progress`/`chapter_completion`) is the one true copy.
+- `backend/app_base.py`: `SECRET_KEY` silently fell back to `secrets.token_hex(32)` per process —
+  under gunicorn's multi-worker model each worker gets a different key, breaking session
+  validation. Now fails fast at import time when `FEATURE_AUTH` is on and `SECRET_KEY` is unset;
+  no behavior change while auth stays off (today's default). Also set `SESSION_COOKIE_SECURE`.
+- New `frontend/static/js/route_utils.js` (same clean-IIFE pattern as `view_mode.js`, unit-tested
+  via `node --test` + `node:vm` loading the real browser file) centralizes the base-path strip and
+  the 10 route regexes that `handleRoute()` and `buildBreadcrumbs()` each independently
+  maintained. `buildBreadcrumbs()` was reading the raw `pathname` instead of stripping
+  `window.APP_BASE_PATH`, so breadcrumbs collapsed to just "Home" under the documented
+  `/summrabook` prefix deploy mode (not live in prod today, but a real bug in that supported mode).
+  Also fixed a second divergence caught while unifying: `buildBreadcrumbs()`'s `authorMatch` regex
+  disallowed slashes while `handleRoute()`'s and the backend's own `<path:author_slug>` route both
+  allow them.
+- Security pass (requested mid-session): scanned staged diff + full tracked tree + entire git
+  history for API keys, emails, IPs, personal-name leaks. Confirmed clean — no key has ever been
+  committed (`git log --all -p` grep), `.env`/`*.local.md` correctly gitignored and never in
+  history, the one personal-domain hit in `tests/test_url_prefix.py` is the already-public prod
+  domain used as a test fixture value. `deploy/service.env.example` already documents *why*
+  `GEMINI_API_KEY` deliberately never reaches the VM (prod only serves pre-generated audio).
+
+**Verification:** `pytest tests/` 438 passed (was 430), 1 deselected. `node --test tests/js/*.mjs`
+23 passed. `tests/e2e/`: `smoke.mjs`, `breadcrumb_navigate.mjs`, `breadcrumb_no_flash.mjs` all pass
+— confirms the route_utils extraction didn't regress breadcrumb rendering. `app.min.js` rebuilt via
+the documented esbuild command.
+
+### Next: Phase 1 — packaging foundation (pyproject.toml, kill sys.path hacks, add ruff + CI)
