@@ -6992,4 +6992,46 @@ TDD throughout: each fix has a failing-test-first regression.
 — confirms the route_utils extraction didn't regress breadcrumb rendering. `app.min.js` rebuilt via
 the documented esbuild command.
 
-### Next: Phase 1 — packaging foundation (pyproject.toml, kill sys.path hacks, add ruff + CI)
+### Phase 1 — packaging foundation (DONE, commit `0dac077`)
+- Added `pyproject.toml` (`backend` + `scripts` as real editable packages via `pip install -e .`).
+  This is the actual fix for the 123 `sys.path` hacks + 10 dual-import shims the audit found —
+  everything now resolves as `from backend import config` / `from scripts.content.
+  generate_summaries import SummaryGenerator` from anywhere, no CWD dependence.
+- Removed `tests/conftest.py`'s sys.path injection (looped over every `scripts/*/` dir) and the
+  24+ redundant per-file preambles it made unnecessary.
+- Converted ~55 `scripts/*.py` + ~30 `tests/*.py` files from bare imports to absolute package
+  imports. Caught one previously-invisible bug this exposed: `migrate_book_covers.py`'s
+  `from resize_image import ...` only ever worked by accident via conftest's old per-subdir hack —
+  fixed to `from scripts.images.resize_image import ...`.
+- `app.py`/`app_base.py`/`app_prod.py`/`gemini_tts_handler.py` keep their dual-mode
+  try/except shim (still needed: dev runs `python backend/app.py` directly, prod's gunicorn
+  loads `backend.app_prod:app` as a package) but the fallback branch now resolves via the
+  installed package instead of a sys.path hack.
+- Fixed a real bug this surfaced in 3 tests that reload `app_base` after patching config:
+  `from backend import app_base` silently returns a **stale cached attribute** on the `backend`
+  package object instead of re-executing the module, once `sys.modules['backend.app_base']` has
+  been popped — `importlib.reload()` then fails with "module not in sys.modules" because the
+  object it's holding was never actually re-registered. Fixed by switching to
+  `importlib.import_module('backend.app_base')`, which correctly detects the missing entry.
+- Self-caught bug: a line-ending cleanup pass (this repo mixes CRLF and LF files) had a
+  double-`\r` bug that corrupted 25 files enough to break Python's parser on one of them
+  (`test_comprehensive_parsing.py`). Caught via `py_compile` across every touched file before
+  commit — not caught by pytest alone, since the file's own collection would have simply errored
+  loudly, but I want the general lesson on record: **run `py_compile` on every mechanically-edited
+  file, not just the test suite**, when doing a bulk text transform across dozens of files.
+- Added `backend/requirements.txt: Pillow` — genuinely missing; 5+ image scripts and
+  `test_illustrations.py` need it, so CI's test job would fail to even collect tests without it.
+- Added `.github/workflows/ci.yml` (repo had zero CI before this). pytest is a hard gate; ruff
+  runs but is informational only (`|| true`) — the repo has ~560 pre-existing findings (mostly
+  F541/I001 style, not bugs), and failing the build on those on day one would misrepresent actual
+  regression risk. Documented in the workflow comment as a backlog to work down incrementally.
+
+**Verification:** `pytest tests/` 438 passed (unchanged from Phase 0), run with `PYTHONPATH=`
+(no env-var crutch) to prove the packaging genuinely works end-to-end, not just under the old
+convention. `py_compile` + isolated-subprocess import-smoke-test across all 89 touched non-test
+files: exactly 1 failure, a pre-existing tuple-unpacking bug in a dead `scripts/archive/` debug
+script (confirmed present before my changes via `git stash`). `tests/e2e/smoke.mjs` passes.
+Security-scanned the full diff (requested standing instruction for this session): no secrets,
+keys, or PII introduced.
+
+### Next: Phase 2 — delete provable dead code (Tier A + B only; Tier C needs user review)
