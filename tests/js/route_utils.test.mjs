@@ -100,3 +100,41 @@ test("parseAppRoute: exact-match routes (categories/books/discover/blog) set onl
     assert.equal(w.parseAppRoute("/blog").blogMatch, true);
     assert.equal(w.parseAppRoute("/blog/some-post").blogPostMatch[1], "some-post");
 });
+
+// --- withBasePath / summraBasePath ---
+// Moved here from app.js so components/BlogIndex.js and components/
+// BlogPost.js (which load before app.js) can also call withBasePath() —
+// see route_utils.js's module docstring.
+
+test("summraBasePath: empty when APP_BASE_PATH is unset", () => {
+    const w = loadWithLocation("/", "");
+    assert.equal(w.summraBasePath(), "");
+});
+
+test("summraBasePath: reflects window.APP_BASE_PATH", () => {
+    const w = loadWithLocation("/", "/summrabook");
+    assert.equal(w.summraBasePath(), "/summrabook");
+});
+
+test("withBasePath: prefixes a root-relative path with the base path", () => {
+    const w = loadWithLocation("/", "/summrabook");
+    assert.equal(w.withBasePath("/api/blog"), "/summrabook/api/blog");
+});
+
+test("withBasePath: root deployment (no base path) leaves the path unchanged", () => {
+    const w = loadWithLocation("/", "");
+    assert.equal(w.withBasePath("/api/blog"), "/api/blog");
+});
+
+test("withBasePath: leaves absolute http(s)/protocol-relative URLs untouched", () => {
+    const w = loadWithLocation("/", "/summrabook");
+    assert.equal(w.withBasePath("https://example.com/x"), "https://example.com/x");
+    assert.equal(w.withBasePath("http://example.com/x"), "http://example.com/x");
+    assert.equal(w.withBasePath("//example.com/x"), "//example.com/x");
+});
+
+test("withBasePath: passes through falsy input unchanged", () => {
+    const w = loadWithLocation("/", "/summrabook");
+    assert.equal(w.withBasePath(""), "");
+    assert.equal(w.withBasePath(null), null);
+});
