@@ -10,10 +10,12 @@ Usage:
     PYTHONPATH=backend venv/bin/python scripts/audits/prepend_missing_titles.py --book-id 80
 """
 import argparse
-import sqlite3
 import sys
 
-DB_PATH = "data/database.db"
+from backend import config
+from scripts.lib.db import get_connection
+
+DB_PATH = config.DATABASE_PATH
 
 
 def main() -> int:
@@ -22,7 +24,7 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
 
-    db = sqlite3.connect(DB_PATH)
+    db = get_connection(DB_PATH)
     rows = list(
         db.execute(
             "SELECT chapter_number, chapter_title, chapter_text, modern_english_text "

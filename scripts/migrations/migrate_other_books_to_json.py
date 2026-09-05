@@ -15,16 +15,17 @@ Usage:
     python scripts/migrations/migrate_other_books_to_json.py --rollback backup.json  # Rollback
 """
 
-import sqlite3
 import json
 import argparse
 from datetime import datetime
 
+from backend import config
+from scripts.lib.db import get_connection
 
-def backup_data(db_path='data/database.db'):
+
+def backup_data(db_path=config.DATABASE_PATH):
     """Create backup of current other_books data"""
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection(db_path)
     cursor = conn.cursor()
 
     cursor.execute("SELECT id, name, other_books FROM authors WHERE other_books IS NOT NULL")
@@ -110,7 +111,7 @@ def parse_comma_separated_books(text):
     return books
 
 
-def migrate_to_json(db_path='data/database.db', dry_run=True):
+def migrate_to_json(db_path=config.DATABASE_PATH, dry_run=True):
     """
     Migrate other_books from comma-separated to JSON
 
@@ -118,8 +119,7 @@ def migrate_to_json(db_path='data/database.db', dry_run=True):
         db_path: Path to database
         dry_run: If True, only show what would be changed
     """
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection(db_path)
     cursor = conn.cursor()
 
     cursor.execute("SELECT id, name, other_books FROM authors WHERE other_books IS NOT NULL")
@@ -183,14 +183,14 @@ def migrate_to_json(db_path='data/database.db', dry_run=True):
     return len(changes)
 
 
-def rollback_from_backup(backup_file, db_path='data/database.db'):
+def rollback_from_backup(backup_file, db_path=config.DATABASE_PATH):
     """Rollback to backup file"""
     with open(backup_file, 'r') as f:
         backup = json.load(f)
 
     print(f"Rolling back to backup from {backup['timestamp']}")
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
     cursor = conn.cursor()
 
     for author in backup['authors']:
@@ -209,7 +209,7 @@ def main():
     parser = argparse.ArgumentParser(description='Migrate other_books to JSON format')
     parser.add_argument('--apply', action='store_true', help='Apply changes (default is dry run)')
     parser.add_argument('--rollback', type=str, help='Rollback using backup file')
-    parser.add_argument('--db', default='data/database.db', help='Database path')
+    parser.add_argument('--db', default=str(config.DATABASE_PATH), help='Database path')
 
     args = parser.parse_args()
 

@@ -26,13 +26,13 @@ Usage:
 No LLM calls — pure DB rewrite of modern_english_text.
 """
 import argparse
-import sqlite3
 import sys
-from pathlib import Path
 from typing import List, Tuple, Optional
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-DB_PATH = ROOT / "data" / "database.db"
+from backend import config
+from scripts.lib.db import get_connection
+
+DB_PATH = config.DATABASE_PATH
 
 SEP = "\n\n"
 
@@ -151,8 +151,7 @@ def main() -> int:
         print(f"ERROR: DB not found at {DB_PATH}", file=sys.stderr)
         return 2
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection(DB_PATH)
     row = conn.execute(
         "SELECT c.id, c.chapter_text, c.modern_english_text, b.title AS book_title "
         "FROM chapters c JOIN books b ON b.id = c.book_id "

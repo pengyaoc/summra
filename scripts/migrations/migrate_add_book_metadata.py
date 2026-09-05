@@ -11,13 +11,13 @@ Adds:
 """
 
 import sqlite3
-from pathlib import Path
+
+from scripts.lib.db import get_connection
 
 
 def migrate_database():
     """Apply database migrations for new metadata fields."""
-    db_path = Path(__file__).parent.parent.parent / 'data' / 'database.db'
-    conn = sqlite3.connect(str(db_path))
+    conn = get_connection()
     cursor = conn.cursor()
 
     print("Starting database migration...")

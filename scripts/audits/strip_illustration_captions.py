@@ -39,12 +39,12 @@ Usage:
 """
 import argparse
 import re
-import sqlite3
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-DB_PATH = ROOT / "data" / "database.db"
+from backend import config
+from scripts.lib.db import get_connection
+
+DB_PATH = config.DATABASE_PATH
 
 SEP = "\n\n"
 
@@ -175,8 +175,7 @@ def main() -> int:
         print(f"ERROR: DB not found at {DB_PATH}", file=sys.stderr)
         return 2
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection(DB_PATH)
     rows = conn.execute(
         "SELECT id, chapter_number, chapter_text, modern_english_text "
         "FROM chapters WHERE book_id = ? ORDER BY chapter_number",

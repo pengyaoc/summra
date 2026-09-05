@@ -6,10 +6,7 @@ This script updates existing chapter titles in the database to use consistent
 title case formatting.
 """
 
-from pathlib import Path
-
-
-import sqlite3
+from scripts.lib.db import get_connection
 
 
 def normalize_chapter_title(title: str) -> str:
@@ -141,8 +138,7 @@ def backfill_chapter_titles(dry_run=False):
         dry_run: If True, only show what would be changed without updating
     """
     # Connect to database
-    db_path = Path(__file__).parent.parent.parent / 'data' / 'database.db'
-    conn = sqlite3.connect(str(db_path))
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Get all chapters

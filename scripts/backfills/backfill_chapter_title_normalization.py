@@ -6,12 +6,11 @@ This script updates chapter titles in the database to apply the new title
 normalization (title casing) that was recently added to generate_summaries.py.
 """
 
-import sqlite3
-
-
+from backend import config
+from scripts.lib.db import get_connection
 from scripts.content.generate_summaries import SummaryGenerator, fix_roman_numerals_in_text
 
-def normalize_chapter_titles_for_book(book_id: int, db_path: str = 'data/database.db'):
+def normalize_chapter_titles_for_book(book_id: int, db_path: str = str(config.DATABASE_PATH)):
     """
     Update chapter titles for a specific book to apply title normalization.
 
@@ -19,7 +18,7 @@ def normalize_chapter_titles_for_book(book_id: int, db_path: str = 'data/databas
         book_id: The ID of the book to update
         db_path: Path to the database file
     """
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
     cursor = conn.cursor()
 
     # Get book info

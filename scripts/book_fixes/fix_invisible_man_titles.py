@@ -3,8 +3,9 @@
 Fix chapter title capitalization for The Invisible Man (book_id 71)
 """
 
-import sqlite3
 import re
+
+from scripts.lib.db import get_connection
 
 def normalize_chapter_title(title: str) -> str:
     """
@@ -51,8 +52,7 @@ def normalize_chapter_title(title: str) -> str:
     return ' '.join(result)
 
 def main():
-    db_path = 'data/database.db'
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Get all chapters for book 71 (The Invisible Man)
