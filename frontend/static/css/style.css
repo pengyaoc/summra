@@ -5171,7 +5171,8 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     color: var(--text-color);
 }
 
-/* Prevent body scrolling when pagination is active */
+/* Prevent body/html scrolling when pagination is active */
+html.pagination-active,
 body.pagination-active {
     overflow: hidden;
 }
