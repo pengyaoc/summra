@@ -107,62 +107,6 @@ class Database:
             )
         ''')
 
-        # Add chapter_text column if it doesn't exist (migration for existing databases)
-        try:
-            cursor.execute("ALTER TABLE chapters ADD COLUMN chapter_text TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add cover_image_url column if it doesn't exist (migration for existing databases)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN cover_image_url TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add gutenberg_id column if it doesn't exist (migration for existing databases)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN gutenberg_id INTEGER")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add cover_source column if it doesn't exist (migration for existing databases)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN cover_source TEXT DEFAULT 'unknown'")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add slug column for SEO-friendly URLs (migration for existing databases)
-        # Note: SQLite ALTER TABLE ADD COLUMN does not support UNIQUE constraint,
-        # so we add the column first, then create a unique index separately.
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN slug TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-        try:
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_books_slug ON books(slug)")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Index already exists
-            pass
-
-        # Add author_id column for foreign key relationship (migration for existing databases)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN author_id INTEGER REFERENCES authors(id)")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
         # Book sections table (for two-level structure: Part/Book/Act → Chapters)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS book_sections (
@@ -180,45 +124,6 @@ class Database:
         # Add section_id column to chapters table if it doesn't exist (migration)
         try:
             cursor.execute("ALTER TABLE chapters ADD COLUMN section_id INTEGER REFERENCES book_sections(id)")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add illustration_url column to chapters table if it doesn't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE chapters ADD COLUMN illustration_url TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add about_text and relevance_now columns to books table if they don't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN about_text TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN relevance_now TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add modern_english_text column to chapters table if it doesn't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE chapters ADD COLUMN modern_english_text TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add is_poetry column to books table if it doesn't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN is_poetry INTEGER DEFAULT 0")
             conn.commit()
         except sqlite3.OperationalError:
             # Column already exists
@@ -275,45 +180,6 @@ class Database:
             )
         ''')
 
-        # Add short_bio and long_bio columns if they don't exist (migration for existing databases)
-        try:
-            cursor.execute("ALTER TABLE authors ADD COLUMN short_bio TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        try:
-            cursor.execute("ALTER TABLE authors ADD COLUMN long_bio TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add character_guide_url column to books table if it doesn't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN character_guide_url TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add timeline_url column to books table if it doesn't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN timeline_url TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
-        # Add themes_url column to books table if it doesn't exist (migration)
-        try:
-            cursor.execute("ALTER TABLE books ADD COLUMN themes_url TEXT")
-            conn.commit()
-        except sqlite3.OperationalError:
-            # Column already exists
-            pass
-
         # Blog posts table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS blog_posts (
@@ -329,16 +195,57 @@ class Database:
             )
         ''')
 
-        # Add header_image_url column if it doesn't exist (migration for existing databases)
+        # Column migrations for existing databases — every table above is
+        # CREATE TABLE IF NOT EXISTS, so a fresh database already has every
+        # column and each ALTER TABLE below is a silent no-op (caught as
+        # sqlite3.OperationalError: duplicate column name). Kept as one
+        # data-driven list instead of 18 copy-pasted try/except blocks.
+        for table, column_def in self._COLUMN_MIGRATIONS:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
+                conn.commit()
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+
+        # books.slug needs a UNIQUE index rather than a UNIQUE column
+        # constraint, since SQLite's ALTER TABLE ADD COLUMN doesn't support
+        # UNIQUE — add the column (above) then the index separately.
         try:
-            cursor.execute("ALTER TABLE blog_posts ADD COLUMN header_image_url TEXT")
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_books_slug ON books(slug)")
             conn.commit()
         except sqlite3.OperationalError:
-            # Column already exists
+            # Index already exists
             pass
 
         conn.commit()
         conn.close()
+
+    # (table, column_definition) pairs applied by init_db() on every
+    # instantiation. Order doesn't matter for correctness — ALTER TABLE ADD
+    # COLUMN only requires the target table to already exist (all of them do,
+    # created above), not any table a REFERENCES clause points at — but is
+    # kept close to the original commit order for readability.
+    _COLUMN_MIGRATIONS = [
+        ("chapters", "chapter_text TEXT"),
+        ("books", "cover_image_url TEXT"),
+        ("books", "gutenberg_id INTEGER"),
+        ("books", "cover_source TEXT DEFAULT 'unknown'"),
+        ("books", "slug TEXT"),
+        ("books", "author_id INTEGER REFERENCES authors(id)"),
+        ("chapters", "section_id INTEGER REFERENCES book_sections(id)"),
+        ("chapters", "illustration_url TEXT"),
+        ("books", "about_text TEXT"),
+        ("books", "relevance_now TEXT"),
+        ("chapters", "modern_english_text TEXT"),
+        ("books", "is_poetry INTEGER DEFAULT 0"),
+        ("authors", "short_bio TEXT"),
+        ("authors", "long_bio TEXT"),
+        ("books", "character_guide_url TEXT"),
+        ("books", "timeline_url TEXT"),
+        ("books", "themes_url TEXT"),
+        ("blog_posts", "header_image_url TEXT"),
+    ]
 
     def add_book(self, title: str, author: str, filename: str, full_text: str,
                  gutenberg_id: int = None, cover_image_url: str = None, author_id: int = None, is_poetry: bool = False) -> int:
