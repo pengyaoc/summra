@@ -119,9 +119,14 @@
                      signed-out-view comment below) — showing this button
                      just to immediately hide it again once auth.js's
                      checkAuthStatus() resolves would flash a dead-end UI
-                     element. auth.js's updateAuthUI() removes `hidden` only
-                     once a real signed-in user is confirmed. -->
-                <button class="header-nav-btn user-account-btn" id="user-account-btn" hidden>
+                     element. Uses the `.hidden` utility class (display:none
+                     !important), not the `hidden` attribute — `.header-nav-btn`
+                     sets `display: flex` as an author style, which beats the
+                     UA stylesheet's `[hidden]{display:none}` in the cascade,
+                     so the bare attribute alone silently does nothing here.
+                     auth.js's updateAuthUI() removes `.hidden` only once a
+                     real signed-in user is confirmed. -->
+                <button class="header-nav-btn user-account-btn hidden" id="user-account-btn">
                     <span class="user-icon">👤</span>
                     <span class="user-name" id="header-user-name">Account</span>
                 </button>
