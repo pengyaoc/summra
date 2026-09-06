@@ -7578,9 +7578,55 @@ a deferral: the premise (these breakpoints are redundant) doesn't hold up under 
 class of finding as the `RateLimiter`/`dict(row)`/`SummaryGenerator('dummy')` corrections earlier in
 this log.
 
-### Next: the `SummaryGenerator` class breakup (largest remaining task — the plan's own note that
-`detect_chapters` and `_detect_chapters_from_toc_structure` need internal decomposition first means
-this deserves a dedicated session), the remaining ~150 CSS hex literals (each needs the same
-per-usage semantic check demonstrated above before tokenizing — no further mechanical passes
-possible), `showAuthorDetail`/`showDiscoverPage`'s try/catch-wrapped control flow (left out of the
-`finishPageTransition` consolidation), and the `showBlogPost` title-overwrite bug found above.
+### showBlogPost title-overwrite bug — FIXED (TDD, commit `178f600`)
+Only pass the generic placeholder title to `finishPageTransition` when `this.blogPost.post` is null
+(post not found) — `BlogPost.render()` already sets the real title via `updatePageTitle()` when a
+post is found, so passing `null` there lets `finishPageTransition` skip the call entirely and leaves
+the real title in place. New e2e test `tests/e2e/blog_post_title_not_overwritten.mjs` (requires
+`FEATURE_BLOG=True`) confirmed failing with the exact overwrite before the fix, passing after;
+manually verified the not-found path still falls back to the placeholder correctly.
+
+### Phase 4d — COMPLETE: showAuthorDetail/showDiscoverPage folded in too (commit `5a3bf3d`)
+These two were left out of the initial `finishPageTransition` consolidation because both wrap their
+body in try/catch. On a second look the try block's tail is the same 3-step sequence as the other 5
+methods — only the catch block (untouched) differs. Applied `finishPageTransition` inside both try
+blocks. Along the way, confirmed `showAuthorDetail`'s original `updateBreadcrumbs('author',
+authorData.author)` call's second argument was already dead — `updateBreadcrumbs(section = 'book')`
+never declared a second parameter, and the real breadcrumb author name flows through
+`this.currentAuthor`, set inside `renderAuthorPage()` immediately before. Verified live: both
+success paths produce correct titles/breadcrumbs, and `showAuthorDetail`'s catch path (author not
+found) still renders its error message correctly. All 7 `showX` page-controller methods now share
+`finishPageTransition` where their control flow allows it.
+
+### Phase 4f (continued) — 3 more rounds of per-usage-checked CSS tokens (commits `940e752`, `afd4fdb`, `c77358b`)
+Kept applying the same discipline established in the first Phase 4f commit — read every call site's
+selector before tokenizing, never merge two same-valued-but-differently-scoped colors under one name:
+- `--secondary-color-hover` (#2980b9, 7 `:hover` states), `--text-muted` (#95a5a6, 4 uses),
+  `--sticky-header-accent`/`--sticky-header-border` (#333333/#666666, 4 uses each, sticky
+  reading-header dark UI chrome).
+- `--reading-theme-dark-bg`/`--reading-theme-dark-text` (#1a1a1a/#e0e0e0) and
+  `--reading-theme-sepia-bg`/`--reading-theme-sepia-text` (#f4ecd8/#5c4f3d) — the dark/sepia reading
+  themes' background+text colors, 5 uses each pair, including the settings-panel theme-preview
+  swatches (confirmed these are deliberately meant to preview the real theme color, not coincidental).
+- `--skeleton-base`/`--skeleton-highlight` (#f0f0f0/#e8e8e8) — the shimmer loading-state gradient.
+
+**Discovered, not fixed:** `.skeleton` and `@keyframes shimmer` are each defined 2-3 times in the
+file; the file's own comment on one copy says "legacy - keeping for backward compatibility." This is
+the "16 doubly-defined-but-live selectors" the original plan flagged separately — a rule-cascade
+question (which definition wins), not a color-tokenization one, so left untouched here to avoid
+conflating the two kinds of change.
+
+Left several close-but-not-identical grays as literals on purpose (merging them would shift the
+actual rendered shade, not just its name): `.hero-search-result-item`'s #f0f0f0 divider (vs
+`--border-light`'s #e0e0e0), `.side-by-side-headers`'s #e8e8e8 divider (vs `--skeleton-highlight`'s
+role), `.header`/`.unified-view-toggle`'s #1a1a1a (vs the reading-theme dark background).
+
+Verified live via claude-in-chrome each round: toggled a chapter's `data-theme` between dark/sepia/
+light and read computed styles (all matched original hex values exactly), injected real `.skeleton`/
+`.illustration-skeleton` elements and read their computed gradients (also exact matches). Full suite
+unaffected across all 3 commits (513 pytest, 29/29 JS).
+
+### Next: the `SummaryGenerator` class breakup (largest remaining task — deserves a dedicated
+session), the remaining ~125 CSS hex literals (each single-use or not yet checked — same per-usage
+discipline applies, no shortcuts), and the discovered `.skeleton`/`@keyframes shimmer` duplicate-rule
+cleanup (a cascade-order question, separate from color tokenization).
