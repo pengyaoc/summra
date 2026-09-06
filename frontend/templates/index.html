@@ -687,14 +687,16 @@
         <div class="user-modal-content">
             <button class="user-modal-close" id="user-modal-close" aria-label="Close">✕</button>
 
-            <!-- Signed-out view. There's no login form any more — sign-in
-                 happens by visiting any gated pengyaochen.com path and
-                 letting the shared Apache gateway's Google redirect run;
-                 see docs/superpowers/specs/2026-09-05-consolidated-login-design.md. -->
+            <!-- Signed-out view. No sign-in action here by design — this app
+                 has no login flow of its own. Progress is saved locally via
+                 the offline fallback in auth.js; syncing it across devices
+                 only happens if you're already authenticated through the
+                 shared gateway (e.g. by signing in at pengyaochen.com/pages),
+                 which sets X-Remote-Email and is picked up transparently.
+                 See docs/superpowers/specs/2026-09-05-consolidated-login-design.md. -->
             <div class="user-modal-view" id="signed-out-view">
-                <h2 class="user-modal-title">Sign in with Google</h2>
-                <p class="user-modal-subtitle">Track your reading progress across devices</p>
-                <a href="/" class="btn-primary account-signin-link">Sign in with Google</a>
+                <h2 class="user-modal-title">Reading Progress</h2>
+                <p class="user-modal-subtitle">Saved on this device. Sign in at pengyaochen.com/pages to sync it across devices.</p>
             </div>
 
             <!-- Signed-in view -->
