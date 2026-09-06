@@ -7694,3 +7694,36 @@ old parallel dedicated VM predates this design and isn't part of it), so buildin
 actual client (PKCE, token exchange, JWKS verification) is future work, to be built only
 when a real standalone need shows up. Don't assume it exists; check `AUTH_SOURCE` before
 relying on any `self_oidc`-only behavior.
+
+## 2026-09-06 — Shared Apache OIDC gateway live; app code not yet deployed
+
+The consolidated-login Apache gateway (see 2026-09-05 entry above, and pchauth's spec/plan
+in the `pchauth` repo) went live on `wordpress-2-vm` today. `deploy/apache/summra.conf`
+gained the OIDC directives in its `<Location ${SUMMRA_PREFIX}/>` block (`AuthType
+openid-connect`, `Require all granted`, `RequestHeader unset`/`set X-Remote-Email`) and
+was redeployed to `/etc/apache2/service-locations/summra.conf` via the same
+`sed "s#\${SUMMRA_PREFIX}#/summrabook#g"` substitution `deploy/install.sh` uses, so the
+repo and the VM stay in sync. Backed up first
+(`summra.conf.bak-pre-oidc-20260906`).
+
+**Important: this repo's `feat/consolidated-login` branch (the actual app code — email-keyed
+`users` table, `pchauth` wiring, whoami endpoint, frontend sign-in link) has NOT been
+deployed to the VM yet.** The gateway change alone is live; `/summrabook/` currently
+passes through Apache unauthenticated into the *old*, still-running app code
+(`FEATURE_AUTH = False`), which doesn't read `X-Remote-Email` at all. Full behavior is
+only live once this branch is merged and deployed via `deploy/install.sh`.
+
+Two real Apache-layer bugs were found and fixed during the gateway rollout (not specific
+to Summra, but affects the shared vhost this app lives behind — full incident in
+`01-projects/personal-brand/wordpress-vm-pages-setup.md`'s "Consolidated login" section):
+1. `OIDCCacheShmMax` has an enforced minimum of 128, not the `20` the original design
+   spec assumed — `apache2ctl configtest` caught it immediately.
+2. `OIDCUnAuthAction pass`, set vhost-wide so `/summrabook/` and `/reader/` never block an
+   anonymous request, was initially inherited by `/pages/` too, briefly serving it with no
+   gate at all — fixed with a `/pages/`-local `OIDCUnAuthAction auth` override. Doesn't
+   affect Summra directly, but is why the vhost's structure now has that override present.
+
+**Next steps** (tracked in pchauth's plan, not duplicated here): deploy this branch,
+re-verify `X-Remote-Email` is actually consumed (today's header-spoofing test against
+`/reader/api/me` only proved the *old* app's own auth rejects a forged header, not that
+the new trusted_header path scrubs it — real verification needs this deploy first).
