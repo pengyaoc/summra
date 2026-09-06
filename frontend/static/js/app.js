@@ -539,6 +539,32 @@ class SummraApp {
         this.currentPage = pageKey;
     }
 
+    /**
+     * Shared tail for page-controller methods (showCategoryDetail,
+     * showAllCategories, showAllBooksGrid, showBlogIndex, showBlogPost):
+     * update breadcrumbs, restore scroll (or jump to top), then set the page
+     * title. The three steps are independent (verified: none reads state the
+     * others set), so this fixed order is safe regardless of a given page's
+     * original statement order.
+     * @param {string} breadcrumbKey - passed to updateBreadcrumbs()
+     * @param {string} scrollPageKey - passed to restoreScrollPosition() when restoreScroll is true
+     * @param {boolean} restoreScroll - restore saved position vs. scroll to top
+     * @param {string|null} title - passed to updatePageTitle(); skipped if falsy
+     */
+    finishPageTransition(breadcrumbKey, scrollPageKey, restoreScroll, title) {
+        this.updateBreadcrumbs(breadcrumbKey);
+
+        if (restoreScroll) {
+            this.restoreScrollPosition(scrollPageKey);
+        } else {
+            window.scrollTo(0, 0);
+        }
+
+        if (title) {
+            this.updatePageTitle(title);
+        }
+    }
+
     updateURL(book, page = null) {
         // Use slug from backend if available, fallback to generating from title
         const slug = book.slug || this.slugify(book.title);
@@ -2006,19 +2032,14 @@ class SummraApp {
             });
         }
 
-        // Update breadcrumbs
-        this.updateBreadcrumbs('category');
-
-        if (restoreScroll) {
-            this.restoreScrollPosition(pageKey);
-        } else {
-            window.scrollTo(0, 0);
-        }
-
-        // Update page title
-        if (categoryData && categoryData.category) {
-            this.updatePageTitle(`${categoryData.category.name} - Classic Books | Summra`);
-        }
+        this.finishPageTransition(
+            'category',
+            pageKey,
+            restoreScroll,
+            categoryData && categoryData.category
+                ? `${categoryData.category.name} - Classic Books | Summra`
+                : null
+        );
     }
 
     async showAllCategories(restoreScroll = false) {
@@ -2044,17 +2065,12 @@ class SummraApp {
             console.error('Error loading categories:', error);
         }
 
-        // Update breadcrumbs
-        this.updateBreadcrumbs('all-categories');
-
-        if (restoreScroll) {
-            this.restoreScrollPosition('all-categories');
-        } else {
-            window.scrollTo(0, 0);
-        }
-
-        // Update page title
-        this.updatePageTitle('Browse Categories - Classic Book Summaries | Summra');
+        this.finishPageTransition(
+            'all-categories',
+            'all-categories',
+            restoreScroll,
+            'Browse Categories - Classic Book Summaries | Summra'
+        );
     }
 
     async displayAllCategories(categories) {
@@ -2153,17 +2169,12 @@ class SummraApp {
             grid.appendChild(bookCard);
         });
 
-        // Update breadcrumbs for All Books page
-        this.updateBreadcrumbs('category');
-
-        if (restoreScroll) {
-            this.restoreScrollPosition('all-books');
-        } else {
-            window.scrollTo(0, 0);
-        }
-
-        // Update page title
-        this.updatePageTitle('Browse Classic Books - Free Summaries | Summra');
+        this.finishPageTransition(
+            'category',
+            'all-books',
+            restoreScroll,
+            'Browse Classic Books - Free Summaries | Summra'
+        );
     }
 
     async showAuthorDetail(authorName, restoreScroll = false) {
@@ -2436,17 +2447,12 @@ class SummraApp {
         }
         await this.blogIndex.render();
 
-        // Update breadcrumbs
-        this.updateBreadcrumbs('blog');
-
-        // Update page title
-        this.updatePageTitle('Blog - Classic Literature Guides | Summra');
-
-        if (restoreScroll) {
-            this.restoreScrollPosition('blog');
-        } else {
-            window.scrollTo(0, 0);
-        }
+        this.finishPageTransition(
+            'blog',
+            'blog',
+            restoreScroll,
+            'Blog - Classic Literature Guides | Summra'
+        );
     }
 
     async showBlogPost(slug, restoreScroll = false) {
@@ -2463,17 +2469,15 @@ class SummraApp {
         }
         await this.blogPost.render(slug);
 
-        // Update breadcrumbs
-        this.updateBreadcrumbs('blog-post');
-
-        // Update page title (will be updated by BlogPost component with actual title)
-        this.updatePageTitle('Blog Post | Summra');
-
-        if (restoreScroll) {
-            this.restoreScrollPosition(`blog-post-${slug}`);
-        } else {
-            window.scrollTo(0, 0);
-        }
+        // Note: updatePageTitle() here runs after blogPost.render() already set
+        // the real post title (BlogPost.js) — this placeholder overwrites it.
+        // Pre-existing behavior, preserved as-is; not introduced by this change.
+        this.finishPageTransition(
+            'blog-post',
+            `blog-post-${slug}`,
+            restoreScroll,
+            'Blog Post | Summra'
+        );
     }
 
     escapeHtml(text) {
