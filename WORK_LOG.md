@@ -7744,3 +7744,21 @@ Verified live: anonymous `GET /api/auth/check` → `{"authenticated": false}`; a
 `POST /api/progress/save` 401s anonymously; `/summrabook/` itself still loads (200).
 
 Not yet done: merging this branch to `main`.
+
+## 2026-09-06 (later still) — Real root cause found: Require all granted silently skipped auth
+
+Same bug, same fix as OpenReader's equivalent entry today: `<Location /summrabook/>` used
+`Require all granted`, which makes Apache's core skip invoking `mod_auth_openidc`'s
+authentication check entirely (a documented Apache 2.4 optimization) — `X-Remote-Email`
+was never injected even for a genuinely signed-in session. Fixed to `Require valid-user`
+in `deploy/apache/summra.conf`, redeployed to `/etc/apache2/service-locations/summra.conf`.
+`OIDCUnAuthAction pass` still covers the anonymous case correctly with this change.
+
+**Fully verified live**: after signing in once via `/pages/` (real Google account),
+`/summrabook/api/auth/check` correctly returned
+`{"authenticated":true,"user":{"email":"pychen007@gmail.com",...}}` with zero additional
+login prompt — confirming both the fix and, for the first time, genuine silent
+cross-service SSO. Anonymous access and write-gating re-confirmed unaffected.
+
+Full incident write-up: `01-projects/personal-brand/wordpress-vm-pages-setup.md`,
+"Consolidated login" sections (2026-09-06).
