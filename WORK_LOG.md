@@ -7518,7 +7518,69 @@ if a chapter fetch legitimately returns nothing (e.g. a real 404). This is a str
 not a bug hunt, so left as discovered, flagged here for a follow-up TDD fix (reproduce with a mocked
 failed fetch, then hoist the declaration or re-query the element).
 
-### Next: the `SummaryGenerator` class breakup (largest remaining task), Phase 4d's page-controller
-abstraction, and the remainder of Phase 4f (new CSS tokens, breakpoint consolidation) — the last two
-need a design decision, best taken up explicitly with the user rather than guessed at. The
-`chapterFulltext` scoping bug found above is also available as a small, well-scoped next fix.
+### `chapterFulltext` scoping bug — FIXED (TDD, commit `4148fa5`)
+Hoisted `const chapterFulltext = document.getElementById('chapter-fulltext')` out of the
+`if (!chapter || !chapter.summary)` block so the `if (!chapter)` guard right after it can also reach
+it. New e2e test `tests/e2e/chapter_not_found_no_crash.mjs` uses Playwright's `page.route()` to force
+the chapter-detail API to report "not found," confirmed failing with the exact `ReferenceError`
+before the fix, passing after. Full suite unaffected.
+
+### Phase 4d (partial) — shared `finishPageTransition` tail for page controllers (commit `725ff5f`)
+The plan's "7 showX methods share an identical 8-step skeleton" doesn't hold uniformly on inspection:
+`showAuthorDetail`/`showDiscoverPage` wrap their bodies in try/catch with a distinct error-render
+path — folding them into one template would mean threading exception handling through a generic
+callback, real complexity for forced uniformity. The other 5 (`showCategoryDetail`,
+`showAllCategories`, `showAllBooksGrid`, `showBlogIndex`, `showBlogPost`) do share one exact 3-step
+tail (breadcrumbs → scroll restore/top → title), though 2 of them had it in a different statement
+order. Verified the 3 operations are mutually independent (no shared state read/written between
+them) before normalizing all 5 to one order via `finishPageTransition(breadcrumbKey, scrollPageKey,
+restoreScroll, title)`.
+
+**Found, not fixed (pre-existing, confirmed live with FEATURE_BLOG temporarily enabled locally):**
+`showBlogPost`'s title-placeholder update runs *after* `blogPost.render()` has already set the real
+post title, silently overwriting it back to the generic "Blog Post | Summra" on every blog post view.
+My refactor preserves the exact same relative timing, so this bug is neither introduced nor fixed —
+flagged for a follow-up.
+
+Verified: full pytest (513, unchanged), JS unit (29/29, unchanged), `npm run build:check`, and live
+browser checks of all 5 methods (3 called directly via `window.summraApp`, 2 exercised through real
+navigation with the feature flag on) — correct titles/breadcrumbs, zero console errors throughout.
+
+### Phase 4f (continued) — CSS tokens: 5 more clean single-purpose color groups (commits `940e752`, `afd4fdb`)
+Added `--border-light` (#e0e0e0, 10 of 27 total uses — the other 17 split into a dark-reading-theme
+text color and several one-off decorative uses, correctly left alone, same trap as `--text-color` in
+the prior Phase 4f commit), `--secondary-color-hover` (#2980b9, 7 uses, all `:hover` states — the
+hover shade of `--secondary-color`), `--text-muted` (#95a5a6, 4 uses: modal close button, form hint
+text, completed-chapter indicators), and `--sticky-header-accent`/`--sticky-header-border` (#333333/
+#666666, 4 uses each, all within the sticky reading header's dark UI chrome). Each group verified by
+reading every call site's selector before tokenizing — all 4 latter groups turned out to be exactly
+one concept each, unlike `--border-light`/`--text-color`. Verified live (computed
+`border-bottom-color` on `.sticky-reading-header` resolves to `rgb(51, 51, 51)` as expected) plus
+screenshots of 4 pages. Full suite unaffected.
+
+### Phase 4f — breakpoint consolidation: investigated, NOT attempted (correction to the plan)
+The plan calls for consolidating "10 breakpoints → 3-4." Checked 4 independent non-standard
+breakpoint clusters before touching anything:
+- `max-width: 390px/360px/320px` — a deliberate cascading carousel-card-size reduction (85px → 75px
+  widths, shrinking gaps) for progressively narrower phones. `390px` specifically matches the iPhone
+  12/Pixel 5 viewport widths (390/393px) used by the existing `tests/e2e/sticky_overlap*.mjs` device
+  suite — this breakpoint exists because of, and is tested by, real device-specific bug fixing.
+- `min-width: 650px/900px/1200px` — a deliberate progressive `.books-grid` column count (2 → 3 → 4 →
+  auto-fill).
+- `min-width: 600px/900px` — a deliberate progressive `.pagination-wrapper` width/button-offset
+  scheme for wider reading columns.
+
+Every non-standard breakpoint examined turned out to be intentional, tested, progressive responsive
+design — not accidental sprawl. Forcing these into "3-4 canonical breakpoints" would remove real
+intermediate device-width states and risk reintroducing the exact sticky-header overlap bugs the
+`sticky_overlap` e2e suite exists to catch. **Not attempted** — this is a correction to the plan, not
+a deferral: the premise (these breakpoints are redundant) doesn't hold up under inspection, same
+class of finding as the `RateLimiter`/`dict(row)`/`SummaryGenerator('dummy')` corrections earlier in
+this log.
+
+### Next: the `SummaryGenerator` class breakup (largest remaining task — the plan's own note that
+`detect_chapters` and `_detect_chapters_from_toc_structure` need internal decomposition first means
+this deserves a dedicated session), the remaining ~150 CSS hex literals (each needs the same
+per-usage semantic check demonstrated above before tokenizing — no further mechanical passes
+possible), `showAuthorDetail`/`showDiscoverPage`'s try/catch-wrapped control flow (left out of the
+`finishPageTransition` consolidation), and the `showBlogPost` title-overwrite bug found above.
