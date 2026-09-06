@@ -7762,3 +7762,34 @@ cross-service SSO. Anonymous access and write-gating re-confirmed unaffected.
 
 Full incident write-up: `01-projects/personal-brand/wordpress-vm-pages-setup.md`,
 "Consolidated login" sections (2026-09-06).
+
+## 2026-09-06 (yet later) — Removed the dead "Sign in with Google" button; product decision to drop app-level login entirely
+
+Separately from the SSO-plumbing fixes above: a user report that the "Sign in with Google"
+button in `/summrabook`'s account modal did nothing but refresh the page. Root cause:
+`frontend/templates/index.html`'s `signed-out-view` had `<a href="/" class="btn-primary
+account-signin-link">` — a static anchor with no click handler ever wired to it anywhere in
+`auth.js`/`app.min.js` (confirmed via `grep` across the whole frontend bundle — zero hits for
+`account-signin-link`, `client_id`, `accounts.google.com`, or any GSI/OAuth code). It wasn't
+broken by a regression; it was never finished. The design comment above it assumed sign-in
+would happen "by visiting any gated pengyaochen.com path," but `/summrabook/` is intentionally
+*not* gated (`OIDCUnAuthAction pass`), so `href="/"` (ungated site root) never triggered
+anything — clicking it just navigated to the WordPress homepage.
+
+Product decision (not a bug fix): Summra and OpenReader don't need their own login UI at all.
+Cross-device progress sync already happens transparently for allowed emails via the shared
+Apache gateway when signed in at `/pages/` (confirmed working end-to-end in the entry above) —
+that's sufficient. Building a real self-serve Google sign-in button for these two apps is
+explicitly out of scope.
+
+Fix: replaced the dead button with a plain, honest statement in the same modal —
+"Reading Progress — Saved on this device. Sign in at pengyaochen.com/pages to sync it across
+devices." No CTA, no banner elsewhere in the app (progress-sync being device-local-only for
+anonymous visitors was already the existing behavior via `auth.js`'s offline-storage fallback,
+so this is a UI-honesty fix, not a behavior change). Full test suite (523 passed) unaffected.
+Deployed via `git pull` + `systemctl --user restart summra` on `wordpress-2-vm`.
+
+See OpenReader's equivalent entry in its own `docs/WORKLOG.md` (same session, same root cause,
+same decision) — that app additionally got a friendly public-demo banner for anonymous
+visitors, since its use case (public browsing, e.g. by a recruiter) benefits from an explicit
+"you don't need to sign in" cue that Summra's read-fine-either-way UX doesn't need.
