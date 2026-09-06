@@ -7727,3 +7727,20 @@ to Summra, but affects the shared vhost this app lives behind — full incident 
 re-verify `X-Remote-Email` is actually consumed (today's header-spoofing test against
 `/reader/api/me` only proved the *old* app's own auth rejects a forged header, not that
 the new trusted_header path scrubs it — real verification needs this deploy first).
+
+## 2026-09-06 (later same day) — App code deployed, full stack verified
+
+Deployed by pushing `feat/consolidated-login` to GitHub and checking it out directly on
+`/opt/summra` (`git fetch && git checkout feat/consolidated-login` — `install.sh`'s own
+`git clone` step is first-run only; this is the update path), then
+`pip install -r requirements-prod.txt` and `systemctl --user restart summra`. Set
+`SUMMRA_AUTH_MODE=optional` and `SUMMRA_ALLOWED_EMAILS=pychen007@gmail.com,cassyheng@gmail.com`
+in `service.env` alongside the deploy (backed up first,
+`service.env.bak-pre-oidc-20260906`).
+
+Verified live: anonymous `GET /api/auth/check` → `{"authenticated": false}`; a forged
+`X-Remote-Email: attacker@evil.com` sent from outside still resolves to
+`{"authenticated": false}` — proof the Apache `RequestHeader unset` scrub actually works;
+`POST /api/progress/save` 401s anonymously; `/summrabook/` itself still loads (200).
+
+Not yet done: merging this branch to `main`.
