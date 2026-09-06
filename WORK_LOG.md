@@ -7793,3 +7793,30 @@ See OpenReader's equivalent entry in its own `docs/WORKLOG.md` (same session, sa
 same decision) — that app additionally got a friendly public-demo banner for anonymous
 visitors, since its use case (public browsing, e.g. by a recruiter) benefits from an explicit
 "you don't need to sign in" cue that Summra's read-fine-either-way UX doesn't need.
+
+## 2026-09-06 (yet later still) — Hide #user-account-btn entirely while signed out; stop naming /pages in the UI
+
+Two follow-ups, both about the account button/modal, not the reading experience (which was
+already fully read-fine-anonymous):
+
+1. **The Account button itself was still showing** for every visitor, signed in or not — the
+   `{% if feature_auth %}` template gate controls whether the button exists on this deployment
+   at all, not whether *this* visitor is signed in (that's only known client-side, after
+   `auth.js`'s async `checkAuthStatus()` resolves). Clicking it as an anonymous visitor opened
+   the honest-but-still-a-dead-end `signed-out-view` modal from the entry above. Fixed by
+   giving `#user-account-btn` a default `hidden` attribute in the template (most visitors here
+   are anonymous, so hidden-by-default avoids a flash-of-visible-then-hidden on the common
+   path) and having `auth.js`'s `updateAuthUI()` clear `hidden` only once `currentUser` is
+   confirmed non-null. The `cachedUser` localStorage instant-restore path (already existing,
+   for offline support) means a genuinely returning signed-in visitor still sees it
+   immediately, no flash either way.
+2. **The signed-out-view modal named `pengyaochen.com/pages` as the sign-in path** — flagged as
+   something that should stay unadvertised rather than spelled out in visible UI copy (or even
+   in a comment, in case of view-source). Trimmed the modal text to "Saved on this device."
+   with no path named; the explanatory comment above it now says "the shared gateway elsewhere
+   on pengyaochen.com" instead. Functionally this view is now unreachable for a genuinely
+   anonymous visitor anyway (the button that opens it is hidden), so this is defense in depth
+   for the edge cases where it could still render (the brief pre-auth-check window, or a
+   session expiring mid-visit) rather than a behavior change.
+
+Full test suite (523) unaffected — both changes are frontend-only (template + auth.js).
