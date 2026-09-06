@@ -322,10 +322,13 @@ export const readerMixin = {
         // Fetch individual chapter data on demand (optimized - only fetches one chapter)
         let chapter = this.chapters.find(c => c.chapter_number === chapterNum);
 
+        // Declared here (not inside the block below) so the "chapter not found"
+        // guard after that block can also reach it.
+        const chapterFulltext = document.getElementById('chapter-fulltext');
+
         // If chapter doesn't have full details (summary/text), fetch them
         if (!chapter || !chapter.summary) {
             // Show loading state only when fetching new data
-            const chapterFulltext = document.getElementById('chapter-fulltext');
             const chapterSummaryText = document.getElementById('chapter-summary-text');
 
             if (chapterFulltext && !restoreScroll) {
