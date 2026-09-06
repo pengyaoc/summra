@@ -5,8 +5,6 @@ in a separate database (summra.db) from the main content database.
 """
 
 import sqlite3
-import hashlib
-import secrets
 import json
 from pathlib import Path
 from datetime import datetime
@@ -46,13 +44,17 @@ class UserDatabase:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Users table
+        self._migrate_password_schema(cursor)
+
+        # Users table. subject/name are reserved for the deferred self_oidc
+        # identity source (see pchauth's spec) and are never populated this
+        # round — trusted_header only ever supplies email.
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                salt TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                subject TEXT UNIQUE,
+                name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP
             )
@@ -101,109 +103,45 @@ class UserDatabase:
         conn.commit()
         conn.close()
 
-    def hash_password(self, password: str, salt: str = None) -> tuple[str, str]:
-        """Hash password with salt using SHA-256.
+    def _migrate_password_schema(self, cursor: sqlite3.Cursor) -> None:
+        """Consolidated login, 2026-09-05 (see WORK_LOG.md and pchauth's
+        spec). An already-existing `users` table predates the email/subject/
+        name schema — `CREATE TABLE IF NOT EXISTS` below is a no-op against
+        it, so this has to run first. Every known deployment (prod and every
+        local dev copy checked) has exactly 0 rows in this table, so a
+        straight DROP + recreate is safe; refuse instead of silently
+        dropping data if that's ever not true."""
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()}
+        if not columns or "email" in columns:
+            return  # fresh DB, or already migrated
+        row_count = cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if row_count > 0:
+            raise RuntimeError(
+                f"users table has the old password schema AND {row_count} row(s) — "
+                "refusing to auto-migrate a non-empty table; back it up and migrate by hand"
+            )
+        cursor.execute("DROP TABLE users")
 
-        Args:
-            password: Plain text password
-            salt: Optional salt (generates new one if not provided)
-
-        Returns:
-            Tuple of (password_hash, salt)
-        """
-        if salt is None:
-            salt = secrets.token_hex(32)
-
-        password_hash = hashlib.sha256(
-            (password + salt).encode('utf-8')
-        ).hexdigest()
-
-        return password_hash, salt
-
-    def create_user(self, username: str, password: str) -> Optional[int]:
-        """Create a new user account.
-
-        Args:
-            username: Username (must be unique)
-            password: Plain text password
-
-        Returns:
-            User ID if successful, None if username already exists
-        """
+    def upsert_user_by_email(self, email: str) -> int:
+        """Creates the user row on first sight of this email, or returns
+        the existing id. This is the only way a user row comes into being
+        now — there is no registration flow, since identity comes from
+        Apache's trusted header, not a form."""
+        email = email.strip().lower()
         conn = self.get_connection()
         cursor = conn.cursor()
-
-        try:
-            # Hash password
-            password_hash, salt = self.hash_password(password)
-
-            # Insert user
-            cursor.execute('''
-                INSERT INTO users (username, password_hash, salt)
-                VALUES (?, ?, ?)
-            ''', (username, password_hash, salt))
-
-            user_id = cursor.lastrowid
-            conn.commit()
-            return user_id
-
-        except sqlite3.IntegrityError:
-            # Username already exists
-            return None
-        finally:
-            conn.close()
-
-    def authenticate_user(self, username: str, password: str) -> Optional[Dict]:
-        """Authenticate user with username and password.
-
-        Args:
-            username: Username
-            password: Plain text password
-
-        Returns:
-            User dict if authenticated, None otherwise
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
-        # Get user
-        cursor.execute('''
-            SELECT id, username, password_hash, salt, created_at, last_login
-            FROM users
-            WHERE username = ?
-        ''', (username,))
-
-        row = cursor.fetchone()
-
-        if row is None:
-            conn.close()
-            return None
-
-        # Verify password
-        password_hash, _ = self.hash_password(password, row['salt'])
-
-        if password_hash != row['password_hash']:
-            conn.close()
-            return None
-
-        # Update last login
-        cursor.execute('''
-            UPDATE users
-            SET last_login = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (row['id'],))
+        cursor.execute(
+            '''
+            INSERT INTO users (email, last_login)
+            VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT(email) DO UPDATE SET last_login = CURRENT_TIMESTAMP
+            ''',
+            (email,),
+        )
         conn.commit()
-
-        # Return user dict
-        user = {
-            'id': row['id'],
-            'username': row['username'],
-            'created_at': row['created_at'],
-            'last_login': datetime.now().isoformat()
-        }
-
+        row = cursor.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
         conn.close()
-        return user
+        return row['id']
 
     def get_user_by_id(self, user_id: int) -> Optional[Dict]:
         """Get user by ID.
@@ -218,7 +156,7 @@ class UserDatabase:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, username, created_at, last_login
+            SELECT id, email, created_at, last_login
             FROM users
             WHERE id = ?
         ''', (user_id,))
@@ -231,7 +169,7 @@ class UserDatabase:
 
         return {
             'id': row['id'],
-            'username': row['username'],
+            'email': row['email'],
             'created_at': row['created_at'],
             'last_login': row['last_login']
         }

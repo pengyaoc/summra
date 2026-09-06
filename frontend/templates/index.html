@@ -687,74 +687,30 @@
         <div class="user-modal-content">
             <button class="user-modal-close" id="user-modal-close" aria-label="Close">✕</button>
 
-            <!-- Logged Out View -->
-            <div class="user-modal-view" id="login-view">
-                <h2 class="user-modal-title">Sign in to Summra</h2>
-                <p class="user-modal-subtitle">Track your reading progress across devices</p>
-
-                <form id="login-form" class="user-form">
-                    <div class="form-group">
-                        <label for="login-username">Username</label>
-                        <input type="text" id="login-username" name="username" required autocomplete="username">
-                    </div>
-                    <div class="form-group">
-                        <label for="login-password">Password</label>
-                        <input type="password" id="login-password" name="password" required autocomplete="current-password">
-                    </div>
-                    <div class="form-error hidden" id="login-error"></div>
-                    <button type="submit" class="btn-primary">Sign In</button>
-                </form>
-
-                <div class="user-modal-footer">
-                    <p>Don't have an account? <button class="link-btn" id="show-register">Create one</button></p>
-                </div>
+            <!-- Signed-out view. No sign-in action here by design — this app
+                 has no login flow of its own. Progress is saved locally via
+                 the offline fallback in auth.js; syncing it across devices
+                 only happens if you're already authenticated through the
+                 shared gateway (e.g. by signing in at pengyaochen.com/pages),
+                 which sets X-Remote-Email and is picked up transparently.
+                 See docs/superpowers/specs/2026-09-05-consolidated-login-design.md. -->
+            <div class="user-modal-view" id="signed-out-view">
+                <h2 class="user-modal-title">Reading Progress</h2>
+                <p class="user-modal-subtitle">Saved on this device. Sign in at pengyaochen.com/pages to sync it across devices.</p>
             </div>
 
-            <!-- Register View -->
-            <div class="user-modal-view hidden" id="register-view">
-                <h2 class="user-modal-title">Create Account</h2>
-                <p class="user-modal-subtitle">Start tracking your reading journey</p>
-
-                <form id="register-form" class="user-form">
-                    <div class="form-group">
-                        <label for="register-username">Username</label>
-                        <input type="text" id="register-username" name="username" required autocomplete="username" minlength="3">
-                        <small>At least 3 characters</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="register-password">Password</label>
-                        <input type="password" id="register-password" name="password" required autocomplete="new-password" minlength="6">
-                        <small>At least 6 characters</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="register-password-confirm">Confirm Password</label>
-                        <input type="password" id="register-password-confirm" name="password-confirm" required autocomplete="new-password">
-                    </div>
-                    <div class="form-error hidden" id="register-error"></div>
-                    <button type="submit" class="btn-primary">Create Account</button>
-                </form>
-
-                <div class="user-modal-footer">
-                    <p>Already have an account? <button class="link-btn" id="show-login">Sign in</button></p>
-                </div>
-            </div>
-
-            <!-- Logged In View -->
+            <!-- Signed-in view -->
             <div class="user-modal-view hidden" id="account-view">
                 <h2 class="user-modal-title">My Account</h2>
 
                 <div class="account-info">
                     <div class="account-item">
-                        <span class="account-label">Username:</span>
-                        <span class="account-value" id="account-username"></span>
+                        <span class="account-label">Email:</span>
+                        <span class="account-value" id="account-email"></span>
                     </div>
                     <div class="account-item">
                         <span class="account-label">Member since:</span>
                         <span class="account-value" id="account-created"></span>
-                    </div>
-                    <div class="account-item">
-                        <span class="account-label">Last login:</span>
-                        <span class="account-value" id="account-last-login"></span>
                     </div>
                 </div>
 
@@ -769,10 +725,6 @@
                         <span class="stat-label">Chapters completed:</span>
                         <span class="stat-value" id="chapters-completed-count">0</span>
                     </div>
-                </div>
-
-                <div class="user-modal-footer">
-                    <button class="btn-secondary" id="logout-btn">Sign Out</button>
                 </div>
             </div>
         </div>

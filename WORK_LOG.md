@@ -7694,3 +7694,102 @@ old parallel dedicated VM predates this design and isn't part of it), so buildin
 actual client (PKCE, token exchange, JWKS verification) is future work, to be built only
 when a real standalone need shows up. Don't assume it exists; check `AUTH_SOURCE` before
 relying on any `self_oidc`-only behavior.
+
+## 2026-09-06 — Shared Apache OIDC gateway live; app code not yet deployed
+
+The consolidated-login Apache gateway (see 2026-09-05 entry above, and pchauth's spec/plan
+in the `pchauth` repo) went live on `wordpress-2-vm` today. `deploy/apache/summra.conf`
+gained the OIDC directives in its `<Location ${SUMMRA_PREFIX}/>` block (`AuthType
+openid-connect`, `Require all granted`, `RequestHeader unset`/`set X-Remote-Email`) and
+was redeployed to `/etc/apache2/service-locations/summra.conf` via the same
+`sed "s#\${SUMMRA_PREFIX}#/summrabook#g"` substitution `deploy/install.sh` uses, so the
+repo and the VM stay in sync. Backed up first
+(`summra.conf.bak-pre-oidc-20260906`).
+
+**Important: this repo's `feat/consolidated-login` branch (the actual app code — email-keyed
+`users` table, `pchauth` wiring, whoami endpoint, frontend sign-in link) has NOT been
+deployed to the VM yet.** The gateway change alone is live; `/summrabook/` currently
+passes through Apache unauthenticated into the *old*, still-running app code
+(`FEATURE_AUTH = False`), which doesn't read `X-Remote-Email` at all. Full behavior is
+only live once this branch is merged and deployed via `deploy/install.sh`.
+
+Two real Apache-layer bugs were found and fixed during the gateway rollout (not specific
+to Summra, but affects the shared vhost this app lives behind — full incident in
+`01-projects/personal-brand/wordpress-vm-pages-setup.md`'s "Consolidated login" section):
+1. `OIDCCacheShmMax` has an enforced minimum of 128, not the `20` the original design
+   spec assumed — `apache2ctl configtest` caught it immediately.
+2. `OIDCUnAuthAction pass`, set vhost-wide so `/summrabook/` and `/reader/` never block an
+   anonymous request, was initially inherited by `/pages/` too, briefly serving it with no
+   gate at all — fixed with a `/pages/`-local `OIDCUnAuthAction auth` override. Doesn't
+   affect Summra directly, but is why the vhost's structure now has that override present.
+
+**Next steps** (tracked in pchauth's plan, not duplicated here): deploy this branch,
+re-verify `X-Remote-Email` is actually consumed (today's header-spoofing test against
+`/reader/api/me` only proved the *old* app's own auth rejects a forged header, not that
+the new trusted_header path scrubs it — real verification needs this deploy first).
+
+## 2026-09-06 (later same day) — App code deployed, full stack verified
+
+Deployed by pushing `feat/consolidated-login` to GitHub and checking it out directly on
+`/opt/summra` (`git fetch && git checkout feat/consolidated-login` — `install.sh`'s own
+`git clone` step is first-run only; this is the update path), then
+`pip install -r requirements-prod.txt` and `systemctl --user restart summra`. Set
+`SUMMRA_AUTH_MODE=optional` and `SUMMRA_ALLOWED_EMAILS=pychen007@gmail.com,cassyheng@gmail.com`
+in `service.env` alongside the deploy (backed up first,
+`service.env.bak-pre-oidc-20260906`).
+
+Verified live: anonymous `GET /api/auth/check` → `{"authenticated": false}`; a forged
+`X-Remote-Email: attacker@evil.com` sent from outside still resolves to
+`{"authenticated": false}` — proof the Apache `RequestHeader unset` scrub actually works;
+`POST /api/progress/save` 401s anonymously; `/summrabook/` itself still loads (200).
+
+Not yet done: merging this branch to `main`.
+
+## 2026-09-06 (later still) — Real root cause found: Require all granted silently skipped auth
+
+Same bug, same fix as OpenReader's equivalent entry today: `<Location /summrabook/>` used
+`Require all granted`, which makes Apache's core skip invoking `mod_auth_openidc`'s
+authentication check entirely (a documented Apache 2.4 optimization) — `X-Remote-Email`
+was never injected even for a genuinely signed-in session. Fixed to `Require valid-user`
+in `deploy/apache/summra.conf`, redeployed to `/etc/apache2/service-locations/summra.conf`.
+`OIDCUnAuthAction pass` still covers the anonymous case correctly with this change.
+
+**Fully verified live**: after signing in once via `/pages/` (real Google account),
+`/summrabook/api/auth/check` correctly returned
+`{"authenticated":true,"user":{"email":"pychen007@gmail.com",...}}` with zero additional
+login prompt — confirming both the fix and, for the first time, genuine silent
+cross-service SSO. Anonymous access and write-gating re-confirmed unaffected.
+
+Full incident write-up: `01-projects/personal-brand/wordpress-vm-pages-setup.md`,
+"Consolidated login" sections (2026-09-06).
+
+## 2026-09-06 (yet later) — Removed the dead "Sign in with Google" button; product decision to drop app-level login entirely
+
+Separately from the SSO-plumbing fixes above: a user report that the "Sign in with Google"
+button in `/summrabook`'s account modal did nothing but refresh the page. Root cause:
+`frontend/templates/index.html`'s `signed-out-view` had `<a href="/" class="btn-primary
+account-signin-link">` — a static anchor with no click handler ever wired to it anywhere in
+`auth.js`/`app.min.js` (confirmed via `grep` across the whole frontend bundle — zero hits for
+`account-signin-link`, `client_id`, `accounts.google.com`, or any GSI/OAuth code). It wasn't
+broken by a regression; it was never finished. The design comment above it assumed sign-in
+would happen "by visiting any gated pengyaochen.com path," but `/summrabook/` is intentionally
+*not* gated (`OIDCUnAuthAction pass`), so `href="/"` (ungated site root) never triggered
+anything — clicking it just navigated to the WordPress homepage.
+
+Product decision (not a bug fix): Summra and OpenReader don't need their own login UI at all.
+Cross-device progress sync already happens transparently for allowed emails via the shared
+Apache gateway when signed in at `/pages/` (confirmed working end-to-end in the entry above) —
+that's sufficient. Building a real self-serve Google sign-in button for these two apps is
+explicitly out of scope.
+
+Fix: replaced the dead button with a plain, honest statement in the same modal —
+"Reading Progress — Saved on this device. Sign in at pengyaochen.com/pages to sync it across
+devices." No CTA, no banner elsewhere in the app (progress-sync being device-local-only for
+anonymous visitors was already the existing behavior via `auth.js`'s offline-storage fallback,
+so this is a UI-honesty fix, not a behavior change). Full test suite (523 passed) unaffected.
+Deployed via `git pull` + `systemctl --user restart summra` on `wordpress-2-vm`.
+
+See OpenReader's equivalent entry in its own `docs/WORKLOG.md` (same session, same root cause,
+same decision) — that app additionally got a friendly public-demo banner for anonymous
+visitors, since its use case (public browsing, e.g. by a recruiter) benefits from an explicit
+"you don't need to sign in" cue that Summra's read-fine-either-way UX doesn't need.
