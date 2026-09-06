@@ -23,6 +23,7 @@ html {
     --text-color: #2c3e50;
     --text-light: #7f8c8d;
     --border-color: #bdc3c7;
+    --border-light: #e0e0e0;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
@@ -875,7 +876,7 @@ body.on-chapter-page .header {
     padding: 24px;
     background: #f8f9fa;
     border-radius: 8px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-light);
 }
 
 .about-single-column {
@@ -959,7 +960,7 @@ body.on-chapter-page .header {
 .reading-guide-tabs-header {
     display: flex;
     gap: 0;
-    border-bottom: 2px solid #e0e0e0;
+    border-bottom: 2px solid var(--border-light);
     margin-bottom: 24px;
 }
 
@@ -1044,7 +1045,7 @@ body.on-chapter-page .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 2px solid #e0e0e0;
+    border-bottom: 2px solid var(--border-light);
     margin-bottom: 24px;
 }
 
@@ -1150,7 +1151,7 @@ body.on-chapter-page .header {
 .related-books-section {
     margin-bottom: 48px;
     padding-top: 16px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--border-light);
 }
 
 .related-books-section > h3 {
@@ -4014,7 +4015,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 /* Add visual separation with subtle background for original text */
 .side-by-side-cell.original {
     padding-right: 1rem;
-    border-right: 1px solid #e0e0e0;
+    border-right: 1px solid var(--border-light);
 }
 
 .side-by-side-cell.modern {
@@ -4045,7 +4046,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
     .side-by-side-cell.original {
         border-right: none;
-        border-bottom: 2px solid #e0e0e0;
+        border-bottom: 2px solid var(--border-light);
         padding-right: 0;
         padding-bottom: 1rem;
     }
@@ -4126,7 +4127,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     justify-content: space-between;
     align-items: center;
     padding: 20px 24px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--border-light);
     background: #f5f5f5;
 }
 
@@ -4180,7 +4181,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 .admin-textarea {
     width: 100%;
     padding: 12px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border-light);
     border-radius: 8px;
     font-size: 0.95rem;
     font-family: 'Courier New', monospace;
@@ -4200,7 +4201,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     justify-content: flex-end;
     gap: 12px;
     padding: 20px 24px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--border-light);
     background: #f5f5f5;
 }
 
@@ -4918,7 +4919,7 @@ body.pagination-active {
 
 .pagination-page-container .side-by-side-cell.original {
     padding-right: 1rem !important;
-    border-right: 1px solid #e0e0e0 !important;
+    border-right: 1px solid var(--border-light) !important;
     border-bottom: none !important;
     padding-bottom: 0 !important;
 }
