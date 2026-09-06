@@ -521,25 +521,13 @@ body.on-chapter-page .header {
 }
 
 /* Skeleton Loading Styles */
-@keyframes shimmer {
+@keyframes shimmer-px {
     0% {
         background-position: -1000px 0;
     }
     100% {
         background-position: 1000px 0;
     }
-}
-
-.skeleton {
-    background: linear-gradient(
-        90deg,
-        var(--skeleton-base) 0px,
-        var(--skeleton-highlight) 40px,
-        var(--skeleton-base) 80px
-    );
-    background-size: 1000px 100%;
-    animation: shimmer 2s infinite linear;
-    border-radius: 4px;
 }
 
 .book-cover-skeleton {
@@ -555,7 +543,7 @@ body.on-chapter-page .header {
         var(--skeleton-base) 80px
     );
     background-size: 1000px 100%;
-    animation: shimmer 2s infinite linear;
+    animation: shimmer-px 2s infinite linear;
     border-radius: 4px;
     z-index: 1;
 }
@@ -592,26 +580,11 @@ body.on-chapter-page .header {
         var(--skeleton-base) 80px
     );
     background-size: 1000px 100%;
-    animation: shimmer 2s infinite linear;
+    animation: shimmer-px 2s infinite linear;
     border-radius: 8px;
     margin: 20px 0;
 }
 
-
-.content-skeleton.title {
-    height: 24px;
-    width: 60%;
-    margin-bottom: 20px;
-}
-
-.content-skeleton.text {
-    height: 16px;
-    margin: 8px 0;
-}
-
-.content-skeleton.text:last-child {
-    width: 80%;
-}
 
 .error {
     background-color: var(--error-bg-light);
@@ -650,17 +623,6 @@ body.on-chapter-page .header {
     padding-bottom: 40px;
 }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 /* Loading States */
 .loading-container {
     display: flex;
@@ -695,23 +657,6 @@ body.on-chapter-page .header {
     font-size: 0.9rem;
     font-weight: 500;
     opacity: 0.8;
-}
-
-/* Skeleton Loading States (legacy - keeping for backward compatibility) */
-.skeleton {
-    background: linear-gradient(90deg, var(--skeleton-base) 25%, #e0e0e0 50%, var(--skeleton-base) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: 4px;
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: 200% 0;
-    }
-    100% {
-        background-position: -200% 0;
-    }
 }
 
 
