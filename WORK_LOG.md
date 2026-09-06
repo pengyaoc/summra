@@ -7484,10 +7484,41 @@ instance, called `formatTime(125)` → `"2:05"`, `cleanTextForTTS(...)` correctl
 and zero-width characters, `truncateAtSentenceBoundary(...)` correctly truncated at a sentence
 boundary, and zero console errors across two page loads of a real book page.
 
-### Next: `reader.js` extraction (`renderMarkdown`, `formatChapterText`, `formatSideBySideText`,
-`showChapterDetailPage`, `showResumeReadingButton`, `showMediumDetail`, `getCurrentViewMode`,
-`applyChapterViewMode`, `showChapterDetail` — also non-contiguous, deliberately kept as a separate
-commit/verification cycle from `audio.js`), then the `SummaryGenerator` class breakup (largest
-remaining task), Phase 4d's page-controller abstraction, and the remainder of Phase 4f (new CSS
-tokens, breakpoint consolidation) — the last two need a design decision, best taken up explicitly
-with the user rather than guessed at.
+### Phase 4b (continued) — extract `reader.js` (DONE, commit `baece22`)
+Extracted the 9 chapter-reading methods (`renderMarkdown`, `formatChapterText`,
+`formatSideBySideText`, `showChapterDetailPage`, `showResumeReadingButton`, `showMediumDetail`,
+`getCurrentViewMode`, `applyChapterViewMode`, `showChapterDetail`) into `reader.js` — same mixin
+pattern, same non-contiguous risk class as `audio.js` (3 separate blocks: 568-654, 1978-2182,
+2183-2579).
+
+Learned from the `audio.js` transcription incident: extracted **programmatically** this time
+(sliced directly from the source file via a Python script, never retyped by hand) specifically to
+eliminate that risk class entirely, then verified byte-for-byte content equivalence via a scripted
+diff against the original blocks. That diff still caught something on the first pass: 2 JSDoc
+comment blocks (on `getCurrentViewMode`/`applyChapterViewMode`) were silently dropped by the
+extraction script's blank-line handling — comments only, no behavioral test would have caught it,
+but a faithful move shouldn't lose them either. Fixed the script to attach any comment
+immediately preceding a method to that method, re-verified as an exact diff match.
+
+`app.js`: 3,601 → 2,914 lines (**-19%** this step; **-52%** cumulative from the original 6,104).
+Verified: `npm run build:check`, full pytest (513, unchanged), JS unit suite (29/29, unchanged),
+and **live interactive verification** of the actual chapter-reading page via claude-in-chrome —
+navigated to a real book chapter, confirmed all 9 methods bound on the running instance, then
+clicked through Summary → Original → Plain English → Side-by-Side view modes and paged through
+content with arrow keys, watching the illustration page, paragraph-paired side-by-side rows, and
+markdown-rendered summary all render correctly with zero console errors. Also ran the pre-existing
+e2e regression scripts most relevant to this cluster (`chapter_view_default`, `sxs_page1_has_rows`,
+`chapter_header_hidden`, `sxs_font_regression`, `breadcrumb_navigate`, `hero_home_navigation`) — all
+pass.
+
+**Found, not fixed (pre-existing, moved verbatim):** inside `showChapterDetail`, `chapterFulltext`
+is declared `const` inside the `if (!chapter || !chapter.summary)` block but referenced again after
+that block closes, at the `if (!chapter)` guard — a block-scoping bug that throws `ReferenceError`
+if a chapter fetch legitimately returns nothing (e.g. a real 404). This is a structural-move task,
+not a bug hunt, so left as discovered, flagged here for a follow-up TDD fix (reproduce with a mocked
+failed fetch, then hoist the declaration or re-query the element).
+
+### Next: the `SummaryGenerator` class breakup (largest remaining task), Phase 4d's page-controller
+abstraction, and the remainder of Phase 4f (new CSS tokens, breakpoint consolidation) — the last two
+need a design decision, best taken up explicitly with the user rather than guessed at. The
+`chapterFulltext` scoping bug found above is also available as a small, well-scoped next fix.
