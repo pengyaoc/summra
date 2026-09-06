@@ -7674,3 +7674,23 @@ Deserves a dedicated session (the plan's own note that `detect_chapters` and
 real paid Gemini ingestion, means it shouldn't be rushed). Everything else from the original
 7-phase plan is now done or has a documented reason it wasn't (see corrections scattered through
 this log: RateLimiter, `dict(row)`, breakpoint consolidation, etc.).
+
+## 2026-09-05 — Consolidated Google login, planned (not yet implemented)
+
+Brainstormed a shared login design across Summra, OpenReader, and `/pages/` on
+`pengyaochen.com` — full design and reasoning lives in the `pchauth` repo
+(`~/Documents/dev/pchauth/docs/superpowers/specs/2026-09-05-consolidated-login-design.md`).
+For this app specifically: `backend/auth_routes.py`/`auth_utils.py` (the current
+`FEATURE_AUTH=False`, 0-user, salted-SHA256 system) get replaced by a thin wrapper
+reading `X-Remote-Email`, set by a shared Apache `mod_auth_openidc` gateway once this
+box's vhost is updated — no OIDC protocol code in this repo for the cohosted deployment.
+
+**Deliberately out of scope for the current round: `self_oidc` mode** (this app running
+its own Google OIDC client directly, for a standalone deployment with no Apache gateway
+in front). There is no standalone deployment of Summra's cohosted identity today (the
+old parallel dedicated VM predates this design and isn't part of it), so building
+`self_oidc` now would be speculative. The design reserves the shape for it —
+`AUTH_SOURCE` env var, `subject`/`email`/`name` columns on `users` regardless — but the
+actual client (PKCE, token exchange, JWKS verification) is future work, to be built only
+when a real standalone need shows up. Don't assume it exists; check `AUTH_SOURCE` before
+relying on any `self_oidc`-only behavior.
