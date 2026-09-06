@@ -5,34 +5,53 @@ This document provides in-depth technical documentation for the Summra project, 
 ## Table of Contents
 
 1. [Backend Module Map](#backend-module-map)
-2. [Database Schema & ERD](#database-schema--erd)
-3. [SEO Architecture](#seo-architecture)
-4. [Related Books System](#related-books-system)
-5. [Chapter Parser Implementation](#chapter-parser-implementation)
-6. [TTS Engine Implementation](#tts-engine-implementation)
-7. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
-8. [Bulk Summary Processing](#bulk-summary-processing)
-9. [Project Gutenberg Integration](#project-gutenberg-integration)
-10. [Gemini Image Generation System](#gemini-image-generation-system)
-11. [Book Metadata Enrichment](#book-metadata-enrichment)
-12. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
-13. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
-14. [Pagination System](#pagination-system-added-2025-12-19)
-15. [PWA Offline Support & Caching](#pwa-offline-support--caching-added-2025-12-31)
+2. [Frontend Module Map](#frontend-module-map)
+3. [Database Schema & ERD](#database-schema--erd)
+4. [SEO Architecture](#seo-architecture)
+5. [Related Books System](#related-books-system)
+6. [Chapter Parser Implementation](#chapter-parser-implementation)
+7. [TTS Engine Implementation](#tts-engine-implementation)
+8. [LLM Call Logic & Rate Limiting](#llm-call-logic--rate-limiting)
+9. [Bulk Summary Processing](#bulk-summary-processing)
+10. [Project Gutenberg Integration](#project-gutenberg-integration)
+11. [Gemini Image Generation System](#gemini-image-generation-system)
+12. [Book Metadata Enrichment](#book-metadata-enrichment)
+13. [Discover Page Architecture](#discover-page-architecture-added-2025-12-11)
+14. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
+15. [Pagination System](#pagination-system-added-2025-12-19)
+16. [PWA Offline Support & Caching](#pwa-offline-support--caching-added-2025-12-31)
 
 ---
 
 ## Backend Module Map
 
-The Flask app is split into a shared base module + two entry points so the production VM can run a slimmer version without the TTS dependencies.
+*Last restructured 2026-09-05 — see `WORK_LOG.md` Phases 1/3/5 for the history of this split.*
+
+The project is installed as an editable package (`pyproject.toml`, `pip install -e .`) so `backend`
+and `scripts` are real importable packages — this replaced the `sys.path` hacks and
+`try/except ImportError` shims that every script and test previously needed just to find `config`,
+`models`, and sibling scripts. `tests/conftest.py` no longer manipulates `sys.path` at all.
+
+The Flask app itself is split into a shared base module + two entry points so the production VM can
+run a slimmer version without the TTS dependencies. `app_base.py` is now an **app-factory only** —
+every route lives in its own blueprint under `backend/routes/`:
 
 | File | Role |
 |------|------|
-| `backend/app_base.py` | **Shared base.** Creates the Flask app, configures CORS + sessions, registers all read-side routes (pages, JSON API, sitemap, robots.txt, service-worker, offline), and conditionally registers auth + blog blueprints based on feature flags. Both entry points import `app` from here. |
+| `backend/app_base.py` | **App factory.** Creates the Flask app, configures CORS + sessions, imports and registers every blueprint below (conditionally, for auth/blog, behind feature flags). Both entry points import `app` from here. Global error handler + `asset_v()` content-hash cache-busting live here too. |
+| `backend/routes/common.py` | Shared `db`/`config` module attributes (set by `app_base.py` after creating them, to avoid a circular import back into `app_base`) plus route-agnostic helpers: `site_origin()`, `author_name_to_slug()`/`slug_to_author_name()`, `build_breadcrumbs()`, `breadcrumbs_to_schema()`. |
+| `backend/routes/system.py` | robots.txt, sitemap.xml, manifest.json, service-worker.js, precache-revision endpoint. |
+| `backend/routes/pages.py` | Server-rendered page routes (SSR shell for each page type). |
+| `backend/routes/books.py` | Book detail, chapter detail, and book-related JSON API endpoints. |
+| `backend/routes/taxonomy.py` | Category and related-books JSON API endpoints. |
+| `backend/routes/discover.py` | Discover-page carousel JSON API endpoint. |
+| `backend/routes/authors.py` | Author detail page + JSON API endpoints. |
+| `backend/routes/blog.py` | Blog index/post pages + JSON API. Registered only when `FEATURE_BLOG` is on. |
+| `backend/auth_utils.py` | `login_required` decorator — extracted here because it was byte-identical between `auth_routes.py` and `progress_routes.py`. |
 | `backend/app.py` | **Dev entry point.** Adds `POST /api/tts/generate` that calls `GeminiTTSHandler` to generate audio on demand (and `POST /api/tts/stop` to abort + clean up chunks), plus an admin chapter-edit route. Sets `IS_DEVELOPMENT = True`. Run with `python backend/app.py` — binds `:5001`. |
 | `backend/app_prod.py` | **Prod entry point.** Replaces `POST /api/tts/generate` with a pre-generated-only lookup (no live generation). Adds `/health`. Served by Gunicorn behind Nginx in production. |
 | `backend/config.py` | Single source of truth for paths, models, rate limits, summary configs, feature flags. |
-| `backend/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection. |
+| `backend/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection via a versioned `_COLUMN_MIGRATIONS` list (replaced 18 copy-pasted `try/except OperationalError` blocks). |
 | `backend/user_models.py` | User database layer (`data/summra.db`, per `config.USER_DATABASE_PATH`) — users, reading_progress, chapter_completion. SHA-256 + salt password hashing. Sessions are Flask permanent sessions (30 days). |
 | `backend/auth_routes.py` | Auth blueprint (register / login / logout / me). Conditionally registered behind `FEATURE_AUTH`. |
 | `backend/progress_routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete). Conditionally registered behind `FEATURE_AUTH`. |
@@ -49,7 +68,54 @@ Both flags are injected into the SPA shell as `window.FEATURE_AUTH` / `window.FE
 - `data/database.db` — content (books, summaries, chapters, etc.). Regeneratable from `data/books/` via `scripts/content/generate_summaries.py`.
 - `summra.db` (project root) — users, reading progress. Small, **irreplaceable**, separate so a content rebuild can't accidentally drop user data.
 
-**Scripts inventory** lives in `scripts/README.md` — every subfolder (`content/`, `audio/`, `images/`, `categorization/`, `migrations/`, `backfills/`, `audits/`, `book_fixes/`, `blog/`, `archive/`) is a Python package and is auto-added to `sys.path` by `tests/conftest.py` so tests can import scripts as either `from generate_summaries import …` or `from scripts.content.generate_summaries import …`.
+**Scripts inventory** lives in `scripts/README.md` — every subfolder (`content/`, `audio/`, `images/`, `categorization/`, `migrations/`, `backfills/`, `audits/`, `book_fixes/`, `blog/`, `archive/`, `lib/`) is a real Python package, imported as `from scripts.content.generate_summaries import …` (the old bare `from generate_summaries import …` sys.path-hack style no longer works anywhere).
+
+**`scripts/lib/`** — shared library extracted out of the individual scripts (Phase 5), used across `scripts/`:
+| File | Role |
+|------|------|
+| `scripts/lib/db.py` | `get_connection(db_path=None)` — one sqlite3 connection helper backed by `config.DATABASE_PATH`, replacing 13 individually hardcoded DB paths. Callers pass their own module-level `DB_PATH` explicitly so test suites that `patch.object(module, "DB_PATH", tmp_path)` still work. |
+| `scripts/lib/llm.py` | `get_gemini_client(api_key=None)` — one Gemini client factory backed by `config.GEMINI_API_KEY`, replacing 6 duplicated `genai.Client(...)` construction sites. Raises `ValueError` fast on a missing key. |
+| `scripts/lib/text.py` | `normalize_chapter_title()`, `fix_roman_numerals_in_text()`, `normalize_book_title()` — pure text-normalization functions extracted from `generate_summaries.py` (one was a byte-identical duplicate in `migrate_book_titles.py`). |
+
+`generate_summaries.py` itself also had its self-contained pieces (`SummaryConstants`/`APIConstants`/etc., `RateLimiter`, batch-job-state persistence) extracted to `scripts/content/constants.py`, `rate_limiter.py`, `batch_state.py` respectively — re-exported under their original names so existing `from scripts.content.generate_summaries import X` call sites are unaffected. The `SummaryGenerator` class itself (~5,700 lines) has **not** been split further; that's the one large item left from the modularization effort (see `WORK_LOG.md`).
+
+---
+
+## Frontend Module Map
+
+*Added 2026-09-05.* `app.js` was a single 6,104-line file (one `SummraApp` class with ~137 methods)
+with no module system. It's now loaded as a native ES module (`<script type="module">` in dev;
+`esbuild --bundle` produces the single-file `app.min.js` for production — `npm run build`,
+verified fresh via `npm run build:check` in CI). Six clusters of methods were extracted into
+sibling files as plain objects of methods, merged onto `SummraApp.prototype` via
+`Object.assign(SummraApp.prototype, someMixin)` right after the class body — a structural move
+only, every method still reads/writes `this.*` exactly as if it were still inline:
+
+| File | Methods |
+|------|---------|
+| `frontend/static/js/app.js` | The `SummraApp` class itself (routing, book/category/discover/blog page controllers, event setup) + the mixin imports/`Object.assign` calls. |
+| `frontend/static/js/pagination.js` | The page-based chapter-reading engine (21 methods) — largest subsystem. |
+| `frontend/static/js/settings.js` | Font/size/theme picker, sticky header, reading-progress (11 methods). |
+| `frontend/static/js/breadcrumbs.js` | Breadcrumb build/render/show/hide (4 methods). |
+| `frontend/static/js/offline.js` | "Save for Offline" PWA feature (4 methods). |
+| `frontend/static/js/audio.js` | Persistent audio player + TTS generation flow (14 methods). |
+| `frontend/static/js/reader.js` | Chapter-reading page controller — markdown/text rendering, the side-by-side view, view-mode switching, `showChapterDetail` (9 methods). |
+| `frontend/static/js/route_utils.js` | `summraBasePath()`/`withBasePath()`/route-parsing helpers, loaded early enough for `components/BlogIndex.js`/`BlogPost.js` to use them. |
+| `frontend/static/js/view_mode.js` | Pure `resolveInitialChapterViewMode()` helper (unit-tested), the original model this mixin pattern followed. |
+| `frontend/static/js/components/BlogIndex.js`, `BlogPost.js` | Standalone (non-mixin) blog components, `new BlogIndex(app)`/`new BlogPost(app)`. |
+
+Seven page-controller methods (`showCategoryDetail`, `showAllCategories`, `showAllBooksGrid`,
+`showBlogIndex`, `showBlogPost`, `showAuthorDetail`, `showDiscoverPage`) share a
+`finishPageTransition(breadcrumbKey, scrollPageKey, restoreScroll, title)` helper (in `app.js`) for
+their common tail (update breadcrumbs → restore scroll or jump to top → set page title).
+
+**CSS tokens** (`frontend/static/css/style.css`, `:root`): ~30 custom properties for colors reused
+across multiple selectors — added incrementally by checking every call site's selector before
+tokenizing two colors together, specifically to avoid merging colors that coincidentally share a
+hex value but mean different things (e.g. the dark chapter-reading theme's text color vs. the
+sticky-header UI's border color both happen to render the same gray). Every hex literal still
+written directly in the file (not a token) occurs exactly once — there's nothing left to
+deduplicate.
 
 ---
 
