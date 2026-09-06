@@ -189,13 +189,16 @@ function updateAuthUI() {
             // Only a genuinely signed-in visitor (via the shared gateway
             // elsewhere on pengyaochen.com) ever sees this — there's no
             // sign-in action this app can offer an anonymous one, so the
-            // button stays hidden (see the template's default `hidden`
-            // attribute) rather than showing a dead end.
-            accountBtn.hidden = false;
+            // button stays hidden (see the template's default `.hidden`
+            // class) rather than showing a dead end. `.hidden` (not the
+            // `hidden` attribute) because `.header-nav-btn`'s own
+            // `display: flex` otherwise wins the cascade over the bare
+            // attribute's UA-stylesheet default.
+            accountBtn.classList.remove('hidden');
         } else {
             userName.textContent = 'Account';
             accountBtn.classList.remove('logged-in');
-            accountBtn.hidden = true;
+            accountBtn.classList.add('hidden');
         }
     }
 }
