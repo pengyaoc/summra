@@ -2469,14 +2469,14 @@ class SummraApp {
         }
         await this.blogPost.render(slug);
 
-        // Note: updatePageTitle() here runs after blogPost.render() already set
-        // the real post title (BlogPost.js) — this placeholder overwrites it.
-        // Pre-existing behavior, preserved as-is; not introduced by this change.
+        // render() already calls updatePageTitle() with the real post title
+        // when the post is found — only fall back to the generic placeholder
+        // when it wasn't (render() leaves the title untouched in that case).
         this.finishPageTransition(
             'blog-post',
             `blog-post-${slug}`,
             restoreScroll,
-            'Blog Post | Summra'
+            this.blogPost.post ? null : 'Blog Post | Summra'
         );
     }
 
