@@ -22,8 +22,12 @@ html {
     --card-background: #ffffff;
     --text-color: #2c3e50;
     --text-light: #7f8c8d;
+    --text-muted: #95a5a6;
     --border-color: #bdc3c7;
     --border-light: #e0e0e0;
+    --secondary-color-hover: #2980b9;
+    --sticky-header-accent: #333333;
+    --sticky-header-border: #666666;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
@@ -186,7 +190,7 @@ body.on-chapter-page .header {
 }
 
 .breadcrumb-link:hover {
-    color: #2980b9;
+    color: var(--secondary-color-hover);
 }
 
 .breadcrumb-separator {
@@ -911,7 +915,7 @@ body.on-chapter-page .header {
 }
 
 .learn-more-btn:hover {
-    color: #2980b9;
+    color: var(--secondary-color-hover);
     text-decoration: underline;
 }
 
@@ -1326,7 +1330,7 @@ body.on-chapter-page .header {
 }
 
 .expand-link:hover {
-    color: #2980b9;
+    color: var(--secondary-color-hover);
     text-decoration: underline;
 }
 
@@ -1421,7 +1425,7 @@ body.on-chapter-page .header {
 
 .chapter-box:hover {
     background: #e8f4f8;
-    border-left-color: #2980b9;
+    border-left-color: var(--secondary-color-hover);
     transform: translateX(4px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
@@ -2786,7 +2790,7 @@ body.on-chapter-page .header {
 }
 
 .view-all-link:hover {
-    color: #2980b9;
+    color: var(--secondary-color-hover);
     text-decoration: underline;
 }
 
@@ -3495,7 +3499,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     right: 0;
     z-index: 1000;
     background: #000000 !important;
-    border-bottom: 1px solid #333333;
+    border-bottom: 1px solid var(--sticky-header-accent);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     transition: transform 0.3s ease;
     pointer-events: none;
@@ -3550,8 +3554,8 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
 /* Sticky header buttons */
 .sticky-back-btn {
-    background: #333333;
-    border: 1px solid #666666;
+    background: var(--sticky-header-accent);
+    border: 1px solid var(--sticky-header-border);
     color: var(--card-background) !important;
     border-radius: 6px;
     padding: 6px 12px;
@@ -3584,7 +3588,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     background: #1a1a1a;
     border-radius: 6px;
     overflow: hidden;
-    border: 1px solid #666666;
+    border: 1px solid var(--sticky-header-border);
 }
 
 .unified-view-btn {
@@ -3595,7 +3599,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
     font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.2s;
-    border-right: 1px solid #666666;
+    border-right: 1px solid var(--sticky-header-border);
 }
 
 .unified-view-btn:last-child {
@@ -3603,7 +3607,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 .unified-view-btn:hover {
-    background: #333333;
+    background: var(--sticky-header-accent);
 }
 
 .unified-view-btn.active {
@@ -3615,7 +3619,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 .sticky-tts-btn,
 .sticky-settings-btn {
     background: transparent;
-    border: 1px solid #666666;
+    border: 1px solid var(--sticky-header-border);
     color: var(--card-background) !important;
     border-radius: 6px;
     padding: 6px 10px;
@@ -3626,7 +3630,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
 .sticky-tts-btn:hover,
 .sticky-settings-btn:hover {
-    background: #333333;
+    background: var(--sticky-header-accent);
     border-color: #999999;
 }
 
@@ -5029,7 +5033,7 @@ body.pagination-active {
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #95a5a6;
+    color: var(--text-muted);
     transition: color 0.2s ease;
     padding: 0.25rem;
     line-height: 1;
@@ -5087,7 +5091,7 @@ body.pagination-active {
 
 .form-group small {
     font-size: 0.85rem;
-    color: #95a5a6;
+    color: var(--text-muted);
 }
 
 /* Error message */
@@ -5118,7 +5122,7 @@ body.pagination-active {
 }
 
 .btn-primary:hover {
-    background: #2980b9;
+    background: var(--secondary-color-hover);
 }
 
 .btn-primary:active {
@@ -5166,7 +5170,7 @@ body.pagination-active {
 }
 
 .link-btn:hover {
-    color: #2980b9;
+    color: var(--secondary-color-hover);
 }
 
 /* View switching */
@@ -5275,7 +5279,7 @@ body.pagination-active {
 }
 
 .chapter-box.completed .chapter-title {
-    color: #95a5a6;
+    color: var(--text-muted);
 }
 
 .chapter-box.completed:hover {
@@ -5289,7 +5293,7 @@ body.pagination-active {
 
 .chapter-header.completed h1,
 .chapter-header.completed h2 {
-    color: #95a5a6;
+    color: var(--text-muted);
 }
 
 /* Progress indicator badge */
