@@ -23,6 +23,7 @@ try:
     from . import models
     from . import user_models
     from . import progress_routes
+    from . import whoami
     from .pchauth.config import AuthConfig
     from .pchauth.config import load_config as load_pchauth_config
     from .pchauth.flask_adapter import init_pchauth
@@ -32,6 +33,7 @@ except ImportError:
     from backend import models
     from backend import user_models
     from backend import progress_routes
+    from backend import whoami
     from backend.pchauth.config import AuthConfig
     from backend.pchauth.config import load_config as load_pchauth_config
     from backend.pchauth.flask_adapter import init_pchauth
@@ -109,7 +111,9 @@ if config.FEATURE_AUTH:
         pchauth_config,
         upsert_user=lambda identity: user_db.upsert_user_by_email(identity.email),
     )
+    whoami.user_db = user_db
     app.register_blueprint(progress_routes.progress_bp)
+    app.register_blueprint(whoami.whoami_bp)
 
 app.register_blueprint(system.bp)
 app.register_blueprint(pages.bp)

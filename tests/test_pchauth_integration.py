@@ -61,3 +61,22 @@ def test_optional_mode_401s_without_header_and_succeeds_with_it(monkeypatch):
 
     authed = client.get('/api/progress/all', headers={'X-Remote-Email': 'me@example.com'})
     assert authed.status_code == 200
+
+
+def test_whoami_check_reflects_signed_out_state(monkeypatch):
+    client = _reload_app_base(
+        monkeypatch, feature_auth=True, auth_mode='optional', allowed_emails='me@example.com'
+    )
+    response = client.get('/api/auth/check')
+    assert response.status_code == 200
+    assert response.json == {'authenticated': False}
+
+
+def test_whoami_check_reflects_signed_in_state(monkeypatch):
+    client = _reload_app_base(
+        monkeypatch, feature_auth=True, auth_mode='optional', allowed_emails='me@example.com'
+    )
+    response = client.get('/api/auth/check', headers={'X-Remote-Email': 'me@example.com'})
+    assert response.status_code == 200
+    assert response.json['authenticated'] is True
+    assert response.json['user']['email'] == 'me@example.com'
