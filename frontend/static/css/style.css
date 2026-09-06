@@ -28,6 +28,12 @@ html {
     --secondary-color-hover: #2980b9;
     --sticky-header-accent: #333333;
     --sticky-header-border: #666666;
+    --reading-theme-dark-bg: #1a1a1a;
+    --reading-theme-dark-text: #e0e0e0;
+    --reading-theme-sepia-bg: #f4ecd8;
+    --reading-theme-sepia-text: #5c4f3d;
+    --skeleton-base: #f0f0f0;
+    --skeleton-highlight: #e8e8e8;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
@@ -509,9 +515,9 @@ body.on-chapter-page .header {
 .skeleton {
     background: linear-gradient(
         90deg,
-        #f0f0f0 0px,
-        #e8e8e8 40px,
-        #f0f0f0 80px
+        var(--skeleton-base) 0px,
+        var(--skeleton-highlight) 40px,
+        var(--skeleton-base) 80px
     );
     background-size: 1000px 100%;
     animation: shimmer 2s infinite linear;
@@ -526,9 +532,9 @@ body.on-chapter-page .header {
     height: 100%;
     background: linear-gradient(
         90deg,
-        #f0f0f0 0px,
-        #e8e8e8 40px,
-        #f0f0f0 80px
+        var(--skeleton-base) 0px,
+        var(--skeleton-highlight) 40px,
+        var(--skeleton-base) 80px
     );
     background-size: 1000px 100%;
     animation: shimmer 2s infinite linear;
@@ -563,9 +569,9 @@ body.on-chapter-page .header {
     height: 400px;
     background: linear-gradient(
         90deg,
-        #f0f0f0 0px,
-        #e8e8e8 40px,
-        #f0f0f0 80px
+        var(--skeleton-base) 0px,
+        var(--skeleton-highlight) 40px,
+        var(--skeleton-base) 80px
     );
     background-size: 1000px 100%;
     animation: shimmer 2s infinite linear;
@@ -675,7 +681,7 @@ body.on-chapter-page .header {
 
 /* Skeleton Loading States (legacy - keeping for backward compatibility) */
 .skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background: linear-gradient(90deg, var(--skeleton-base) 25%, #e0e0e0 50%, var(--skeleton-base) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
     border-radius: 4px;
@@ -3348,11 +3354,11 @@ body.on-chapter-page .header {
 }
 
 .theme-preview-dark {
-    background: #1a1a1a;
+    background: var(--reading-theme-dark-bg);
 }
 
 .theme-preview-sepia {
-    background: #f4ecd8;
+    background: var(--reading-theme-sepia-bg);
 }
 
 .theme-choice span {
@@ -3373,20 +3379,20 @@ body:has(.chapter-detail-section[data-theme="light"]:not(.hidden)) {
 }
 
 .chapter-detail-section[data-theme="dark"] {
-    background: #1a1a1a;
-    color: #e0e0e0;
+    background: var(--reading-theme-dark-bg);
+    color: var(--reading-theme-dark-text);
 }
 
 /* When chapter section is active with dark theme, set body background */
 body:has(.chapter-detail-section[data-theme="dark"]:not(.hidden)) {
-    background: #1a1a1a;
+    background: var(--reading-theme-dark-bg);
 }
 
 .chapter-detail-section[data-theme="dark"] .chapter-fulltext p,
 .chapter-detail-section[data-theme="dark"] .chapter-summary-text,
 .chapter-detail-section[data-theme="dark"] h2,
 .chapter-detail-section[data-theme="dark"] h4 {
-    color: #e0e0e0;
+    color: var(--reading-theme-dark-text);
 }
 
 .chapter-detail-section[data-theme="dark"] .chapter-summary-box {
@@ -3399,7 +3405,7 @@ body:has(.chapter-detail-section[data-theme="dark"]:not(.hidden)) {
 }
 
 .chapter-detail-section[data-theme="dark"] .next-chapter-btn {
-    color: #e0e0e0;
+    color: var(--reading-theme-dark-text);
     border-color: #444;
 }
 
@@ -3410,20 +3416,20 @@ body:has(.chapter-detail-section[data-theme="dark"]:not(.hidden)) {
 }
 
 .chapter-detail-section[data-theme="sepia"] {
-    background: #f4ecd8;
-    color: #5c4f3d;
+    background: var(--reading-theme-sepia-bg);
+    color: var(--reading-theme-sepia-text);
 }
 
 /* When chapter section is active with sepia theme, set body background */
 body:has(.chapter-detail-section[data-theme="sepia"]:not(.hidden)) {
-    background: #f4ecd8;
+    background: var(--reading-theme-sepia-bg);
 }
 
 .chapter-detail-section[data-theme="sepia"] .chapter-fulltext p,
 .chapter-detail-section[data-theme="sepia"] .chapter-summary-text,
 .chapter-detail-section[data-theme="sepia"] h2,
 .chapter-detail-section[data-theme="sepia"] h4 {
-    color: #5c4f3d;
+    color: var(--reading-theme-sepia-text);
 }
 
 .chapter-detail-section[data-theme="sepia"] .chapter-summary-box {
@@ -3432,7 +3438,7 @@ body:has(.chapter-detail-section[data-theme="sepia"]:not(.hidden)) {
 }
 
 .chapter-detail-section[data-theme="sepia"] .next-chapter-btn {
-    color: #5c4f3d;
+    color: var(--reading-theme-sepia-text);
     border-color: #d4c5a9;
 }
 
@@ -3454,20 +3460,20 @@ body:has(.medium-detail-section[data-theme="light"]:not(.hidden)) {
 }
 
 .medium-detail-section[data-theme="dark"] {
-    background: #1a1a1a;
-    color: #e0e0e0;
+    background: var(--reading-theme-dark-bg);
+    color: var(--reading-theme-dark-text);
 }
 
 /* When medium section is active with dark theme, set body background */
 body:has(.medium-detail-section[data-theme="dark"]:not(.hidden)) {
-    background: #1a1a1a;
+    background: var(--reading-theme-dark-bg);
 }
 
 .medium-detail-section[data-theme="dark"] .summary-text,
 .medium-detail-section[data-theme="dark"] h2,
 .medium-detail-section[data-theme="dark"] h3,
 .medium-detail-section[data-theme="dark"] h4 {
-    color: #e0e0e0;
+    color: var(--reading-theme-dark-text);
 }
 
 .medium-detail-section[data-theme="dark"] .back-button {
@@ -3475,20 +3481,20 @@ body:has(.medium-detail-section[data-theme="dark"]:not(.hidden)) {
 }
 
 .medium-detail-section[data-theme="sepia"] {
-    background: #f4ecd8;
-    color: #5c4f3d;
+    background: var(--reading-theme-sepia-bg);
+    color: var(--reading-theme-sepia-text);
 }
 
 /* When medium section is active with sepia theme, set body background */
 body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
-    background: #f4ecd8;
+    background: var(--reading-theme-sepia-bg);
 }
 
 .medium-detail-section[data-theme="sepia"] .summary-text,
 .medium-detail-section[data-theme="sepia"] h2,
 .medium-detail-section[data-theme="sepia"] h3,
 .medium-detail-section[data-theme="sepia"] h4 {
-    color: #5c4f3d;
+    color: var(--reading-theme-sepia-text);
 }
 
 /* Sticky Reading Header */
@@ -4839,12 +4845,12 @@ body.pagination-active {
 }
 
 [data-theme="dark"] .pagination-page-container {
-    color: #e0e0e0;
+    color: var(--reading-theme-dark-text);
 }
 
 [data-theme="dark"] .pagination-page-container p,
 [data-theme="dark"] .pagination-page-container .side-by-side-cell {
-    color: #e0e0e0;
+    color: var(--reading-theme-dark-text);
 }
 
 [data-theme="dark"] .pagination-page-container h1,
@@ -4853,7 +4859,7 @@ body.pagination-active {
 [data-theme="dark"] .pagination-page-container h4,
 [data-theme="dark"] .pagination-page-container h5,
 [data-theme="dark"] .pagination-page-container h6 {
-    color: #e0e0e0;
+    color: var(--reading-theme-dark-text);
 }
 
 [data-theme="dark"] .pagination-page-container code {
