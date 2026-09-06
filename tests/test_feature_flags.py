@@ -21,7 +21,7 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     """
     # Drop cached modules so module-level blueprint registration re-runs
     for mod in [
-        'app_base', 'config', 'auth_routes', 'progress_routes',
+        'app_base', 'config', 'progress_routes',
         'models', 'user_models',
     ]:
         sys.modules.pop(mod, None)
@@ -30,11 +30,6 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     from backend import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
     monkeypatch.setattr(_config, 'FEATURE_BLOG', feature_blog, raising=False)
-    if feature_auth:
-        # app_base now requires SECRET_KEY to be set when FEATURE_AUTH is on
-        # (see tests/test_secret_key_config.py) — supply a dummy one here so
-        # this fixture keeps testing route registration, not that guard.
-        monkeypatch.setenv('SECRET_KEY', 'test-secret-key')
     # Ensure the freshly-imported app_base sees the patched values
     sys.modules['backend.config'] = _config
 
@@ -46,25 +41,20 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     return app_base.app.test_client()
 
 
-def test_auth_routes_return_404_when_flag_off(monkeypatch):
-    client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
-    assert client.get('/api/auth/check').status_code == 404
-    assert client.get('/api/auth/login').status_code == 404
-    assert client.get('/api/auth/register').status_code == 404
-
-
 def test_progress_routes_return_404_when_flag_off(monkeypatch):
     client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
     assert client.get('/api/progress/all').status_code == 404
     assert client.get('/api/progress/save').status_code == 404
 
 
-def test_auth_routes_registered_when_flag_on(monkeypatch):
+def test_progress_routes_registered_when_flag_on(monkeypatch):
+    """/api/progress/* exists when FEATURE_AUTH registers the blueprint.
+    There is no /api/auth/* any more — Apache owns login entirely in
+    trusted_header mode; see tests/test_pchauth_integration.py for that
+    coverage instead."""
     client = _reload_app_base(monkeypatch, feature_auth=True, feature_blog=False)
-    # /api/auth/check exists when registered; it should NOT return 404.
-    # (It may return 200 with a JSON payload or 401, but never 404.)
-    resp = client.get('/api/auth/check')
-    assert resp.status_code != 404, f'auth blueprint should register, got {resp.status_code}'
+    resp = client.get('/api/progress/all')
+    assert resp.status_code != 404, f'progress blueprint should register, got {resp.status_code}'
 
 
 def test_blog_routes_return_404_when_flag_off(monkeypatch):

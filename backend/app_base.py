@@ -10,11 +10,9 @@ attributes rather than imported back from here).
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 from pathlib import Path
-from datetime import timedelta
 import os
 import logging
 import zlib
-import secrets
 
 # Handle both direct execution (`python backend/app.py`, dev) and package
 # import (gunicorn's `backend.app_prod:app`, prod) — `backend` is installed
@@ -24,15 +22,19 @@ try:
     from . import config
     from . import models
     from . import user_models
-    from . import auth_routes
     from . import progress_routes
+    from .pchauth.config import AuthConfig
+    from .pchauth.config import load_config as load_pchauth_config
+    from .pchauth.flask_adapter import init_pchauth
     from .routes import common, pages, books, taxonomy, discover, authors, blog, system
 except ImportError:
     from backend import config
     from backend import models
     from backend import user_models
-    from backend import auth_routes
     from backend import progress_routes
+    from backend.pchauth.config import AuthConfig
+    from backend.pchauth.config import load_config as load_pchauth_config
+    from backend.pchauth.flask_adapter import init_pchauth
     from backend.routes import common, pages, books, taxonomy, discover, authors, blog, system
 
 # Configure logging
@@ -70,35 +72,17 @@ app = Flask(__name__,
             template_folder='../frontend/templates')
 app.wsgi_app = PrefixMiddleware(app.wsgi_app)
 
-# Configure session
-_secret_key = os.environ.get('SECRET_KEY')
-if not _secret_key:
-    if config.FEATURE_AUTH:
-        # A per-process random key would silently break sessions across
-        # gunicorn workers (each generates a different key, so cookies signed
-        # by one worker fail to validate on another) — fail fast instead.
-        raise RuntimeError(
-            "SECRET_KEY environment variable must be set when FEATURE_AUTH "
-            "is enabled — see deploy/service.env.example."
-        )
-    # FEATURE_AUTH is off, so sessions aren't exercised; a random per-process
-    # key is harmless here and keeps dev/test running without extra setup.
-    _secret_key = secrets.token_hex(32)
-app.config['SECRET_KEY'] = _secret_key
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', '1') == '1'
-app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
-
+# No SECRET_KEY / session cookie config needed: trusted_header mode reads
+# an already-verified identity from a header on every request, it doesn't
+# mint or read a cookie of its own. (self_oidc, if ever built, would need
+# this back — see pchauth's spec.)
 CORS(app, supports_credentials=True)
 
 # Initialize databases
 db = models.Database()
 user_db = user_models.UserDatabase(config.USER_DATABASE_PATH)
 
-# Set user_db in auth and progress routes
-auth_routes.user_db = user_db
+# Set user_db in progress routes
 progress_routes.user_db = user_db
 
 # Inject db/config into the routes.common module so backend/routes/*.py can
@@ -109,7 +93,22 @@ common.config = config
 # Register blueprints — gated behind FEATURE_AUTH/FEATURE_BLOG so the routes
 # return clean 404s (not 403s) when a subsystem is dark.
 if config.FEATURE_AUTH:
-    app.register_blueprint(auth_routes.auth_bp)
+    # SUMMRA_AUTH_MODE unset (local dev/test default) means 'off', not
+    # pchauth's own library default of 'required' — there's no Apache
+    # gateway to supply X-Remote-Email outside the cohosted deployment, so
+    # 'off' reproduces the old no-login behavior exactly and needs no
+    # SUMMRA_ALLOWED_EMAILS configured. The cohosted deploy's service.env
+    # sets SUMMRA_AUTH_MODE=optional and a real SUMMRA_ALLOWED_EMAILS
+    # explicitly, at which point load_pchauth_config is what runs.
+    if os.environ.get('SUMMRA_AUTH_MODE'):
+        pchauth_config = load_pchauth_config(os.environ, prefix='SUMMRA')
+    else:
+        pchauth_config = AuthConfig(mode='off')
+    init_pchauth(
+        app,
+        pchauth_config,
+        upsert_user=lambda identity: user_db.upsert_user_by_email(identity.email),
+    )
     app.register_blueprint(progress_routes.progress_bp)
 
 app.register_blueprint(system.bp)

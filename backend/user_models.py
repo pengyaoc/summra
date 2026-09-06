@@ -44,6 +44,8 @@ class UserDatabase:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        self._migrate_password_schema(cursor)
+
         # Users table. subject/name are reserved for the deferred self_oidc
         # identity source (see pchauth's spec) and are never populated this
         # round — trusted_header only ever supplies email.
@@ -100,6 +102,25 @@ class UserDatabase:
 
         conn.commit()
         conn.close()
+
+    def _migrate_password_schema(self, cursor: sqlite3.Cursor) -> None:
+        """Consolidated login, 2026-09-05 (see WORK_LOG.md and pchauth's
+        spec). An already-existing `users` table predates the email/subject/
+        name schema — `CREATE TABLE IF NOT EXISTS` below is a no-op against
+        it, so this has to run first. Every known deployment (prod and every
+        local dev copy checked) has exactly 0 rows in this table, so a
+        straight DROP + recreate is safe; refuse instead of silently
+        dropping data if that's ever not true."""
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()}
+        if not columns or "email" in columns:
+            return  # fresh DB, or already migrated
+        row_count = cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if row_count > 0:
+            raise RuntimeError(
+                f"users table has the old password schema AND {row_count} row(s) — "
+                "refusing to auto-migrate a non-empty table; back it up and migrate by hand"
+            )
+        cursor.execute("DROP TABLE users")
 
     def upsert_user_by_email(self, email: str) -> int:
         """Creates the user row on first sight of this email, or returns
