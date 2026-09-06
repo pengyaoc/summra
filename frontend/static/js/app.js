@@ -2210,17 +2210,12 @@ class SummraApp {
             // Render author page
             this.renderAuthorPage(authorData.author, booksData.books || []);
 
-            // Update breadcrumbs
-            this.updateBreadcrumbs('author', authorData.author);
-
-            // Update page title
-            this.updatePageTitle(`${authorName} - Author | Summra`);
-
-            if (restoreScroll) {
-                this.restoreScrollPosition(`author-${authorName}`);
-            } else {
-                window.scrollTo(0, 0);
-            }
+            this.finishPageTransition(
+                'author',
+                `author-${authorName}`,
+                restoreScroll,
+                `${authorName} - Author | Summra`
+            );
         } catch (error) {
             console.error('Error loading author:', error);
             const container = document.getElementById('author-detail-container');
@@ -2264,17 +2259,7 @@ class SummraApp {
             // Render discover page
             this.renderDiscoverPage(data);
 
-            // Update breadcrumbs
-            this.updateBreadcrumbs('discover');
-
-            // Update page title
-            this.updatePageTitle('Discover Classic Books | Summra');
-
-            if (restoreScroll) {
-                this.restoreScrollPosition('discover');
-            } else {
-                window.scrollTo(0, 0);
-            }
+            this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Summra');
         } catch (error) {
             console.error('Error loading discover page:', error);
             discoverSection.innerHTML = `
