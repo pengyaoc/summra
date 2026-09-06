@@ -7820,3 +7820,29 @@ already fully read-fine-anonymous):
    session expiring mid-visit) rather than a behavior change.
 
 Full test suite (523) unaffected — both changes are frontend-only (template + auth.js).
+
+## 2026-09-06 (final) — The hidden-attribute fix above didn't actually work
+
+Verified live (fresh incognito-equivalent tab, service worker/caches cleared) that
+`#user-account-btn` was still visible for an anonymous visitor despite the previous entry's
+fix. Root cause: `.header-nav-btn` sets `display: flex` as an **author** stylesheet rule.
+Author styles always win over the UA stylesheet's own `[hidden] { display: none }` default
+regardless of selector specificity — that's a CSS spec rule, not a specificity fight this
+class could lose on points. So the plain `hidden` attribute compiled to correct HTML but had
+zero visual effect the entire time.
+
+Fix: switched to this codebase's existing `.hidden` utility class (`display: none !important`
+in `style.css`), the same mechanism `#user-modal` already used successfully elsewhere in this
+file — `accountBtn.classList.add/remove('hidden')` instead of toggling `.hidden` as a boolean
+property. `!important` is what actually breaks the tie the bare attribute couldn't.
+
+Also worth noting for future debugging: reproducing "still shows the old version" during this
+verification pass required clearing **both** the Cache Storage API (`caches.delete`) *and*
+unregistering the service worker *and* doing this on a genuinely fresh tab — a same-tab
+`cmd+shift+r` hard reload was not sufficient to pick up the new `auth.js`/template, likely
+because the SW's fetch handler serves from its own cache rather than deferring to the
+browser's normal cache-bypass reload semantics. Don't trust a same-tab hard-reload to prove a
+fix landed on this app; open a fresh tab (or actually clear SW+CacheStorage) instead.
+
+Verified live in a fresh tab after this fix: `#user-account-btn`'s class list includes
+`hidden` and it does not render. Full test suite (523) unaffected.
