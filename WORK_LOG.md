@@ -7626,7 +7626,51 @@ light and read computed styles (all matched original hex values exactly), inject
 `.illustration-skeleton` elements and read their computed gradients (also exact matches). Full suite
 unaffected across all 3 commits (513 pytest, 29/29 JS).
 
-### Next: the `SummaryGenerator` class breakup (largest remaining task — deserves a dedicated
-session), the remaining ~125 CSS hex literals (each single-use or not yet checked — same per-usage
-discipline applies, no shortcuts), and the discovered `.skeleton`/`@keyframes shimmer` duplicate-rule
-cleanup (a cascade-order question, separate from color tokenization).
+### Phase 4f — CSS hex-literal audit COMPLETE (commit `e0a1811`)
+Finished checking every remaining multi-occurrence hex literal in the file (17 more tokens:
+`--text-outline`, `--text-dark`, `--text-secondary`, `--cta-gradient-start`/`-end`,
+`--reading-theme-dark-accent`/`-border`, `--sticky-header-muted`/`-active`, `--hero-accent`,
+`--error-bg-light`, `--section-bg-light`, `--cover-placeholder-bg`, `--admin-modal-bg`,
+`--border-subtle`, `--book-author-text`, `--success-gradient-start`/`-end` — see commit message for
+full per-group justification). **After this pass, every remaining hex literal in the file occurs
+exactly once.** This confirms the "~150 hex literals" the original plan flagged were mostly
+single-use all along — a token exists to name a *shared* value, and nothing is served by aliasing a
+value used in exactly one place. The CSS token-consolidation phase (started 3 commits ago) is done.
+
+Verified live via claude-in-chrome: read all 17 new custom-property values via
+`getComputedStyle(document.documentElement)` (all matched exactly), plus rendered checks on 8 real/
+injected elements. Full suite unaffected (513 pytest, 29/29 JS).
+
+### `.skeleton`/`@keyframes shimmer` duplicate-rule cleanup — DONE, found a real bug (commit `0be0d6e`)
+Investigated the duplicate rules flagged during the tokenization work, rather than leaving them for
+"someday": `.skeleton` was defined twice (second copy, marked "legacy," fully overrode the first
+under identical selector/specificity), `@keyframes shimmer` three times, `@keyframes fadeIn` twice.
+
+- **Confirmed `.skeleton`/`.content-skeleton.*` are dead** — grepped every template and JS render
+  path; no element anywhere is ever given those classes. The one lookalike reference
+  (`content.querySelector('.skeleton')` in `updateReadingGuide`) is a defensive no-op guard (the
+  actual template only ever renders an `<img>`) — confirmed harmless, left alone. Deleted both dead
+  `.skeleton` copies, `.content-skeleton.*`, and their now-orphaned `@keyframes shimmer` duplicate.
+- **Found a real bug**: `.book-cover-skeleton`/`.illustration-skeleton` (both live, `background-size:
+  1000px 100%`) were written for a pixel-based shimmer sweep, but since `@keyframes` resolve by name
+  globally and the *last* definition in the file wins, they were silently animating with the
+  percentage-based keyframe instead — a 2x-wider, faster sweep than their own CSS intended. Renamed
+  the pixel-based keyframe to `shimmer-px` and repointed both selectors at it, so the two live
+  shimmer variants (pixel-scale vs percentage-scale, used by different components) no longer collide
+  under one shared name.
+- Deleted the dead first `@keyframes fadeIn` copy (differed from the live one only by a 10px vs 20px
+  `translateY` — cosmetic, and since keyframes resolve by name the 4 live consumers were already
+  using the surviving copy's behavior; deleting the dead one changes nothing).
+
+Verified via CSSOM in a live browser: exactly 1 each of `@keyframes shimmer`/`shimmer-px`/`fadeIn`
+now (was 3/0/2); `.book-cover-skeleton`'s computed `animation-name` is `shimmer-px`,
+`.skeleton-book-card`'s is still `shimmer`; a bare `.skeleton` element resolves to no background
+(proof it was genuinely unused). Screenshotted an injected `.book-cover-skeleton` rendering
+correctly. Zero console errors. Full suite unaffected (513 pytest, 29/29 JS).
+
+### Next: the `SummaryGenerator` class breakup — the one large item left from the original plan.
+Deserves a dedicated session (the plan's own note that `detect_chapters` and
+`_detect_chapters_from_toc_structure` need internal decomposition first, plus this script drives
+real paid Gemini ingestion, means it shouldn't be rushed). Everything else from the original
+7-phase plan is now done or has a documented reason it wasn't (see corrections scattered through
+this log: RateLimiter, `dict(row)`, breakpoint consolidation, etc.).
