@@ -186,9 +186,16 @@ function updateAuthUI() {
         if (currentUser) {
             userName.textContent = currentUser.email;
             accountBtn.classList.add('logged-in');
+            // Only a genuinely signed-in visitor (via the shared gateway
+            // elsewhere on pengyaochen.com) ever sees this — there's no
+            // sign-in action this app can offer an anonymous one, so the
+            // button stays hidden (see the template's default `hidden`
+            // attribute) rather than showing a dead end.
+            accountBtn.hidden = false;
         } else {
             userName.textContent = 'Account';
             accountBtn.classList.remove('logged-in');
+            accountBtn.hidden = true;
         }
     }
 }

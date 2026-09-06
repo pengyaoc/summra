@@ -114,7 +114,14 @@
                     {% endif %}
                 </div>
                 {% if feature_auth %}
-                <button class="header-nav-btn user-account-btn" id="user-account-btn">
+                <!-- Hidden by default: most visitors here are anonymous, and
+                     there's no sign-in action to offer them (see the
+                     signed-out-view comment below) — showing this button
+                     just to immediately hide it again once auth.js's
+                     checkAuthStatus() resolves would flash a dead-end UI
+                     element. auth.js's updateAuthUI() removes `hidden` only
+                     once a real signed-in user is confirmed. -->
+                <button class="header-nav-btn user-account-btn" id="user-account-btn" hidden>
                     <span class="user-icon">👤</span>
                     <span class="user-name" id="header-user-name">Account</span>
                 </button>
@@ -691,12 +698,18 @@
                  has no login flow of its own. Progress is saved locally via
                  the offline fallback in auth.js; syncing it across devices
                  only happens if you're already authenticated through the
-                 shared gateway (e.g. by signing in at pengyaochen.com/pages),
-                 which sets X-Remote-Email and is picked up transparently.
-                 See docs/superpowers/specs/2026-09-05-consolidated-login-design.md. -->
+                 shared gateway elsewhere on pengyaochen.com, which sets
+                 X-Remote-Email and is picked up transparently. The gated
+                 path itself is deliberately not named here — see
+                 docs/superpowers/specs/2026-09-05-consolidated-login-design.md.
+                 In practice #user-account-btn stays hidden while signed out
+                 (see auth.js's updateAuthUI), so this view is normally
+                 unreachable — kept only as a fallback for the brief window
+                 before the auth check resolves or a session that expires
+                 mid-visit. -->
             <div class="user-modal-view" id="signed-out-view">
                 <h2 class="user-modal-title">Reading Progress</h2>
-                <p class="user-modal-subtitle">Saved on this device. Sign in at pengyaochen.com/pages to sync it across devices.</p>
+                <p class="user-modal-subtitle">Saved on this device.</p>
             </div>
 
             <!-- Signed-in view -->
