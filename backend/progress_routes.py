@@ -4,13 +4,13 @@ This module provides endpoints for saving and retrieving reading progress,
 including chapter completion tracking.
 """
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, g, jsonify, request
 import logging
 
 try:
-    from .auth_utils import login_required
+    from .pchauth.flask_adapter import login_required
 except ImportError:
-    from backend.auth_utils import login_required
+    from backend.pchauth.flask_adapter import login_required
 
 # Will be set by app_base.py
 user_db = None
@@ -39,7 +39,7 @@ def save_progress():
         400: Invalid request
         401: Not authenticated
     """
-    user_id = session.get('user_id')
+    user_id = g.user_id
     data = request.get_json()
 
     if not data:
@@ -83,7 +83,7 @@ def get_progress(book_id):
         404: No progress found
         401: Not authenticated
     """
-    user_id = session.get('user_id')
+    user_id = g.user_id
 
     progress = user_db.get_reading_progress(user_id, book_id)
 
@@ -108,7 +108,7 @@ def get_all_progress():
         200: List of progress data
         401: Not authenticated
     """
-    user_id = session.get('user_id')
+    user_id = g.user_id
 
     progress_list = user_db.get_all_reading_progress(user_id)
 
@@ -135,7 +135,7 @@ def mark_chapter_complete():
         400: Invalid request
         401: Not authenticated
     """
-    user_id = session.get('user_id')
+    user_id = g.user_id
     data = request.get_json()
 
     if not data:
@@ -176,7 +176,7 @@ def get_completed_chapters(book_id):
         200: List of completed chapter numbers
         401: Not authenticated
     """
-    user_id = session.get('user_id')
+    user_id = g.user_id
 
     completed = user_db.get_completed_chapters(user_id, book_id)
 
@@ -223,7 +223,7 @@ def sync_progress():
         400: Invalid request
         401: Not authenticated
     """
-    user_id = session.get('user_id')
+    user_id = g.user_id
     data = request.get_json()
 
     if not data:

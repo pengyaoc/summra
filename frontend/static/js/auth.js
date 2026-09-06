@@ -123,33 +123,6 @@ function setupAuthEventListeners() {
         overlay.addEventListener('click', hideUserModal);
     }
 
-    // View switchers
-    const showRegisterBtn = document.getElementById('show-register');
-    if (showRegisterBtn) {
-        showRegisterBtn.addEventListener('click', () => switchView('register'));
-    }
-
-    const showLoginBtn = document.getElementById('show-login');
-    if (showLoginBtn) {
-        showLoginBtn.addEventListener('click', () => switchView('login'));
-    }
-
-    // Forms
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-    }
-
-    const registerForm = document.getElementById('register-form');
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
-    }
-
-    // Logout button
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
-    }
 }
 
 /**
@@ -164,7 +137,7 @@ function showUserModal() {
         switchView('account');
         updateAccountView();
     } else {
-        switchView('login');
+        switchView('signed-out');
     }
 
     modal.classList.remove('hidden');
@@ -180,18 +153,14 @@ function hideUserModal() {
 
     modal.classList.add('hidden');
     document.body.style.overflow = '';
-
-    // Clear form errors
-    clearFormErrors();
 }
 
 /**
- * Switch between login/register/account views
+ * Switch between signed-out/account views
  */
 function switchView(viewName) {
     const views = {
-        'login': document.getElementById('login-view'),
-        'register': document.getElementById('register-view'),
+        'signed-out': document.getElementById('signed-out-view'),
         'account': document.getElementById('account-view')
     };
 
@@ -204,122 +173,6 @@ function switchView(viewName) {
     if (views[viewName]) {
         views[viewName].classList.remove('hidden');
     }
-
-    // Clear form errors when switching
-    clearFormErrors();
-}
-
-/**
- * Handle login form submission
- */
-async function handleLogin(e) {
-    e.preventDefault();
-
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value;
-
-    // Clear previous errors
-    clearFormError('login');
-
-    try {
-        const response = await fetch(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            setCurrentUser(data.user);
-            updateAuthUI();
-            switchView('account');
-            updateAccountView();
-
-            // Sync offline progress
-            await syncOfflineProgress();
-
-            // Show success message
-            console.log('Logged in successfully');
-        } else {
-            showFormError('login', data.error || 'Login failed');
-        }
-    } catch (error) {
-        console.error('Login error:', error);
-        showFormError('login', 'An error occurred. Please try again.');
-    }
-}
-
-/**
- * Handle register form submission
- */
-async function handleRegister(e) {
-    e.preventDefault();
-
-    const username = document.getElementById('register-username').value.trim();
-    const password = document.getElementById('register-password').value;
-    const passwordConfirm = document.getElementById('register-password-confirm').value;
-
-    // Clear previous errors
-    clearFormError('register');
-
-    // Validate passwords match
-    if (password !== passwordConfirm) {
-        showFormError('register', 'Passwords do not match');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/auth/register`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            setCurrentUser(data.user);
-            updateAuthUI();
-            switchView('account');
-            updateAccountView();
-
-            // Sync offline progress
-            await syncOfflineProgress();
-
-            // Show success message
-            console.log('Account created successfully');
-        } else {
-            showFormError('register', data.error || 'Registration failed');
-        }
-    } catch (error) {
-        console.error('Registration error:', error);
-        showFormError('register', 'An error occurred. Please try again.');
-    }
-}
-
-/**
- * Handle logout
- */
-async function handleLogout() {
-    try {
-        await fetch(`${API_BASE}/auth/logout`, {
-            method: 'POST',
-            credentials: 'include'
-        });
-
-        setCurrentUser(null);
-        updateAuthUI();
-        switchView('login');
-    } catch (error) {
-        console.error('Logout error:', error);
-    }
 }
 
 /**
@@ -331,7 +184,7 @@ function updateAuthUI() {
 
     if (accountBtn && userName) {
         if (currentUser) {
-            userName.textContent = currentUser.username;
+            userName.textContent = currentUser.email;
             accountBtn.classList.add('logged-in');
         } else {
             userName.textContent = 'Account';
@@ -347,17 +200,12 @@ async function updateAccountView() {
     if (!currentUser) return;
 
     // Update basic info
-    const usernameEl = document.getElementById('account-username');
-    if (usernameEl) usernameEl.textContent = currentUser.username;
+    const emailEl = document.getElementById('account-email');
+    if (emailEl) emailEl.textContent = currentUser.email;
 
     const createdEl = document.getElementById('account-created');
     if (createdEl && currentUser.created_at) {
         createdEl.textContent = new Date(currentUser.created_at).toLocaleDateString();
-    }
-
-    const lastLoginEl = document.getElementById('account-last-login');
-    if (lastLoginEl && currentUser.last_login) {
-        lastLoginEl.textContent = new Date(currentUser.last_login).toLocaleString();
     }
 
     // Fetch and update reading stats
@@ -376,36 +224,6 @@ async function updateAccountView() {
     } catch (error) {
         console.error('Error fetching reading stats:', error);
     }
-}
-
-/**
- * Show form error message
- */
-function showFormError(formType, message) {
-    const errorEl = document.getElementById(`${formType}-error`);
-    if (errorEl) {
-        errorEl.textContent = message;
-        errorEl.classList.remove('hidden');
-    }
-}
-
-/**
- * Clear form error message
- */
-function clearFormError(formType) {
-    const errorEl = document.getElementById(`${formType}-error`);
-    if (errorEl) {
-        errorEl.textContent = '';
-        errorEl.classList.add('hidden');
-    }
-}
-
-/**
- * Clear all form errors
- */
-function clearFormErrors() {
-    clearFormError('login');
-    clearFormError('register');
 }
 
 // ===== Reading Progress Functions =====
@@ -451,7 +269,7 @@ async function getReadingProgress(bookId) {
     if (currentUser) {
         // Fetch from server
         try {
-            const response = await fetch(`/api/progress/get/${bookId}`, {
+            const response = await fetch(`${API_BASE}/progress/get/${bookId}`, {
                 credentials: 'include'
             });
 
@@ -507,7 +325,7 @@ async function getCompletedChapters(bookId) {
     if (currentUser) {
         // Fetch from server
         try {
-            const response = await fetch(`/api/progress/chapters/${bookId}`, {
+            const response = await fetch(`${API_BASE}/progress/chapters/${bookId}`, {
                 credentials: 'include'
             });
 
