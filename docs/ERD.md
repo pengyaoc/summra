@@ -38,7 +38,7 @@ every route lives in its own blueprint under `backend/routes/`:
 
 | File | Role |
 |------|------|
-| `backend/app_base.py` | **App factory.** Creates the Flask app, configures CORS + sessions, imports and registers every blueprint below (conditionally, for auth/blog, behind feature flags). Both entry points import `app` from here. Global error handler + `asset_v()` content-hash cache-busting live here too. |
+| `backend/app_base.py` | **App factory.** Creates the Flask app, configures CORS, imports and registers every blueprint below (conditionally, for auth/blog, behind feature flags) and wires up `pchauth`'s `before_request` hook when `FEATURE_AUTH` is on. No session config — trusted-header identity needs none. Both entry points import `app` from here. Global error handler + `asset_v()` content-hash cache-busting live here too. |
 | `backend/routes/common.py` | Shared `db`/`config` module attributes (set by `app_base.py` after creating them, to avoid a circular import back into `app_base`) plus route-agnostic helpers: `site_origin()`, `author_name_to_slug()`/`slug_to_author_name()`, `build_breadcrumbs()`, `breadcrumbs_to_schema()`. |
 | `backend/routes/system.py` | robots.txt, sitemap.xml, manifest.json, service-worker.js, precache-revision endpoint. |
 | `backend/routes/pages.py` | Server-rendered page routes (SSR shell for each page type). |
@@ -47,19 +47,19 @@ every route lives in its own blueprint under `backend/routes/`:
 | `backend/routes/discover.py` | Discover-page carousel JSON API endpoint. |
 | `backend/routes/authors.py` | Author detail page + JSON API endpoints. |
 | `backend/routes/blog.py` | Blog index/post pages + JSON API. Registered only when `FEATURE_BLOG` is on. |
-| `backend/auth_utils.py` | `login_required` decorator — extracted here because it was byte-identical between `auth_routes.py` and `progress_routes.py`. |
+| `backend/pchauth/` | Trusted-header identity package (`core.py`, `config.py`, `trusted_header.py`, `flask_adapter.py`) — see the User Authentication section below. Replaced `backend/auth_routes.py`/`auth_utils.py` (deleted 2026-09-06). |
+| `backend/whoami.py` | `GET /api/auth/check` — the frontend's only sign-in-state probe. Replaced `auth_routes.py`'s register/login/logout/me endpoints, all of which are gone. |
 | `backend/app.py` | **Dev entry point.** Adds `POST /api/tts/generate` that calls `GeminiTTSHandler` to generate audio on demand (and `POST /api/tts/stop` to abort + clean up chunks), plus an admin chapter-edit route. Sets `IS_DEVELOPMENT = True`. Run with `python backend/app.py` — binds `:5001`. |
 | `backend/app_prod.py` | **Prod entry point.** Replaces `POST /api/tts/generate` with a pre-generated-only lookup (no live generation). Adds `/health`. Served by Gunicorn behind Nginx in production. |
 | `backend/config.py` | Single source of truth for paths, models, rate limits, summary configs, feature flags. |
 | `backend/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection via a versioned `_COLUMN_MIGRATIONS` list (replaced 18 copy-pasted `try/except OperationalError` blocks). |
-| `backend/user_models.py` | User database layer (`data/summra.db`, per `config.USER_DATABASE_PATH`) — users, reading_progress, chapter_completion. SHA-256 + salt password hashing. Sessions are Flask permanent sessions (30 days). |
-| `backend/auth_routes.py` | Auth blueprint (register / login / logout / me). Conditionally registered behind `FEATURE_AUTH`. |
-| `backend/progress_routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete). Conditionally registered behind `FEATURE_AUTH`. |
+| `backend/user_models.py` | User database layer (`data/summra.db`, per `config.USER_DATABASE_PATH`) — users (keyed by email, no credential), reading_progress, chapter_completion. No password hashing, no sessions — identity is upserted by email from the trusted header on each request. |
+| `backend/progress_routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete), gated by pchauth's `@login_required`. Conditionally registered behind `FEATURE_AUTH`. |
 | `backend/gemini_tts_handler.py` | Gemini 2.5 Flash TTS client + per-key rate limiter (`GEMINI_TTS_MAX_REQUESTS_PER_MINUTE`, `…_TOKENS_PER_MINUTE`). Owns voice selection, chunking, retries. |
 | `backend/tts_utils.py` | Provider-agnostic helpers: `clean_text_for_speech`, chunk-by-words, WAV stitching, on-disk cache lookup. Cache lookup probes Opus → Gemini WAV → legacy `*_vits.wav` → legacy `*_complete.wav` so older audio still resolves. |
 
 **Feature flags** (`backend/config.py`):
-- `FEATURE_AUTH` (default `False`) — gates auth routes, progress routes, the Account button, and active Save-for-Offline.
+- `FEATURE_AUTH` (default `True` as of 2026-09-06) — gates whether pchauth's hook + the progress/whoami blueprints are registered at all. Whether identity actually resolves to anyone is a *separate* per-host setting, `SUMMRA_AUTH_MODE` (`off`/`optional`/`required`).
 - `FEATURE_BLOG` (default `False`) — gates `/blog`, `/blog/<slug>`, `/api/blog*`, and the blog entries in `sitemap.xml`.
 
 Both flags are injected into the SPA shell as `window.FEATURE_AUTH` / `window.FEATURE_BLOG` so the frontend can server-strip the gated buttons.
@@ -560,11 +560,31 @@ def get_book_by_filename(self, filename) -> dict
 
 ---
 
-## User Authentication & Progress Tracking (Added 2025-12-20)
+## User Authentication & Progress Tracking (Added 2025-12-20; **auth rebuilt 2026-09-06 — see note**)
+
+> **Superseded 2026-09-06:** the username/password registration+login system originally documented in this section — `backend/auth_routes.py`, `backend/auth_utils.py`, SHA-256+salt password hashing, Flask server-side sessions — was deleted outright, not deprecated. Identity is now supplied entirely by a shared Apache reverse-proxy gateway via a trusted `X-Remote-Email` header (the `pchauth` package, `backend/pchauth/`). This app has never run its own OAuth flow and has no login form of any kind. Full history: `WORK_LOG.md` (2026-09-05/06 entries); design spec in the `pchauth` repo's `docs/superpowers/specs/2026-09-05-consolidated-login-design.md`.
 
 ### Overview
 
-User authentication system with reading progress tracking stored in a separate database (`summra.db`). Supports offline operation with localStorage sync and provides persistent login sessions for PWA users.
+Reading-progress tracking stored in a separate database (`summra.db`), keyed by an identity this app never authenticates itself — it trusts whatever `X-Remote-Email` the Apache gateway in front of it supplies (or none, for an anonymous visitor). Supports offline operation with localStorage sync for both progress and identity.
+
+### Identity: pchauth (`backend/pchauth/`)
+
+**Purpose:** framework-agnostic trusted-header identity resolution, shared with OpenReader (each app has its own copy of the same small package — no cross-repo dependency).
+
+| File | Purpose |
+|---|---|
+| `core.py` | `Identity` dataclass (`email`, plus `subject`/`name` reserved for a deferred direct-OIDC source, unused today) and `is_allowed(email, config)` — the allowlist check, fails closed. |
+| `config.py` | `AuthConfig` (`mode`: `off`/`optional`/`required`, `allowed_emails`) and `load_pchauth_config(environ, prefix)`, which reads `{PREFIX}_AUTH_MODE` / `{PREFIX}_ALLOWED_EMAILS`. |
+| `trusted_header.py` | Extracts an `Identity` from `X-Remote-Email` (and, if present, `X-Remote-User`/`X-Remote-Name` for the reserved fields) — no verification of its own; the whole security model rests on this header being unforgeable, which is only true because the app binds `127.0.0.1` and is reachable exclusively through the trusted Apache proxy. |
+| `flask_adapter.py` | `init_pchauth(app, config, upsert_user)` — a `before_request` hook resolving `g.user_id` every request; `login_required` decorator matching `auth_utils.py`'s old error shape (`{'error': 'Authentication required'}`, 401) so replacing it needed no call-site changes in `progress_routes.py`. |
+
+**Per-request resolution (`init_pchauth`'s hook):**
+- `mode == 'off'`: every request resolves to one fixed default identity (`upsert_user(Identity(email=""))`) — reproduces pre-pchauth no-login behavior for local dev/test, where there's no Apache gateway to supply anything.
+- No `X-Remote-Email` + `optional`: `g.user_id = None`, request proceeds anonymously.
+- No `X-Remote-Email` + `required`: 401 immediately.
+- Header present but email not in `allowed_emails`: 403.
+- Header present and allowed: `upsert_user(identity)` creates/updates the `users` row by email and sets `g.user_id`.
 
 ### Database: summra.db
 
@@ -579,9 +599,9 @@ User authentication system with reading progress tracking stored in a separate d
 │       users             │
 ├─────────────────────────┤
 │ id (PK)                 │
-│ username (UNIQUE)       │
-│ password_hash           │
-│ salt                    │
+│ email (UNIQUE)          │
+│ subject (UNIQUE, unused)│
+│ name (unused)           │
 │ created_at              │
 │ last_login              │
 └─────────────────────────┘
@@ -612,9 +632,9 @@ UNIQUE(user_id, book_id)   UNIQUE(user_id, book_id, chapter_number)
 ```sql
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    salt TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    subject TEXT UNIQUE,
+    name TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
 )
@@ -622,17 +642,12 @@ CREATE TABLE users (
 
 **Fields:**
 - `id`: Auto-incrementing primary key
-- `username`: Unique username (min 3 characters, case-sensitive)
-- `password_hash`: SHA-256 hash of (password + salt)
-- `salt`: Random 32-byte salt (hex-encoded, unique per user)
-- `created_at`: Account creation timestamp
-- `last_login`: Last successful login timestamp
+- `email`: From the trusted `X-Remote-Email` header — the only identity source this round; unique
+- `subject`, `name`: reserved for a deferred direct-OIDC identity source (`self_oidc` in the pchauth design), never populated by `trusted_header.py` today — don't assume either is set
+- `created_at`: Account (row) creation timestamp
+- `last_login`: Last request timestamp that resolved this identity
 
-**Security:**
-- Password never stored in plaintext
-- Each user has unique random salt
-- Hash algorithm: SHA-256 (password + salt)
-- No password recovery (reset only)
+**No credential of any kind is stored here.** This table exists to key reading-progress rows to an email, not to authenticate anyone — authentication happens entirely upstream, in Apache. A pre-2026-09-06 `users` table (`username`/`password_hash`/`salt`) is dropped and recreated on first run after upgrade (`UserDatabase._migrate_password_schema`) — safe because every known deployment had 0 rows in it; that migration refuses to run (rather than silently drop data) if it ever finds otherwise.
 
 #### reading_progress table
 
@@ -700,16 +715,17 @@ CREATE TABLE chapter_completion (
 
 #### Key Methods
 
-**Authentication:**
+**Identity:**
 ```python
-def create_user(self, username: str, password: str) -> Optional[int]
-    """Create new user with hashed password. Returns user_id or None if username exists."""
+def upsert_user_by_email(self, email: str) -> int
+    """Create the users row for this email if it doesn't exist, update
+    last_login either way, and return its id. Called from pchauth's
+    before_request hook on every request that carries a trusted,
+    allowlisted identity — this is the only way a users row is ever
+    created; there is no separate "register" step."""
 
-def authenticate_user(self, username: str, password: str) -> Optional[Dict]
-    """Verify credentials. Returns user dict or None if invalid."""
-
-def update_last_login(self, user_id: int) -> None
-    """Update last_login timestamp."""
+def get_user_by_id(self, user_id: int) -> Optional[Dict]
+    """Used by GET /api/auth/check to render {authenticated, user}."""
 ```
 
 **Reading Progress:**
@@ -741,29 +757,11 @@ def get_user_stats(self, user_id: int) -> Dict
 
 ### Authentication Flow
 
-#### Registration
-1. User submits username and password (min 3 chars each)
-2. Backend validates username doesn't exist
-3. Generate random 32-byte salt
-4. Hash password: SHA-256(password + salt)
-5. Store username, password_hash, salt, created_at
-6. Create Flask session with user_id
-7. Mark session as permanent (30-day duration)
-
-#### Login
-1. User submits username and password
-2. Backend retrieves user record by username
-3. Hash submitted password with stored salt
-4. Compare hashes (constant-time comparison)
-5. If match: create Flask session, update last_login
-6. Return user data (excluding password_hash and salt)
+There is no registration or login flow in this app — see `init_pchauth`'s per-request resolution above. Every request either arrives with a trusted `X-Remote-Email` (checked against the allowlist, then upserted) or without one (anonymous under `optional`, rejected under `required`). No client ever POSTs credentials to this app.
 
 #### Session Management
-- Flask server-side sessions
-- SESSION_PERMANENT = True
-- PERMANENT_SESSION_LIFETIME = 30 days
-- Session data stored in signed cookie
-- Auto-cleanup on expiration
+- No session of this app's own — no cookie is set, no server-side session store exists here. Identity is re-derived from the request header every single time.
+- Persistence lives entirely in the shared Apache gateway's `mod_auth_openidc` session (out of this app's control) plus the frontend's own `localStorage` cache of the last-known user (`auth.js`'s `summra_current_user` key) for instant offline UI.
 
 ### Progress Tracking Flow
 
@@ -808,12 +806,13 @@ STORAGE_KEYS = {
 #### Service Worker Caching
 ```javascript
 registerRoute(
-    ({ url }) => url.pathname === '/api/auth/check',
+    ({ url }) => url.pathname === BASE_PATH + '/api/auth/check',
     new NetworkFirst({
         cacheName: 'auth-cache',
         networkTimeoutSeconds: 3,
         plugins: [
-            new ExpirationPlugin({ maxAgeSeconds: 60 * 60 }) // 1 hour
+            new CacheableResponsePlugin({ statuses: [0, 200] }),
+            new ExpirationPlugin({ maxEntries: 1, maxAgeSeconds: 30 * 24 * 60 * 60 }) // 30 days
         ]
     })
 );
@@ -822,7 +821,7 @@ registerRoute(
 **Behavior:**
 - Try network first with 3-second timeout
 - Fallback to cached auth status if offline
-- Cache expires after 1 hour
+- Cache expires after 30 days (extended from an original 1 hour — matches how long a PWA installation might realistically stay offline; see PRD §7d)
 
 ### Frontend Integration
 
@@ -833,10 +832,7 @@ registerRoute(
 ```javascript
 window.authModule = {
     initAuth(),                                    // Initialize on page load
-    checkAuthStatus(),                             // Verify login status
-    login(username, password),                     // Login user
-    register(username, password),                  // Register user
-    logout(),                                      // Logout and clear session
+    checkAuthStatus(),                             // Ask /api/auth/check who (if anyone) the gateway says we are
     trackChapterView(book_id, chapter_num, page),  // Save progress
     trackPageChange(book_id, chapter_num, page),   // Update page position
     onChapterComplete(book_id, chapter_num),       // Mark complete
@@ -845,17 +841,20 @@ window.authModule = {
 }
 ```
 
+No `login()`/`register()`/`logout()` — there's nothing for this module to call for any of those; signing in happens, if at all, entirely outside this app.
+
 #### UI Integration Points
 
-**Header Account Button:** (`index.html:107-110`)
+**Header Account Button:** (`index.html`, `frontend/static/js/auth.js`'s `updateAuthUI()`)
 ```html
-<button class="header-nav-btn user-account-btn" id="user-account-btn">
+<button class="header-nav-btn user-account-btn hidden" id="user-account-btn">
     <span class="user-icon">👤</span>
     <span class="user-name" id="header-user-name">Account</span>
 </button>
 ```
-- Shows username when logged in
-- Opens modal on click
+- Ships with the `.hidden` class server-rendered (most visitors are anonymous, and there's no sign-in action to offer them — see the Superseded note above). `updateAuthUI()` removes `.hidden` only once `/api/auth/check` confirms a real signed-in user, and shows their email.
+- **Not** the bare `hidden` HTML attribute: `.header-nav-btn`'s own `display: flex` author style beats the UA stylesheet's `[hidden] { display: none }` regardless of specificity (author styles always win over UA defaults) — that was tried first and silently did nothing. `.hidden`'s `display: none !important` is what actually works; see `WORK_LOG.md`, 2026-09-06 final entry, for the live debugging story (including that reproducing the bug required clearing the PWA's service-worker cache, not just a same-tab hard reload).
+- Opens the account modal on click; the modal's signed-out view (unreachable for a genuinely anonymous visitor, since the button itself is hidden) has no sign-in CTA and does not name the gateway's sign-in path.
 
 **Continue Reading Button:** (`app.js:showResumeReadingButton()`)
 - Created dynamically in `book-detail-info` section
@@ -874,47 +873,26 @@ box.className = 'chapter-box' + (isCompleted ? ' completed' : '');
 
 ### API Endpoints
 
-#### Authentication
-- `POST /api/auth/register` - Create new account
-- `POST /api/auth/login` - Login with credentials
-- `POST /api/auth/logout` - Logout and clear session
-- `GET /api/auth/check` - Verify authentication status
-- `GET /api/auth/me` - Get current user info
+#### Identity
+- `GET /api/auth/check` - `{authenticated, user}` for the current request's resolved identity (or `{authenticated: false}`). No `/register`, `/login`, `/logout`, or `/me` — see the Superseded note.
 
 #### Progress Tracking
 - `POST /api/progress/save` - Save reading position
 - `GET /api/progress/get/<book_id>` - Get reading position
+- `GET /api/progress/all` - All progress rows for the current user (used to compute account-view stats client-side — there's no dedicated stats endpoint)
 - `POST /api/progress/chapter/complete` - Mark chapter complete
+- `GET /api/progress/chapters/<book_id>` - Completed chapter numbers for a book
 - `POST /api/progress/sync` - Sync offline progress
-- `GET /api/progress/stats` - Get user statistics
 
-**Authentication Required:** All progress endpoints require valid session.
+**Authentication Required:** every progress endpoint above (`@login_required`, pchauth's Flask adapter) 401s an anonymous request. That's the entire enforcement boundary — there is no session to steal or CSRF-protect, since there's no session.
 
 ### Security Considerations
 
-**Password Security:**
-- SHA-256 hashing (not plaintext)
-- Unique salt per user
-- Salt stored separately from hash
-- No password recovery (reset only)
+**Identity trust boundary:** this app trusts `X-Remote-Email` unconditionally and performs no verification of its own. That's only safe because (a) gunicorn binds `127.0.0.1`, never a public interface, and (b) Apache is the only thing that can reach it — see `deploy/apache/summra.conf` and the shared vhost documented in the vault's `wordpress-vm-pages-setup.md`. If either of those ever changes, this becomes a header-spoofing vulnerability instantly. A header-spoofing test against a comparable trusted-header endpoint is documented in OpenReader's `docs/WORKLOG.md` (2026-09-06) as part of verifying this design.
 
-**Session Security:**
-- HTTPOnly cookies (JavaScript can't access)
-- SameSite=Lax (CSRF protection)
-- Signed session data (tamper-proof)
-- 30-day expiration
+**No credential storage:** nothing to hash, salt, rotate, or leak — the `users` table holds only an email and timestamps.
 
-**CSRF Protection:**
-- SameSite cookie policy
-- Session-based authentication
-- No third-party cookie sharing
-
-**Future Enhancements:**
-- HTTPS enforcement
-- Rate limiting on login attempts
-- Password strength requirements
-- Two-factor authentication
-- Email verification
+**Allowlist fails closed:** `is_allowed()` denies by default; `load_pchauth_config` refuses to start in a non-`off` mode with an empty allowlist.
 
 ---
 
@@ -10753,21 +10731,7 @@ When user clicks "Save for Offline" button:
 
 ### Session Configuration
 
-**Location:** `backend/app_base.py` lines 44-49
-
-```python
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
-```
-
-**Session Lifetime:**
-- **30 days** - Matches auth cache duration
-- Supports extended offline usage
-- Session stored in secure HTTP-only cookie
-- Automatically renewed on activity
+**There is none.** `backend/app_base.py` sets no `SECRET_KEY` or session cookie config — a comment there notes this is deliberate: trusted-header mode reads identity fresh from `X-Remote-Email` on every request, so there's nothing for a session to persist server-side. The 30-day figure that used to describe session lifetime now only describes the frontend's `auth-cache` service-worker entry (above) and `localStorage`'s `summra_current_user` — both client-side, both just a UX cache for instant offline rendering, neither authoritative.
 
 ### Offline Progress Sync
 
@@ -10804,7 +10768,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
    ```
 
 3. **Trigger Points:**
-   - On login/registration
+   - Whenever `/api/auth/check` resolves a signed-in identity that wasn't previously cached (e.g. the visitor is already signed in elsewhere on `pengyaochen.com` and this is the first request that picks that up)
    - When coming back online (detected via auth check success)
    - Before saving new progress (if online)
 
@@ -10813,8 +10777,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 **Manual Test Procedure:**
 
 1. **Setup:**
-   - Open app in browser/PWA
-   - Login with account
+   - Open app in browser/PWA, already signed in via the shared gateway (visit any gated `pengyaochen.com` path first — there's no in-app login to do)
    - Navigate to book page
    - Click "Save for Offline"
    - Wait for cache completion

@@ -650,39 +650,30 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - Minimal, unobtrusive UI elements during reading
 - Professional typography and spacing
 
-### 7. User Authentication & Reading Progress (Added 2025-12-20, gated behind `FEATURE_AUTH` since 2026)
+### 7. User Authentication & Reading Progress (Added 2025-12-20; **rebuilt 2026-09-06 on `pchauth`/trusted-header, no app-level login**)
 
-**Status:** Implemented but **dark by default** in current builds. Set `FEATURE_AUTH = True` in `backend/config.py` to enable. When the flag is off, the Account button and Save-for-Offline button are server-stripped from the SPA shell, the `/api/auth/*` and `/api/progress/*` blueprints are not registered, and the routes return clean 404s. The schema and code paths described below ship in the repo and are exercised by tests.
+**Status:** `FEATURE_AUTH = True` by default (`backend/config.py`) — the progress-tracking and whoami blueprints are always registered on this deployment. What varies per host is `SUMMRA_AUTH_MODE` (`off` / `optional` / `required`, read from `SUMMRA_AUTH_MODE` env — unset means `off`, matching pre-pchauth no-login behavior for local dev/test). Production (`wordpress-2-vm`) runs `optional` with `SUMMRA_ALLOWED_EMAILS` set.
+
+> **Superseded (2026-09-06):** everything below this note through §7a as originally written — username/password registration, SHA-256+salt hashing, a Login/Register account modal, `/api/auth/register`, `/api/auth/login`, `backend/auth_routes.py`/`auth_utils.py` — **no longer exists**. There is no registration or login *form* anywhere in this app. Full incident/design history: `WORK_LOG.md`, 2026-09-05/09-06 entries; design spec in the `pchauth` repo's `docs/superpowers/specs/2026-09-05-consolidated-login-design.md`.
 
 **Feature Description:**
-User authentication system with reading progress tracking that persists across devices and works offline in PWA mode.
+Reading-progress tracking that persists across devices *for a signed-in visitor*, where "signed in" is decided entirely outside this app: a shared Apache reverse-proxy vhost on `wordpress-2-vm` runs `mod_auth_openidc` against Google, and — when a session already exists (e.g. because you signed in at `pengyaochen.com/pages`) — forwards a trusted `X-Remote-Email` header to this app on every request. This app never runs an OAuth flow, never asks for a password, and offers no sign-in button of its own (see 2026-09-06 UI decision below). Anonymous visitors read fine; their progress just stays local to the device instead of syncing.
 
 **User Stories:**
-- As a reader, I want to create an account so my reading progress is saved and synced across devices
-- As a returning user, I want to stay logged in on my device so I don't have to re-enter credentials
-- As a PWA user, I want to stay logged in when offline so I can continue reading without interruption
+- As a reader, I want my progress synced across devices *if* I'm already signed in elsewhere on the site — without this app asking me to log in separately
+- As an anonymous visitor, I want the app to work normally without being nagged to create an account
 - As a reader, I want to resume where I left off so I don't lose my place in a book
 - As a reader, I want to see which chapters I've completed so I can track my progress through a book
 
 **Specifications:**
 
-**7a. User Registration & Login:**
-- **Username/Password Authentication:** Simple username and password login (no email required)
-- **Password Security:** SHA-256 hashing with random salt per user
-- **Session Management:**
-  - Flask session-based authentication
-  - Permanent sessions (30-day duration)
-  - Session cookies persist across browser sessions
-- **Account Modal:**
-  - Accessible via Account button in header
-  - Three views: Login, Register, Account Info
-  - Switch between login/register with inline links
-  - Form validation with clear error messages
-- **Account Button:**
-  - Shows "Account" when logged out
-  - Shows username when logged in
-  - Visual indicator (background color) when logged in
-  - Always pinned to right side of header
+**7a. Identity (no login flow in this app):**
+- **Source of truth:** `X-Remote-Email`, set by the shared Apache vhost's `mod_auth_openidc` (`AuthType openid-connect`, `Require valid-user`, `OIDCUnAuthAction pass` so anonymous requests still reach the app). This app trusts the header unconditionally — it only works because gunicorn binds `127.0.0.1` and is reachable *only* through that Apache proxy.
+- **Allowlist:** `pchauth.core.is_allowed()` checks the header's email against `SUMMRA_ALLOWED_EMAILS` (comma-separated, `service.env`) and fails closed — an empty allowlist in a non-`off` mode refuses to start.
+- **Per-request resolution (`pchauth/flask_adapter.py`'s `init_pchauth`, a `before_request` hook):** no header + `optional` → anonymous (`g.user_id = None`, request proceeds); no header + `required` → 401; header present but not allowlisted → 403; header present and allowlisted → `user_db.upsert_user_by_email()` creates/updates the row and sets `g.user_id`.
+- **`GET /api/auth/check`** (`backend/whoami.py`): the frontend's only sign-in-state probe — `{"authenticated": false}` for anonymous, else `{"authenticated": true, "user": {...}}`. No `/api/auth/login`, `/api/auth/register`, or `/api/auth/logout` exist; "logging out" is the shared gateway's own logout, not something this app can do.
+- **Account button (`#user-account-btn`, header):** hidden by default (`.hidden` utility class — the bare `hidden` HTML attribute doesn't work here since `.header-nav-btn`'s own `display: flex` author style wins the cascade over the UA stylesheet's `[hidden]` default; see `WORK_LOG.md`, 2026-09-06 final entry). `auth.js`'s `updateAuthUI()` removes `.hidden` only once `/api/auth/check` confirms a real signed-in user; an anonymous visitor never sees it at all — there's no sign-in action to offer them, so a visible dead-end button was judged worse than no button.
+- **Account modal, signed-out view:** no CTA. Just "Reading Progress — Saved on this device." — the shared-gateway sign-in path is deliberately not named anywhere in the UI (it should stay unadvertised, not something a curious visitor discovers by inspecting the page).
 
 **7b. Reading Progress Tracking:**
 - **Granular Progress Storage:**
@@ -714,17 +705,13 @@ User authentication system with reading progress tracking that persists across d
 - **Icon:** 📖 book emoji for visual recognition
 
 **7d. Offline Support (PWA Mode):**
-- **Session Persistence:**
-  - Sessions marked as permanent (30-day lifetime)
-  - User data cached in localStorage for offline access
-  - Auth status cached for offline validation
+- **Identity Persistence:** no session cookie of this app's own to persist — identity is re-derived from `X-Remote-Email` on every request. `auth.js` restores the last-known user from `localStorage` instantly on load (for offline support), then confirms/corrects it against `/api/auth/check`.
 - **Offline Progress Tracking:**
-  - Progress saved to localStorage when offline
-  - Auto-sync to server when connection restored
+  - Progress saved to localStorage when offline, or whenever anonymous (no signed-in user to sync to)
+  - Auto-sync to server when connection restored *and* signed in
   - Merge strategy: server takes precedence for conflicts
 - **Service Worker Caching:**
-  - Auth check endpoint cached (1-hour TTL)
-  - NetworkFirst strategy with 3-second timeout
+  - `/api/auth/check` cached (NetworkFirst, 3s timeout, 30-day expiration — matches how long a trusted-header identity realistically stays valid for a PWA that may go offline for extended periods)
   - Graceful fallback to cached auth state offline
 
 **7e. Reading History & Statistics:**
@@ -738,7 +725,7 @@ User authentication system with reading progress tracking that persists across d
 **Database Schema:**
 - **Separate Database:** `summra.db` (not `database.db`)
 - **Tables:**
-  - `users`: User credentials and metadata
+  - `users`: identity (`email` unique, `subject`/`name` reserved for a future direct-OIDC source, unused today) + `created_at`/`last_login` — no password column
   - `reading_progress`: Chapter and page tracking
   - `chapter_completion`: Completion tracking per chapter
 
@@ -752,26 +739,23 @@ User authentication system with reading progress tracking that persists across d
 - Continue Reading button prominent and easily accessible
 
 **Acceptance Criteria:**
-- [✅] Users can register with username and password
-- [✅] Users can login and stay logged in across sessions
-- [✅] Sessions persist for 30 days
-- [✅] PWA mode maintains login when offline
-- [✅] Reading progress auto-saves on chapter view
+- [✅] Identity resolves from `X-Remote-Email` when present and allowlisted; anonymous otherwise (no error, no forced login)
+- [✅] No registration/login form exists anywhere in this app
+- [✅] Account button hidden for anonymous visitors; shown, with email, once `/api/auth/check` confirms a real signed-in user
+- [✅] Reading progress auto-saves on chapter view (server-side if signed in, else localStorage)
 - [✅] Chapter completion auto-marked on last page
 - [✅] Completed chapters show visual indicator (grey + checkmark)
 - [✅] Continue Reading button appears on book page when progress exists
 - [✅] Continue Reading button positioned near Save for Offline
 - [✅] Clicking Continue Reading navigates to saved chapter and page
-- [✅] Offline progress syncs to server when online
+- [✅] Offline progress syncs to server once online *and* signed in
 - [✅] Account stats show books started and chapters completed
-- [✅] User can logout and clear session
-- [✅] Password hashing prevents plaintext storage
+- [✅] Anonymous visitor never sees the shared-gateway sign-in path named in the UI
 
 **Design Inspiration:**
 - Goodreads for reading progress tracking
 - Kindle for seamless reading continuation
-- Notion for clean modal design
-- Standard web app authentication patterns
+- Trusted-header SSO (identity owned entirely by the reverse proxy, app never sees a credential)
 
 ### 8. Breadcrumb Navigation (Added 2025-12-02)
 
@@ -1480,9 +1464,8 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 - 📋 Highlighting and annotations
 
 ### Phase 4: Advanced Features (FUTURE)
-- 📋 User accounts and authentication
+- [✅] User identity and reading progress tracking — shipped (§7), trusted-header SSO not a standalone login system
 - 📋 Favorites and reading lists
-- 📋 Reading progress tracking
 - 📋 Search across all books
 - 📋 Book recommendations
 - 📋 Multiple TTS voices
@@ -1585,8 +1568,8 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 - A: Only use Project Gutenberg books (verified public domain in US)
 
 ### User Accounts
-- Q: Do we need user accounts?
-- A: Implemented (2025-12-20), but shipped dark behind `FEATURE_AUTH` (default `False`). The full auth + reading-progress stack — Flask sessions, SHA-256 + salt password hashing, `users` / `reading_progress` / `chapter_completion` tables in `summra.db`, Continue-Reading button, offline progress sync — is present in code. Flip the flag in `backend/config.py` to turn it on.
+- Q: Do we need user accounts / our own login system?
+- A: No — decided 2026-09-06. Identity comes entirely from a shared Apache reverse-proxy gateway (`mod_auth_openidc` against Google) that also fronts `/pages/` and OpenReader; this app just reads a trusted `X-Remote-Email` header when present (`SUMMRA_AUTH_MODE=optional` in production). No registration/login form, no password, no session cookie of this app's own. Full history in §7 above and `WORK_LOG.md`. `users` / `reading_progress` / `chapter_completion` tables in `summra.db` still exist and are always active (`FEATURE_AUTH = True` by default) — what's gone is the standalone credential/login layer, not the progress tracking itself.
 
 ## Dependencies
 
@@ -2481,11 +2464,11 @@ The following subsystems are **implemented in code but dark by default**, gated 
 
 | Flag | Default | What it gates |
 |------|---------|---------------|
-| `FEATURE_AUTH` | `False` | User registration/login, reading-progress tracking, Continue-Reading button, active Save-for-Offline (PRD §7) |
+| `FEATURE_AUTH` | `True` (changed 2026-09-06; was `False`) | Registers the progress-tracking and whoami blueprints (identity + reading-progress tracking, Continue-Reading button, active Save-for-Offline — PRD §7). No longer a registration/login system — see §7's superseded note. Per-host reach of identity is separately controlled by `SUMMRA_AUTH_MODE` (`off`/`optional`/`required`), not this flag. |
 | `FEATURE_BLOG` | `False` | Editorial blog routes, blog API endpoints, blog entries in `sitemap.xml` (PRD §15) |
 
 **Convention:**
-- Backend: blueprints are conditionally registered (`if config.FEATURE_AUTH: app.register_blueprint(auth_routes.bp)`); routes return 404 when the flag is off
+- Backend: blueprints are conditionally registered (`if config.FEATURE_AUTH: init_pchauth(...); app.register_blueprint(progress_routes.progress_bp); app.register_blueprint(whoami.whoami_bp)`); routes return 404 when the flag is off
 - Frontend: the flag values are injected into the SPA shell as `window.FEATURE_AUTH` / `window.FEATURE_BLOG`, and the gated button markup is server-stripped from `index.html` when off
 - Tests: feature flags are exercised by `tests/test_feature_flags.py`
 
