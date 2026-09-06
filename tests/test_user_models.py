@@ -48,3 +48,50 @@ def test_get_user_by_id_returns_email(test_db_path):
 def test_get_user_by_id_returns_none_for_unknown_id(test_db_path):
     db = UserDatabase(db_path=test_db_path)
     assert db.get_user_by_id(999) is None
+
+
+def test_migrates_an_existing_old_schema_empty_table(test_db_path):
+    import sqlite3
+
+    conn = sqlite3.connect(test_db_path)
+    conn.execute('''
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+    db = UserDatabase(db_path=test_db_path)
+    user_id = db.upsert_user_by_email("me@example.com")
+    assert isinstance(user_id, int)
+
+
+def test_refuses_to_migrate_a_non_empty_old_schema_table(test_db_path):
+    import sqlite3
+
+    conn = sqlite3.connect(test_db_path)
+    conn.execute('''
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        )
+    ''')
+    conn.execute(
+        "INSERT INTO users (username, password_hash, salt) VALUES ('x', 'y', 'z')"
+    )
+    conn.commit()
+    conn.close()
+
+    import pytest
+    with pytest.raises(RuntimeError, match="non-empty"):
+        UserDatabase(db_path=test_db_path)
