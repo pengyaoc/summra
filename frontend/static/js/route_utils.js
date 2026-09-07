@@ -64,12 +64,14 @@
     function parseAppRoute(path) {
         return {
             bookMatch: path.match(/^\/books\/([^\/]+)$/),
+            readerMatch: path.match(/^\/books\/([^\/]+)\/read$/),
             mediumMatch: path.match(/^\/books\/([^\/]+)\/summary$/),
             chapterMatch: path.match(/^\/books\/([^\/]+)\/chapters\/(\d+)$/),
             categoryMatch: path.match(/^\/categories\/(\d+)$/),
             categoriesMatch: path === '/categories',
             allBooksMatch: path === '/books',
             discoverMatch: path === '/discover',
+            libraryMatch: path === '/library',
             authorMatch: path.match(/^\/authors\/(.+)$/),
             blogMatch: path === '/blog',
             blogPostMatch: path.match(/^\/blog\/([^\/]+)$/),

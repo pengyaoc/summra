@@ -108,11 +108,21 @@ export const settingsMixin = {
     applyFont(font) {
         const chapterSection = document.getElementById('chapter-detail-section');
         const mediumSection = document.getElementById('medium-detail-section');
+        const readerSection = document.getElementById('continuous-reader-section');
         if (chapterSection) {
             chapterSection.setAttribute('data-font', font);
         }
         if (mediumSection) {
             mediumSection.setAttribute('data-font', font);
+        }
+        if (readerSection) {
+            readerSection.setAttribute('data-font', font);
+        }
+
+        if (this.continuousReader?.active) {
+            const marker = this.continuousReader.currentMarker;
+            this.loadContinuousReaderAt(marker, marker?.chapter_id);
+            return;
         }
 
         // Reinitialize pagination if active (check for pagination wrapper existence)
@@ -158,6 +168,13 @@ export const settingsMixin = {
     applyFontSize(size) {
         const chapterSection = document.getElementById('chapter-detail-section');
         const mediumSection = document.getElementById('medium-detail-section');
+        const readerSection = document.getElementById('continuous-reader-section');
+
+        if (readerSection) {
+            readerSection.querySelectorAll('.continuous-reader-content, .side-by-side-cell, .pagination-page-container').forEach(el => {
+                el.style.fontSize = `${size}px`;
+            });
+        }
 
         if (chapterSection) {
             const fulltext = chapterSection.querySelector('.chapter-fulltext');
@@ -204,11 +221,15 @@ export const settingsMixin = {
     applyTheme(theme) {
         const chapterSection = document.getElementById('chapter-detail-section');
         const mediumSection = document.getElementById('medium-detail-section');
+        const readerSection = document.getElementById('continuous-reader-section');
         if (chapterSection) {
             chapterSection.setAttribute('data-theme', theme);
         }
         if (mediumSection) {
             mediumSection.setAttribute('data-theme', theme);
+        }
+        if (readerSection) {
+            readerSection.setAttribute('data-theme', theme);
         }
     },
 

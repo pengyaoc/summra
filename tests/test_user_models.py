@@ -6,6 +6,26 @@ pchauth's spec, docs/superpowers/specs/2026-09-05-consolidated-login-design.md.
 from backend.user_models import UserDatabase
 
 
+def _marker(ordinal=0, paragraph_id=None):
+    return {
+        "content_version": 1,
+        "chapter_id": 10,
+        "paragraph_id": paragraph_id or f"paragraph-{ordinal}",
+        "offset": 0,
+        "quote": f"paragraph {ordinal}",
+        "ordinal": ordinal,
+        "word_position": ordinal * 10,
+    }
+
+
+def _mutation(sequence, *, cause="page_turn", base_revision=0, boundaries=0, active_seconds=0):
+    return {
+        "mutation_id": f"mutation-{sequence}", "device_id": "device-a", "device_sequence": sequence,
+        "book_id": 7, "mode": "original", "event_cause": cause, "base_revision": base_revision,
+        "sequential_boundaries_delta": boundaries, "active_seconds_delta": active_seconds,
+    }
+
+
 def test_upsert_by_email_creates_new_user(test_db_path):
     db = UserDatabase(db_path=test_db_path)
     user_id = db.upsert_user_by_email("me@example.com")
@@ -95,3 +115,41 @@ def test_refuses_to_migrate_a_non_empty_old_schema_table(test_db_path):
     import pytest
     with pytest.raises(RuntimeError, match="non-empty"):
         UserDatabase(db_path=test_db_path)
+
+
+def test_progress_requires_sequential_meaningful_engagement(test_db_path):
+    db = UserDatabase(db_path=test_db_path)
+    user_id = db.upsert_user_by_email("reader@example.com")
+    first = db.apply_mutation(user_id, _mutation(1), _marker(0), None)
+    second = db.apply_mutation(user_id, _mutation(2, base_revision=1, boundaries=1), _marker(1), _marker(1))
+    third = db.apply_mutation(user_id, _mutation(3, base_revision=2, boundaries=1), _marker(2), _marker(2))
+    assert first["projection"]["book"]["status"] == "preview"
+    assert second["projection"]["book"]["status"] == "preview"
+    assert third["projection"]["book"]["status"] == "in_progress"
+    assert len(db.get_library_projection(user_id)) == 1
+
+
+def test_progress_mutation_is_idempotent_and_conflicts_keep_projection(test_db_path):
+    db = UserDatabase(db_path=test_db_path)
+    user_id = db.upsert_user_by_email("reader@example.com")
+    accepted = db.apply_mutation(user_id, _mutation(1), _marker(0), None)
+    duplicate = db.apply_mutation(user_id, _mutation(1), _marker(0), None)
+    conflict = db.apply_mutation(user_id, _mutation(2, base_revision=0), _marker(4), _marker(4))
+    assert accepted["result"] == "accepted"
+    assert duplicate["result"] == "duplicate"
+    assert conflict["result"] == "conflict"
+    assert conflict["projection"]["modes"][0]["current_marker"]["ordinal"] == 0
+
+
+def test_completion_and_manual_unfinish_preserve_mode_marker(test_db_path):
+    db = UserDatabase(db_path=test_db_path)
+    user_id = db.upsert_user_by_email("reader@example.com")
+    completed = db.apply_mutation(
+        user_id, _mutation(1, cause="completion"), _marker(9), _marker(9), completion_allowed=True,
+    )
+    unfinished = db.apply_mutation(
+        user_id, _mutation(2, cause="manual_unfinish", base_revision=1), _marker(9), None,
+    )
+    assert completed["projection"]["book"]["status"] == "finished"
+    assert unfinished["projection"]["book"]["status"] == "in_progress"
+    assert unfinished["projection"]["modes"][0]["current_marker"]["paragraph_id"] == "paragraph-9"

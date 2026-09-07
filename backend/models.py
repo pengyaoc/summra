@@ -2,6 +2,9 @@ import sqlite3
 import json
 import wave
 import re
+import hashlib
+import uuid
+from collections import defaultdict
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict
@@ -41,6 +44,7 @@ class Database:
         """Get database connection"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys = ON')
         return conn
 
     def init_db(self):
@@ -193,6 +197,152 @@ class Database:
                 updated_date DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        ''')
+
+        # Continuous-reader content. These records are generated from the
+        # existing chapter blobs and are immutable once published. Keeping
+        # them in the content database means reader requests never need to
+        # parse an entire chapter or book on the hot path.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_content_version (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                version INTEGER NOT NULL,
+                alignment_version INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(status IN ('draft', 'published', 'retired')),
+                manifest_etag TEXT NOT NULL,
+                source_checksum TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                published_at TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+                UNIQUE(book_id, version)
+            )
+        ''')
+        cursor.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_reader_one_published_version
+            ON reader_content_version(book_id) WHERE status = 'published'
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_mode_manifest (
+                content_version_id INTEGER NOT NULL,
+                mode TEXT NOT NULL CHECK(mode IN ('summary', 'original', 'plain', 'side_by_side')),
+                availability TEXT NOT NULL CHECK(availability IN ('available', 'partial', 'unavailable')),
+                total_word_count INTEGER NOT NULL DEFAULT 0,
+                unit_count INTEGER NOT NULL DEFAULT 0,
+                first_segment_id TEXT,
+                last_segment_id TEXT,
+                terminal_paragraph_id TEXT,
+                PRIMARY KEY (content_version_id, mode),
+                FOREIGN KEY (content_version_id) REFERENCES reader_content_version(id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_structure_entry (
+                id TEXT PRIMARY KEY,
+                content_version_id INTEGER NOT NULL,
+                kind TEXT NOT NULL CHECK(kind IN ('part', 'chapter')),
+                section_id INTEGER,
+                chapter_id INTEGER,
+                ordinal INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                FOREIGN KEY (content_version_id) REFERENCES reader_content_version(id) ON DELETE CASCADE,
+                FOREIGN KEY (section_id) REFERENCES book_sections(id) ON DELETE CASCADE,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+                UNIQUE(content_version_id, ordinal)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_segment (
+                id TEXT PRIMARY KEY,
+                content_version_id INTEGER NOT NULL,
+                mode TEXT NOT NULL CHECK(mode IN ('summary', 'original', 'plain', 'side_by_side')),
+                ordinal INTEGER NOT NULL,
+                first_unit_ordinal INTEGER NOT NULL,
+                last_unit_ordinal INTEGER NOT NULL,
+                first_word_offset INTEGER NOT NULL DEFAULT 0,
+                last_word_offset INTEGER NOT NULL DEFAULT 0,
+                byte_count INTEGER NOT NULL,
+                unit_count INTEGER NOT NULL,
+                oversized_unit INTEGER NOT NULL DEFAULT 0,
+                etag TEXT NOT NULL,
+                FOREIGN KEY (content_version_id) REFERENCES reader_content_version(id) ON DELETE CASCADE,
+                UNIQUE(content_version_id, mode, ordinal)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_paragraph (
+                id TEXT NOT NULL,
+                content_version_id INTEGER NOT NULL,
+                segment_id TEXT,
+                chapter_id INTEGER NOT NULL,
+                mode TEXT NOT NULL CHECK(mode IN ('summary', 'original', 'plain')),
+                availability TEXT NOT NULL DEFAULT 'available' CHECK(availability IN ('available', 'gap')),
+                ordinal INTEGER NOT NULL,
+                chapter_ordinal INTEGER NOT NULL,
+                content TEXT,
+                normalized_quote TEXT,
+                word_count INTEGER NOT NULL DEFAULT 0,
+                word_start INTEGER NOT NULL DEFAULT 0,
+                fallback_paragraph_id TEXT,
+                FOREIGN KEY (content_version_id) REFERENCES reader_content_version(id) ON DELETE CASCADE,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+                FOREIGN KEY (segment_id) REFERENCES reader_segment(id) ON DELETE SET NULL,
+                PRIMARY KEY (content_version_id, id),
+                UNIQUE(content_version_id, mode, ordinal),
+                UNIQUE(content_version_id, mode, chapter_id, chapter_ordinal)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_alignment_row (
+                id TEXT NOT NULL,
+                content_version_id INTEGER NOT NULL,
+                segment_id TEXT,
+                chapter_id INTEGER NOT NULL,
+                ordinal INTEGER NOT NULL,
+                chapter_ordinal INTEGER NOT NULL,
+                canonical_word_count INTEGER NOT NULL DEFAULT 0,
+                word_start INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (content_version_id) REFERENCES reader_content_version(id) ON DELETE CASCADE,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+                FOREIGN KEY (segment_id) REFERENCES reader_segment(id) ON DELETE SET NULL,
+                PRIMARY KEY (content_version_id, id),
+                UNIQUE(content_version_id, ordinal),
+                UNIQUE(content_version_id, chapter_id, chapter_ordinal)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_alignment_member (
+                content_version_id INTEGER NOT NULL,
+                alignment_row_id TEXT NOT NULL,
+                member_mode TEXT NOT NULL CHECK(member_mode IN ('original', 'plain')),
+                paragraph_id TEXT,
+                available INTEGER NOT NULL CHECK(available IN (0, 1)),
+                PRIMARY KEY (content_version_id, alignment_row_id, member_mode),
+                FOREIGN KEY (content_version_id, alignment_row_id)
+                    REFERENCES reader_alignment_row(content_version_id, id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reader_paragraph_mapping (
+                content_version_id INTEGER NOT NULL,
+                old_content_version INTEGER NOT NULL,
+                old_paragraph_id TEXT NOT NULL,
+                new_paragraph_id TEXT NOT NULL,
+                mapping_reason TEXT NOT NULL,
+                confidence REAL NOT NULL DEFAULT 1.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (content_version_id, old_content_version, old_paragraph_id),
+                FOREIGN KEY (content_version_id) REFERENCES reader_content_version(id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_reader_paragraph_segment
+            ON reader_paragraph(segment_id, ordinal)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_reader_alignment_segment
+            ON reader_alignment_row(segment_id, ordinal)
         ''')
 
         # Column migrations for existing databases — every table above is
@@ -411,11 +561,17 @@ class Database:
         word_count = len(content.split())
 
         cursor.execute('''
-            INSERT OR REPLACE INTO summaries (book_id, summary_type, content, word_count)
+            INSERT INTO summaries (book_id, summary_type, content, word_count)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT(book_id, summary_type) DO UPDATE SET
+                content = excluded.content,
+                word_count = excluded.word_count
         ''', (book_id, summary_type, content, word_count))
 
-        summary_id = cursor.lastrowid
+        summary_id = cursor.execute(
+            'SELECT id FROM summaries WHERE book_id = ? AND summary_type = ?',
+            (book_id, summary_type),
+        ).fetchone()['id']
         conn.commit()
         conn.close()
 
@@ -473,12 +629,23 @@ class Database:
                 modern_english_text = existing['modern_english_text']
 
         cursor.execute('''
-            INSERT OR REPLACE INTO chapters
+            INSERT INTO chapters
             (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url, modern_english_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(book_id, chapter_number) DO UPDATE SET
+                chapter_title = excluded.chapter_title,
+                chapter_text = excluded.chapter_text,
+                summary = excluded.summary,
+                word_count = excluded.word_count,
+                section_id = excluded.section_id,
+                illustration_url = excluded.illustration_url,
+                modern_english_text = excluded.modern_english_text
         ''', (book_id, chapter_number, chapter_title, chapter_text, summary, word_count, section_id, illustration_url, modern_english_text))
 
-        chapter_id = cursor.lastrowid
+        chapter_id = cursor.execute(
+            'SELECT id FROM chapters WHERE book_id = ? AND chapter_number = ?',
+            (book_id, chapter_number),
+        ).fetchone()['id']
         conn.commit()
         conn.close()
 
@@ -1602,3 +1769,746 @@ class Database:
         if row:
             return dict(row)
         return None
+
+    # ------------------------------------------------------------------
+    # Continuous-reader content compiler and query surface
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _reader_normalize_quote(text: str) -> str:
+        """A short, presentation-independent public-domain recovery excerpt."""
+        return re.sub(r'\s+', ' ', (text or '').strip().lower())[:180]
+
+    @staticmethod
+    def _reader_split_paragraphs(text: str) -> List[str]:
+        """Match the current chapter renderer: every nonempty source line is
+        a logical paragraph. Empty source is represented by no rows; callers
+        create an explicit Plain-English gap where needed."""
+        return [p.strip() for p in (text or '').splitlines() if p.strip()]
+
+    @staticmethod
+    def _reader_word_count(text: str) -> int:
+        return len(re.findall(r"\b[\w’'-]+\b", text or ''))
+
+    @staticmethod
+    def _reader_id(prefix: str) -> str:
+        return f'{prefix}_{uuid.uuid4().hex}'
+
+    def _reader_source_checksum(self, chapters: List[Dict]) -> str:
+        source = [
+            {
+                'id': chapter['id'],
+                'number': chapter['chapter_number'],
+                'title': chapter.get('chapter_title') or '',
+                'summary': chapter.get('summary') or '',
+                'original': chapter.get('chapter_text') or '',
+                'plain': chapter.get('modern_english_text') or '',
+                'section_id': chapter.get('section_id'),
+            }
+            for chapter in chapters
+        ]
+        return hashlib.sha256(
+            json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        ).hexdigest()
+
+    def ensure_reader_content(self, book_id: int) -> Dict:
+        """Return the published content version, compiling one when source
+        content changed. Compilation is deterministic in ordering and retains
+        paragraph identities when a paragraph's normalized source survives.
+
+        A deployment may call this for every book as an explicit backfill;
+        the reader routes also call it for a newly opened book so development
+        data is usable without a separate operational step.
+        """
+        conn = self.get_connection()
+        try:
+            book = conn.execute('SELECT id FROM books WHERE id = ?', (book_id,)).fetchone()
+            if not book:
+                raise ValueError('Book not found')
+            chapters = [dict(row) for row in conn.execute('''
+                SELECT id, book_id, chapter_number, chapter_title, chapter_text,
+                       modern_english_text, summary, section_id, illustration_url
+                FROM chapters WHERE book_id = ? ORDER BY chapter_number
+            ''', (book_id,)).fetchall()]
+            if not chapters:
+                raise ValueError('Book has no chapters')
+
+            checksum = self._reader_source_checksum(chapters)
+            published = conn.execute('''
+                SELECT * FROM reader_content_version
+                WHERE book_id = ? AND status = 'published'
+            ''', (book_id,)).fetchone()
+            if published and published['source_checksum'] == checksum:
+                return dict(published)
+
+            return self._compile_reader_content(conn, book_id, chapters, checksum, dict(published) if published else None)
+        finally:
+            conn.close()
+
+    def _compile_reader_content(
+        self,
+        conn: sqlite3.Connection,
+        book_id: int,
+        chapters: List[Dict],
+        checksum: str,
+        previous: Optional[Dict],
+    ) -> Dict:
+        """Compile one immutable reader version in a single transaction."""
+        max_version = conn.execute(
+            'SELECT COALESCE(MAX(version), 0) AS max_version FROM reader_content_version WHERE book_id = ?',
+            (book_id,),
+        ).fetchone()['max_version']
+        version_number = max_version + 1
+        manifest_seed = f'{book_id}:{version_number}:{checksum}'
+        manifest_etag = hashlib.sha256(manifest_seed.encode('utf-8')).hexdigest()
+
+        # A unique normalized source match lets ordinary regenerated content
+        # retain its durable ID. Ambiguous repeated paragraphs intentionally
+        # receive a new ID and are covered by ordinal recovery/mapping.
+        reusable_ids: Dict[tuple, List[str]] = defaultdict(list)
+        previous_version_id = previous['id'] if previous else None
+        if previous_version_id:
+            for row in conn.execute('''
+                SELECT id, mode, chapter_id, normalized_quote
+                FROM reader_paragraph
+                WHERE content_version_id = ? AND normalized_quote IS NOT NULL
+            ''', (previous_version_id,)):
+                reusable_ids[(row['mode'], row['chapter_id'], row['normalized_quote'])].append(row['id'])
+
+        with conn:
+            conn.execute('''
+                INSERT INTO reader_content_version
+                    (book_id, version, alignment_version, status, manifest_etag, source_checksum)
+                VALUES (?, ?, 1, 'draft', ?, ?)
+            ''', (book_id, version_number, manifest_etag, checksum))
+            content_version_id = conn.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
+
+            # Structural hierarchy is versioned because it is part of a
+            # reader manifest, even though the source chapter IDs remain
+            # stable across versions.
+            structure_ordinal = 0
+            seen_sections = set()
+            for chapter in chapters:
+                section_id = chapter.get('section_id')
+                if section_id and section_id not in seen_sections:
+                    section = conn.execute(
+                        'SELECT section_title FROM book_sections WHERE id = ?', (section_id,)
+                    ).fetchone()
+                    if section:
+                        conn.execute('''
+                            INSERT INTO reader_structure_entry
+                                (id, content_version_id, kind, section_id, chapter_id, ordinal, title)
+                            VALUES (?, ?, 'part', ?, NULL, ?, ?)
+                        ''', (
+                            self._reader_id('struct'), content_version_id, section_id,
+                            structure_ordinal, section['section_title'] or 'Part',
+                        ))
+                        structure_ordinal += 1
+                    seen_sections.add(section_id)
+                conn.execute('''
+                    INSERT INTO reader_structure_entry
+                        (id, content_version_id, kind, section_id, chapter_id, ordinal, title)
+                    VALUES (?, ?, 'chapter', NULL, ?, ?, ?)
+                ''', (
+                    self._reader_id('struct'), content_version_id, chapter['id'], structure_ordinal,
+                    chapter.get('chapter_title') or f"Chapter {chapter['chapter_number']}",
+                ))
+                structure_ordinal += 1
+
+            paragraph_rows: Dict[str, List[Dict]] = {'summary': [], 'original': [], 'plain': []}
+            global_ordinal = {'summary': 0, 'original': 0, 'plain': 0}
+            by_chapter_mode: Dict[tuple, List[Dict]] = {}
+
+            def paragraph_id_for(mode: str, chapter_id: int, text: str) -> str:
+                quote = self._reader_normalize_quote(text)
+                candidates = reusable_ids.get((mode, chapter_id, quote), [])
+                return candidates.pop() if len(candidates) == 1 else self._reader_id('para')
+
+            # Summary, Original, and Plain English all have separate logical
+            # sequences. Plain gaps are emitted only when the book has at
+            # least some Plain English coverage; a fully absent mode is
+            # reported unavailable instead of creating a fake sequence.
+            plain_coverage = any(self._reader_split_paragraphs(c.get('modern_english_text') or '') for c in chapters)
+            for chapter in chapters:
+                source_by_mode = {
+                    'summary': self._reader_split_paragraphs(chapter.get('summary') or ''),
+                    'original': self._reader_split_paragraphs(chapter.get('chapter_text') or ''),
+                    'plain': self._reader_split_paragraphs(chapter.get('modern_english_text') or ''),
+                }
+                for mode in ('summary', 'original', 'plain'):
+                    source = source_by_mode[mode]
+                    rows = []
+                    if mode == 'plain' and not source and plain_coverage:
+                        originals = source_by_mode['original'] or ['']
+                        source = [None] * len(originals)
+                    for chapter_ordinal, text in enumerate(source):
+                        availability = 'available' if text is not None else 'gap'
+                        fallback_id = None
+                        if mode == 'plain' and text is None:
+                            original_rows = by_chapter_mode.get((chapter['id'], 'original'), [])
+                            if chapter_ordinal < len(original_rows):
+                                fallback_id = original_rows[chapter_ordinal]['id']
+                        text = text or ''
+                        row = {
+                            'id': paragraph_id_for(mode, chapter['id'], text) if availability == 'available' else self._reader_id('gap'),
+                            'chapter_id': chapter['id'],
+                            'mode': mode,
+                            'availability': availability,
+                            'ordinal': global_ordinal[mode],
+                            'chapter_ordinal': chapter_ordinal,
+                            'content': text if availability == 'available' else None,
+                            'normalized_quote': self._reader_normalize_quote(text) if availability == 'available' else None,
+                            'word_count': self._reader_word_count(text) if availability == 'available' else 0,
+                            'fallback_paragraph_id': fallback_id,
+                        }
+                        global_ordinal[mode] += 1
+                        rows.append(row)
+                        paragraph_rows[mode].append(row)
+                    by_chapter_mode[(chapter['id'], mode)] = rows
+
+            for mode, rows in paragraph_rows.items():
+                word_start = 0
+                for row in rows:
+                    row['word_start'] = word_start
+                    word_start += row['word_count']
+                    conn.execute('''
+                        INSERT INTO reader_paragraph
+                            (id, content_version_id, chapter_id, mode, availability, ordinal,
+                             chapter_ordinal, content, normalized_quote, word_count, word_start,
+                             fallback_paragraph_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        row['id'], content_version_id, row['chapter_id'], row['mode'], row['availability'],
+                        row['ordinal'], row['chapter_ordinal'], row['content'], row['normalized_quote'],
+                        row['word_count'], row['word_start'], row['fallback_paragraph_id'],
+                    ))
+
+            alignment_rows: List[Dict] = []
+            alignment_ordinal = 0
+            alignment_word_start = 0
+            for chapter in chapters:
+                originals = by_chapter_mode.get((chapter['id'], 'original'), [])
+                plains = by_chapter_mode.get((chapter['id'], 'plain'), []) if plain_coverage else []
+                for chapter_ordinal in range(max(len(originals), len(plains))):
+                    original = originals[chapter_ordinal] if chapter_ordinal < len(originals) else None
+                    plain = plains[chapter_ordinal] if chapter_ordinal < len(plains) else None
+                    canonical_words = (original or plain or {}).get('word_count', 0)
+                    row = {
+                        'id': self._reader_id('alignment'),
+                        'chapter_id': chapter['id'],
+                        'ordinal': alignment_ordinal,
+                        'chapter_ordinal': chapter_ordinal,
+                        'canonical_word_count': canonical_words,
+                        'word_start': alignment_word_start,
+                        'original': original,
+                        'plain': plain,
+                    }
+                    alignment_rows.append(row)
+                    alignment_ordinal += 1
+                    alignment_word_start += canonical_words
+                    conn.execute('''
+                        INSERT INTO reader_alignment_row
+                            (id, content_version_id, chapter_id, ordinal, chapter_ordinal,
+                             canonical_word_count, word_start)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        row['id'], content_version_id, row['chapter_id'], row['ordinal'],
+                        row['chapter_ordinal'], row['canonical_word_count'], row['word_start'],
+                    ))
+                    for member_mode, member in (('original', original), ('plain', plain)):
+                        available = bool(member and member['availability'] == 'available')
+                        conn.execute('''
+                            INSERT INTO reader_alignment_member
+                                (content_version_id, alignment_row_id, member_mode, paragraph_id, available)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (
+                            content_version_id, row['id'], member_mode,
+                            member['id'] if available else None, int(available),
+                        ))
+
+            def make_segments(mode: str, rows: List[Dict], text_for_row) -> List[Dict]:
+                segments = []
+                current = []
+                byte_count = 0
+                for row in rows:
+                    row_bytes = len((text_for_row(row) or '').encode('utf-8'))
+                    would_overflow = current and (len(current) >= 80 or byte_count + row_bytes > 24 * 1024)
+                    if would_overflow:
+                        segments.append((current, byte_count))
+                        current, byte_count = [], 0
+                    current.append(row)
+                    byte_count += row_bytes
+                    if row_bytes > 64 * 1024:
+                        segments.append((current, byte_count))
+                        current, byte_count = [], 0
+                if current:
+                    segments.append((current, byte_count))
+
+                saved = []
+                for segment_ordinal, (units, size) in enumerate(segments):
+                    segment_id = self._reader_id('segment')
+                    oversized = int(len(units) == 1 and size > 64 * 1024)
+                    etag = hashlib.sha256(
+                        f'{content_version_id}:{mode}:{segment_ordinal}:{size}:{units[0]["id"]}:{units[-1]["id"]}'.encode('utf-8')
+                    ).hexdigest()
+                    conn.execute('''
+                        INSERT INTO reader_segment
+                            (id, content_version_id, mode, ordinal, first_unit_ordinal, last_unit_ordinal,
+                             first_word_offset, last_word_offset, byte_count, unit_count, oversized_unit, etag)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        segment_id, content_version_id, mode, segment_ordinal,
+                        units[0]['ordinal'], units[-1]['ordinal'], units[0]['word_start'],
+                        units[-1]['word_start'] + units[-1].get('word_count', units[-1].get('canonical_word_count', 0)),
+                        size, len(units), oversized, etag,
+                    ))
+                    for unit in units:
+                        target = 'reader_alignment_row' if mode == 'side_by_side' else 'reader_paragraph'
+                        conn.execute(
+                            f'UPDATE {target} SET segment_id = ? WHERE content_version_id = ? AND id = ?',
+                            (segment_id, content_version_id, unit['id']),
+                        )
+                    saved.append({'id': segment_id, 'ordinal': segment_ordinal, 'etag': etag})
+                return saved
+
+            all_segments = {}
+            for mode in ('summary', 'original', 'plain'):
+                all_segments[mode] = make_segments(mode, paragraph_rows[mode], lambda row: row.get('content') or '')
+            all_segments['side_by_side'] = make_segments(
+                'side_by_side', alignment_rows,
+                lambda row: ' '.join(
+                    (member or {}).get('content') or '' for member in (row.get('original'), row.get('plain'))
+                ),
+            )
+
+            for mode in ('summary', 'original', 'plain', 'side_by_side'):
+                rows = alignment_rows if mode == 'side_by_side' else paragraph_rows[mode]
+                total_words = sum(row.get('canonical_word_count', row.get('word_count', 0)) for row in rows)
+                if mode == 'plain' and not plain_coverage:
+                    availability = 'unavailable'
+                elif mode == 'plain' and any(row['availability'] == 'gap' for row in rows):
+                    availability = 'partial'
+                elif mode == 'side_by_side' and not plain_coverage:
+                    availability = 'unavailable'
+                elif rows:
+                    availability = 'available'
+                else:
+                    availability = 'unavailable'
+                segments = all_segments[mode] if availability != 'unavailable' else []
+                conn.execute('''
+                    INSERT INTO reader_mode_manifest
+                        (content_version_id, mode, availability, total_word_count, unit_count,
+                         first_segment_id, last_segment_id, terminal_paragraph_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    content_version_id, mode, availability, total_words, len(rows),
+                    segments[0]['id'] if segments else None,
+                    segments[-1]['id'] if segments else None,
+                    rows[-1]['id'] if rows and segments else None,
+                ))
+
+            if previous_version_id:
+                old_rows = conn.execute('''
+                    SELECT id, mode, chapter_id, chapter_ordinal, normalized_quote
+                    FROM reader_paragraph WHERE content_version_id = ?
+                ''', (previous_version_id,)).fetchall()
+                current_by_quote = {
+                    (row['mode'], row['chapter_id'], row['normalized_quote']): row['id']
+                    for rows in paragraph_rows.values() for row in rows
+                    if row['normalized_quote']
+                }
+                current_by_ordinal = {
+                    (row['mode'], row['chapter_id'], row['chapter_ordinal']): row['id']
+                    for rows in paragraph_rows.values() for row in rows
+                }
+                for old in old_rows:
+                    new_id = current_by_quote.get((old['mode'], old['chapter_id'], old['normalized_quote']))
+                    reason = 'quote' if new_id else 'ordinal'
+                    new_id = new_id or current_by_ordinal.get((old['mode'], old['chapter_id'], old['chapter_ordinal']))
+                    if new_id:
+                        conn.execute('''
+                            INSERT INTO reader_paragraph_mapping
+                                (content_version_id, old_content_version, old_paragraph_id,
+                                 new_paragraph_id, mapping_reason, confidence)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (
+                            content_version_id, previous_version_id, old['id'], new_id,
+                            reason, 1.0 if reason == 'quote' else 0.7,
+                        ))
+
+            if previous_version_id:
+                conn.execute("UPDATE reader_content_version SET status = 'retired' WHERE id = ?", (previous_version_id,))
+            conn.execute('''
+                UPDATE reader_content_version
+                SET status = 'published', published_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (content_version_id,))
+
+        return dict(conn.execute('SELECT * FROM reader_content_version WHERE id = ?', (content_version_id,)).fetchone())
+
+    def get_reader_manifest(self, book_id: int) -> Dict:
+        version = self.ensure_reader_content(book_id)
+        conn = self.get_connection()
+        try:
+            book = self.get_book(book_id)
+            if not book:
+                raise ValueError('Book not found')
+            modes = [dict(row) for row in conn.execute('''
+                SELECT mode, availability, total_word_count, unit_count, first_segment_id,
+                       last_segment_id, terminal_paragraph_id
+                FROM reader_mode_manifest WHERE content_version_id = ? ORDER BY
+                    CASE mode WHEN 'summary' THEN 1 WHEN 'original' THEN 2 WHEN 'plain' THEN 3 ELSE 4 END
+            ''', (version['id'],)).fetchall()]
+            segments = [dict(row) for row in conn.execute('''
+                SELECT id, mode, ordinal, first_unit_ordinal, last_unit_ordinal,
+                       first_word_offset, last_word_offset, byte_count, unit_count, oversized_unit, etag
+                FROM reader_segment WHERE content_version_id = ? ORDER BY mode, ordinal
+            ''', (version['id'],)).fetchall()]
+            structure = [dict(row) for row in conn.execute('''
+                SELECT s.kind, s.section_id, s.chapter_id, s.ordinal, s.title,
+                       c.chapter_number, c.illustration_url
+                FROM reader_structure_entry s
+                LEFT JOIN chapters c ON c.id = s.chapter_id
+                WHERE s.content_version_id = ? ORDER BY s.ordinal
+            ''', (version['id'],)).fetchall()]
+            return {
+                'book': {
+                    'id': book['id'], 'slug': book['slug'], 'title': book['title'],
+                    'author': book['author'], 'cover_image_url': book.get('cover_image_url'),
+                },
+                'content_version': version['version'],
+                'content_version_id': version['id'],
+                'etag': version['manifest_etag'],
+                'modes': modes,
+                'structure': structure,
+                'segments': segments,
+            }
+        finally:
+            conn.close()
+
+    def get_reader_segment(self, book_id: int, segment_id: str, mode: str) -> Optional[Dict]:
+        if mode not in {'summary', 'original', 'plain', 'side_by_side'}:
+            return None
+        version = self.ensure_reader_content(book_id)
+        conn = self.get_connection()
+        try:
+            segment = conn.execute('''
+                SELECT * FROM reader_segment
+                WHERE id = ? AND content_version_id = ? AND mode = ?
+            ''', (segment_id, version['id'], mode)).fetchone()
+            if not segment:
+                return None
+            segment = dict(segment)
+            previous = conn.execute('''
+                SELECT id FROM reader_segment WHERE content_version_id = ? AND mode = ? AND ordinal = ?
+            ''', (version['id'], mode, segment['ordinal'] - 1)).fetchone()
+            following = conn.execute('''
+                SELECT id FROM reader_segment WHERE content_version_id = ? AND mode = ? AND ordinal = ?
+            ''', (version['id'], mode, segment['ordinal'] + 1)).fetchone()
+            if mode == 'side_by_side':
+                rows = [dict(row) for row in conn.execute('''
+                    SELECT r.id, r.chapter_id, r.ordinal, r.chapter_ordinal,
+                           r.canonical_word_count, r.word_start,
+                           c.chapter_number, c.chapter_title
+                    FROM reader_alignment_row r JOIN chapters c ON c.id = r.chapter_id
+                    WHERE r.content_version_id = ? AND r.segment_id = ? ORDER BY r.ordinal
+                ''', (version['id'], segment_id)).fetchall()]
+                for row in rows:
+                    members = conn.execute('''
+                        SELECT m.member_mode, m.available, p.id, p.content, p.normalized_quote, p.word_count
+                        FROM reader_alignment_member m
+                        LEFT JOIN reader_paragraph p
+                          ON p.content_version_id = m.content_version_id AND p.id = m.paragraph_id
+                        WHERE m.content_version_id = ? AND m.alignment_row_id = ?
+                    ''', (version['id'], row['id'])).fetchall()
+                    row['members'] = {member['member_mode']: dict(member) for member in members}
+                units = rows
+            else:
+                units = [dict(row) for row in conn.execute('''
+                    SELECT p.id, p.chapter_id, p.ordinal, p.chapter_ordinal, p.content,
+                           p.availability, p.normalized_quote, p.word_count, p.word_start,
+                           p.fallback_paragraph_id, c.chapter_number, c.chapter_title
+                    FROM reader_paragraph p JOIN chapters c ON c.id = p.chapter_id
+                    WHERE p.content_version_id = ? AND p.segment_id = ? ORDER BY p.ordinal
+                ''', (version['id'], segment_id)).fetchall()]
+            return {
+                'id': segment['id'], 'mode': mode, 'content_version': version['version'],
+                'etag': segment['etag'], 'previous_segment_id': previous['id'] if previous else None,
+                'next_segment_id': following['id'] if following else None, 'units': units,
+                'word_range': [segment['first_word_offset'], segment['last_word_offset']],
+            }
+        finally:
+            conn.close()
+
+    def resolve_reader_marker(self, book_id: int, marker: Dict) -> Optional[Dict]:
+        """Validate and enrich a marker with authoritative ordering values."""
+        if not marker or marker.get('mode') not in {'summary', 'original', 'plain', 'side_by_side'}:
+            return None
+        version = self.ensure_reader_content(book_id)
+        if marker.get('content_version') not in (None, version['version']):
+            # Content changed; mapping/recovery is handled by the reader on
+            # retrieval. New writes always target the published version.
+            return None
+        offset = marker.get('offset', 0)
+        try:
+            offset = max(0.0, min(1.0, float(offset)))
+        except (TypeError, ValueError):
+            return None
+        conn = self.get_connection()
+        try:
+            if marker['mode'] == 'side_by_side':
+                row = conn.execute('''
+                    SELECT id, chapter_id, ordinal, word_start, canonical_word_count
+                    FROM reader_alignment_row
+                    WHERE content_version_id = ? AND id = ?
+                ''', (version['id'], marker.get('paragraph_id'))).fetchone()
+                if not row:
+                    return None
+                words = row['canonical_word_count']
+            else:
+                row = conn.execute('''
+                    SELECT id, chapter_id, ordinal, word_start, word_count, normalized_quote
+                    FROM reader_paragraph
+                    WHERE content_version_id = ? AND mode = ? AND id = ?
+                ''', (version['id'], marker['mode'], marker.get('paragraph_id'))).fetchone()
+                if not row:
+                    return None
+                words = row['word_count']
+            if marker.get('chapter_id') not in (None, row['chapter_id']):
+                return None
+            return {
+                'book_id': book_id, 'mode': marker['mode'], 'content_version': version['version'],
+                'chapter_id': row['chapter_id'], 'paragraph_id': row['id'], 'offset': offset,
+                'quote': marker.get('quote') or (row['normalized_quote'] if 'normalized_quote' in row.keys() else ''),
+                'ordinal': row['ordinal'], 'word_position': row['word_start'] + int(words * offset),
+            }
+        finally:
+            conn.close()
+
+    def recover_reader_marker(self, book_id: int, marker: Dict) -> Optional[Dict]:
+        """Recover a historical marker into the current published version.
+
+        Recovery is deliberately read-only.  The caller can render the result
+        and only persist it after a real post-restore reader action, so a
+        failed/cancelled restore never destroys the original durable anchor.
+        """
+        if not marker or marker.get('mode') not in {'summary', 'original', 'plain', 'side_by_side'}:
+            return None
+        version = self.ensure_reader_content(book_id)
+        current_version = version['version']
+        source_version = marker.get('content_version')
+        if source_version in (None, current_version):
+            resolved = self.resolve_reader_marker(book_id, marker)
+            if resolved:
+                resolved['recovery_level'] = 'same_id'
+            return resolved
+
+        conn = self.get_connection()
+        try:
+            old_version = conn.execute('''
+                SELECT id FROM reader_content_version WHERE book_id = ? AND version = ?
+            ''', (book_id, source_version)).fetchone()
+            if not old_version:
+                return None
+            mode = marker['mode']
+            old_id = marker.get('paragraph_id')
+            old_chapter = marker.get('chapter_id')
+            target_id = None
+            target_chapter = old_chapter
+            recovery_level = None
+
+            if mode == 'side_by_side':
+                same = conn.execute('''
+                    SELECT id, chapter_id FROM reader_alignment_row
+                    WHERE content_version_id = ? AND id = ?
+                ''', (version['id'], old_id)).fetchone()
+                if same:
+                    target_id, target_chapter, recovery_level = same['id'], same['chapter_id'], 'same_id'
+                if not target_id:
+                    mapped = conn.execute('''
+                        SELECT current_member.alignment_row_id AS id, current_row.chapter_id
+                        FROM reader_alignment_member old_member
+                        JOIN reader_paragraph_mapping mapping
+                          ON mapping.old_content_version = old_member.content_version_id
+                         AND mapping.old_paragraph_id = old_member.paragraph_id
+                         AND mapping.content_version_id = ?
+                        JOIN reader_alignment_member current_member
+                          ON current_member.content_version_id = ?
+                         AND current_member.paragraph_id = mapping.new_paragraph_id
+                        JOIN reader_alignment_row current_row
+                          ON current_row.content_version_id = current_member.content_version_id
+                         AND current_row.id = current_member.alignment_row_id
+                        WHERE old_member.content_version_id = ? AND old_member.alignment_row_id = ?
+                          AND old_member.available = 1
+                        ORDER BY CASE old_member.member_mode WHEN 'original' THEN 0 ELSE 1 END
+                        LIMIT 1
+                    ''', (version['id'], version['id'], old_version['id'], old_id)).fetchone()
+                    if mapped:
+                        target_id, target_chapter, recovery_level = mapped['id'], mapped['chapter_id'], 'mapping'
+                if not target_id:
+                    old_row = conn.execute('''
+                        SELECT chapter_id, chapter_ordinal FROM reader_alignment_row
+                        WHERE content_version_id = ? AND id = ?
+                    ''', (old_version['id'], old_id)).fetchone()
+                    if old_row:
+                        nearest = conn.execute('''
+                            SELECT id, chapter_id FROM reader_alignment_row
+                            WHERE content_version_id = ? AND chapter_id = ?
+                            ORDER BY ABS(chapter_ordinal - ?) ASC, chapter_ordinal ASC LIMIT 1
+                        ''', (version['id'], old_row['chapter_id'], old_row['chapter_ordinal'])).fetchone()
+                        if nearest:
+                            target_id, target_chapter, recovery_level = nearest['id'], nearest['chapter_id'], 'ordinal'
+            else:
+                same = conn.execute('''
+                    SELECT id, chapter_id FROM reader_paragraph
+                    WHERE content_version_id = ? AND mode = ? AND id = ?
+                ''', (version['id'], mode, old_id)).fetchone()
+                if same:
+                    target_id, target_chapter, recovery_level = same['id'], same['chapter_id'], 'same_id'
+                if not target_id:
+                    mapped = conn.execute('''
+                        SELECT new_paragraph_id AS id FROM reader_paragraph_mapping
+                        WHERE content_version_id = ? AND old_content_version = ? AND old_paragraph_id = ?
+                    ''', (version['id'], old_version['id'], old_id)).fetchone()
+                    if mapped:
+                        target = conn.execute('''
+                            SELECT id, chapter_id FROM reader_paragraph
+                            WHERE content_version_id = ? AND mode = ? AND id = ?
+                        ''', (version['id'], mode, mapped['id'])).fetchone()
+                        if target:
+                            target_id, target_chapter, recovery_level = target['id'], target['chapter_id'], 'mapping'
+                if not target_id and marker.get('quote'):
+                    quote = self._reader_normalize_quote(marker['quote'])
+                    quoted = conn.execute('''
+                        SELECT id, chapter_id FROM reader_paragraph
+                        WHERE content_version_id = ? AND mode = ? AND chapter_id = ?
+                          AND normalized_quote = ?
+                    ''', (version['id'], mode, old_chapter, quote)).fetchall()
+                    if len(quoted) == 1:
+                        target_id, target_chapter, recovery_level = quoted[0]['id'], quoted[0]['chapter_id'], 'quote'
+                if not target_id:
+                    old_row = conn.execute('''
+                        SELECT chapter_id, chapter_ordinal FROM reader_paragraph
+                        WHERE content_version_id = ? AND mode = ? AND id = ?
+                    ''', (old_version['id'], mode, old_id)).fetchone()
+                    if old_row:
+                        nearest = conn.execute('''
+                            SELECT id, chapter_id FROM reader_paragraph
+                            WHERE content_version_id = ? AND mode = ? AND chapter_id = ?
+                            ORDER BY ABS(chapter_ordinal - ?) ASC, chapter_ordinal ASC LIMIT 1
+                        ''', (version['id'], mode, old_row['chapter_id'], old_row['chapter_ordinal'])).fetchone()
+                        if nearest:
+                            target_id, target_chapter, recovery_level = nearest['id'], nearest['chapter_id'], 'ordinal'
+
+            if not target_id and old_chapter:
+                table = 'reader_alignment_row' if mode == 'side_by_side' else 'reader_paragraph'
+                mode_clause = '' if mode == 'side_by_side' else ' AND mode = ?'
+                params = [version['id'], old_chapter]
+                if mode != 'side_by_side':
+                    params.append(mode)
+                chapter_opening = conn.execute(
+                    f'''SELECT id, chapter_id FROM {table}
+                        WHERE content_version_id = ? AND chapter_id = ?{mode_clause}
+                        ORDER BY chapter_ordinal LIMIT 1''', params
+                ).fetchone()
+                if chapter_opening:
+                    target_id, target_chapter, recovery_level = chapter_opening['id'], chapter_opening['chapter_id'], 'chapter_opening'
+            if not target_id:
+                table = 'reader_alignment_row' if mode == 'side_by_side' else 'reader_paragraph'
+                mode_clause = '' if mode == 'side_by_side' else ' AND mode = ?'
+                params = [version['id']]
+                if mode != 'side_by_side':
+                    params.append(mode)
+                opening = conn.execute(
+                    f'''SELECT id, chapter_id FROM {table}
+                        WHERE content_version_id = ?{mode_clause}
+                        ORDER BY ordinal LIMIT 1''', params
+                ).fetchone()
+                if opening:
+                    target_id, target_chapter, recovery_level = opening['id'], opening['chapter_id'], 'book_opening'
+            if not target_id:
+                return None
+            recovered = self.resolve_reader_marker(book_id, {
+                'mode': mode, 'content_version': current_version, 'chapter_id': target_chapter,
+                'paragraph_id': target_id, 'offset': marker.get('offset', 0),
+            })
+            if recovered:
+                recovered['recovery_level'] = recovery_level
+            return recovered
+        finally:
+            conn.close()
+
+    def map_reader_marker(self, book_id: int, marker: Dict, target_mode: str) -> Optional[Dict]:
+        """Map a published marker into another reader mode.
+
+        Full-text modes use the explicit alignment rows. Summary mappings are
+        intentionally chapter-scoped because summaries are not sentence-aligned
+        with source text.
+        """
+        if target_mode not in {'summary', 'original', 'plain', 'side_by_side'}:
+            return None
+        source = self.resolve_reader_marker(book_id, marker)
+        if not source:
+            return None
+        if source['mode'] == target_mode:
+            return source
+        version = self.ensure_reader_content(book_id)
+        conn = self.get_connection()
+        try:
+            target = None
+            if target_mode == 'summary':
+                target = conn.execute('''
+                    SELECT id, chapter_id FROM reader_paragraph
+                    WHERE content_version_id = ? AND mode = 'summary' AND availability = 'available'
+                      AND chapter_id = ? ORDER BY chapter_ordinal LIMIT 1
+                ''', (version['id'], source['chapter_id'])).fetchone()
+            elif source['mode'] == 'summary':
+                if target_mode == 'side_by_side':
+                    target = conn.execute('''
+                        SELECT id, chapter_id FROM reader_alignment_row
+                        WHERE content_version_id = ? AND chapter_id = ? ORDER BY chapter_ordinal LIMIT 1
+                    ''', (version['id'], source['chapter_id'])).fetchone()
+                else:
+                    target = conn.execute('''
+                        SELECT id, chapter_id FROM reader_paragraph
+                        WHERE content_version_id = ? AND mode = ? AND availability = 'available'
+                          AND chapter_id = ? ORDER BY chapter_ordinal LIMIT 1
+                    ''', (version['id'], target_mode, source['chapter_id'])).fetchone()
+            elif source['mode'] == 'side_by_side':
+                target = conn.execute('''
+                    SELECT p.id, p.chapter_id
+                    FROM reader_alignment_member m
+                    JOIN reader_paragraph p
+                      ON p.content_version_id = m.content_version_id AND p.id = m.paragraph_id
+                    WHERE m.content_version_id = ? AND m.alignment_row_id = ?
+                      AND m.member_mode = ? AND m.available = 1
+                ''', (version['id'], source['paragraph_id'], target_mode)).fetchone()
+            elif target_mode == 'side_by_side':
+                target = conn.execute('''
+                    SELECT m.alignment_row_id AS id, r.chapter_id
+                    FROM reader_alignment_member m
+                    JOIN reader_alignment_row r
+                      ON r.content_version_id = m.content_version_id AND r.id = m.alignment_row_id
+                    WHERE m.content_version_id = ? AND m.paragraph_id = ? AND m.member_mode = ?
+                ''', (version['id'], source['paragraph_id'], source['mode'])).fetchone()
+            else:
+                target = conn.execute('''
+                    SELECT p.id, p.chapter_id
+                    FROM reader_alignment_member source_member
+                    JOIN reader_alignment_member target_member
+                      ON target_member.content_version_id = source_member.content_version_id
+                     AND target_member.alignment_row_id = source_member.alignment_row_id
+                    JOIN reader_paragraph p
+                      ON p.content_version_id = target_member.content_version_id AND p.id = target_member.paragraph_id
+                    WHERE source_member.content_version_id = ? AND source_member.paragraph_id = ?
+                      AND source_member.member_mode = ? AND target_member.member_mode = ?
+                      AND target_member.available = 1
+                ''', (version['id'], source['paragraph_id'], source['mode'], target_mode)).fetchone()
+            if not target:
+                return None
+            return self.resolve_reader_marker(book_id, {
+                'mode': target_mode, 'content_version': version['version'],
+                'chapter_id': target['chapter_id'], 'paragraph_id': target['id'], 'offset': 0,
+            })
+        finally:
+            conn.close()

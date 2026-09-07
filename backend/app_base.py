@@ -86,6 +86,7 @@ user_db = user_models.UserDatabase(config.USER_DATABASE_PATH)
 
 # Set user_db in progress routes
 progress_routes.user_db = user_db
+progress_routes.content_db = db
 
 # Inject db/config into the routes.common module so backend/routes/*.py can
 # reach them without importing this module back (see backend/routes/common.py).

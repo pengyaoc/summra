@@ -22,9 +22,10 @@ export const paginationMixin = {
     setupPagination() {
         // Setup keyboard navigation
         document.addEventListener('keydown', (e) => {
-            // Only handle keyboard navigation when on chapter detail page
+            // The continuous reader preserves the established page-turn keys.
             const chapterSection = document.getElementById('chapter-detail-section');
-            if (!chapterSection || chapterSection.classList.contains('hidden')) {
+            const continuousActive = this.continuousReader?.active;
+            if ((!chapterSection || chapterSection.classList.contains('hidden')) && !continuousActive) {
                 return;
             }
 
@@ -56,7 +57,7 @@ export const paginationMixin = {
         // Handle wheel events for scroll-to-turn-page
         const handleWheel = (e) => {
             const chapterSection = document.getElementById('chapter-detail-section');
-            if (!chapterSection || chapterSection.classList.contains('hidden')) {
+            if ((!chapterSection || chapterSection.classList.contains('hidden')) && !this.continuousReader?.active) {
                 return;
             }
 
@@ -144,10 +145,12 @@ export const paginationMixin = {
         if (containerElement.classList.contains('chapter-side-by-side')) {
             pageContainer.classList.add('chapter-side-by-side');
         }
-        // Copy data-font attribute from chapter section for font styling
-        const chapterSectionEl = document.getElementById('chapter-detail-section');
-        if (chapterSectionEl && chapterSectionEl.hasAttribute('data-font')) {
-            pageContainer.setAttribute('data-font', chapterSectionEl.getAttribute('data-font'));
+        // Copy the active reader's font setting for page measurement/rendering.
+        const readerSectionEl = this.continuousReader?.active
+            ? document.getElementById('continuous-reader-section')
+            : document.getElementById('chapter-detail-section');
+        if (readerSectionEl && readerSectionEl.hasAttribute('data-font')) {
+            pageContainer.setAttribute('data-font', readerSectionEl.getAttribute('data-font'));
         }
         pageContainer.innerHTML = textContent;
         paginationWrapper.appendChild(pageContainer);
@@ -222,8 +225,12 @@ export const paginationMixin = {
 
         // Get EXACT viewport height minus all fixed elements
         const viewportHeight = window.innerHeight;
-        const stickyHeaderHeight = document.querySelector('.sticky-reading-header')?.offsetHeight || 51;
-        const progressBarHeight = document.querySelector('.reading-progress-bar')?.offsetHeight || 30;
+        const stickyHeaderHeight = this.continuousReader?.active
+            ? (document.querySelector('.continuous-reader-chrome')?.offsetHeight || 52) + 51
+            : (document.querySelector('.sticky-reading-header')?.offsetHeight || 51);
+        const progressBarHeight = this.continuousReader?.active
+            ? (document.querySelector('.continuous-reader-footer')?.offsetHeight || 30)
+            : (document.querySelector('.reading-progress-bar')?.offsetHeight || 30);
         const verticalPadding = 20;
 
         this.pagination.containerHeight = viewportHeight - stickyHeaderHeight - progressBarHeight - verticalPadding;
@@ -282,10 +289,12 @@ export const paginationMixin = {
             if (containerElement.classList.contains('chapter-side-by-side')) {
                 pageDiv.classList.add('chapter-side-by-side');
             }
-            // Copy data-font attribute from chapter section for font styling
-            const chapterSectionEl = document.getElementById('chapter-detail-section');
-            if (chapterSectionEl && chapterSectionEl.hasAttribute('data-font')) {
-                pageDiv.setAttribute('data-font', chapterSectionEl.getAttribute('data-font'));
+            // Copy active reader font setting for an accurate measurement node.
+            const readerSectionEl = this.continuousReader?.active
+                ? document.getElementById('continuous-reader-section')
+                : document.getElementById('chapter-detail-section');
+            if (readerSectionEl && readerSectionEl.hasAttribute('data-font')) {
+                pageDiv.setAttribute('data-font', readerSectionEl.getAttribute('data-font'));
             }
             pageDiv.style.cssText = `
                 position: absolute;
@@ -673,11 +682,15 @@ export const paginationMixin = {
         // Update progress indicator
         this.updatePaginationProgress();
 
-        // Save page position
-        this.savePagePosition();
+        if (this.continuousReader?.active) {
+            this.onContinuousPageDisplayed();
+        } else {
+            // Save page position
+            this.savePagePosition();
 
-        // Track page change for reading progress
-        if (window.authModule && this.currentBook && this.currentChapter !== null) {
+            // Legacy chapter view is read-only while its route redirects to
+            // the continuous reader. Keep this branch for direct old markup.
+            if (window.authModule && this.currentBook && this.currentChapter !== null) {
             window.authModule.trackPageChange(
                 this.currentBook.id,
                 this.currentChapter,
@@ -693,9 +706,12 @@ export const paginationMixin = {
                 );
             }
         }
+        }
 
         // Scroll to top of content area
-        const chapterSection = document.getElementById('chapter-detail-section');
+        const chapterSection = this.continuousReader?.active
+            ? document.getElementById('continuous-reader-section')
+            : document.getElementById('chapter-detail-section');
         if (chapterSection) {
             const sectionTop = chapterSection.offsetTop;
             window.scrollTo({ top: sectionTop, behavior: 'instant' });
@@ -823,6 +839,10 @@ export const paginationMixin = {
 
         // Check if we're at the first page of the current chapter
         if (this.pagination.currentPage <= 0) {
+            if (this.continuousReader?.active) {
+                this.navigateContinuousSegment(-1);
+                return;
+            }
             // Try to navigate to previous chapter (go to last page)
             this.navigateToPreviousChapter();
             return;
@@ -847,6 +867,10 @@ export const paginationMixin = {
 
         // Check if we're at the last page of the current chapter
         if (this.pagination.currentPage >= this.pagination.totalPages - 1) {
+            if (this.continuousReader?.active) {
+                this.navigateContinuousSegment(1);
+                return;
+            }
             // Try to navigate to next chapter
             this.navigateToNextChapter();
             return;
@@ -946,6 +970,16 @@ export const paginationMixin = {
         const prevButton = document.querySelector('.pagination-nav-prev');
         const nextButton = document.querySelector('.pagination-nav-next');
 
+        if (this.continuousReader?.active) {
+            const descriptor = this.continuousReader.manifest.segments.find(item => item.id === this.continuousReader.currentSegmentId);
+            const hasPrevious = this.pagination.currentPage > 0 || (descriptor && descriptor.ordinal > 0);
+            const hasNext = this.pagination.currentPage < this.pagination.totalPages - 1 ||
+                (descriptor && this.continuousReader.manifest.segments.some(item => item.mode === this.continuousReader.mode && item.ordinal === descriptor.ordinal + 1));
+            if (prevButton) { prevButton.style.visibility = hasPrevious ? 'visible' : 'hidden'; prevButton.style.pointerEvents = hasPrevious ? 'auto' : 'none'; }
+            if (nextButton) { nextButton.style.visibility = hasNext ? 'visible' : 'hidden'; nextButton.style.pointerEvents = hasNext ? 'auto' : 'none'; }
+            return;
+        }
+
         // Check if there are previous/next chapters (handles preface at chapter 0)
         const hasPrevChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter - 1);
         const hasNextChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter + 1);
@@ -969,6 +1003,10 @@ export const paginationMixin = {
      * Update progress indicators with page numbers and percentage
      */
     updatePaginationProgress() {
+        if (this.continuousReader?.active) {
+            this.updateNavigationButtons();
+            return;
+        }
         const progressFill = document.getElementById('reading-progress-fill');
         const progressText = document.getElementById('reading-progress-text');
 
@@ -996,6 +1034,12 @@ export const paginationMixin = {
      * Recalculate pagination when window resizes or settings change
      */
     recalculatePagination() {
+        if (this.continuousReader?.active) {
+            const marker = this.continuousReader.currentMarker;
+            this.continuousReader.restoring = true;
+            this.loadContinuousReaderAt(marker, marker?.chapter_id);
+            return;
+        }
         // Use the stored active wrapper reference
         if (!this.pagination.activeWrapper) {
             return;
