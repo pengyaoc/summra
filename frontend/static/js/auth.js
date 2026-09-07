@@ -18,6 +18,29 @@ const API_BASE = (window.APP_BASE_PATH || '') + '/api';
 // Auth state
 let currentUser = null;
 let authInitialized = false;
+// Set only when signed in with a Google account that isn't on
+// SUMMRA_ALLOWED_EMAILS (Apache accepts any Google account; only this
+// app's allowlist rejects it) — distinct from never having signed in at
+// all, so updateAuthUI can say *why* instead of looking identical to a
+// plain anonymous visitor. Mirrors reader's ForbiddenError/
+// wrongAccountEmail, reader/docs/WORKLOG.md 2026-09-07.
+let wrongAccountEmail = null;
+
+// Apache's dedicated login entry point (see the vault's
+// wordpress-vm-pages-setup.md for the <Location> that backs this, and
+// reader/docs/WORKLOG.md 2026-09-07 for why the plain path alone isn't
+// enough). `logout=` clears any existing Apache session before
+// redirecting back to this same URL — without it, an existing session
+// for the *wrong* Google account would just pass straight through again
+// with no new authorization request at all, silently reusing the same
+// wrong identity forever. The vhost also sets `OIDCAuthRequestParams
+// "prompt=select_account"`, so once a fresh authorization request does
+// fire, Google shows its account picker instead of silently reusing its
+// own still-active session for the same wrong account.
+function signinUrl() {
+    const base = (window.APP_BASE_PATH || '') + '/login';
+    return base + '?logout=' + encodeURIComponent(base);
+}
 
 // Local storage keys for offline support
 const STORAGE_KEYS = {
@@ -77,6 +100,19 @@ async function checkAuthStatus() {
         const response = await fetch(`${API_BASE}/auth/check`, {
             credentials: 'include'
         });
+
+        // pchauth's Flask before_request hook short-circuits straight to
+        // this 403 for a disallowed-but-authenticated identity — /check's
+        // own 200 {authenticated:false} body is only ever reached for a
+        // genuinely anonymous visitor (mode=optional, no identity at
+        // all), never for a rejected one.
+        if (response.status === 403) {
+            const body = await response.json().catch(() => ({}));
+            wrongAccountEmail = body.email || null;
+            setCurrentUser(null);
+            return;
+        }
+        wrongAccountEmail = null;
 
         const data = await response.json();
 
@@ -186,19 +222,42 @@ function updateAuthUI() {
         if (currentUser) {
             userName.textContent = currentUser.email;
             accountBtn.classList.add('logged-in');
-            // Only a genuinely signed-in visitor (via the shared gateway
-            // elsewhere on pengyaochen.com) ever sees this — there's no
-            // sign-in action this app can offer an anonymous one, so the
-            // button stays hidden (see the template's default `.hidden`
-            // class) rather than showing a dead end. `.hidden` (not the
-            // `hidden` attribute) because `.header-nav-btn`'s own
-            // `display: flex` otherwise wins the cascade over the bare
-            // attribute's UA-stylesheet default.
+            // `.hidden` (not the `hidden` attribute) because
+            // `.header-nav-btn`'s own `display: flex` otherwise wins the
+            // cascade over the bare attribute's UA-stylesheet default.
             accountBtn.classList.remove('hidden');
         } else {
             userName.textContent = 'Account';
             accountBtn.classList.remove('logged-in');
             accountBtn.classList.add('hidden');
+        }
+    }
+
+    // Deliberately quiet — small, muted, bottom of the footer, no icon or
+    // "with Google" framing (matches OpenReader's sidebar treatment,
+    // reader/docs/WORKLOG.md 2026-09-07). Shown only for a genuinely
+    // signed-out visitor, never for one rejected by the allowlist (that
+    // case gets the banner below instead, plus this same link so they
+    // can still retry).
+    const signinLink = document.getElementById('footer-signin-link');
+    if (signinLink) {
+        signinLink.href = signinUrl();
+        signinLink.classList.toggle('hidden', !!currentUser);
+    }
+
+    const banner = document.getElementById('wrong-account-banner');
+    if (banner) {
+        if (wrongAccountEmail) {
+            // No call-to-action or link here by design (matches reader's
+            // banner, reader/docs/WORKLOG.md 2026-09-07) — purely
+            // informational; the way back in stays in the footer's quiet
+            // sign-in link, not something that competes for attention.
+            banner.textContent =
+                `Signed in as ${wrongAccountEmail}, which isn't authorized for Summra. ` +
+                `Your reading progress is being saved locally on this device only.`;
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
         }
     }
 }
