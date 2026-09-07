@@ -115,13 +115,15 @@
                 </div>
                 {% if feature_auth %}
                 <!-- Hidden by default: most visitors here are anonymous, and
-                     there's no sign-in action to offer them (see the
-                     signed-out-view comment below) — showing this button
-                     just to immediately hide it again once auth.js's
-                     checkAuthStatus() resolves would flash a dead-end UI
-                     element. Uses the `.hidden` utility class (display:none
-                     !important), not the `hidden` attribute — `.header-nav-btn`
-                     sets `display: flex` as an author style, which beats the
+                     this button is the *account* view, not the sign-in
+                     action (that's the quiet footer link, added
+                     2026-09-07 — see reader/docs/WORKLOG.md same date) —
+                     showing this account button just to immediately hide
+                     it again once auth.js's checkAuthStatus() resolves
+                     would flash a dead-end UI element. Uses the `.hidden`
+                     utility class (display:none !important), not the
+                     `hidden` attribute — `.header-nav-btn` sets
+                     `display: flex` as an author style, which beats the
                      UA stylesheet's `[hidden]{display:none}` in the cascade,
                      so the bare attribute alone silently does nothing here.
                      auth.js's updateAuthUI() removes `.hidden` only once a
@@ -133,6 +135,16 @@
                 {% endif %}
             </div>
         </header>
+
+        {% if feature_auth %}
+        <!-- Shown only when signed in with a Google account that isn't on
+             SUMMRA_ALLOWED_EMAILS (Apache accepts any Google account;
+             only this app's own allowlist rejects it). Distinct from a
+             plain signed-out visitor, who never sees this at all — see
+             auth.js's checkAuthStatus() 403 handling and reader's
+             equivalent, reader/docs/WORKLOG.md 2026-09-07. -->
+        <div class="wrong-account-banner hidden" id="wrong-account-banner"></div>
+        {% endif %}
 
         <!-- Main Content -->
         <main class="main-content">
@@ -628,6 +640,19 @@
             <p>Summra — the classics, rewritten into plain English.</p>
             <p class="small">Every sentence rewritten into modern prose. Read free, side by side with the original.</p>
             <p class="small">© 2026 Summra. Plain English rewrites of classic literature.</p>
+            {% if feature_auth %}
+            <!-- Deliberately understated — small, muted, bottom of the
+                 footer, no icon or "with Google" framing (matches
+                 OpenReader's sidebar treatment, reader/docs/WORKLOG.md
+                 2026-09-07). Hidden by default and shown only once
+                 auth.js's updateAuthUI() confirms the visitor is signed
+                 out, so a signed-in visitor never sees a pointless link.
+                 href is set by auth.js, not here — it needs
+                 window.APP_BASE_PATH plus a logout=<url> round trip (see
+                 that file for why a plain link isn't enough once a
+                 wrong-account session can exist). -->
+            <a href="#" class="footer-signin hidden" id="footer-signin-link">sign in</a>
+            {% endif %}
         </footer>
         {% endif %}
     </div>
@@ -699,14 +724,18 @@
         <div class="user-modal-content">
             <button class="user-modal-close" id="user-modal-close" aria-label="Close">✕</button>
 
-            <!-- Signed-out view. No sign-in action here by design — this app
-                 has no login flow of its own. Progress is saved locally via
-                 the offline fallback in auth.js; syncing it across devices
-                 only happens if you're already authenticated through the
-                 shared gateway elsewhere on pengyaochen.com, which sets
-                 X-Remote-Email and is picked up transparently. The gated
-                 path itself is deliberately not named here — see
-                 docs/superpowers/specs/2026-09-05-consolidated-login-design.md.
+            <!-- Signed-out view. No sign-in action *here* — this modal is the
+                 account view, not the entry point; the actual sign-in link
+                 lives quietly in the footer (added 2026-09-07, see
+                 reader/docs/WORKLOG.md same date), deliberately not
+                 duplicated into this modal so it stays low-key rather than
+                 competing for attention. This app still has no login flow
+                 of its own — the footer link goes straight to Apache's
+                 gateway (docs/superpowers/specs/2026-09-05-consolidated-login-design.md).
+                 Progress is saved locally via the offline fallback in
+                 auth.js; syncing it across devices only happens once
+                 actually signed in through that gateway, which sets
+                 X-Remote-Email and is picked up transparently.
                  In practice #user-account-btn stays hidden while signed out
                  (see auth.js's updateAuthUI), so this view is normally
                  unreachable — kept only as a fallback for the brief window

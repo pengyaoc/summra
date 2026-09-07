@@ -1721,6 +1721,35 @@ body.on-chapter-page .header {
     margin-top: 8px;
 }
 
+/* Wrong-account notice (auth.js's checkAuthStatus 403 handling) — shown
+   only when signed in with a Google account not on SUMMRA_ALLOWED_EMAILS.
+   Amber/warning-toned, distinct from a plain signed-out visitor who never
+   sees this at all. */
+.wrong-account-banner {
+    text-align: center;
+    padding: 10px 24px;
+    font-size: 0.85rem;
+    background: var(--error-bg-light);
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Deliberately quiet — a way back in, not an invitation. No icon, no
+   "with Google", small and faint. Matches OpenReader's sidebar treatment. */
+.footer-signin {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    text-decoration: none;
+    opacity: 0.6;
+}
+
+.footer-signin:hover {
+    text-decoration: underline;
+    opacity: 1;
+}
+
 /* Persistent Audio Player */
 .persistent-audio-player {
     position: fixed;
