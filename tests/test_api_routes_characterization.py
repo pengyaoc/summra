@@ -219,6 +219,43 @@ def test_api_chapter_detail(client, db):
     assert data['chapter']['chapter_number'] == 1
 
 
+def test_continuous_reader_manifest_segments_mapping_and_recovery_routes(client, db):
+    """The public reader protocol stays bounded and validates opaque IDs."""
+    db.add_chapter(
+        db.ids['book_id'], 1, 'Chapter One', 'Summary of chapter one.',
+        chapter_text='The full text of chapter one.', modern_english_text='The plain text of chapter one.',
+    )
+    manifest_response = client.get(f"/api/reader/books/{db.ids['book_id']}/manifest")
+    assert manifest_response.status_code == 200
+    assert manifest_response.headers['ETag']
+    manifest = manifest_response.get_json()['manifest']
+    assert 'chapter_text' not in str(manifest)
+    assert [mode['mode'] for mode in manifest['modes']] == ['summary', 'original', 'plain', 'side_by_side']
+    side_descriptor = next(item for item in manifest['segments'] if item['mode'] == 'side_by_side')
+    segment_response = client.get(
+        f"/api/reader/books/{db.ids['book_id']}/segments/{side_descriptor['id']}?mode=side_by_side"
+    )
+    assert segment_response.status_code == 200
+    side_unit = segment_response.get_json()['segment']['units'][0]
+    assert set(side_unit['members']) == {'original', 'plain'}
+    mapped = client.post(f"/api/reader/books/{db.ids['book_id']}/map", json={
+        'target_mode': 'plain',
+        'marker': {
+            'mode': 'side_by_side', 'content_version': manifest['content_version'],
+            'chapter_id': side_unit['chapter_id'], 'paragraph_id': side_unit['id'], 'offset': 0,
+        },
+    })
+    assert mapped.status_code == 200
+    assert mapped.get_json()['marker']['mode'] == 'plain'
+    assert client.get(
+        f"/api/reader/books/{db.ids['book_id']}/segments/not-a-real-segment?mode=original"
+    ).status_code == 404
+    assert client.get(
+        f"/api/reader/books/{db.ids['book_id']}/manifest",
+        headers={'If-None-Match': manifest_response.headers['ETag']},
+    ).status_code == 304
+
+
 def test_api_summary_configs(client):
     resp = client.get('/api/summary-configs')
     assert resp.status_code == 200

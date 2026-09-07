@@ -67,7 +67,7 @@
     </script>
     {% endif %}
 </head>
-<body{% if initial_data and (initial_data.type == 'chapter' or initial_data.type == 'medium') %} class="on-chapter-page"{% endif %}>
+<body{% if initial_data and initial_data.type in ['chapter', 'medium', 'reader'] %} class="on-chapter-page"{% endif %}>
     <!-- Environment configuration -->
     <script>
         window.__IS_DEVELOPMENT__ = {{ 'true' if is_development else 'false' }};
@@ -106,6 +106,7 @@
                     <h1 class="logo">Summra</h1>
                 </a>
                 <div class="header-nav-buttons">
+                    <a href="{{ base_path }}/library" class="header-nav-btn hidden" id="library-nav-btn">Library</a>
                     <a href="{{ base_path }}/discover" class="header-nav-btn" id="discover-nav-btn">Discover</a>
                     <a href="{{ base_path }}/books" class="header-nav-btn" id="books-nav-btn">Books</a>
                     <a href="{{ base_path }}/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
@@ -148,13 +149,33 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <section class="library-section {% if not initial_data or initial_data.type != 'library' %}hidden{% endif %}" id="library-section">
+                <div class="library-header">
+                    <h1>Your Library</h1>
+                    <p>Books you start appear here, with your place saved automatically.</p>
+                </div>
+                <div id="library-offline-note" class="reader-status hidden" role="status">Sync pending</div>
+                <section class="library-shelf" id="continue-reading-shelf">
+                    <h2>Continue Reading</h2>
+                    <div class="library-cards" id="continue-reading-cards"></div>
+                </section>
+                <section class="library-shelf" id="finished-shelf">
+                    <h2>Finished</h2>
+                    <div class="library-cards" id="finished-cards"></div>
+                </section>
+                <div class="library-empty hidden" id="library-empty">
+                    <p>Books you start will appear here, with your place saved automatically.</p>
+                    <a class="hero-cta-primary" href="{{ base_path }}/discover">Find your first classic</a>
+                </div>
+            </section>
+
             {# Hero Sections (Apple-style) — always rendered (not swapped for an
                empty placeholder on sub-pages) so app.js's showHomeSection() only
                ever needs to toggle `hidden`, never rebuild this markup from a JS
                template literal. The two used to drift apart (different hero copy
                depending on whether you landed on / directly vs navigated here
                client-side) until they were unified into this one copy. #}
-            <div id="hero-section"{% if initial_data and initial_data.type in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author'] %} class="hidden"{% endif %}>
+            <div id="hero-section"{% if initial_data and initial_data.type in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author', 'library', 'reader'] %} class="hidden"{% endif %}>
                 <!-- Main Hero Banner -->
                 <section class="hero-banner hero-main">
                     <div class="hero-banner-content">
@@ -506,6 +527,40 @@
                 </div>
             </section>
 
+            <section class="continuous-reader-section {% if not initial_data or initial_data.type != 'reader' %}hidden{% endif %}" id="continuous-reader-section" aria-label="Book reader">
+                <header class="continuous-reader-chrome" id="continuous-reader-chrome">
+                    <button type="button" id="reader-back-button" class="reader-chrome-btn" aria-label="Back">←</button>
+                    <div class="reader-title-wrap">
+                        <span id="reader-book-title" class="reader-book-title"></span>
+                        <span id="reader-chapter-title" class="reader-chapter-title"></span>
+                    </div>
+                    <button type="button" id="reader-toc-button" class="reader-chrome-btn" aria-expanded="false">Contents</button>
+                    <label class="reader-mode-label">Mode
+                        <select id="reader-mode-select" aria-label="Reading mode">
+                            <option value="summary">Summary</option>
+                            <option value="original">Original</option>
+                            <option value="plain">Plain English</option>
+                            <option value="side_by_side">Side-by-Side</option>
+                        </select>
+                    </label>
+                    <button type="button" id="reader-about-button" class="reader-chrome-btn">About</button>
+                </header>
+                <aside class="reader-panel hidden" id="reader-toc-panel" aria-label="Table of contents">
+                    <button type="button" class="reader-panel-close" data-reader-close="reader-toc-panel">Close</button>
+                    <div id="reader-toc-list"></div>
+                </aside>
+                <aside class="reader-panel hidden" id="reader-about-panel" aria-label="About this book">
+                    <button type="button" class="reader-panel-close" data-reader-close="reader-about-panel">Close</button>
+                    <div id="reader-about-content"></div>
+                </aside>
+                <div class="reader-status hidden" id="reader-status" role="status"></div>
+                <div class="continuous-reader-content" id="continuous-reader-content" tabindex="-1"></div>
+                <footer class="continuous-reader-footer">
+                    <span id="continuous-reader-progress">0%</span>
+                    <span id="continuous-reader-chapter-context"></span>
+                </footer>
+            </section>
+
             <!-- Reading Settings Panel (shared between chapter and medium pages) -->
             <div class="reading-settings-panel hidden" id="reading-settings-panel">
                 <div class="reading-settings-header">
@@ -792,10 +847,8 @@
     <script src="{{ url_for('static', filename='js/components/BlogPost.js') }}{{ asset_v('js/components/BlogPost.js') }}"></script>
     {% endif %}
 
-    <!-- Authentication module -->
-    {% if feature_auth %}
+    <!-- Local-first reader state runs for anonymous and signed-in readers. -->
     <script src="{{ url_for('static', filename='js/auth.js') }}{{ asset_v('js/auth.js') }}"></script>
-    {% endif %}
 
     {# view_mode.js exposes window.resolveInitialChapterViewMode and must
        load before app.js / app.min.js. #}
@@ -817,8 +870,7 @@
     <script src="{{ url_for('static', filename='js/app.min.js') }}{{ asset_v('js/app.min.js') }}"></script>
     {% endif %}
 
-    <!-- Initialize authentication -->
-    {% if feature_auth %}
+    <!-- Initialize local reader state and, where configured, identity sync. -->
     <script>
         // Initialize auth system when DOM is ready
         if (document.readyState === 'loading') {
@@ -833,6 +885,5 @@
             }
         }
     </script>
-    {% endif %}
 </body>
 </html>

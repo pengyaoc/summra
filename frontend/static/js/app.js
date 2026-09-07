@@ -93,7 +93,9 @@ class SummraApp {
             'author-detail-section',
             'discover-section',
             'blog-index-section',
-            'blog-post-section'
+            'blog-post-section',
+            'library-section',
+            'continuous-reader-section'
         ];
 
         this.init();
@@ -296,12 +298,14 @@ class SummraApp {
         // /blog - Blog index
         // /blog/{slug} - Blog post
         const {
-            bookMatch, mediumMatch, chapterMatch, categoryMatch, categoriesMatch,
-            allBooksMatch, discoverMatch, authorMatch, blogMatch, blogPostMatch
+            bookMatch, readerMatch, mediumMatch, chapterMatch, categoryMatch, categoriesMatch,
+            allBooksMatch, discoverMatch, libraryMatch, authorMatch, blogMatch, blogPostMatch
         } = parseAppRoute(path);
 
         // Routes that don't need books data - proceed immediately
-        if (blogPostMatch) {
+        if (libraryMatch) {
+            await this.showLibrary();
+        } else if (blogPostMatch) {
             const slug = blogPostMatch[1];
             await this.showBlogPost(slug, true);
         } else if (blogMatch) {
@@ -314,7 +318,17 @@ class SummraApp {
             // Ensure books are loaded for book-related routes
             await this.ensureBooksLoaded();
 
-            if (authorMatch) {
+            if (readerMatch) {
+                const bookSlug = readerMatch[1];
+                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
+                if (book) {
+                    const query = new URLSearchParams(window.location.search);
+                    await this.showContinuousReader(book, {
+                        mode: query.get('mode'),
+                        chapter: query.get('chapter'),
+                    });
+                }
+            } else if (authorMatch) {
                 const authorName = decodeURIComponent(authorMatch[1]);
                 await this.showAuthorDetail(authorName, true);
             } else if (chapterMatch) {
@@ -322,12 +336,9 @@ class SummraApp {
                 const chapterNum = parseInt(chapterMatch[2]);
                 const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
                 if (book) {
-                    // Set current book and load chapters if not already loaded
-                    this.currentBook = book;
-                    if (this.chapters.length === 0 || this.chapters[0]?.book_id !== book.id) {
-                        await this.loadChapters();
-                    }
-                    await this.showChapterDetail(book, chapterNum, true);
+                    // Legacy chapter URLs open the same continuous reader at
+                    // the requested chapter, without a chapter destination.
+                    await this.showContinuousReader(book, { chapter: String(chapterNum), legacyChapterNumber: true });
                 }
             } else if (mediumMatch) {
                 const bookSlug = mediumMatch[1];
@@ -480,7 +491,8 @@ class SummraApp {
         // Mirrors the server-side Jinja gate in index.html so SPA navigation matches.
         const footer = document.querySelector('footer.footer');
         if (footer) {
-            const onChapter = showArray.includes('chapter-detail-section');
+            const onChapter = showArray.includes('chapter-detail-section') ||
+                showArray.includes('continuous-reader-section');
             footer.classList.toggle('hidden', onChapter);
         }
 
@@ -489,7 +501,8 @@ class SummraApp {
         // whose WebKit re-evaluation can lag a frame on iOS, leaking the site
         // nav over the chapter text after pushState navigation).
         const onReadingPage = showArray.includes('chapter-detail-section') ||
-                              showArray.includes('medium-detail-section');
+                              showArray.includes('medium-detail-section') ||
+                              showArray.includes('continuous-reader-section');
         document.body.classList.toggle('on-chapter-page', onReadingPage);
 
         // Only modify sections if they're not already in the correct state
@@ -1080,6 +1093,16 @@ class SummraApp {
     }
 
     async selectBook(book, restoreScroll = false) {
+        // A book is the reader destination. Keep the older detail code below
+        // temporarily unreachable rather than letting any card retain the
+        // chapter-grid intermediary.
+        this.currentBook = book;
+        const readerPath = withBasePath(`/books/${book.slug || this.slugify(book.title)}/read`);
+        if (window.location.pathname !== readerPath) {
+            window.history.pushState({ type: 'reader', bookId: book.id }, '', readerPath);
+        }
+        return this.showContinuousReader(book);
+
         // Track origin for context-aware breadcrumbs BEFORE changing view
         // If we're currently viewing a category, store it as the origin
         if (this.currentView === 'category' && this.currentCategory) {

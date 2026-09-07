@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-09-07: Continuous Reader + Library direct replacement — IN PROGRESS (local validation complete; VM acceptance pending)
+
+**Decision recorded.** Per product direction, this is an in-place replacement: the existing `data/summra.db` contains disposable test progress and was removed locally. There is no progress migration, dual-write period, or new rollout flag. Git revert is the rollback path. `data/database.db` was retained and augmented with reader metadata only.
+
+**Implementation approach.**
+
+- Added immutable, versioned reader-content tables in `data/database.db`: content versions, structure entries, per-mode manifests, bounded segments, logical paragraphs, Side-by-Side alignment rows/members, and old-to-new paragraph mappings.
+- The compiler creates stable logical anchors, preserves chapter IDs by replacing `INSERT OR REPLACE` with conflict updates, targets 24 KiB segments, and validates 64 KiB/80-unit bounds. It compiles lazily after a source checksum change; the local catalog was explicitly compiled for all 90 books before deployment preparation.
+- Replaced cloud progress with `book_reading_state`, `mode_reading_state`, and idempotent `progress_mutation` records in the fresh `summra.db`. IndexedDB now stores device identity, per-mode markers, queue entries, Library projection, manifests, and reader segments.
+- Added canonical `/books/{slug}/read`, Library, continuous manifest/segment APIs, marker map/recover APIs, semantic paragraph-offset restoration, lifecycle queue saves, completion/manual-unfinish semantics, Side-by-Side responsive layout, and service-worker/IndexedDB offline fallback.
+- Kept legacy chapter URLs server-rendered for metadata while routing their visible experience into the same continuous reader.
+
+**Document alignment.** `docs/CONTINUOUS_READER_LIBRARY_PRD.md` and `docs/CONTINUOUS_READER_LIBRARY_ERD.md` now explicitly describe the approved direct cutover (no migration/dual write/flags), runtime checksum compilation, recover/map endpoints, and lifecycle queue behavior.
+
+**Validation completed locally.**
+
+- `92 passed` across reader database, user-state, API characterization, and URL-prefix test coverage.
+- JS syntax checks, Python compilation, `npm run build`, `npm run build:check`, and `git diff --check` pass.
+- Catalog validation: 90 published reader versions for 90 books; zero reader-table FK violations; zero segment-bound violations; zero alignment rows missing Original or Plain member records.
+- Headless browser smoke passes for Home, canonical reader, and legacy chapter URL. Focused Playwright checks verified: desktop two-column Side-by-Side, stacked Side-by-Side below 760px while retaining the same alignment anchor, offline reopen after service-worker activation, and an increasing semantic offset through a 5,247-word paragraph.
+
+**Catalog note.** `PRAGMA integrity_check` is `ok`. `PRAGMA foreign_key_check` reports 97 pre-existing findings in unrelated legacy catalog/audio/category rows; no reader-table finding was introduced or altered by this work.
+
+**Next.** Commit the implementation, deploy code plus compiled `data/database.db` to the VM, reset the VM test-only `summra.db`, restart the app, and perform production-path smoke checks before handoff.
+
+---
+
 ## 2026-06-01: Summaries + covers for 6 previously-empty books — DONE
 
 **Books touched:** 108 (Frederick Douglass), 109 (Man Who Was Thursday), 110 (Augustine), 111 (Tess), 112 (Mississippi), 114 (Udolpho). All six had been ingested but had no `summaries` rows and only generic placeholder cover images.

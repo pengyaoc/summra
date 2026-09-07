@@ -144,6 +144,27 @@ if (workbox) {
         })
     );
 
+    // Continuous-reader manifests are small and versioned. Prefer a fresh
+    // manifest when online, but retain the last one for offline reopening.
+    registerRoute(
+        ({ url }) => url.pathname.match(/\/api\/reader\/books\/\d+\/manifest$/),
+        new NetworkFirst({
+            cacheName: 'reader-manifests-v1',
+            plugins: [new CacheableResponsePlugin({ statuses: [0, 200] }), new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 7 * 24 * 60 * 60 })],
+            networkTimeoutSeconds: 4,
+        })
+    );
+
+    // Segments are immutable for their content version and may safely be
+    // served cache-first once fetched.
+    registerRoute(
+        ({ url }) => url.pathname.match(/\/api\/reader\/books\/\d+\/segments\/[^/]+$/),
+        new CacheFirst({
+            cacheName: 'reader-segments-v1',
+            plugins: [new CacheableResponsePlugin({ statuses: [0, 200] }), new ExpirationPlugin({ maxEntries: 8000, maxAgeSeconds: 30 * 24 * 60 * 60 })],
+        })
+    );
+
     // Cache book summaries - Network First
     registerRoute(
         ({ url }) => url.pathname.match(/\/api\/books\/\d+\/summary\/\w+$/),

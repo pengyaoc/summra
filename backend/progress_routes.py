@@ -1,273 +1,149 @@
-"""Reading progress tracking routes.
+"""Continuous-reader progress and Library API routes."""
 
-This module provides endpoints for saving and retrieving reading progress,
-including chapter completion tracking.
-"""
+import logging
 
 from flask import Blueprint, g, jsonify, request
-import logging
 
 try:
     from .pchauth.flask_adapter import login_required
 except ImportError:
     from backend.pchauth.flask_adapter import login_required
 
-# Will be set by app_base.py
+
 user_db = None
-
+content_db = None
 logger = logging.getLogger(__name__)
-
-# Create blueprint
-progress_bp = Blueprint('progress', __name__, url_prefix='/api/progress')
+progress_bp = Blueprint('progress', __name__, url_prefix='/api')
 
 
-@progress_bp.route('/save', methods=['POST'])
+def _marker_for(payload, key):
+    marker = payload.get(key)
+    return marker if isinstance(marker, dict) else None
+
+
+def _validate_book(book_id):
+    return isinstance(book_id, int) and content_db and content_db.get_book(book_id)
+
+
+@progress_bp.route('/progress/v2/mutations', methods=['POST'])
 @login_required
-def save_progress():
-    """Save reading progress for current user.
+def apply_progress_mutation():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'JSON mutation required'}), 400
+    book_id = payload.get('book_id')
+    if not _validate_book(book_id):
+        return jsonify({'error': 'Unknown book'}), 400
 
-    Request JSON:
-        {
-            "book_id": int,
-            "chapter_number": int,
-            "page_number": int (optional),
-            "scroll_position": int (optional)
-        }
+    current_marker = content_db.resolve_reader_marker(book_id, _marker_for(payload, 'current_marker'))
+    if not current_marker:
+        return jsonify({'error': 'Invalid current marker'}), 400
+    if current_marker['mode'] != payload.get('mode'):
+        return jsonify({'error': 'Marker mode does not match mutation mode'}), 400
 
-    Returns:
-        200: Progress saved successfully
-        400: Invalid request
-        401: Not authenticated
-    """
-    user_id = g.user_id
-    data = request.get_json()
+    furthest_input = _marker_for(payload, 'qualified_furthest_marker')
+    furthest_marker = content_db.resolve_reader_marker(book_id, furthest_input) if furthest_input else None
+    if furthest_input and not furthest_marker:
+        return jsonify({'error': 'Invalid furthest marker'}), 400
+    if furthest_marker and furthest_marker['mode'] != payload.get('mode'):
+        return jsonify({'error': 'Furthest marker mode does not match mutation mode'}), 400
 
-    if not data:
-        return jsonify({'error': 'Invalid request'}), 400
-
-    book_id = data.get('book_id')
-    chapter_number = data.get('chapter_number')
-    page_number = data.get('page_number', 0)
-    scroll_position = data.get('scroll_position', 0)
-
-    if book_id is None or chapter_number is None:
-        return jsonify({'error': 'book_id and chapter_number are required'}), 400
-
-    # Save progress
-    user_db.save_reading_progress(
-        user_id=user_id,
-        book_id=book_id,
-        chapter_number=chapter_number,
-        page_number=page_number,
-        scroll_position=scroll_position
+    manifest = content_db.get_reader_manifest(book_id)
+    mode_manifest = next((item for item in manifest['modes'] if item['mode'] == payload.get('mode')), None)
+    completion_allowed = bool(
+        payload.get('event_cause') == 'completion'
+        and payload.get('terminal_dwell_ms', 0) >= 2000
+        and payload.get('sequential_terminal_entry') is True
+        and mode_manifest
+        and mode_manifest['terminal_paragraph_id'] == current_marker['paragraph_id']
     )
+    try:
+        result = user_db.apply_mutation(
+            g.user_id, payload, current_marker, furthest_marker, completion_allowed=completion_allowed,
+        )
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    status = 409 if result['result'] == 'conflict' else 200
+    return jsonify({'success': True, **result}), status
 
-    logger.info(
-        f"Progress saved for user {user_id}: book {book_id}, "
-        f"chapter {chapter_number}, page {page_number}"
-    )
 
-    return jsonify({'success': True}), 200
-
-
-@progress_bp.route('/get/<int:book_id>', methods=['GET'])
+@progress_bp.route('/progress/v2/books/<int:book_id>', methods=['GET'])
 @login_required
-def get_progress(book_id):
-    """Get reading progress for a specific book.
-
-    Args:
-        book_id: Book ID
-
-    Returns:
-        200: Progress data
-        404: No progress found
-        401: Not authenticated
-    """
-    user_id = g.user_id
-
-    progress = user_db.get_reading_progress(user_id, book_id)
-
-    if progress is None:
-        return jsonify({
-            'success': True,
-            'progress': None
-        }), 200
-
-    return jsonify({
-        'success': True,
-        'progress': progress
-    }), 200
+def get_progress_v2(book_id):
+    if not _validate_book(book_id):
+        return jsonify({'error': 'Unknown book'}), 404
+    return jsonify({'success': True, 'projection': user_db.get_book_projection(g.user_id, book_id)})
 
 
-@progress_bp.route('/all', methods=['GET'])
+@progress_bp.route('/library', methods=['GET'])
 @login_required
-def get_all_progress():
-    """Get all reading progress for current user.
+def get_library():
+    """Return denormalized cards without per-book client requests."""
+    states = user_db.get_library_projection(g.user_id)
+    if not states:
+        return jsonify({'success': True, 'continue_reading': [], 'finished': []})
 
-    Returns:
-        200: List of progress data
-        401: Not authenticated
-    """
-    user_id = g.user_id
-
-    progress_list = user_db.get_all_reading_progress(user_id)
-
-    return jsonify({
-        'success': True,
-        'progress': progress_list
-    }), 200
-
-
-@progress_bp.route('/chapter/complete', methods=['POST'])
-@login_required
-def mark_chapter_complete():
-    """Mark a chapter as complete or incomplete.
-
-    Request JSON:
-        {
-            "book_id": int,
-            "chapter_number": int,
-            "completed": bool (optional, default: true)
+    ids = [state['book_id'] for state in states]
+    placeholders = ', '.join('?' for _ in ids)
+    conn = content_db.get_connection()
+    try:
+        books = {
+            row['id']: dict(row)
+            for row in conn.execute(
+                f'''SELECT id, slug, title, author, cover_image_url FROM books WHERE id IN ({placeholders})''', ids
+            ).fetchall()
         }
-
-    Returns:
-        200: Chapter status updated
-        400: Invalid request
-        401: Not authenticated
-    """
-    user_id = g.user_id
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Invalid request'}), 400
-
-    book_id = data.get('book_id')
-    chapter_number = data.get('chapter_number')
-    completed = data.get('completed', True)
-
-    if book_id is None or chapter_number is None:
-        return jsonify({'error': 'book_id and chapter_number are required'}), 400
-
-    # Mark chapter
-    user_db.mark_chapter_complete(
-        user_id=user_id,
-        book_id=book_id,
-        chapter_number=chapter_number,
-        completed=completed
-    )
-
-    logger.info(
-        f"Chapter {'completed' if completed else 'uncompleted'} for user {user_id}: "
-        f"book {book_id}, chapter {chapter_number}"
-    )
-
-    return jsonify({'success': True}), 200
-
-
-@progress_bp.route('/chapters/<int:book_id>', methods=['GET'])
-@login_required
-def get_completed_chapters(book_id):
-    """Get list of completed chapters for a book.
-
-    Args:
-        book_id: Book ID
-
-    Returns:
-        200: List of completed chapter numbers
-        401: Not authenticated
-    """
-    user_id = g.user_id
-
-    completed = user_db.get_completed_chapters(user_id, book_id)
-
-    return jsonify({
-        'success': True,
-        'completed_chapters': completed
-    }), 200
-
-
-@progress_bp.route('/sync', methods=['POST'])
-@login_required
-def sync_progress():
-    """Sync offline progress with server.
-
-    This endpoint allows syncing multiple progress entries at once,
-    useful for offline mode where progress is stored locally and
-    synced when connection is restored.
-
-    Request JSON:
-        {
-            "progress": [
-                {
-                    "book_id": int,
-                    "chapter_number": int,
-                    "page_number": int,
-                    "scroll_position": int,
-                    "timestamp": str (ISO format)
-                },
-                ...
-            ],
-            "completed_chapters": [
-                {
-                    "book_id": int,
-                    "chapter_number": int,
-                    "completed": bool,
-                    "timestamp": str (ISO format)
-                },
-                ...
-            ]
+        chapter_ids = {
+            state['last_mode_state']['current_marker']['chapter_id']
+            for state in states
+            if state.get('last_mode_state') and state['last_mode_state'].get('current_marker')
         }
+        chapters = {}
+        if chapter_ids:
+            chapter_placeholders = ', '.join('?' for _ in chapter_ids)
+            chapters = {
+                row['id']: dict(row)
+                for row in conn.execute(
+                    f'''SELECT id, chapter_number, chapter_title FROM chapters WHERE id IN ({chapter_placeholders})''',
+                    list(chapter_ids),
+                ).fetchall()
+            }
+    finally:
+        conn.close()
 
-    Returns:
-        200: Progress synced successfully
-        400: Invalid request
-        401: Not authenticated
-    """
-    user_id = g.user_id
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'error': 'Invalid request'}), 400
-
-    # Sync reading progress
-    progress_list = data.get('progress', [])
-    for progress in progress_list:
-        book_id = progress.get('book_id')
-        chapter_number = progress.get('chapter_number')
-        page_number = progress.get('page_number', 0)
-        scroll_position = progress.get('scroll_position', 0)
-
-        if book_id is not None and chapter_number is not None:
-            user_db.save_reading_progress(
-                user_id=user_id,
-                book_id=book_id,
-                chapter_number=chapter_number,
-                page_number=page_number,
-                scroll_position=scroll_position
-            )
-
-    # Sync chapter completion
-    completed_list = data.get('completed_chapters', [])
-    for completion in completed_list:
-        book_id = completion.get('book_id')
-        chapter_number = completion.get('chapter_number')
-        completed = completion.get('completed', True)
-
-        if book_id is not None and chapter_number is not None:
-            user_db.mark_chapter_complete(
-                user_id=user_id,
-                book_id=book_id,
-                chapter_number=chapter_number,
-                completed=completed
-            )
-
-    synced_count = len(progress_list) + len(completed_list)
-    logger.info(f"Synced {synced_count} progress entries for user {user_id}")
-
-    return jsonify({
-        'success': True,
-        'synced': {
-            'progress': len(progress_list),
-            'completed_chapters': len(completed_list)
+    cards = {'continue_reading': [], 'finished': []}
+    for state in states:
+        book = books.get(state['book_id'])
+        if not book:
+            continue
+        mode_state = state.get('last_mode_state')
+        marker = mode_state.get('furthest_marker') if mode_state else None
+        percentage = 0
+        if marker and mode_state:
+            manifest = content_db.get_reader_manifest(state['book_id'])
+            mode = next((item for item in manifest['modes'] if item['mode'] == state['last_mode']), None)
+            if mode and mode['total_word_count']:
+                percentage = min(99, round(marker['word_position'] * 100 / mode['total_word_count']))
+        if state['status'] == 'finished':
+            percentage = 100
+        current = mode_state.get('current_marker') if mode_state else None
+        chapter = chapters.get(current['chapter_id']) if current else None
+        card = {
+            **book,
+            'status': state['status'],
+            'last_mode': state['last_mode'],
+            'furthest_percentage': percentage,
+            'current_chapter': chapter,
+            'last_meaningful_read_at': state['last_meaningful_read_at'],
+            'finished_at': state['finished_at'],
         }
-    }), 200
+        cards['finished' if state['status'] == 'finished' else 'continue_reading'].append(card)
+    return jsonify({'success': True, **cards})
+
+
+# Retained only as a harmless auth-route probe used by existing integration
+# coverage. Reader code no longer calls this v1 endpoint.
+@progress_bp.route('/progress/all', methods=['GET'])
+@login_required
+def retired_progress_all():
+    return jsonify({'success': True, 'progress': []})

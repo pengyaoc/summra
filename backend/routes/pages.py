@@ -24,6 +24,16 @@ def discover():
                          meta_title='Discover Classic Books by Difficulty Level | Summra')
 
 
+@bp.route('/library')
+def library():
+    """Authenticated readers populate this shell from the Library API."""
+    return render_template(
+        'index.html',
+        meta_title='Your Library | Summra',
+        initial_data={'type': 'library'},
+    )
+
+
 @bp.route('/offline')
 def offline():
     """Offline fallback page for PWA"""
@@ -169,6 +179,28 @@ def book_summary_detail(slug):
         og_image=og_image,
         structured_data=structured_data,
         initial_data=initial_data
+    )
+
+
+@bp.route('/books/<slug>/read')
+def book_reader(slug):
+    """Canonical continuous-reader shell. Prose remains API-delivered so
+    opening a large book does not put a full chapter into the HTML shell."""
+    db = common.db
+    book = db.get_book_by_slug(slug)
+    if not book:
+        return render_template('index.html'), 404
+    summary = db.get_summary(book['id'], 'concise')
+    description = (summary or {}).get('content', '')[:200]
+    return render_template(
+        'index.html',
+        meta_title=f"Read {book['title']} by {book['author']} | Summra",
+        meta_description=description,
+        canonical_url=f"{common.site_origin()}/books/{slug}/read",
+        initial_data={
+            'type': 'reader',
+            'book': {'id': book['id'], 'title': book['title'], 'author': book['author'], 'slug': slug},
+        },
     )
 
 

@@ -695,4 +695,499 @@ export const readerMixin = {
             await window.authModule.trackChapterView(book.id, chapterNum, 0);
         }
     },
+
+    async showLibrary() {
+        this.continuousReader = { active: false };
+        this.clearPagination();
+        this.showOnlySections('library-section');
+        document.getElementById('library-nav-btn')?.classList.toggle('hidden', !window.authModule?.currentUser?.());
+        const cards = await window.authModule?.getLibrary?.();
+        const continueEl = document.getElementById('continue-reading-cards');
+        const finishedEl = document.getElementById('finished-cards');
+        const emptyEl = document.getElementById('library-empty');
+        const offline = document.getElementById('library-offline-note');
+        if (!cards || !continueEl || !finishedEl) return;
+        const render = (book, action) => {
+            const rawCover = book.cover_image_url || '';
+            const coverUrl = /^https?:\/\//.test(rawCover) ? rawCover :
+                (rawCover.startsWith('/static/') ? rawCover : `/static/${rawCover.replace(/^\/+/, '')}`);
+            const cover = rawCover ? `<img src="${this.escapeHtml(withBasePath(coverUrl))}" alt="" loading="lazy">` : '';
+            const chapter = book.current_chapter?.chapter_title || (book.current_chapter ? `Chapter ${book.current_chapter.chapter_number}` : 'Beginning');
+            const unfinished = book.status === 'finished'
+                ? `<button class="library-mark-unfinished" type="button" data-reader-unfinish="${book.id}">Mark unfinished</button>` : '';
+            return `<article class="library-card" data-reader-book="${book.id}">${cover}<div><h3>${this.escapeHtml(book.title)}</h3><p>${this.escapeHtml(book.author)}</p><p>${this.escapeHtml(book.last_mode.replaceAll('_', ' '))} · ${book.furthest_percentage}%</p><p>${this.escapeHtml(chapter)}</p><button type="button">${action}</button>${unfinished}</div></article>`;
+        };
+        continueEl.innerHTML = cards.continue_reading.map(book => render(book, 'Continue')).join('');
+        finishedEl.innerHTML = cards.finished.map(book => render(book, 'Read again')).join('');
+        emptyEl?.classList.toggle('hidden', cards.continue_reading.length + cards.finished.length > 0);
+        document.getElementById('continue-reading-shelf')?.classList.toggle('hidden', !cards.continue_reading.length);
+        document.getElementById('finished-shelf')?.classList.toggle('hidden', !cards.finished.length);
+        offline?.classList.toggle('hidden', !cards.offline);
+        document.querySelectorAll('[data-reader-book]').forEach(card => card.addEventListener('click', () => {
+            const book = this.allBooks.find(item => item.id === Number(card.dataset.readerBook));
+            if (book) this.selectBook(book);
+        }));
+        document.querySelectorAll('[data-reader-unfinish]').forEach(button => button.addEventListener('click', async event => {
+            event.stopPropagation();
+            await this.markReaderBookUnfinished(Number(button.dataset.readerUnfinish));
+            await this.showLibrary();
+        }));
+        this.updatePageTitle('Your Library | Summra');
+    },
+
+    async markReaderBookUnfinished(bookId) {
+        const state = await window.authModule?.getReaderState?.(bookId);
+        const mode = state?.book?.last_mode;
+        const modeState = state?.modes?.find(item => item.mode === mode);
+        if (!mode || !modeState?.current_marker) return;
+        await window.authModule?.queueReaderMutation?.({
+            book_id: bookId, mode, current_marker: modeState.current_marker,
+            event_cause: 'manual_unfinish', active_seconds_delta: 0, sequential_boundaries_delta: 0,
+            base_revision: modeState.revision || modeState.server_revision || 0,
+        });
+    },
+
+    async showContinuousReader(book, options = {}) {
+        if (this.continuousReader?.active && this.currentBook?.id !== book.id) {
+            await this.saveContinuousReader('navigation');
+        }
+        this.currentBook = book;
+        this.currentView = 'reader';
+        this.clearAllPaginationData();
+        this.showOnlySections('continuous-reader-section');
+        const status = document.getElementById('reader-status');
+        const content = document.getElementById('continuous-reader-content');
+        status?.classList.remove('hidden');
+        if (status) status.textContent = 'Opening book…';
+        if (content) content.innerHTML = '';
+        let manifest = null;
+        try {
+            const manifestResponse = await fetch(`${this.apiBase}/reader/books/${book.id}/manifest`);
+            const manifestData = await manifestResponse.json();
+            if (manifestResponse.ok && manifestData.success) {
+                manifest = manifestData.manifest;
+                window.authModule?.cacheReaderManifest?.(manifest).catch(() => {});
+            }
+        } catch (_) { /* use the durable segment cache below */ }
+        manifest ||= await window.authModule?.getCachedReaderManifest?.(book.id);
+        if (!manifest) {
+            if (status) status.textContent = 'Unable to open this book. Retry.';
+            return;
+        }
+        const state = await window.authModule?.getReaderState?.(book.id) || { book: null, modes: [] };
+        const available = manifest.modes.filter(item => item.availability !== 'unavailable').map(item => item.mode);
+        const requestedMode = options.mode;
+        const savedMode = state.book?.last_mode;
+        const mode = available.includes(requestedMode) ? requestedMode :
+            (available.includes(savedMode) ? savedMode : (available.includes('plain') ? 'plain' : available.includes('original') ? 'original' : available[0]));
+        if (!mode) {
+            if (status) status.textContent = 'No readable content is available for this book.';
+            return;
+        }
+        const modeState = state.modes?.find(item => item.mode === mode);
+        let restoredMarker = modeState?.current_marker || null;
+        let recoveryNotice = false;
+        if (restoredMarker && restoredMarker.content_version !== manifest.content_version) {
+            const recovered = await this.recoverContinuousMarker(restoredMarker);
+            if (recovered) {
+                restoredMarker = recovered;
+                if (recovered.recovery_level === 'chapter_opening' || recovered.recovery_level === 'book_opening') {
+                    recoveryNotice = true;
+                    this.setContinuousReaderStatus('This book changed; your place was restored approximately.');
+                }
+            }
+        }
+        const chapterId = this.resolveReaderChapter(manifest, options.chapter, options.legacyChapterNumber);
+        this.continuousReader = {
+            active: true, restoring: true, manifest, mode, state, modeState,
+            currentMarker: restoredMarker,
+            recoveryNotice,
+            furthestMarker: modeState?.furthest_marker || null,
+            segmentIds: [], currentSegmentId: null, chapterId,
+            lastDisplayedOrdinal: null, pageTurnAt: Date.now(), terminalTimer: null,
+        };
+        this.setupContinuousReaderChrome();
+        this.setupContinuousReaderLifecycle();
+        await this.loadContinuousReaderAt(this.continuousReader.currentMarker, chapterId);
+        if (!this.continuousReader.recoveryNotice) status?.classList.add('hidden');
+    },
+
+    resolveReaderChapter(manifest, rawChapter, legacyNumber = false) {
+        if (!rawChapter) return null;
+        const chapter = manifest.structure.find(entry => entry.kind === 'chapter' &&
+            (legacyNumber ? String(entry.chapter_number) === String(rawChapter) : String(entry.chapter_id) === String(rawChapter)));
+        return chapter?.chapter_id || null;
+    },
+
+    async loadContinuousReaderAt(marker = null, chapterId = null) {
+        const reader = this.continuousReader;
+        if (!reader?.active) return;
+        const descriptors = reader.manifest.segments.filter(segment => segment.mode === reader.mode);
+        let descriptor = marker ? descriptors.find(segment => marker.ordinal >= segment.first_unit_ordinal && marker.ordinal <= segment.last_unit_ordinal) : null;
+        if (!descriptor && chapterId) {
+            descriptor = await this.findContinuousSegmentForChapter(descriptors, chapterId);
+        }
+        descriptor ||= descriptors[0];
+        if (!descriptor) return;
+        const loaded = await this.fetchContinuousSegment(descriptor.id);
+        if (!loaded) return;
+        const nextDescriptor = descriptors.find(item => item.ordinal === descriptor.ordinal + 1);
+        const next = nextDescriptor ? await this.fetchContinuousSegment(nextDescriptor.id, true) : null;
+        reader.currentSegmentId = descriptor.id;
+        reader.segmentIds = [loaded.id, next?.id].filter(Boolean);
+        this.renderContinuousSegments([loaded, next].filter(Boolean), marker);
+    },
+
+    async findContinuousSegmentForChapter(descriptors, chapterId) {
+        for (const descriptor of descriptors) {
+            const segment = await this.fetchContinuousSegment(descriptor.id, true);
+            if (segment?.units?.some(unit => Number(unit.chapter_id) === Number(chapterId))) return descriptor;
+        }
+        return null;
+    },
+
+    async fetchContinuousSegment(segmentId, prefetch = false) {
+        const reader = this.continuousReader;
+        if (!reader?.active) return null;
+        reader.requests ||= new Map();
+        if (reader.requests.has(segmentId)) return reader.requests.get(segmentId);
+        const request = fetch(`${this.apiBase}/reader/books/${this.currentBook.id}/segments/${encodeURIComponent(segmentId)}?mode=${reader.mode}`)
+            .then(response => response.ok ? response.json() : Promise.reject(new Error('segment unavailable')))
+            .then(data => {
+                window.authModule?.cacheReaderSegment?.(this.currentBook.id, data.segment).catch(() => {});
+                return data.segment;
+            })
+            .catch(error => {
+                const cachedPromise = window.authModule?.getCachedReaderSegment?.(
+                    this.currentBook.id, reader.manifest.content_version, reader.mode, segmentId,
+                );
+                if (!cachedPromise) {
+                    if (!prefetch) this.setContinuousReaderStatus('The next section needs a connection.');
+                    return null;
+                }
+                return cachedPromise.then(cached => {
+                    if (cached) return cached;
+                    if (!prefetch) this.setContinuousReaderStatus('The next section needs a connection.');
+                    return null;
+                });
+            });
+        reader.requests.set(segmentId, request);
+        return request;
+    },
+
+    renderContinuousSegments(segments, restoreMarker = null) {
+        const reader = this.continuousReader;
+        const container = document.getElementById('continuous-reader-content');
+        if (!reader?.active || !container) return;
+        reader.unitsById = new Map();
+        const html = [];
+        let activeChapter = null;
+        for (const segment of segments) {
+            for (const unit of segment.units) {
+                reader.unitsById.set(unit.id, unit);
+                if (unit.chapter_id !== activeChapter) {
+                    activeChapter = unit.chapter_id;
+                    html.push(`<h2 class="reader-chapter-heading" data-reader-chapter="${unit.chapter_id}">${this.escapeHtml(unit.chapter_title || `Chapter ${unit.chapter_number || ''}`)}</h2>`);
+                }
+                if (reader.mode === 'side_by_side') {
+                    const original = unit.members.original;
+                    const plain = unit.members.plain;
+                    const cell = (member, label) => member?.available
+                        ? `<p>${this.escapeHtml(member.content || '')}</p>`
+                        : `<p class="reader-gap">${label} unavailable for this section.</p>`;
+                    html.push(`<div class="side-by-side-row reader-alignment-row" data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.canonical_word_count || 0}"><div class="side-by-side-cell original">${cell(original, 'Original')}</div><div class="side-by-side-cell modern">${cell(plain, 'Plain English')}</div></div>`);
+                } else if (unit.availability === 'gap') {
+                    html.push(`<div class="reader-gap" data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="0">Plain English unavailable for this section.</div>`);
+                } else {
+                    html.push(`<p data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.word_count || 0}">${this.escapeHtml(unit.content || '')}</p>`);
+                }
+            }
+        }
+        container.className = `continuous-reader-content ${reader.mode === 'side_by_side' ? 'chapter-side-by-side' : ''}`;
+        container.innerHTML = reader.mode === 'side_by_side'
+            ? `<div class="side-by-side-headers"><div class="side-by-side-header">Original</div><div class="side-by-side-header">Plain English</div></div>${html.join('')}`
+            : html.join('');
+        this.pagination.originalContent = {};
+        this.initializePagination(container, reader.mode === 'side_by_side' ? 'side-by-side' : reader.mode);
+        if (restoreMarker?.paragraph_id) {
+            const page = this.findContinuousPageForMarker(restoreMarker);
+            if (page >= 0) {
+                this.pagination.currentPage = page;
+                this.displayCurrentPage();
+            }
+        }
+        reader.restoring = false;
+        // Opening/restoring never writes progress, but the chrome still needs
+        // the marker that is visibly on screen for the next deliberate turn.
+        this.settleContinuousReaderMarker();
+    },
+
+    findContinuousPageForMarker(marker) {
+        const reader = this.continuousReader;
+        const unit = reader?.unitsById?.get(marker.paragraph_id);
+        const totalWords = unit?.word_count || unit?.canonical_word_count || 0;
+        const targetWords = totalWords * Math.max(0, Math.min(1, Number(marker.offset) || 0));
+        let accumulated = 0;
+        for (let index = 0; index < this.pagination.pages.length; index += 1) {
+            const page = document.createElement('div');
+            page.innerHTML = this.pagination.pages[index];
+            const fragments = [...page.querySelectorAll('[data-reader-anchor]')]
+                .filter(candidate => candidate.dataset.readerAnchor === marker.paragraph_id);
+            if (!fragments.length) continue;
+            const words = fragments.reduce((sum, candidate) => {
+                const text = reader.mode === 'side_by_side'
+                    ? (candidate.querySelector('.side-by-side-cell.original')?.textContent || candidate.textContent || '')
+                    : candidate.textContent || '';
+                return sum + text.trim().split(/\s+/).filter(Boolean).length;
+            }, 0);
+            if (!totalWords || targetWords < accumulated + words || index === this.pagination.pages.length - 1) return index;
+            accumulated += words;
+        }
+        return -1;
+    },
+
+    settleContinuousReaderMarker() {
+        const reader = this.continuousReader;
+        const page = this.pagination.activeWrapper?.querySelector('.pagination-page-container');
+        const anchor = page?.querySelector('[data-reader-anchor]');
+        if (!reader?.active || !anchor) return;
+        reader.currentMarker = {
+            book_id: this.currentBook.id, mode: reader.mode,
+            content_version: reader.manifest.content_version, chapter_id: Number(anchor.dataset.readerChapter),
+            paragraph_id: anchor.dataset.readerAnchor, offset: this.continuousMarkerOffset(anchor),
+            quote: (anchor.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180),
+            ordinal: Number(anchor.dataset.readerOrdinal),
+        };
+        reader.lastDisplayedOrdinal = reader.currentMarker.ordinal;
+        const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === reader.currentMarker.chapter_id);
+        document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
+        document.getElementById('continuous-reader-chapter-context').textContent = chapter?.title || '';
+        this.updateContinuousReaderProgress();
+    },
+
+    continuousMarkerOffset(anchor) {
+        const reader = this.continuousReader;
+        const totalWords = Number(anchor?.dataset.readerWordCount) || reader?.unitsById?.get(anchor?.dataset.readerAnchor)?.word_count || 0;
+        if (!anchor || totalWords <= 0 || !this.pagination?.pages?.length) return 0;
+        const countWords = element => {
+            const source = reader.mode === 'side_by_side'
+                ? (element.querySelector('.side-by-side-cell.original')?.textContent || element.textContent || '')
+                : element.textContent || '';
+            return source.trim().split(/\s+/).filter(Boolean).length;
+        };
+        let priorWords = 0;
+        for (let index = 0; index < this.pagination.currentPage; index += 1) {
+            const page = document.createElement('div');
+            page.innerHTML = this.pagination.pages[index];
+            page.querySelectorAll('[data-reader-anchor]').forEach(candidate => {
+                if (candidate.dataset.readerAnchor === anchor.dataset.readerAnchor) priorWords += countWords(candidate);
+            });
+        }
+        return Math.max(0, Math.min(0.99, priorWords / totalWords));
+    },
+
+    setupContinuousReaderChrome() {
+        const reader = this.continuousReader;
+        if (!reader?.active) return;
+        document.getElementById('reader-book-title').textContent = this.currentBook.title;
+        const select = document.getElementById('reader-mode-select');
+        select.value = reader.mode;
+        for (const option of select.options) {
+            const manifest = reader.manifest.modes.find(item => item.mode === option.value);
+            option.disabled = !manifest || manifest.availability === 'unavailable';
+            option.textContent = option.value === 'side_by_side' ? 'Side-by-Side' :
+                option.value === 'plain' ? 'Plain English' : option.value[0].toUpperCase() + option.value.slice(1);
+        }
+        select.onchange = async () => {
+            await this.saveContinuousReader('mode_exit');
+            const previousMode = reader.mode;
+            reader.mode = select.value;
+            reader.restoring = true;
+            let destination = reader.state?.modes?.find(item => item.mode === reader.mode)?.current_marker || null;
+            if (!destination && reader.currentMarker) {
+                destination = await this.mapContinuousMarker(reader.currentMarker, previousMode, reader.mode);
+            }
+            await this.loadContinuousReaderAt(destination, reader.currentMarker?.chapter_id);
+        };
+        document.getElementById('reader-back-button').onclick = () => window.history.back();
+        document.getElementById('reader-toc-button').onclick = () => this.toggleContinuousPanel('reader-toc-panel');
+        document.getElementById('reader-about-button').onclick = () => this.toggleContinuousPanel('reader-about-panel');
+        document.querySelectorAll('[data-reader-close]').forEach(button => button.onclick = () => document.getElementById(button.dataset.readerClose)?.classList.add('hidden'));
+        const toc = document.getElementById('reader-toc-list');
+        toc.innerHTML = reader.manifest.structure.filter(entry => entry.kind === 'chapter').map(entry =>
+            `<button type="button" data-reader-chapter-target="${entry.chapter_id}">${this.escapeHtml(entry.title)}</button>`).join('');
+        toc.querySelectorAll('[data-reader-chapter-target]').forEach(button => button.onclick = async () => {
+            document.getElementById('reader-toc-panel').classList.add('hidden');
+            reader.restoring = true;
+            await this.loadContinuousReaderAt(null, button.dataset.readerChapterTarget);
+            await this.saveContinuousReader('toc');
+        });
+        this.loadContinuousAbout();
+    },
+
+    setupContinuousReaderLifecycle() {
+        if (this.continuousReaderLifecycleBound) return;
+        this.continuousReaderLifecycleBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') this.saveContinuousReader('hidden');
+        });
+        window.addEventListener('pagehide', () => this.saveContinuousReader('pagehide'));
+        window.setInterval(() => {
+            const reader = this.continuousReader;
+            if (reader?.active && document.visibilityState === 'visible' && Date.now() - reader.pageTurnAt >= 15000) {
+                this.saveContinuousReader('page_turn', 0, 15);
+                reader.pageTurnAt = Date.now();
+            }
+        }, 15000);
+    },
+
+    toggleContinuousPanel(id) {
+        const panel = document.getElementById(id);
+        panel?.classList.toggle('hidden');
+    },
+
+    async loadContinuousAbout() {
+        const target = document.getElementById('reader-about-content');
+        if (!target) return;
+        try {
+            const bookId = this.currentBook.id;
+            const authorSlug = this.slugify(this.currentBook.author || '');
+            const [bookResponse, overviewResponse, categoriesResponse, relatedResponse, authorResponse] = await Promise.all([
+                fetch(`${this.apiBase}/books/${bookId}`),
+                fetch(`${this.apiBase}/books/${bookId}/summary/comprehensive`),
+                fetch(`${this.apiBase}/books/${bookId}/categories`),
+                fetch(`${this.apiBase}/books/${bookId}/related`),
+                authorSlug ? fetch(`${this.apiBase}/authors/${encodeURIComponent(authorSlug)}`) : Promise.resolve(null),
+            ]);
+            const [data, overview, categories, related, author] = await Promise.all([
+                bookResponse.json(), overviewResponse.json().catch(() => ({})),
+                categoriesResponse.json().catch(() => ({})), relatedResponse.json().catch(() => ({})),
+                authorResponse ? authorResponse.json().catch(() => ({})) : Promise.resolve({}),
+            ]);
+            if (data.success) {
+                const categoryList = (categories.categories || []).map(category => this.escapeHtml(category.name)).join(', ');
+                const relatedList = (related.related || []).slice(0, 6).map(book =>
+                    `<button type="button" class="reader-related-book" data-related-book="${book.id}">${this.escapeHtml(book.title)} <span>— ${this.escapeHtml(book.author || '')}</span></button>`
+                ).join('');
+                const overviewText = overview.summary?.content || overview.summary?.summary || '';
+                target.innerHTML = `<h2>${this.escapeHtml(data.book.title)}</h2>
+                    <p class="reader-about-author">${this.escapeHtml(data.book.author)}</p>
+                    <p>${this.escapeHtml(data.book.about_text || 'About this book is coming soon.')}</p>
+                    ${author?.author?.short_bio || author?.author?.long_bio ? `<h3>Author</h3><p>${this.escapeHtml(author.author.short_bio || author.author.long_bio)}</p>` : ''}
+                    ${overviewText ? `<h3>Overview</h3><p>${this.escapeHtml(overviewText)}</p>` : ''}
+                    ${categoryList ? `<h3>Categories</h3><p>${categoryList}</p>` : ''}
+                    ${relatedList ? `<h3>Related books</h3><div class="reader-related-list">${relatedList}</div>` : ''}`;
+                target.querySelectorAll('[data-related-book]').forEach(button => button.onclick = () => {
+                    const next = this.allBooks.find(book => book.id === Number(button.dataset.relatedBook));
+                    if (next) this.selectBook(next);
+                });
+            }
+        } catch (_) { target.textContent = 'About this book is unavailable offline.'; }
+    },
+
+    async mapContinuousMarker(marker, fromMode, toMode) {
+        if (!marker || fromMode === toMode) return marker;
+        try {
+            const response = await fetch(`${this.apiBase}/reader/books/${this.currentBook.id}/map`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ marker: { ...marker, mode: fromMode }, target_mode: toMode }),
+            });
+            const data = await response.json();
+            return response.ok && data.success ? data.marker : null;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    async recoverContinuousMarker(marker) {
+        try {
+            const response = await fetch(`${this.apiBase}/reader/books/${this.currentBook.id}/recover`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marker }),
+            });
+            const data = await response.json();
+            if (response.ok && data.success) {
+                return data.marker;
+            }
+        } catch (_) { /* retain original marker as a best-effort entry */ }
+        return null;
+    },
+
+    onContinuousPageDisplayed() {
+        const reader = this.continuousReader;
+        if (!reader?.active || reader.restoring) return;
+        const page = this.pagination.activeWrapper?.querySelector('.pagination-page-container');
+        const anchor = page?.querySelector('[data-reader-anchor]');
+        if (!anchor) return;
+        const marker = {
+            book_id: this.currentBook.id, mode: reader.mode,
+            content_version: reader.manifest.content_version, chapter_id: Number(anchor.dataset.readerChapter),
+            paragraph_id: anchor.dataset.readerAnchor, offset: this.continuousMarkerOffset(anchor),
+            quote: (anchor.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180),
+            ordinal: Number(anchor.dataset.readerOrdinal),
+        };
+        const sequential = reader.lastDisplayedOrdinal !== null && marker.ordinal === reader.lastDisplayedOrdinal + 1;
+        const activeSeconds = document.visibilityState === 'visible'
+            ? Math.min(60, Math.floor((Date.now() - reader.pageTurnAt) / 1000)) : 0;
+        reader.pageTurnAt = Date.now();
+        reader.lastDisplayedOrdinal = marker.ordinal;
+        reader.currentMarker = marker;
+        const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === marker.chapter_id);
+        document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
+        document.getElementById('continuous-reader-chapter-context').textContent = chapter?.title || '';
+        this.updateContinuousReaderProgress();
+        clearTimeout(reader.settleTimer);
+        reader.settleTimer = setTimeout(() => this.saveContinuousReader('page_turn', sequential ? 1 : 0, activeSeconds), 600);
+        const modeManifest = reader.manifest.modes.find(item => item.mode === reader.mode);
+        clearTimeout(reader.terminalTimer);
+        if (modeManifest?.terminal_paragraph_id === marker.paragraph_id && sequential) {
+            reader.terminalTimer = setTimeout(() => this.saveContinuousReader('completion', 0, 2, {
+                terminal_dwell_ms: 2000, sequential_terminal_entry: true,
+            }), 2000);
+        }
+    },
+
+    async saveContinuousReader(cause, boundaries = 0, activeSeconds = 0, extra = {}) {
+        const reader = this.continuousReader;
+        if (!reader?.active || !reader.currentMarker || reader.restoring) return;
+        const furthest = reader.furthestMarker;
+        const qualified = boundaries > 0 && (!furthest || reader.currentMarker.ordinal >= furthest.ordinal)
+            ? reader.currentMarker : null;
+        if (qualified) reader.furthestMarker = qualified;
+        const modeState = reader.state?.modes?.find(item => item.mode === reader.mode);
+        await window.authModule?.queueReaderMutation?.({
+            book_id: this.currentBook.id, mode: reader.mode, current_marker: reader.currentMarker,
+            qualified_furthest_marker: qualified, event_cause: cause,
+            active_seconds_delta: activeSeconds, sequential_boundaries_delta: boundaries,
+            base_revision: modeState?.revision || modeState?.server_revision || 0,
+            ...extra,
+        });
+        this.updateContinuousReaderProgress();
+    },
+
+    updateContinuousReaderProgress() {
+        const reader = this.continuousReader;
+        const mode = reader?.manifest?.modes?.find(item => item.mode === reader.mode);
+        const marker = reader?.furthestMarker;
+        const percentage = mode?.total_word_count && marker ? Math.min(99, Math.round(marker.word_position * 100 / mode.total_word_count)) : 0;
+        const text = document.getElementById('continuous-reader-progress');
+        if (text) text.textContent = `${percentage}%`;
+    },
+
+    setContinuousReaderStatus(message) {
+        const status = document.getElementById('reader-status');
+        if (status) { status.textContent = message; status.classList.remove('hidden'); }
+    },
+
+    async navigateContinuousSegment(direction) {
+        const reader = this.continuousReader;
+        if (!reader?.active) return;
+        const segment = await this.fetchContinuousSegment(reader.currentSegmentId);
+        const id = direction > 0 ? segment?.next_segment_id : segment?.previous_segment_id;
+        if (!id) return;
+        reader.restoring = false;
+        const loaded = await this.fetchContinuousSegment(id);
+        if (!loaded) return;
+        reader.currentSegmentId = id;
+        this.renderContinuousSegments([loaded], null);
+    },
 };

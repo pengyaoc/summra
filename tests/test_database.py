@@ -213,6 +213,72 @@ class TestDatabase:
         assert chapters[0]['summary'] == "Second summary"
         assert chapters[0]['chapter_text'] == "Second text"
 
+    def test_chapter_regeneration_preserves_chapter_id(self, temp_db):
+        """Reader anchors remain chapter-scoped across normal regeneration."""
+        book_id = temp_db.add_book(
+            title="Stable Chapter", author="Test Author", filename="stable_chapter.txt", full_text="x"
+        )
+        first_id = temp_db.add_chapter(book_id, 1, "One", "First", "First text")
+        second_id = temp_db.add_chapter(book_id, 1, "One", "Second", "Second text")
+        assert second_id == first_id
+
+    def test_reader_manifest_segments_alignment_and_mapping(self, temp_db):
+        """The reader compiler produces bounded, explicit Side-by-Side rows."""
+        book_id = temp_db.add_book(
+            title="Continuous Test", author="Test Author", filename="continuous_reader.txt", full_text="x"
+        )
+        temp_db.add_chapter(
+            book_id, 1, "One", "Summary one.\nSummary two.",
+            "Original one.\n\nOriginal two.", modern_english_text="Plain one.\n\nPlain two.",
+        )
+        temp_db.add_chapter(
+            book_id, 2, "Two", "Summary three.",
+            "Original three.", modern_english_text="Plain three.",
+        )
+        manifest = temp_db.get_reader_manifest(book_id)
+        assert [mode['mode'] for mode in manifest['modes']] == ['summary', 'original', 'plain', 'side_by_side']
+        assert all(segment['byte_count'] <= 64 * 1024 and segment['unit_count'] <= 80 for segment in manifest['segments'])
+        side_descriptor = next(segment for segment in manifest['segments'] if segment['mode'] == 'side_by_side')
+        side = temp_db.get_reader_segment(book_id, side_descriptor['id'], 'side_by_side')
+        assert side['units'][0]['members']['original']['available'] == 1
+        assert side['units'][0]['members']['plain']['available'] == 1
+        original_descriptor = next(segment for segment in manifest['segments'] if segment['mode'] == 'original')
+        original = temp_db.get_reader_segment(book_id, original_descriptor['id'], 'original')['units'][0]
+        mapped = temp_db.map_reader_marker(book_id, {
+            'mode': 'original', 'content_version': manifest['content_version'],
+            'chapter_id': original['chapter_id'], 'paragraph_id': original['id'], 'offset': 0,
+        }, 'side_by_side')
+        assert mapped['mode'] == 'side_by_side'
+
+    def test_reader_recovers_old_marker_through_content_mapping(self, temp_db):
+        book_id = temp_db.add_book(
+            title="Recovery Test", author="Test Author", filename="reader_recovery.txt", full_text="x"
+        )
+        chapter_id = temp_db.add_chapter(
+            book_id, 1, "One", "Summary", "First paragraph.\n\nSecond paragraph.",
+            modern_english_text="First plain.\n\nSecond plain.",
+        )
+        first_manifest = temp_db.get_reader_manifest(book_id)
+        first_segment = temp_db.get_reader_segment(
+            book_id, next(s['id'] for s in first_manifest['segments'] if s['mode'] == 'original'), 'original'
+        )
+        old = first_segment['units'][1]
+        # A content edit creates a new version but leaves one normalized
+        # paragraph available for explicit old-to-new mapping.
+        temp_db.add_chapter(
+            book_id, 1, "One", "Summary updated", "New opening.\n\nSecond paragraph.",
+            modern_english_text="New plain.\n\nSecond plain.",
+        )
+        second_manifest = temp_db.get_reader_manifest(book_id)
+        assert second_manifest['content_version'] == first_manifest['content_version'] + 1
+        recovered = temp_db.recover_reader_marker(book_id, {
+            'mode': 'original', 'content_version': first_manifest['content_version'],
+            'chapter_id': chapter_id, 'paragraph_id': old['id'], 'offset': 0.25, 'quote': old['normalized_quote'],
+        })
+        assert recovered['content_version'] == second_manifest['content_version']
+        assert recovered['recovery_level'] in {'same_id', 'mapping', 'quote', 'ordinal'}
+        assert recovered['chapter_id'] == chapter_id
+
     def test_add_multiple_chapters(self, temp_db):
         """Test adding multiple chapters for same book"""
         book_id = temp_db.add_book(
