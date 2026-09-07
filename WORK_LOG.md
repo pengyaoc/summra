@@ -27,7 +27,9 @@
 
 **Catalog note.** `PRAGMA integrity_check` is `ok`. `PRAGMA foreign_key_check` reports 97 pre-existing findings in unrelated legacy catalog/audio/category rows; no reader-table finding was introduced or altered by this work.
 
-**Next.** Commit the implementation, deploy code plus compiled `data/database.db` to the VM, reset the VM test-only `summra.db`, restart the app, and perform production-path smoke checks before handoff.
+**Deployment status.** The implementation was committed as `32d0976` and pushed to `origin/main`. Local content preflight confirmed `books=90`, `chapters=4,159`, `authors=57`, and `reader_versions=90`. Before any VM mutation, the documented GCP SSH preflight was attempted with the configured project and default-project form. Both were denied `compute.instances.get` for the configured VM. The active account and project match the local deployment metadata, so this is an IAM-access block; no VM code, catalog data, service, or progress database was changed.
+
+**Next.** Restore Compute Engine access for the configured account/project, then pull `32d0976`, compare the VM catalog counts, copy the verified compiled `data/database.db`, reset the VM test-only `summra.db`, restart the app, and run production-path smoke checks before handoff.
 
 ---
 
