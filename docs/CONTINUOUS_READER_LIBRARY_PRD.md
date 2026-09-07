@@ -367,7 +367,7 @@ For each `(user or device, book, mode)` retain:
 - `current_marker`: the most recently settled reading location, including intentional backward reading and TOC navigation.
 - `furthest_marker`: the greatest position reached through qualified sequential reading.
 
-Current marker may move in either direction. Furthest marker is monotonic within a content version and never decreases because of backward reading, a TOC jump, mode mapping, or remote merge. A content-version migration may remap it but must preserve the closest equivalent extent and an audit record.
+Current marker may move in either direction. Furthest marker is monotonic within a content version and never decreases because of backward reading, a TOC jump, mode mapping, or remote merge. A content-version update may remap it but must preserve the closest equivalent extent and an audit record. This is content recovery within v2, not migration of the removed legacy progress database.
 
 ### 12.3 Percentage
 
@@ -505,7 +505,7 @@ On completion:
 - move the book from Continue Reading to Finished on the next Library update; and
 - offer **Keep reading** and **Back to Library** without a blocking celebration.
 
-Chapter checkmarks disappear from the primary UI. Existing chapter-completion data may remain for migration or internal analysis but is not used as the source of book completion.
+Chapter checkmarks disappear from the primary UI. The disposable legacy progress database is removed at cutover, so its chapter-completion data is neither retained nor migrated; it is not a source of book completion.
 
 ## 15. Local reading, offline queue, and cross-device sync
 
@@ -629,7 +629,7 @@ Unique: `(user_id, book_id, mode)`.
 - base and accepted revisions
 - client occurrence and server receipt times
 
-Retain enough history for idempotency, sync diagnostics, and content-version migrations; establish a retention policy before launch.
+Retain enough history for idempotency, sync diagnostics, and content-version recovery; establish a retention policy before launch.
 
 ### Content anchors
 
@@ -823,12 +823,12 @@ The change is complete when:
 
 | Dependency or risk | Mitigation |
 | --- | --- |
-| Stable paragraph identities do not exist today | Create persisted IDs and versioned migration maps before UI rollout |
+| Content changes can alter persisted paragraph identities | Use versioned paragraph mappings and the quote/ordinal recovery ladder |
 | Original and Plain English paragraphs may not align perfectly | Persist explicit alignment rows, including one-sided gaps; validate every advertised book |
 | Progressive fetch can expose boundary stalls | Manifest-first loading, two-ahead prefetch, inline retry, latency telemetry |
 | Incremental content or repagination can move rendered page boundaries | Restore the same semantic anchor after pagination-index updates; regression-test fonts and viewports |
 | Offline and multi-device writes can race | Local-first idempotent queue, optimistic revisions, monotonic furthest merge, explicit current conflict prompt |
-| Legacy page numbers cannot always map exactly | Best-effort one-time client mapping; otherwise honest chapter-start fallback with migration confidence |
+| Legacy page numbers cannot map exactly | Do not carry them over: the disposable test progress database is reset at cutover |
 | Content edits can invalidate locations | Content versions, old-to-new maps, quote/ordinal recovery ladder |
 | TOC/end jumps can create false completion | Cause-tagged programmatic page-change suppression and sequential end qualification |
 | Long books can grow DOM/memory | Bounded segments and a small live pagination window around the current page |
@@ -839,10 +839,10 @@ The change is complete when:
 These decisions do not change the product contract and should be resolved in technical design:
 
 - Whether stable paragraph and segment metadata lives in normalized SQLite tables or a versioned generated artifact referenced by SQLite.
-- Exact IndexedDB library and migration library, if any.
+- IndexedDB implementation: use the browser-native API with no schema-migration library; the local stores are created fresh or upgraded in place.
 - Supported-browser memory threshold that triggers distant-segment placeholders.
 - Retention duration for accepted progress mutations after the idempotency and diagnostics window.
-- Whether the final canonical reader URL keeps the current hash-routing convention during migration or moves immediately to server paths.
+- Canonical reader URL: `/books/{slug}/read`; legacy chapter URLs retain server-rendered metadata and enter the same reader experience.
 
 ## 26. References
 
