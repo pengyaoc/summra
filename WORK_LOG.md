@@ -4,7 +4,7 @@
 
 ---
 
-## 2026-09-07: Continuous Reader + Library direct replacement — IN PROGRESS (local validation complete; VM acceptance pending)
+## 2026-09-07: Continuous Reader + Library direct replacement — DONE
 
 **Decision recorded.** Per product direction, this is an in-place replacement: the existing `data/summra.db` contains disposable test progress and was removed locally. There is no progress migration, dual-write period, or new rollout flag. Git revert is the rollback path. `data/database.db` was retained and augmented with reader metadata only.
 
@@ -27,9 +27,11 @@
 
 **Catalog note.** `PRAGMA integrity_check` is `ok`. `PRAGMA foreign_key_check` reports 97 pre-existing findings in unrelated legacy catalog/audio/category rows; no reader-table finding was introduced or altered by this work.
 
-**Deployment status.** The implementation was committed as `32d0976` and pushed to `origin/main`. Local content preflight confirmed `books=90`, `chapters=4,159`, `authors=57`, and `reader_versions=90`. Before any VM mutation, the documented GCP SSH preflight was attempted with the configured project and default-project form. Both were denied `compute.instances.get` for the configured VM. The active account and project match the local deployment metadata, so this is an IAM-access block; no VM code, catalog data, service, or progress database was changed.
+**Deployment and VM acceptance.** The implementation was committed as `32d0976`, deployment status as `c042dfa`, and both were pushed to `origin/main`. The previous local metadata mistakenly targeted the retired dedicated VM. The live target is `wordpress-2-vm` under `pychen007@gmail.com`, project `pelagic-magpie-277922`, and `/opt/summra`; its established update method is `git pull --ff-only origin main` followed by the `summra` user's systemd service restart. That pull completed successfully without changing the two untracked, VM-local `service.env` files.
 
-**Next.** Restore Compute Engine access for the configured account/project, then pull `32d0976`, compare the VM catalog counts, copy the verified compiled `data/database.db`, reset the VM test-only `summra.db`, restart the app, and run production-path smoke checks before handoff.
+The VM's catalog counts matched local (`books=90`, `chapters=4,159`, `authors=57`) before activation. Its original catalog was retained as a timestamped backup. The first temporary transfer exposed that VM `/tmp` is only 483 MB: the 684 MB catalog was truncated and rejected on checksum/integrity checks. The verified retry used `/home/pengyao/database.db.new`, matched the local MD5 exactly, then replaced `/opt/summra/data/database.db` during a controlled service stop. The explicitly disposable `data/summra.db` plus SQLite sidecars were reset, the service restarted successfully, and the malformed `/tmp` artifact was removed.
+
+**Production verification.** `summra.service` is active and loopback returns HTTP 200. The public `https://pengyaochen.com/summrabook/`, canonical reader, and books API return HTTP 200. The deployed reader manifest advertises Side-by-Side (796 units), a public Side-by-Side segment returned 29 units with both Original and Plain members for every row, the VM has all 90 published reader versions, and no alignment row is missing either member. Local `.prod-metadata.local.md` now records this verified VM, user-service, prefix, and persistent-transfer workflow; it remains ignored as required.
 
 ---
 
