@@ -1,28 +1,22 @@
 """Tests for the static-asset cache-busting helper.
 
 Bug this guards against:
-The service worker (frontend/static/service-worker.js) used to cache CSS with
-the CacheFirst strategy and a 30-day max-age. When a deploy shipped a layout
-change that depended on new CSS rules (e.g. the pagination redesign that added
+Browsers cache CSS aggressively. When a deploy ships a layout change that
+depends on new CSS rules (e.g. the pagination redesign that added
 padding-top:51px on .chapter-detail-section to reserve space for the always-on
-sticky header), returning users served NEW HTML + NEW JS over OLD cached CSS,
-producing visual breakage (sticky header overlapping body text, dead nav
+sticky header), returning users can serve NEW HTML + NEW JS over OLD cached
+CSS, producing visual breakage (sticky header overlapping body text, dead nav
 buttons because click coordinates landed where the old layout placed them).
 
-Clearing browsing history was not enough on iOS Chrome — users had to
-explicitly clear site data to evict the SW cache, which also wipes login state
-for every site.
+The fix: asset_v('css/foo.css') returns '?v=<content-hash>' so the CSS URL
+changes whenever style.css's content changes. Different URL → cache miss →
+fresh fetch. (Originally this was '?v=<mtime>' — switched to a content hash
+since mtime is preserved or reset inconsistently by different deploy paths,
+so it can miss a real content change or churn on a no-op one.)
 
-Two complementary fixes ship together:
-  1. asset_v('css/foo.css') returns '?v=<content-hash>' so the CSS URL
-     changes whenever style.css's content changes. Different URL → SW
-     cache miss → fresh fetch. (Originally this was '?v=<mtime>' — switched
-     to a content hash since mtime is preserved or reset inconsistently by
-     different deploy paths, so it can miss a real content change or churn
-     on a no-op one.)
-  2. The SW CSS strategy itself was switched from CacheFirst to
-     StaleWhileRevalidate (see service-worker.js), so even without URL
-     versioning, the cache self-heals within one navigation cycle.
+This app previously also ran a service worker with its own CSS caching
+strategy (removed 2026-09-07 along with the rest of offline support); that
+half of the original fix no longer applies.
 
 These tests cover the URL versioning piece.
 """

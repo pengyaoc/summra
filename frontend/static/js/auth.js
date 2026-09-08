@@ -1,12 +1,21 @@
-/* Authentication plus local-first continuous-reader state. */
+/* Authentication plus continuous-reader state (server-DB backed; content caching only is local). */
 
 const API_BASE = (window.APP_BASE_PATH || '') + '/api';
 const READER_DB = 'summra-reader-v2';
-const PROFILE_KEY = 'profile';
 let currentUser = null;
 let wrongAccountEmail = null;
 let authInitializationPromise = null;
 let readerDbPromise = null;
+// A mutation only needs a stable identity for the lifetime of this tab (the
+// server dedups by mutation_id and conflict-checks by revision, not by
+// continuity of device_sequence across sessions), so these are in-memory only.
+let sessionDeviceId = null;
+let nextDeviceSequence = 1;
+
+function randomId(prefix) {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
+    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
 
 function signinUrl() {
     const base = (window.APP_BASE_PATH || '') + '/login';
@@ -28,25 +37,21 @@ function transactionPromise(transaction) {
     });
 }
 
+// Content caching only (already-fetched manifests/segments) so a mid-session
+// network hiccup doesn't lose a page the reader already loaded. Reading
+// progress itself is never read from or written to this database — it is
+// always the server DB (see queueReaderMutation/getReaderState below).
 function readerDb() {
     if (readerDbPromise) return readerDbPromise;
     readerDbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(READER_DB, 1);
+        const request = indexedDB.open(READER_DB, 2);
         request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains('device_profile')) db.createObjectStore('device_profile', { keyPath: 'scope' });
-            if (!db.objectStoreNames.contains('identity_cache')) db.createObjectStore('identity_cache', { keyPath: 'scope' });
-            if (!db.objectStoreNames.contains('local_book_state')) db.createObjectStore('local_book_state', { keyPath: 'book_id' });
-            if (!db.objectStoreNames.contains('local_mode_state')) db.createObjectStore('local_mode_state', { keyPath: ['book_id', 'mode'] });
-            if (!db.objectStoreNames.contains('pending_mutation')) {
-                const store = db.createObjectStore('pending_mutation', { keyPath: 'mutation_id' });
-                store.createIndex('by_status', 'queue_status');
-                store.createIndex('by_sequence', ['device_id', 'device_sequence'], { unique: true });
+            for (const stale of ['device_profile', 'identity_cache', 'local_book_state', 'local_mode_state', 'pending_mutation', 'cached_library', 'sync_decision']) {
+                if (db.objectStoreNames.contains(stale)) db.deleteObjectStore(stale);
             }
-            if (!db.objectStoreNames.contains('cached_library')) db.createObjectStore('cached_library', { keyPath: 'scope' });
             if (!db.objectStoreNames.contains('cached_manifest')) db.createObjectStore('cached_manifest', { keyPath: ['book_id', 'content_version'] });
             if (!db.objectStoreNames.contains('cached_segment')) db.createObjectStore('cached_segment', { keyPath: ['book_id', 'content_version', 'mode', 'segment_id'] });
-            if (!db.objectStoreNames.contains('sync_decision')) db.createObjectStore('sync_decision', { keyPath: ['book_id', 'mode', 'remote_revision'] });
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
@@ -54,192 +59,50 @@ function readerDb() {
     return readerDbPromise;
 }
 
-function randomId(prefix) {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
-    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-}
-
-async function getProfile(store) {
-    let profile = await requestPromise(store.get(PROFILE_KEY));
-    if (!profile) {
-        profile = { scope: PROFILE_KEY, schema_version: 1, device_id: randomId('device'), next_device_sequence: 1, created_at: new Date().toISOString() };
-        store.put(profile);
-    }
-    return profile;
-}
-
 async function queueReaderMutation(input) {
-    const db = await readerDb();
-    const tx = db.transaction(['device_profile', 'local_book_state', 'local_mode_state', 'pending_mutation'], 'readwrite');
-    const profileStore = tx.objectStore('device_profile');
-    const bookStore = tx.objectStore('local_book_state');
-    const modeStore = tx.objectStore('local_mode_state');
-    const mutationStore = tx.objectStore('pending_mutation');
-    const profile = await getProfile(profileStore);
-    const sequence = profile.next_device_sequence;
-    profile.next_device_sequence += 1;
-    profileStore.put(profile);
-
-    const now = new Date().toISOString();
-    const existingBook = await requestPromise(bookStore.get(input.book_id));
-    const existingMode = await requestPromise(modeStore.get([input.book_id, input.mode]));
-    const current = input.current_marker;
-    const furthest = input.qualified_furthest_marker || existingMode?.furthest_marker || null;
-    const localMode = {
-        book_id: input.book_id, mode: input.mode, content_version: current.content_version,
-        current_marker: current, furthest_marker: furthest,
-        active_reading_seconds: (existingMode?.active_reading_seconds || 0) + (input.active_seconds_delta || 0),
-        sequential_boundary_count: (existingMode?.sequential_boundary_count || 0) + (input.sequential_boundaries_delta || 0),
-        // Keep a speculative per-mode revision so queued mutations from one
-        // device are submitted in the exact order the server expects.
-        server_revision: (existingMode?.server_revision ?? input.base_revision ?? 0) + 1,
-        last_device_id: profile.device_id, updated_at: now,
+    if (!currentUser) return null;
+    sessionDeviceId ||= randomId('device');
+    const body = {
+        ...input, mutation_id: randomId('mutation'), device_id: sessionDeviceId,
+        device_sequence: nextDeviceSequence++, client_occurred_at: new Date().toISOString(),
     };
-    const meaningful = localMode.sequential_boundary_count >= 2 ||
-        (localMode.active_reading_seconds >= 60 && current.ordinal > 0);
-    const bookState = {
-        book_id: input.book_id, last_mode: input.mode,
-        status: input.event_cause === 'manual_unfinish' ? 'in_progress' : (existingBook?.status || (meaningful ? 'in_progress' : 'preview')),
-        meaningfully_started_at: existingBook?.meaningfully_started_at || (meaningful ? now : null),
-        last_meaningful_read_at: meaningful ? now : (existingBook?.last_meaningful_read_at || null),
-        finished_at: existingBook?.finished_at || null,
-        manual_unfinished_at: input.event_cause === 'manual_unfinish' ? now : (existingBook?.manual_unfinished_at || null),
-        server_revision: (existingBook?.server_revision ?? input.base_revision ?? 0) + 1,
-        updated_at: now,
-    };
-    if (input.event_cause === 'completion') {
-        bookState.status = 'finished';
-        bookState.finished_at = now;
-    }
-    bookStore.put(bookState);
-    modeStore.put(localMode);
-    const mutation = {
-        ...input, mutation_id: randomId('mutation'), device_id: profile.device_id,
-        device_sequence: sequence, base_revision: existingMode?.server_revision ?? input.base_revision ?? 0,
-        client_occurred_at: now, queue_status: 'pending', retry_count: 0, next_attempt_at: now,
-    };
-    mutationStore.put(mutation);
-    await transactionPromise(tx);
-    flushReaderQueue().catch(() => {});
-    return mutation;
-}
-
-async function cacheProjection(projection) {
-    if (!projection?.book) return;
-    const db = await readerDb();
-    const tx = db.transaction(['local_book_state', 'local_mode_state'], 'readwrite');
-    const book = projection.book;
-    tx.objectStore('local_book_state').put({
-        book_id: book.book_id, last_mode: book.last_mode, status: book.status,
-        meaningfully_started_at: book.meaningfully_started_at, last_meaningful_read_at: book.last_meaningful_read_at,
-        finished_at: book.finished_at, manual_unfinished_at: book.manual_unfinished_at,
-        server_revision: book.revision, updated_at: book.updated_at,
-    });
-    for (const mode of projection.modes || []) {
-        tx.objectStore('local_mode_state').put({
-            book_id: mode.book_id, mode: mode.mode, content_version: mode.content_version,
-            current_marker: mode.current_marker, furthest_marker: mode.furthest_marker,
-            active_reading_seconds: mode.active_reading_seconds, sequential_boundary_count: mode.sequential_boundary_count,
-            server_revision: mode.revision, last_device_id: mode.last_device_id, updated_at: mode.updated_at,
+    try {
+        const response = await fetch(`${API_BASE}/progress/v2/mutations`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
         });
-    }
-    await transactionPromise(tx);
+        const data = await response.json().catch(() => null);
+        if (!data) return null;
+        if (data.success && (data.result === 'accepted' || data.result === 'duplicate' || response.status === 409)) {
+            return { ...input, base_revision: input.base_revision, projection: data.projection, conflict: response.status === 409 };
+        }
+    } catch (_) { /* best effort; the reader keeps its in-memory position and will resync from the server on next read */ }
+    return null;
 }
 
 async function getReaderState(bookId) {
-    if (currentUser && navigator.onLine) {
-        try {
-            const response = await fetch(`${API_BASE}/progress/v2/books/${bookId}`, {
-                credentials: 'include', cache: 'no-store',
-            });
-            if (response.ok) {
-                const data = await response.json();
-                await cacheProjection(data.projection);
-                return data.projection;
-            }
-        } catch (_) { /* use local state */ }
-    }
-    const db = await readerDb();
-    const tx = db.transaction(['local_book_state', 'local_mode_state'], 'readonly');
-    const book = await requestPromise(tx.objectStore('local_book_state').get(bookId));
-    const modes = await requestPromise(tx.objectStore('local_mode_state').getAll());
-    await transactionPromise(tx);
-    return { book: book || null, modes: modes.filter(item => item.book_id === bookId) };
-}
-
-async function flushReaderQueue() {
-    if (!currentUser || !navigator.onLine) return;
-    const db = await readerDb();
-    const readTx = db.transaction('pending_mutation', 'readonly');
-    const mutations = await requestPromise(readTx.objectStore('pending_mutation').getAll());
-    await transactionPromise(readTx);
-    for (const mutation of mutations.filter(item => item.queue_status === 'pending')) {
-        try {
-            const body = { ...mutation };
-            delete body.queue_status; delete body.retry_count; delete body.next_attempt_at;
-            const response = await fetch(`${API_BASE}/progress/v2/mutations`, {
-                method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-            });
-            const data = await response.json();
-            const writeTx = db.transaction(['pending_mutation', 'local_book_state', 'local_mode_state'], 'readwrite');
-            if (data.success && (data.result === 'accepted' || data.result === 'duplicate')) {
-                writeTx.objectStore('pending_mutation').delete(mutation.mutation_id);
-                if (data.projection) await cacheProjectionInTransaction(writeTx, data.projection);
-            } else if (response.status === 409) {
-                mutation.queue_status = 'conflict';
-                writeTx.objectStore('pending_mutation').put(mutation);
-                if (data.projection) await cacheProjectionInTransaction(writeTx, data.projection);
-            } else {
-                mutation.retry_count += 1;
-                mutation.next_attempt_at = new Date(Date.now() + Math.min(60000, 1000 * (2 ** mutation.retry_count))).toISOString();
-                writeTx.objectStore('pending_mutation').put(mutation);
-            }
-            await transactionPromise(writeTx);
-        } catch (_) { return; }
-    }
-}
-
-function cacheProjectionInTransaction(tx, projection) {
-    if (!projection?.book) return;
-    const book = projection.book;
-    tx.objectStore('local_book_state').put({
-        book_id: book.book_id, last_mode: book.last_mode, status: book.status,
-        meaningfully_started_at: book.meaningfully_started_at, last_meaningful_read_at: book.last_meaningful_read_at,
-        finished_at: book.finished_at, manual_unfinished_at: book.manual_unfinished_at,
-        server_revision: book.revision, updated_at: book.updated_at,
-    });
-    for (const mode of projection.modes || []) {
-        tx.objectStore('local_mode_state').put({
-            book_id: mode.book_id, mode: mode.mode, content_version: mode.content_version,
-            current_marker: mode.current_marker, furthest_marker: mode.furthest_marker,
-            active_reading_seconds: mode.active_reading_seconds, sequential_boundary_count: mode.sequential_boundary_count,
-            server_revision: mode.revision, last_device_id: mode.last_device_id, updated_at: mode.updated_at,
+    if (!currentUser) return { book: null, modes: [] };
+    try {
+        const response = await fetch(`${API_BASE}/progress/v2/books/${bookId}`, {
+            credentials: 'include', cache: 'no-store',
         });
-    }
+        if (response.ok) {
+            const data = await response.json();
+            return data.projection;
+        }
+    } catch (_) { /* no server state available right now */ }
+    return { book: null, modes: [] };
 }
 
 async function getLibrary() {
-    const scope = currentUser ? `user:${currentUser.id}` : 'device';
-    if (currentUser && navigator.onLine) {
-        try {
-            const response = await fetch(`${API_BASE}/library`, {
-                credentials: 'include', cache: 'no-store',
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const db = await readerDb();
-                const tx = db.transaction('cached_library', 'readwrite');
-                tx.objectStore('cached_library').put({ scope, projection: data, cached_at: new Date().toISOString() });
-                await transactionPromise(tx);
-                return data;
-            }
-        } catch (_) { /* fall through */ }
-    }
-    const db = await readerDb();
-    const tx = db.transaction('cached_library', 'readonly');
-    const cached = await requestPromise(tx.objectStore('cached_library').get(scope));
-    await transactionPromise(tx);
-    return cached?.projection || { success: true, continue_reading: [], finished: [], offline: true };
+    if (!currentUser) return { success: true, continue_reading: [], finished: [] };
+    try {
+        const response = await fetch(`${API_BASE}/library`, {
+            credentials: 'include', cache: 'no-store',
+        });
+        if (response.ok) return await response.json();
+    } catch (_) { /* fall through */ }
+    return { success: true, continue_reading: [], finished: [] };
 }
 
 async function cacheReaderManifest(manifest) {
@@ -289,7 +152,6 @@ async function initAuth() {
         updateAuthUI();
     })();
     await authInitializationPromise;
-    window.addEventListener('online', () => flushReaderQueue().catch(() => {}));
 }
 
 async function checkAuthStatus() {
@@ -305,8 +167,7 @@ async function checkAuthStatus() {
         const data = await response.json();
         wrongAccountEmail = null;
         currentUser = data.authenticated ? data.user : null;
-        if (currentUser) await flushReaderQueue();
-    } catch (_) { /* anonymous/local reading stays available */ }
+    } catch (_) { /* anonymous reading stays available; no progress persistence without an account */ }
 }
 
 function setupAuthEventListeners() {
@@ -359,14 +220,14 @@ function updateAuthUI() {
     document.getElementById('library-nav-btn')?.classList.toggle('hidden', !currentUser);
     const banner = document.getElementById('wrong-account-banner');
     if (banner) {
-        banner.textContent = wrongAccountEmail ? `Signed in as ${wrongAccountEmail}, which isn't authorized for Summra. Reading progress remains on this device.` : '';
+        banner.textContent = wrongAccountEmail ? `Signed in as ${wrongAccountEmail}, which isn't authorized for Summra.` : '';
         banner.classList.toggle('hidden', !wrongAccountEmail);
     }
 }
 
 window.authModule = {
     initAuth, checkAuthStatus, currentUser: () => currentUser,
-    queueReaderMutation, flushReaderQueue, getReaderState, getLibrary,
+    queueReaderMutation, getReaderState, getLibrary,
     cacheReaderManifest, getCachedReaderManifest, cacheReaderSegment, getCachedReaderSegment,
     // Legacy chapter pages can remain viewable while their routes redirect to
     // the continuous reader. They intentionally no longer persist v1 data.

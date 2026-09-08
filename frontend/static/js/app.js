@@ -30,7 +30,6 @@
 import { paginationMixin } from './pagination.js';
 import { settingsMixin } from './settings.js';
 import { breadcrumbsMixin } from './breadcrumbs.js';
-import { offlineMixin } from './offline.js';
 import { audioMixin } from './audio.js';
 import { readerMixin } from './reader.js';
 
@@ -113,102 +112,8 @@ class SummraApp {
         this.setupLightbox();
         this.setupAdminFeatures();
         this.loadReadingPreferences();
-        this.registerServiceWorker();
         this.setupInstallPrompt();
         this.setupPagination();
-    }
-
-    registerServiceWorker() {
-        // Register service worker for PWA functionality
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register(withBasePath('/service-worker.js'))
-                    .then((registration) => {
-                        console.log('✅ Service Worker registered successfully:', registration.scope);
-
-                        // Check for updates periodically
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            console.log('🔄 Service Worker update found');
-
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New service worker available, show update notification
-                                    console.log('✨ New content available! Refresh to update.');
-                                    // TODO: Show user-friendly update notification
-                                }
-                            });
-                        });
-
-                        // Request persistent storage (critical for iOS PWA)
-                        // This helps prevent iOS from clearing cache after inactivity
-                        this.requestPersistentStorage();
-                    })
-                    .catch((error) => {
-                        console.log('❌ Service Worker registration failed:', error);
-                    });
-            });
-        } else {
-            console.log('⚠️  Service Workers not supported in this browser');
-        }
-    }
-
-    async requestPersistentStorage() {
-        // Request persistent storage to prevent iOS from clearing cache
-        // iOS 17+ supports this API and may grant persistence for home screen PWAs
-        if (navigator.storage && navigator.storage.persist) {
-            try {
-                const isPersisted = await navigator.storage.persist();
-                if (isPersisted) {
-                    console.log('✅ Persistent storage granted - cache protected from eviction');
-                } else {
-                    console.log('⚠️  Persistent storage denied - cache may be cleared after inactivity');
-                    console.log('💡 Tip: Add this app to your home screen for better persistence');
-                }
-
-                // Check current persistence status
-                const persisted = await navigator.storage.persisted();
-                console.log('Storage persistence status:', persisted ? 'PERSISTENT' : 'BEST-EFFORT');
-
-                // Check storage quota (helpful for debugging iOS limits)
-                if (navigator.storage.estimate) {
-                    const estimate = await navigator.storage.estimate();
-                    const usedMB = (estimate.usage / (1024 * 1024)).toFixed(2);
-                    const quotaMB = (estimate.quota / (1024 * 1024)).toFixed(2);
-                    console.log(`Storage used: ${usedMB} MB / ${quotaMB} MB (${((estimate.usage / estimate.quota) * 100).toFixed(1)}%)`);
-                }
-
-                // Run periodic cache health check
-                this.performCacheHealthCheck();
-            } catch (error) {
-                console.log('Storage API error:', error);
-            }
-        } else {
-            console.log('⚠️  Storage API not supported - persistence not available');
-        }
-    }
-
-    async performCacheHealthCheck() {
-        // Verify cached books still have their content
-        // This detects iOS cache eviction and cleans up stale markers
-        try {
-            const offlineBooks = await this.getOfflineBooks();
-
-            if (offlineBooks.evictedBookIds && offlineBooks.evictedBookIds.length > 0) {
-                console.warn(`⚠️  Cache eviction detected! ${offlineBooks.evictedBookIds.length} book(s) lost:`, offlineBooks.evictedBookIds);
-                console.log('💡 Books need to be re-downloaded for offline access');
-
-                // Store eviction info for user notification
-                localStorage.setItem('summra_cache_evicted', JSON.stringify({
-                    bookIds: offlineBooks.evictedBookIds,
-                    detectedAt: new Date().toISOString()
-                }));
-            } else if (offlineBooks.bookIds && offlineBooks.bookIds.length > 0) {
-                console.log(`✅ Cache health check passed - ${offlineBooks.bookIds.length} book(s) still cached`);
-            }
-        } catch (error) {
-            console.error('Cache health check failed:', error);
-        }
     }
 
     setupInstallPrompt() {
@@ -643,30 +548,6 @@ class SummraApp {
 
         // Setup reading guide tab switching
         this.setupGuideTabs();
-
-        // Track user interaction to help iOS recognize active usage
-        // This helps prevent cache eviction on iOS by showing the app is actively used
-        this.setupIOSInteractionTracking();
-    }
-
-    setupIOSInteractionTracking() {
-        // Track user interactions to signal app is actively used
-        // iOS uses interaction history to determine if PWA should keep its cache
-        const updateLastInteraction = () => {
-            localStorage.setItem('summra_last_interaction', new Date().toISOString());
-        };
-
-        // Track various user interactions
-        const interactionEvents = ['click', 'scroll', 'touchstart', 'keydown'];
-        interactionEvents.forEach(eventType => {
-            document.addEventListener(eventType, updateLastInteraction, { passive: true });
-        });
-
-        // Log interaction tracking start (helpful for debugging)
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-            console.log('📱 iOS interaction tracking enabled - helps prevent cache eviction');
-        }
     }
 
     setupGuideTabs() {
@@ -1259,9 +1140,6 @@ class SummraApp {
 
         // Update page title
         this.updatePageTitle(`${book.title} by ${book.author} | Summra`);
-
-        // Setup save for offline button (PWA-only feature)
-        this.setupSaveOfflineButton();
     }
 
     showBookDetail(restoreScroll = false) {
@@ -2181,29 +2059,14 @@ class SummraApp {
         document.getElementById('category-detail-subtitle').textContent =
             `${this.allBooks.length} book${this.allBooks.length !== 1 ? 's' : ''}`;
 
-        // Get list of offline-saved books to sort and mark them
-        const offlineBooks = await this.getOfflineBooks();
-        const offlineBookIdsSet = new Set(offlineBooks.bookIds || []);
-
-        // Sort books: offline-saved books first, then alphabetically by title
-        const sortedBooks = [...this.allBooks].sort((a, b) => {
-            const aIsOffline = offlineBookIdsSet.has(a.id);
-            const bIsOffline = offlineBookIdsSet.has(b.id);
-
-            // Offline books come first
-            if (aIsOffline && !bIsOffline) return -1;
-            if (!aIsOffline && bIsOffline) return 1;
-
-            // Within the same category (both offline or both online), sort alphabetically
-            return a.title.localeCompare(b.title);
-        });
+        // Render books alphabetically by title
+        const sortedBooks = [...this.allBooks].sort((a, b) => a.title.localeCompare(b.title));
 
         // Render sorted books in grid
         const grid = document.getElementById('category-books-grid');
         grid.innerHTML = '';
         sortedBooks.forEach(book => {
-            const isOffline = offlineBookIdsSet.has(book.id);
-            const bookCard = this.createBookCard(book, isOffline);
+            const bookCard = this.createBookCard(book);
             grid.appendChild(bookCard);
         });
 
@@ -2426,7 +2289,7 @@ class SummraApp {
         }
     }
 
-    createBookCard(book, isOffline = false) {
+    createBookCard(book) {
         const bookCard = document.createElement('div');
         bookCard.className = 'book-card';
 
@@ -2434,18 +2297,8 @@ class SummraApp {
             ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'book-cover')
             : '';
 
-        // Add offline badge if book is saved offline
-        const offlineBadge = isOffline
-            ? `<div class="offline-badge" title="Saved for offline reading">
-                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                       <polyline points="20 6 9 17 4 12"></polyline>
-                   </svg>
-               </div>`
-            : '';
-
         bookCard.innerHTML = `
             ${coverImageHtml}
-            ${offlineBadge}
             <h3>${this.escapeHtml(book.title)}</h3>
             <p class="author">by ${this.escapeHtml(book.author)}</p>
             <div class="meta">
@@ -2765,7 +2618,6 @@ class SummraApp {
 Object.assign(SummraApp.prototype, paginationMixin);
 Object.assign(SummraApp.prototype, settingsMixin);
 Object.assign(SummraApp.prototype, breadcrumbsMixin);
-Object.assign(SummraApp.prototype, offlineMixin);
 Object.assign(SummraApp.prototype, audioMixin);
 Object.assign(SummraApp.prototype, readerMixin);
 

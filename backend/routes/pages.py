@@ -1,4 +1,4 @@
-"""Server-side-rendered page routes (SEO): home, discover, offline, book
+"""Server-side-rendered page routes (SEO): home, discover, book
 detail/summary/chapter, category detail/list, all-books.
 
 Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
@@ -32,12 +32,6 @@ def library():
         meta_title='Your Library | Summra',
         initial_data={'type': 'library'},
     )
-
-
-@bp.route('/offline')
-def offline():
-    """Offline fallback page for PWA"""
-    return render_template('offline.html')
 
 
 @bp.route('/books/<slug>')

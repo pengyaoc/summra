@@ -82,7 +82,7 @@ FLASK_PORT = int(os.environ.get('PORT', 5001))
 FLASK_DEBUG = True
 
 # Feature flags — default False so the gated subsystems are dark until ready.
-# FEATURE_AUTH gates auth + reading progress + active Save-for-Offline.
+# FEATURE_AUTH gates auth + reading progress.
 # FEATURE_BLOG gates the editorial blog (routes + sitemap entries).
 FEATURE_AUTH = True
 FEATURE_BLOG = False

@@ -143,8 +143,7 @@ def inject_environment():
 
 # Cache-busting helper for static assets.
 #
-# The service worker (frontend/static/service-worker.js) caches CSS with the
-# CacheFirst strategy and a 30-day max-age. If a deploy ships a CSS that's
+# Browsers cache CSS/JS aggressively. If a deploy ships a CSS that's
 # incompatible with the existing HTML/JS, returning users will serve the new
 # HTML over old cached CSS until either the cache expires or the user clears
 # site data. asset_v('css/foo.css') returns '?v=<content-hash>' so the URL

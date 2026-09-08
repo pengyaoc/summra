@@ -4,6 +4,150 @@
 
 ---
 
+## 2026-09-07: Removed single-device local progress tracking (IndexedDB mutation queue) — DONE
+
+### Why
+
+Follow-up to the PWA offline-storage removal below, which flagged
+`auth.js`'s IndexedDB-backed local-first reader-state sync
+(`summra-reader-v2`: `device_profile`, `local_book_state`,
+`local_mode_state`, `pending_mutation`, `cached_library`) for a follow-up
+decision rather than removing it blind. User clarification: server-side
+progress in `summra.db` stays (it's what makes progress follow a reader
+across devices) — but per-device local progress, trusted or restored ahead
+of a server round-trip, should not be tracked anymore.
+
+### What was removed (`frontend/static/js/auth.js`, `frontend/static/js/reader.js`)
+
+- The `device_profile` / `local_book_state` / `local_mode_state` /
+  `pending_mutation` IndexedDB object stores, and the never-used
+  `identity_cache` / `sync_decision` stores. A schema-version bump
+  (`summra-reader-v2` v1 → v2) drops these stores for existing visitors on
+  their next load.
+- `queueReaderMutation()`'s local-write-then-background-flush design. It now
+  POSTs straight to `/api/progress/v2/mutations` and returns the server's
+  response (including the fresh `projection`) — no local durable queue, no
+  retry/backoff bookkeeping, no `online` event listener to flush it.
+- `getReaderState()`'s IndexedDB fallback — it now always calls
+  `/api/progress/v2/books/<id>` and returns an empty projection
+  (`{ book: null, modes: [] }`) if that fails or the visitor is signed out,
+  instead of falling back to a local copy.
+- `getLibrary()`'s `cached_library` store and `offline: true` fallback flag,
+  and the corresponding `library-offline-note` ("Sync pending") UI element
+  in `index.html` / `reader.js`'s `showLibrary()` — always calls
+  `/api/library` now.
+- `reader.js`'s `saveContinuousReader()` no longer speculatively bumps a
+  locally-tracked `server_revision`; it applies the server's returned
+  projection to the in-tab (memory-only) reader state when available, and
+  falls back to a same-tab optimistic update only if the request failed.
+- Stale "Reading progress remains on this device" copy in the wrong-account
+  banner (`updateAuthUI()`) — no longer true.
+- Rebuilt `frontend/static/js/app.min.js` (esbuild) to match.
+
+### What was intentionally kept
+
+- `frontend/static/js/auth.js`'s `cached_manifest` / `cached_segment`
+  IndexedDB stores — a pure content cache (already-fetched chapter
+  manifests/segments) so a mid-session network hiccup doesn't lose a page
+  already loaded. This is not progress persistence: it never determines
+  "where the user left off," it only avoids one re-fetch. Left as-is.
+- A per-tab, in-memory-only mutation identity (`sessionDeviceId`,
+  `nextDeviceSequence`) — the `/api/progress/v2/mutations` endpoint still
+  requires `mutation_id`/`device_id`/`device_sequence` on every request for
+  its own dedup/conflict logic; these are now generated fresh per tab
+  session rather than persisted, and never read back to restore anything.
+- Backend `backend/progress_routes.py` / `backend/user_models.py`
+  untouched — the server DB was already the durable source of truth.
+
+### Docs
+
+- `docs/PRD.md` §7d and `docs/ERD.md`'s Progress Tracking section note
+  updated to describe server-DB-only progress.
+- `docs/CONTINUOUS_READER_LIBRARY_PRD.md` / `_ERD.md` — added a superseded
+  notice at the top; left the detailed local-first design description
+  below it as historical record rather than rewriting an 850+/600+ line
+  spec doc in place.
+
+### Verification
+
+- `node --test tests/js/resolve_view_mode.test.mjs`: 13/13 pass (covers
+  `saveContinuousReader`/`switchContinuousReaderMode` mode-switch behavior
+  against a mocked `authModule`).
+- `pytest tests/ -v`: 527 passed, 1 deselected — unchanged from the prior
+  entry's baseline (backend progress endpoints untouched).
+- `venv/bin/python backend/app.py` (dev server, :5001): `/`, `/library`,
+  `/books`, `/api/books` all 200.
+- `node smoke.mjs` (`PATHS=/,/library`): both pass, no console/network
+  errors.
+
+---
+
+## 2026-09-07: Removed PWA offline-storage feature — DONE
+
+### Why
+
+The offline-support feature (service worker page/asset caching, "Save for
+Offline" book downloads via IndexedDB, iOS cache-eviction workarounds, an
+offline fallback page) had accumulated more operational cost than value —
+stale-cache bugs after deploys, iOS-specific cache-eviction chasing, and
+sync-complexity debugging (see the multi-day PWA/iOS entries earlier in this
+log). Decision: the app now assumes an internet connection is always
+available. Removed rather than fixed.
+
+### What was removed
+
+- `frontend/templates/service-worker.js` (Workbox-based service worker) and
+  its Flask route (`backend/routes/system.py`'s `/service-worker.js` +
+  `_precache_revision()` helper).
+- `frontend/static/js/offline.js` (the "Save for Offline" mixin: cache-status
+  checks, `getOfflineBooks()`, `downloadBookForOffline()`) and its import/
+  `Object.assign` wiring, `setupSaveOfflineButton()` call site, and the
+  offline-badge sort/render logic in `app.js`'s books grid.
+- `frontend/templates/offline.html` (offline fallback page) and its
+  `/offline` Flask route (`backend/routes/pages.py`).
+- `registerServiceWorker()`, `requestPersistentStorage()`,
+  `performCacheHealthCheck()`, and `setupIOSInteractionTracking()` from
+  `app.js` — all existed only to register/protect/monitor the service worker
+  cache.
+- "Save for Offline" button markup (`frontend/templates/index.html`) and its
+  CSS (`.save-offline-btn*`, `.offline-badge*` in `style.css`).
+- Rebuilt `frontend/static/js/app.min.js` (esbuild) to match.
+- Removed the now-dead tests: two service-worker tests in
+  `tests/test_url_prefix.py`, `test_service_worker_js`/`test_offline_page` in
+  `tests/test_api_routes_characterization.py`.
+- Trimmed `docs/PRD.md` and `docs/ERD.md`'s PWA sections down to
+  installability only (manifest + iOS "Add to Home Screen" banner), which
+  are kept — see below.
+
+### What was intentionally kept
+
+- `frontend/templates/manifest.json` and the `/manifest.json` route —
+  pure installability metadata (name, icons, `display: standalone`), not
+  offline caching. Users can still install Summra to their home screen.
+- The iOS install banner (`setupInstallPrompt()`, `#ios-install-banner`) —
+  an "Add to Home Screen" prompt, not an offline feature.
+- **`frontend/static/js/auth.js`'s IndexedDB-backed local-first
+  reader-state sync** (`summra-reader-v2`: mutation queue, cached library/
+  manifest/segment stores, `queueReaderMutation`/`getReaderState`/
+  `getLibrary`/etc.) — this is the current continuous-reader's
+  progress-tracking and content-delivery plumbing, deeply wired into
+  `reader.js`. It's architecturally similar in spirit (local storage that
+  degrades gracefully without a network) but is a much larger, actively-used
+  subsystem than the removed PWA offline feature, and gutting it would mean
+  redesigning the continuous reader's save/load path — **left alone,
+  flagged for a follow-up decision** rather than removed blind. Confirm
+  whether "always assume internet connection" should extend this far before
+  touching it.
+
+### Verification
+
+- `venv/bin/python backend/app.py` (dev server, :5001): `/`, `/books`,
+  `/api/books`, `/library` all 200. `/service-worker.js` and `/offline` now
+  404 cleanly (route removed, not a 500).
+- `pytest tests/ -v`: see next entry for pass count once run.
+
+---
+
 ## 2026-09-07: Mode-specific reader progress and reading-surface polish — DONE
 
 ### Per-mode progress restoration

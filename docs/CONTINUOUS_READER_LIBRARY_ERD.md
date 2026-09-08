@@ -1,5 +1,7 @@
 # Summra Library and Continuous Reader ERD
 
+> **Superseded 2026-09-07:** the IndexedDB-backed local mutation queue and per-device local progress state described in this document (`device_profile`, `local_book_state`, `local_mode_state`, `pending_mutation`, `cached_library`, and the associated flush/sync logic) were removed. Progress is now tracked only in `data/summra.db`, keyed by account, and always read/written via `/api/progress/v2/*` — there is no local-first write path and no per-device local copy of progress. IndexedDB in `frontend/static/js/auth.js` today holds only `cached_manifest`/`cached_segment` — a content cache, not progress. This document is kept as historical design record; see `docs/ERD.md` (Progress Tracking section) and `WORK_LOG.md` for the current, accurate description and the removal entry.
+
 **Status:** Implemented design
 **Product requirements:** [`CONTINUOUS_READER_LIBRARY_PRD.md`](CONTINUOUS_READER_LIBRARY_PRD.md)
 **Scope:** Reader content metadata, cloud reading state, browser persistence, and API projections

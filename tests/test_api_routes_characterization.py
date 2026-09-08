@@ -102,15 +102,6 @@ def test_manifest_json(client):
     assert resp.status_code == 200
 
 
-def test_service_worker_js(client):
-    resp = client.get('/service-worker.js')
-    assert resp.status_code == 200
-
-
-def test_offline_page(client):
-    assert client.get('/offline').status_code == 200
-
-
 def test_sitemap_xml(client):
     resp = client.get('/sitemap.xml')
     assert resp.status_code == 200
