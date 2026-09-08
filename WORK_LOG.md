@@ -15,6 +15,8 @@
 
 **Chrome verification.** Tested the current source in the Chrome extension at 430×932 (iPhone-sized) and 1440×900 (desktop): mobile has a one-row toolbar, uncut content, icon-only Contents/Settings, a disabled Side-by-Side option, working TOC chapter picker, and a numeric page-turn percentage (`12%`, not `NaN%`). Desktop Side-by-Side renders as two columns below the fixed chrome. Shrinking an open desktop Side-by-Side session to 430px automatically restores Plain English and retains the semantic position. The Book back button returns to the editorial detail page, and the account dialog reads the v2 Library projection (`In progress: 1` in the exercised local profile).
 
+**Deployment.** Committed as `b7249fb` and pushed to `main`. The established `wordpress-2-vm` workflow completed with `sudo -u summra git pull --ff-only origin main`, retaining its two VM-local untracked `service.env` files. Restarted the `summra` user service using its required `XDG_RUNTIME_DIR`; it is active, serves loopback HTTP 200, and the public canonical Frankenstein reader returned HTTP 200.
+
 **Decision recorded.** Per product direction, this is an in-place replacement: the existing `data/summra.db` contains disposable test progress and was removed locally. There is no progress migration, dual-write period, or new rollout flag. Git revert is the rollback path. `data/database.db` was retained and augmented with reader metadata only.
 
 **Implementation approach.**
