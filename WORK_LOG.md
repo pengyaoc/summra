@@ -74,12 +74,14 @@
 - Committed all reader, documentation, test, and regenerated-bundle changes as
   `24294bd` (`Fix per-mode reader resume and polish reading surface`) and
   pushed `main` to `origin`.
-- Verified `/opt/summra` on `wordpress-2-vm` at `24294bd`; its only untracked
-  files remain the pre-existing VM-local `service.env` and
-  `service.env.bak-pre-oidc-20260906`.
-- Restarted the isolated `summra` systemd user service with its required
-  `XDG_RUNTIME_DIR`. The service is active; both the loopback reader endpoint
-  and `https://pengyaochen.com/summrabook/books/a-christmas-carol-in-prose/read`
+- Added this deployment record as follow-up commit `b8ad605`, then
+  fast-forwarded `/opt/summra` on `wordpress-2-vm` from `cf42e44` through both
+  commits. Its only untracked files remain the pre-existing VM-local
+  `service.env` and `service.env.bak-pre-oidc-20260906`.
+- Restarted the isolated `summra` systemd user service after that pull with
+  its required `XDG_RUNTIME_DIR`. The service is active at `b8ad605`; both the
+  loopback reader endpoint and
+  `https://pengyaochen.com/summrabook/books/a-christmas-carol-in-prose/read`
   returned HTTP 200.
 
 ## 2026-09-07: Continuous Reader + Library direct replacement — DONE
