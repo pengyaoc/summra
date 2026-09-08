@@ -5,7 +5,7 @@ const READER_DB = 'summra-reader-v2';
 const PROFILE_KEY = 'profile';
 let currentUser = null;
 let wrongAccountEmail = null;
-let authInitialized = false;
+let authInitializationPromise = null;
 let readerDbPromise = null;
 
 function signinUrl() {
@@ -278,11 +278,13 @@ async function getCachedReaderSegment(bookId, contentVersion, mode, segmentId) {
 }
 
 async function initAuth() {
-    if (authInitialized) return;
-    authInitialized = true;
-    await checkAuthStatus();
-    setupAuthEventListeners();
-    updateAuthUI();
+    if (authInitializationPromise) return authInitializationPromise;
+    authInitializationPromise = (async () => {
+        await checkAuthStatus();
+        setupAuthEventListeners();
+        updateAuthUI();
+    })();
+    await authInitializationPromise;
     window.addEventListener('online', () => flushReaderQueue().catch(() => {}));
 }
 

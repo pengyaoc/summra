@@ -59,6 +59,12 @@ test("currentAppPath: base-path deployment strips the prefix — this is the bug
     assert.equal(w.currentAppPath(), "/books/moby-dick");
 });
 
+test("currentAppPath: canonical trailing slash still matches the Library route", () => {
+    const w = loadWithLocation("/summrabook/library/", "/summrabook");
+    assert.equal(w.currentAppPath(), "/library");
+    assert.equal(w.parseAppRoute(w.currentAppPath()).libraryMatch, true);
+});
+
 // --- parseAppRoute ---
 
 test("parseAppRoute: matches a book detail route", () => {
