@@ -505,6 +505,13 @@ class SummraApp {
                               showArray.includes('continuous-reader-section');
         document.body.classList.toggle('on-chapter-page', onReadingPage);
 
+        const onContinuousReader = showArray.includes('continuous-reader-section');
+        document.getElementById('reader-mode-settings')?.classList.toggle('hidden', !onContinuousReader);
+        if (!onContinuousReader) {
+            document.getElementById('reader-toc-panel')?.classList.add('hidden');
+            document.getElementById('reading-settings-panel')?.classList.add('hidden');
+        }
+
         // Only modify sections if they're not already in the correct state
         // This prevents flash when server-side rendered page is already showing correct section
         this.ALL_SECTIONS.forEach(sectionId => {
@@ -1093,15 +1100,12 @@ class SummraApp {
     }
 
     async selectBook(book, restoreScroll = false) {
-        // A book is the reader destination. Keep the older detail code below
-        // temporarily unreachable rather than letting any card retain the
-        // chapter-grid intermediary.
-        this.currentBook = book;
-        const readerPath = withBasePath(`/books/${book.slug || this.slugify(book.title)}/read`);
-        if (window.location.pathname !== readerPath) {
-            window.history.pushState({ type: 'reader', bookId: book.id }, '', readerPath);
+        // Book cards open the editorial book page. Reading is an explicit
+        // choice from its Read book control, which owns the /read route.
+        if (this.continuousReader?.active) {
+            await this.saveContinuousReader('navigation');
+            this.continuousReader.active = false;
         }
-        return this.showContinuousReader(book);
 
         // Track origin for context-aware breadcrumbs BEFORE changing view
         // If we're currently viewing a category, store it as the origin
@@ -1153,6 +1157,17 @@ class SummraApp {
         if (bookAuthor) {
             const authorSlug = this.slugify(book.author);
             bookAuthor.innerHTML = `by <a href="${withBasePath(`/authors/${authorSlug}`)}" class="author-link">${this.escapeHtml(book.author)}</a>`;
+        }
+
+        const readButton = document.getElementById('book-read-btn');
+        if (readButton) {
+            readButton.onclick = async () => {
+                const readerPath = withBasePath(`/books/${book.slug || this.slugify(book.title)}/read`);
+                if (window.location.pathname !== readerPath) {
+                    window.history.pushState({ type: 'reader', bookId: book.id }, '', readerPath);
+                }
+                await this.showContinuousReader(book);
+            };
         }
 
         // Fetch full book data to get metadata (about_text, relevance_now, author info)

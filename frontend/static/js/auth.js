@@ -307,14 +307,34 @@ function setupAuthEventListeners() {
     document.getElementById('user-modal-overlay')?.addEventListener('click', hideUserModal);
 }
 
-function showUserModal() {
+async function showUserModal() {
     const modal = document.getElementById('user-modal');
     if (!modal) return;
     document.getElementById('account-view')?.classList.toggle('hidden', !currentUser);
     document.getElementById('signed-out-view')?.classList.toggle('hidden', !!currentUser);
     const email = document.getElementById('account-email');
     if (email && currentUser) email.textContent = currentUser.email;
+    document.getElementById('account-email-row')?.classList.toggle('hidden', !currentUser?.email);
     modal.classList.remove('hidden');
+    if (!currentUser) return;
+
+    const inProgress = document.getElementById('books-in-progress-count');
+    const finished = document.getElementById('books-finished-count');
+    if (inProgress) inProgress.textContent = '…';
+    if (finished) finished.textContent = '…';
+    const createdRow = document.getElementById('account-created-row');
+    const created = document.getElementById('account-created');
+    const createdAt = currentUser.created_at || currentUser.createdAt;
+    if (createdRow) createdRow.classList.toggle('hidden', !createdAt);
+    if (created && createdAt) created.textContent = new Date(createdAt).toLocaleDateString();
+    try {
+        const library = await getLibrary();
+        if (inProgress) inProgress.textContent = String(library.continue_reading?.length || 0);
+        if (finished) finished.textContent = String(library.finished?.length || 0);
+    } catch (_) {
+        if (inProgress) inProgress.textContent = '0';
+        if (finished) finished.textContent = '0';
+    }
 }
 
 function hideUserModal() { document.getElementById('user-modal')?.classList.add('hidden'); }

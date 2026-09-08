@@ -226,7 +226,7 @@ export const paginationMixin = {
         // Get EXACT viewport height minus all fixed elements
         const viewportHeight = window.innerHeight;
         const stickyHeaderHeight = this.continuousReader?.active
-            ? (document.querySelector('.continuous-reader-chrome')?.offsetHeight || 52) + 51
+            ? (document.querySelector('.continuous-reader-chrome')?.offsetHeight || 59)
             : (document.querySelector('.sticky-reading-header')?.offsetHeight || 51);
         const progressBarHeight = this.continuousReader?.active
             ? (document.querySelector('.continuous-reader-footer')?.offsetHeight || 30)

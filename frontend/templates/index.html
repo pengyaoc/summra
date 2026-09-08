@@ -317,6 +317,10 @@
                     <div class="book-detail-info">
                         <h2 id="book-title"></h2>
                         <p class="book-author" id="book-author"></p>
+                        <button class="book-read-btn" id="book-read-btn" type="button">
+                            <span aria-hidden="true">Read book</span>
+                            <span class="book-read-btn-arrow" aria-hidden="true">→</span>
+                        </button>
                         <!-- Coming-soon banner shown when the book has no modern English translation yet. -->
                         <div class="plain-english-coming-soon hidden" id="plain-english-coming-soon" role="status">
                             <span class="plain-english-coming-soon-icon" aria-hidden="true">✨</span>
@@ -529,29 +533,28 @@
 
             <section class="continuous-reader-section {% if not initial_data or initial_data.type != 'reader' %}hidden{% endif %}" id="continuous-reader-section" aria-label="Book reader">
                 <header class="continuous-reader-chrome" id="continuous-reader-chrome">
-                    <button type="button" id="reader-back-button" class="reader-chrome-btn" aria-label="Back">←</button>
-                    <div class="reader-title-wrap">
-                        <span id="reader-book-title" class="reader-book-title"></span>
-                        <span id="reader-chapter-title" class="reader-chapter-title"></span>
+                    <div class="reader-toolbar-left">
+                        <button type="button" id="reader-back-button" class="reader-back-btn" aria-label="Back to book">←</button>
+                        <div class="reader-title-wrap">
+                            <span id="reader-chapter-title" class="reader-chapter-title"></span>
+                            <span id="reader-book-title" class="reader-book-title"></span>
+                        </div>
                     </div>
-                    <button type="button" id="reader-toc-button" class="reader-chrome-btn" aria-expanded="false">Contents</button>
-                    <label class="reader-mode-label">Mode
-                        <select id="reader-mode-select" aria-label="Reading mode">
-                            <option value="summary">Summary</option>
-                            <option value="original">Original</option>
-                            <option value="plain">Plain English</option>
-                            <option value="side_by_side">Side-by-Side</option>
-                        </select>
-                    </label>
-                    <button type="button" id="reader-about-button" class="reader-chrome-btn">About</button>
+                    <div class="reader-toolbar-right">
+                        <button type="button" id="reader-toc-button" class="reader-toolbar-btn reader-icon-btn" aria-expanded="false" title="Contents" aria-label="Contents">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        </button>
+                        <button type="button" id="reader-settings-button" class="reader-toolbar-btn reader-icon-btn" title="Reading settings" aria-label="Reading settings">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25A3.75 3.75 0 1 0 12 15.75 3.75 3.75 0 0 0 12 8.25ZM19.4 15a1.66 1.66 0 0 0 .33 1.83l.06.06-2.12 2.12-.06-.06a1.66 1.66 0 0 0-1.83-.33 1.65 1.65 0 0 0-1 1.51v.09h-3v-.09a1.65 1.65 0 0 0-1-1.51 1.66 1.66 0 0 0-1.83.33l-.06.06-2.12-2.12.06-.06A1.66 1.66 0 0 0 7.17 15a1.65 1.65 0 0 0-1.51-1H5.57v-3h.09a1.65 1.65 0 0 0 1.51-1 1.66 1.66 0 0 0-.33-1.83l-.06-.06 2.12-2.12.06.06a1.66 1.66 0 0 0 1.83.33 1.65 1.65 0 0 0 1-1.51v-.09h3v.09a1.65 1.65 0 0 0 1 1.51 1.66 1.66 0 0 0 1.83-.33l.06-.06 2.12 2.12-.06.06A1.66 1.66 0 0 0 19.4 10a1.65 1.65 0 0 0 1.51 1H21v3h-.09A1.65 1.65 0 0 0 19.4 15Z"/></svg>
+                        </button>
+                    </div>
                 </header>
                 <aside class="reader-panel hidden" id="reader-toc-panel" aria-label="Table of contents">
-                    <button type="button" class="reader-panel-close" data-reader-close="reader-toc-panel">Close</button>
+                    <div class="reader-panel-header">
+                        <h2>Contents</h2>
+                        <button type="button" class="reader-panel-close" data-reader-close="reader-toc-panel" aria-label="Close contents">✕</button>
+                    </div>
                     <div id="reader-toc-list"></div>
-                </aside>
-                <aside class="reader-panel hidden" id="reader-about-panel" aria-label="About this book">
-                    <button type="button" class="reader-panel-close" data-reader-close="reader-about-panel">Close</button>
-                    <div id="reader-about-content"></div>
                 </aside>
                 <div class="reader-status hidden" id="reader-status" role="status"></div>
                 <div class="continuous-reader-content" id="continuous-reader-content" tabindex="-1"></div>
@@ -566,6 +569,17 @@
                 <div class="reading-settings-header">
                     <h3>Reading Settings</h3>
                     <button class="reading-settings-close" id="reading-settings-close">✕</button>
+                </div>
+
+                <div class="reading-settings-section reader-mode-settings hidden" id="reader-mode-settings">
+                    <h4>Reading mode</h4>
+                    <div class="reader-mode-choices" role="group" aria-label="Reading mode">
+                        <button type="button" data-reader-settings-mode="summary">Summary</button>
+                        <button type="button" data-reader-settings-mode="original">Original</button>
+                        <button type="button" data-reader-settings-mode="plain">Plain English</button>
+                        <button type="button" data-reader-settings-mode="side_by_side">Side-by-Side</button>
+                    </div>
+                    <p class="reader-mode-help" id="reader-mode-help"></p>
                 </div>
 
                 <div class="reading-settings-section">
@@ -806,11 +820,11 @@
                 <h2 class="user-modal-title">My Account</h2>
 
                 <div class="account-info">
-                    <div class="account-item">
+                    <div class="account-item" id="account-email-row">
                         <span class="account-label">Email:</span>
                         <span class="account-value" id="account-email"></span>
                     </div>
-                    <div class="account-item">
+                    <div class="account-item" id="account-created-row">
                         <span class="account-label">Member since:</span>
                         <span class="account-value" id="account-created"></span>
                     </div>
@@ -820,12 +834,12 @@
                     <h3>Reading Progress</h3>
                     <p class="account-stats-description">Your reading history is tracked across all your devices.</p>
                     <div class="account-stat-item">
-                        <span class="stat-label">Books started:</span>
-                        <span class="stat-value" id="books-started-count">0</span>
+                        <span class="stat-label">In progress:</span>
+                        <span class="stat-value" id="books-in-progress-count">0</span>
                     </div>
                     <div class="account-stat-item">
-                        <span class="stat-label">Chapters completed:</span>
-                        <span class="stat-value" id="chapters-completed-count">0</span>
+                        <span class="stat-label">Finished:</span>
+                        <span class="stat-value" id="books-finished-count">0</span>
                     </div>
                 </div>
             </div>

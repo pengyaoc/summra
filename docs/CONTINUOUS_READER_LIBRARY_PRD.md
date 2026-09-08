@@ -107,7 +107,7 @@ Account and sign-out controls remain utilities, not primary destinations. Succes
 - `/` remains the default Home page and signed-out landing page.
 - Discover remains accessible from Home and primary navigation.
 - Library is not presented as a signed-out account destination.
-- Opening a book starts the continuous reader without requiring login.
+- Opening a book shows its editorial detail page without requiring login. The explicit **Read book** action opens the continuous reader.
 - Progress and mode preference are saved locally on the device.
 - Sign-in returns to Library after merging local activity.
 
@@ -118,6 +118,7 @@ Account and sign-out controls remain utilities, not primary destinations. Succes
 | `/` | Home; signed-out default |
 | `/library` | Personal Library; authentication required |
 | `/discover` | Catalog and recommendations |
+| `/books/{slug}` | Editorial book page: author context, summary, and the explicit **Read book** entry point |
 | `/books/{slug}/read` | Continuous reader, automatically resumed |
 | `/books/{slug}/read?chapter={chapter_id}` | Same reader anchored to a chapter |
 | Existing `/books/{slug}/chapters/{number}` | Same reader anchored to that chapter; no separate chapter UI |
@@ -126,7 +127,7 @@ Legacy chapter URLs retain their server-rendered metadata and crawlability. They
 
 ### 7.4 Book selection
 
-Selecting a book card from Library, Home, Discover, search, categories, author pages, or related books opens the reader. There is no intermediate chapter grid or confirmation screen. Description, full-book overview, author, categories, and related books live in **About this book**, accessible from reader chrome.
+Selecting a book card from Library, Home, Discover, search, categories, author pages, or related books opens that book's editorial detail page. There is no intermediate chapter grid or confirmation screen. Description, full-book overview, author, categories, and related books remain on that page; **Read book** is the explicit reader entry point.
 
 ## 8. Personal Library
 
@@ -198,27 +199,20 @@ Do not show account counts, chapter checklists, empty shelves, or setup tasks.
 - Crossing a chapter boundary requires no route change, book landing page, chapter selection, or full-screen loading state.
 - Pagination may run incrementally over fetched segments; it must not require all book text to be downloaded or laid out before the first page is readable.
 - The document URL may update its chapter query or history state as the active chapter changes, without causing navigation.
-- Browser Back from the reader returns to the prior product surface. The visible Back control goes to Library for signed-in users and to the actual prior surface when known; otherwise it goes Home for signed-out users.
+- Browser Back from the reader returns to the prior product surface. The visible Back control always returns to that book's editorial detail page, preserving the book context and explicit re-entry point.
 
 ### 9.2 Reader chrome
 
-Chrome is hidden by default after entry. Preserve the reader's existing page-turn interaction zones and chrome reveal/hide behavior. Chrome must also be revealable when the reader:
+The reader uses a persistent, single-row dark toolbar. It must remain one content row at iPhone widths (safe-area inset may increase its outer height) and must not steal page-turn gestures or text selection.
 
-- taps/clicks the center non-text area;
-- presses Escape; or
-- tabs to an interactive control.
+Header controls, in order:
 
-It remains visible while a panel or selector is open. Selecting text, interacting with links, turning a page, or using screen-reader navigation does not accidentally toggle it. Chrome behavior must not steal an existing previous/next-page gesture or tap target.
+- Back to the editorial book page
+- Current chapter and book title (book title may truncate or be omitted on narrow screens)
+- Compact Contents icon, opening a chapter-picker drawer/sheet
+- Matching compact Reading Settings icon
 
-Header controls:
-
-- Back / Library
-- Book title
-- Table of contents
-- Mode selector
-- Audio, where available
-- Reading settings
-- About this book
+Reading Settings contains the four reading-mode controls as well as typography and theme. The full author, summary, and related-book context remains on the editorial book page rather than competing with the focused reader toolbar.
 
 Slim footer:
 
@@ -227,20 +221,7 @@ Slim footer:
 
 Future reading-time estimates are not shown until there is enough reliable, consent-appropriate reading-speed data.
 
-### 9.3 About this book
-
-About this book opens as a non-destructive drawer on wide screens and a full-height sheet on narrow screens. It contains:
-
-- Cover, title, and author
-- Description
-- Full-book summary as **Overview**
-- Categories
-- Author details
-- Related books
-
-Closing the panel returns focus to the invoking control and preserves the exact reading anchor and displayed page. Selecting a related book opens that book's continuous reader.
-
-### 9.4 Entry and restoration sequence
+### 9.3 Entry and restoration sequence
 
 The reader must use this order:
 
@@ -254,7 +235,7 @@ The reader must use this order:
 
 No default marker, page zero, chapter opening, scroll position, or mode change may be persisted before step 6. This invariant fixes the current resume-overwrite defect and applies to initial load, reload, mode changes, history navigation, and error retries.
 
-### 9.5 Loading and error behavior
+### 9.4 Loading and error behavior
 
 - Show title/chapter skeletons only for the initial unresolved segment.
 - Never show a chapter loading screen between already adjacent content.
@@ -265,20 +246,20 @@ No default marker, page zero, chapter opening, scroll position, or mode change m
 
 ## 10. Reading modes
 
-The reader exposes a compact four-option selector in this order:
+Reading Settings exposes the four modes in this order:
 
 1. Summary
 2. Original
 3. Plain English
 4. Side-by-Side
 
-Unavailable content remains visible but disabled with an explanation. A book with partial Plain English coverage permits the mode and shows a restrained “Plain English unavailable for this section” gap with an Original fallback action; it does not silently mix modes.
+Unavailable content remains visible but disabled with an explanation. Side-by-Side is available only at **1024 CSS px or wider**; an open Side-by-Side reader that becomes narrower automatically returns to Plain English (or Original when Plain English is unavailable), preserving the semantic anchor. A book with partial Plain English coverage permits the mode and shows a restrained “Plain English unavailable for this section” gap with an Original fallback action; it does not silently mix modes.
 
 ### 10.1 Summary
 
 - Concatenate the existing chapter summaries into one logical book sequence and paginate it with the same reader.
 - Retain part/chapter headings, illustrations where appropriate, and TOC navigation.
-- The existing full-book summary is the Overview in About this book, not part of the Summary reading sequence.
+- The existing full-book summary remains on the editorial book page, not in the Summary reading sequence.
 - Summary progress has its own denominator and marker.
 
 ### 10.2 Original
@@ -291,13 +272,12 @@ Render aligned plain-English paragraphs in book order. Its marker is independent
 
 ### 10.4 Side-by-Side
 
-- Desktop and tablet landscape: synchronized paragraph rows with Original and Plain English columns.
-- Narrow screens and portrait layouts: stacked paragraph pairs, Original followed by Plain English.
-- The mode remains selectable on mobile.
+- Screens at or above 1024 CSS px: synchronized paragraph rows with Original and Plain English columns.
+- Narrow screens and portrait layouts: the mode is disabled rather than stacked; Plain English or Original remains available as the single-column alternative.
 - Each aligned pair has one logical position. Changing responsive layout does not change the marker.
 - When one side lacks a paragraph, preserve the logical row and show an explicit unavailable state rather than shifting later alignment.
 
-The first release changes layout at a CSS container threshold of 760 px; device type is not used.
+The first release enables Side-by-Side only at a 1024 CSS px viewport threshold; device type is not used.
 
 ### 10.5 First-use mapping and independent resume
 
@@ -660,8 +640,8 @@ Existing `data/summra.db` progress is disposable test data. The release removes 
 - Announce mode changes, approximate anchor recovery, offline boundaries, sync prompts, and loading failures without announcing routine silent saves.
 - Do not make center-tap chrome toggling the only way to reveal controls.
 - Respect reduced motion; resume and programmatic anchor restoration are instant by default.
-- Reader text supports browser zoom to 200% without unintended horizontal overflow; pagination recomputes around the same semantic marker, and Side-by-Side collapses when needed.
-- Side-by-Side reading order is Original then Plain English in both DOM and stacked presentation.
+- Reader text supports browser zoom to 200% without unintended horizontal overflow; pagination recomputes around the same semantic marker, and Side-by-Side becomes unavailable when the effective viewport is too narrow.
+- Side-by-Side reading order is Original then Plain English in the wide-screen two-column DOM presentation.
 - Touch targets are at least 44 by 44 CSS pixels.
 - Progress is conveyed as text as well as visually.
 
@@ -732,14 +712,14 @@ Set numeric growth targets after one week of baseline instrumentation; reliabili
 ### Phase 2: All modes and TOC
 
 - Add Summary and responsive Side-by-Side.
-- Add TOC drawer, About this book, reader chrome, completion, and sync prompt.
+- Add TOC drawer, single-row reader chrome, completion, and sync prompt.
 - Validate offline segment behavior and lifecycle saves.
 
 ### Phase 3: Library and navigation
 
 - Launch Library, post-login merge/redirect, signed-in navigation order, Finished, and empty state.
-- Change all book-card destinations to the reader.
-- Remove chapters as primary cards and account progress counts.
+- Keep all book-card destinations on editorial detail pages, with explicit Read book controls entering the reader.
+- Remove chapters as primary cards and legacy chapter-completion counts; the account utility may show v2 in-progress and finished book totals.
 
 ### Phase 4: VM acceptance and cleanup
 
@@ -774,8 +754,8 @@ No new feature flags or compatibility switches are introduced for this release.
 - [ ] Original, Plain English, and Side-by-Side map to the same logical paragraph on first use.
 - [ ] Summary maps by nearest chapter.
 - [ ] Every mode restores its own later independent location.
-- [ ] Side-by-Side is two columns when wide and stacked Original-then-Plain-English when narrow.
-- [ ] About closes back to the same visible passage.
+- [ ] Side-by-Side is two columns only at 1024 CSS px or wider and is unavailable on narrower screens.
+- [ ] A desktop Side-by-Side session falls back to Plain English (or Original) with the same semantic anchor after narrowing the viewport.
 
 ### Resume and progress
 
@@ -814,7 +794,7 @@ The change is complete when:
 - all acceptance scenarios pass in supported desktop and mobile browsers;
 - every production book has a valid versioned manifest, stable paragraph IDs, and segments for each advertised mode;
 - automated tests cover marker validation, mapping, recovery, conflict, meaningful engagement, completion, API bounds, and route compatibility;
-- end-to-end tests cover the cross-device, offline, font/viewport change, mode resume, TOC, chapter boundary, mobile Side-by-Side, completion, and manual-unfinish scenarios;
+- end-to-end tests cover the cross-device, offline, font/viewport change, mode resume, TOC, chapter boundary, mobile Side-by-Side unavailability, completion, and manual-unfinish scenarios;
 - dashboards and alerts exist for restore failures, segment latency/error rate, inter-chapter stalls, sync queue age, mutation conflicts, and false-completion signals;
 - direct replacement has been exercised against a fresh progress database, and Git rollback is documented; and
 - legacy page-number resume and chapter-checkmark UI are no longer primary product behavior.

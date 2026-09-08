@@ -6,6 +6,15 @@
 
 ## 2026-09-07: Continuous Reader + Library direct replacement — DONE
 
+### Follow-up reader UX corrections — DONE
+
+- Restoring the editorial book-detail view as the destination for book cards and title links; the dedicated **Read book** control is the only entry to `/books/{slug}/read`.
+- Rebuilding the reader chrome as a single-row, focused toolbar. Mode selection moves into Reading Settings; Contents and Settings are matching compact icon controls; the Contents drawer remains a direct chapter picker.
+- Repairing semantic percentage rendering so missing legacy `word_position` values cannot produce `NaN%`, and replacing the account modal's inert legacy counters with the v2 Library projection (in progress / finished).
+- Side-by-Side is being restored as a wide-screen-only mode (minimum 1024 CSS px), with a deliberate fallback if the viewport becomes narrow. Its repeated column header is also being given independent top padding so it cannot sit beneath the fixed toolbar.
+
+**Chrome verification.** Tested the current source in the Chrome extension at 430×932 (iPhone-sized) and 1440×900 (desktop): mobile has a one-row toolbar, uncut content, icon-only Contents/Settings, a disabled Side-by-Side option, working TOC chapter picker, and a numeric page-turn percentage (`12%`, not `NaN%`). Desktop Side-by-Side renders as two columns below the fixed chrome. Shrinking an open desktop Side-by-Side session to 430px automatically restores Plain English and retains the semantic position. The Book back button returns to the editorial detail page, and the account dialog reads the v2 Library projection (`In progress: 1` in the exercised local profile).
+
 **Decision recorded.** Per product direction, this is an in-place replacement: the existing `data/summra.db` contains disposable test progress and was removed locally. There is no progress migration, dual-write period, or new rollout flag. Git revert is the rollback path. `data/database.db` was retained and augmented with reader metadata only.
 
 **Implementation approach.**

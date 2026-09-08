@@ -775,7 +775,9 @@ export const readerMixin = {
             return;
         }
         const state = await window.authModule?.getReaderState?.(book.id) || { book: null, modes: [] };
-        const available = manifest.modes.filter(item => item.availability !== 'unavailable').map(item => item.mode);
+        const available = manifest.modes
+            .filter(item => item.availability !== 'unavailable' && this.isContinuousReaderModeAvailable(item.mode))
+            .map(item => item.mode);
         const requestedMode = options.mode;
         const savedMode = state.book?.last_mode;
         const mode = available.includes(requestedMode) ? requestedMode :
@@ -817,6 +819,46 @@ export const readerMixin = {
         const chapter = manifest.structure.find(entry => entry.kind === 'chapter' &&
             (legacyNumber ? String(entry.chapter_number) === String(rawChapter) : String(entry.chapter_id) === String(rawChapter)));
         return chapter?.chapter_id || null;
+    },
+
+    isContinuousReaderModeAvailable(mode) {
+        return mode !== 'side_by_side' || window.matchMedia('(min-width: 1024px)').matches;
+    },
+
+    async switchContinuousReaderMode(nextMode) {
+        const reader = this.continuousReader;
+        if (!reader?.active || nextMode === reader.mode || !this.isContinuousReaderModeAvailable(nextMode)) return;
+        await this.saveContinuousReader('mode_exit');
+        const previousMode = reader.mode;
+        reader.mode = nextMode;
+        reader.restoring = true;
+        let destination = reader.state?.modes?.find(item => item.mode === reader.mode)?.current_marker || null;
+        if (!destination && reader.currentMarker) {
+            destination = await this.mapContinuousMarker(reader.currentMarker, previousMode, reader.mode);
+        }
+        await this.loadContinuousReaderAt(destination, reader.currentMarker?.chapter_id);
+    },
+
+    async enforceContinuousReaderViewport() {
+        const reader = this.continuousReader;
+        if (!reader?.active || reader.mode !== 'side_by_side' || this.isContinuousReaderModeAvailable('side_by_side')) {
+            if (reader?.active) this.setupContinuousReaderChrome();
+            return;
+        }
+        const fallback = reader.manifest.modes.find(item => item.mode === 'plain' && item.availability !== 'unavailable')?.mode || 'original';
+        try {
+            await this.switchContinuousReaderMode(fallback);
+        } catch (_) {
+            // The alignment anchor is also a plain-text anchor. Preserve it as
+            // the best available location if the optional mapping request fails.
+            reader.mode = fallback;
+            reader.requests = new Map();
+            reader.restoring = true;
+            await this.loadContinuousReaderAt(reader.currentMarker, reader.currentMarker?.chapter_id);
+        }
+        if (reader.mode === 'side_by_side') return;
+        this.setContinuousReaderStatus('Side-by-Side is available on screens 1024px wide or larger.');
+        this.setupContinuousReaderChrome();
     },
 
     async loadContinuousReaderAt(marker = null, chapterId = null) {
@@ -958,6 +1000,7 @@ export const readerMixin = {
             quote: (anchor.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180),
             ordinal: Number(anchor.dataset.readerOrdinal),
         };
+        reader.currentMarker.word_position = this.continuousMarkerWordPosition(reader.currentMarker);
         reader.lastDisplayedOrdinal = reader.currentMarker.ordinal;
         const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === reader.currentMarker.chapter_id);
         document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
@@ -986,43 +1029,75 @@ export const readerMixin = {
         return Math.max(0, Math.min(0.99, priorWords / totalWords));
     },
 
+    continuousMarkerWordPosition(marker) {
+        const reader = this.continuousReader;
+        const direct = Number(marker?.word_position);
+        if (Number.isFinite(direct)) return direct;
+        const unit = reader?.unitsById?.get(marker?.paragraph_id);
+        const wordStart = Number(unit?.word_start);
+        const wordCount = Number(unit?.canonical_word_count ?? unit?.word_count);
+        const offset = Math.max(0, Math.min(1, Number(marker?.offset) || 0));
+        if (Number.isFinite(wordStart) && Number.isFinite(wordCount)) {
+            return wordStart + (wordCount * offset);
+        }
+        const mode = reader?.manifest?.modes?.find(item => item.mode === reader.mode);
+        const ordinal = Number(marker?.ordinal);
+        if (mode?.total_word_count && mode?.unit_count && Number.isFinite(ordinal)) {
+            return Math.max(0, Math.min(mode.total_word_count, (ordinal + offset) * mode.total_word_count / mode.unit_count));
+        }
+        return 0;
+    },
+
     setupContinuousReaderChrome() {
         const reader = this.continuousReader;
         if (!reader?.active) return;
         document.getElementById('reader-book-title').textContent = this.currentBook.title;
-        const select = document.getElementById('reader-mode-select');
-        select.value = reader.mode;
-        for (const option of select.options) {
-            const manifest = reader.manifest.modes.find(item => item.mode === option.value);
-            option.disabled = !manifest || manifest.availability === 'unavailable';
-            option.textContent = option.value === 'side_by_side' ? 'Side-by-Side' :
-                option.value === 'plain' ? 'Plain English' : option.value[0].toUpperCase() + option.value.slice(1);
+        document.getElementById('reader-mode-settings')?.classList.remove('hidden');
+        document.querySelectorAll('[data-reader-settings-mode]').forEach(button => {
+            const manifest = reader.manifest.modes.find(item => item.mode === button.dataset.readerSettingsMode);
+            const enabled = !!manifest && manifest.availability !== 'unavailable' &&
+                this.isContinuousReaderModeAvailable(button.dataset.readerSettingsMode);
+            button.disabled = !enabled;
+            button.classList.toggle('active', button.dataset.readerSettingsMode === reader.mode);
+            button.setAttribute('aria-pressed', button.dataset.readerSettingsMode === reader.mode ? 'true' : 'false');
+            button.onclick = async () => {
+                await this.switchContinuousReaderMode(button.dataset.readerSettingsMode);
+                this.setupContinuousReaderChrome();
+            };
+        });
+        const sideBySide = reader.manifest.modes.find(item => item.mode === 'side_by_side');
+        const modeHelp = document.getElementById('reader-mode-help');
+        if (modeHelp) {
+            modeHelp.textContent = sideBySide?.availability === 'unavailable'
+                ? 'Side-by-Side is unavailable for this book.'
+                : 'Side-by-Side is available on screens 1024px wide or larger.';
         }
-        select.onchange = async () => {
-            await this.saveContinuousReader('mode_exit');
-            const previousMode = reader.mode;
-            reader.mode = select.value;
-            reader.restoring = true;
-            let destination = reader.state?.modes?.find(item => item.mode === reader.mode)?.current_marker || null;
-            if (!destination && reader.currentMarker) {
-                destination = await this.mapContinuousMarker(reader.currentMarker, previousMode, reader.mode);
-            }
-            await this.loadContinuousReaderAt(destination, reader.currentMarker?.chapter_id);
+        document.getElementById('reader-back-button').onclick = async () => {
+            await this.saveContinuousReader('navigation');
+            reader.active = false;
+            document.getElementById('reading-settings-panel')?.classList.add('hidden');
+            await this.selectBook(this.currentBook);
         };
-        document.getElementById('reader-back-button').onclick = () => window.history.back();
         document.getElementById('reader-toc-button').onclick = () => this.toggleContinuousPanel('reader-toc-panel');
-        document.getElementById('reader-about-button').onclick = () => this.toggleContinuousPanel('reader-about-panel');
-        document.querySelectorAll('[data-reader-close]').forEach(button => button.onclick = () => document.getElementById(button.dataset.readerClose)?.classList.add('hidden'));
+        document.getElementById('reader-settings-button').onclick = () => {
+            document.getElementById('reader-toc-panel')?.classList.add('hidden');
+            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
+            document.getElementById('reading-settings-panel')?.classList.remove('hidden');
+        };
+        document.querySelectorAll('[data-reader-close]').forEach(button => button.onclick = () => {
+            document.getElementById(button.dataset.readerClose)?.classList.add('hidden');
+            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
+        });
         const toc = document.getElementById('reader-toc-list');
         toc.innerHTML = reader.manifest.structure.filter(entry => entry.kind === 'chapter').map(entry =>
             `<button type="button" data-reader-chapter-target="${entry.chapter_id}">${this.escapeHtml(entry.title)}</button>`).join('');
         toc.querySelectorAll('[data-reader-chapter-target]').forEach(button => button.onclick = async () => {
             document.getElementById('reader-toc-panel').classList.add('hidden');
+            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
             reader.restoring = true;
             await this.loadContinuousReaderAt(null, button.dataset.readerChapterTarget);
             await this.saveContinuousReader('toc');
         });
-        this.loadContinuousAbout();
     },
 
     setupContinuousReaderLifecycle() {
@@ -1032,6 +1107,9 @@ export const readerMixin = {
             if (document.visibilityState === 'hidden') this.saveContinuousReader('hidden');
         });
         window.addEventListener('pagehide', () => this.saveContinuousReader('pagehide'));
+        const enforceViewport = () => this.enforceContinuousReaderViewport();
+        window.addEventListener('resize', enforceViewport);
+        window.matchMedia('(max-width: 1023px)').addEventListener?.('change', enforceViewport);
         window.setInterval(() => {
             const reader = this.continuousReader;
             if (reader?.active && document.visibilityState === 'visible' && Date.now() - reader.pageTurnAt >= 15000) {
@@ -1044,6 +1122,9 @@ export const readerMixin = {
     toggleContinuousPanel(id) {
         const panel = document.getElementById(id);
         panel?.classList.toggle('hidden');
+        if (id === 'reader-toc-panel') {
+            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', panel?.classList.contains('hidden') ? 'false' : 'true');
+        }
     },
 
     async loadContinuousAbout() {
@@ -1125,6 +1206,7 @@ export const readerMixin = {
             quote: (anchor.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180),
             ordinal: Number(anchor.dataset.readerOrdinal),
         };
+        marker.word_position = this.continuousMarkerWordPosition(marker);
         const sequential = reader.lastDisplayedOrdinal !== null && marker.ordinal === reader.lastDisplayedOrdinal + 1;
         const activeSeconds = document.visibilityState === 'visible'
             ? Math.min(60, Math.floor((Date.now() - reader.pageTurnAt) / 1000)) : 0;
@@ -1168,7 +1250,10 @@ export const readerMixin = {
         const reader = this.continuousReader;
         const mode = reader?.manifest?.modes?.find(item => item.mode === reader.mode);
         const marker = reader?.furthestMarker;
-        const percentage = mode?.total_word_count && marker ? Math.min(99, Math.round(marker.word_position * 100 / mode.total_word_count)) : 0;
+        const wordPosition = this.continuousMarkerWordPosition(marker);
+        const percentage = mode?.total_word_count && marker
+            ? Math.min(99, Math.max(0, Math.round(wordPosition * 100 / mode.total_word_count)))
+            : 0;
         const text = document.getElementById('continuous-reader-progress');
         if (text) text.textContent = `${percentage}%`;
     },
