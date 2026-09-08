@@ -855,15 +855,23 @@ export const readerMixin = {
     async switchContinuousReaderMode(nextMode) {
         const reader = this.continuousReader;
         if (!reader?.active || nextMode === reader.mode || !this.isContinuousReaderModeAvailable(nextMode)) return;
-        await this.saveContinuousReader('mode_exit');
+        clearTimeout(reader.settleTimer);
+        clearTimeout(reader.terminalTimer);
         const previousMode = reader.mode;
+        const previousMarker = reader.currentMarker;
+        await this.saveContinuousReader('mode_exit');
         reader.mode = nextMode;
         reader.restoring = true;
-        let destination = reader.state?.modes?.find(item => item.mode === reader.mode)?.current_marker || null;
-        if (!destination && reader.currentMarker) {
-            destination = await this.mapContinuousMarker(reader.currentMarker, previousMode, reader.mode);
+        reader.requests = new Map();
+        reader.modeState = reader.state?.modes?.find(item => item.mode === nextMode) || null;
+        reader.furthestMarker = reader.modeState?.furthest_marker || null;
+        let destination = reader.modeState?.current_marker || null;
+        if (!destination && previousMarker) {
+            destination = await this.mapContinuousMarker(previousMarker, previousMode, nextMode);
         }
-        await this.loadContinuousReaderAt(destination, reader.currentMarker?.chapter_id);
+        reader.currentMarker = destination;
+        reader.lastDisplayedOrdinal = null;
+        await this.loadContinuousReaderAt(destination, destination?.chapter_id || previousMarker?.chapter_id);
     },
 
     async enforceContinuousReaderViewport() {
@@ -1031,7 +1039,6 @@ export const readerMixin = {
         reader.lastDisplayedOrdinal = reader.currentMarker.ordinal;
         const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === reader.currentMarker.chapter_id);
         document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
-        document.getElementById('continuous-reader-chapter-context').textContent = chapter?.title || '';
         this.updateContinuousReaderProgress();
     },
 
@@ -1242,7 +1249,6 @@ export const readerMixin = {
         reader.currentMarker = marker;
         const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === marker.chapter_id);
         document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
-        document.getElementById('continuous-reader-chapter-context').textContent = chapter?.title || '';
         this.updateContinuousReaderProgress();
         clearTimeout(reader.settleTimer);
         reader.settleTimer = setTimeout(() => this.saveContinuousReader('page_turn', sequential ? 1 : 0, activeSeconds), 600);
@@ -1258,19 +1264,38 @@ export const readerMixin = {
     async saveContinuousReader(cause, boundaries = 0, activeSeconds = 0, extra = {}) {
         const reader = this.continuousReader;
         if (!reader?.active || !reader.currentMarker || reader.restoring) return;
+        const mode = reader.mode;
+        const currentMarker = reader.currentMarker;
         const furthest = reader.furthestMarker;
-        const qualified = boundaries > 0 && (!furthest || reader.currentMarker.ordinal >= furthest.ordinal)
-            ? reader.currentMarker : null;
+        const qualified = boundaries > 0 && (!furthest || currentMarker.ordinal >= furthest.ordinal)
+            ? currentMarker : null;
         if (qualified) reader.furthestMarker = qualified;
-        const modeState = reader.state?.modes?.find(item => item.mode === reader.mode);
-        await window.authModule?.queueReaderMutation?.({
-            book_id: this.currentBook.id, mode: reader.mode, current_marker: reader.currentMarker,
+        let modeState = reader.state?.modes?.find(item => item.mode === mode);
+        const mutation = await window.authModule?.queueReaderMutation?.({
+            book_id: this.currentBook.id, mode, current_marker: currentMarker,
             qualified_furthest_marker: qualified, event_cause: cause,
             active_seconds_delta: activeSeconds, sequential_boundaries_delta: boundaries,
-            base_revision: modeState?.revision || modeState?.server_revision || 0,
+            base_revision: modeState?.server_revision ?? modeState?.revision ?? 0,
             ...extra,
         });
-        this.updateContinuousReaderProgress();
+        // Keep the live projection in step with the local-first write. Without
+        // this snapshot, switching back to a mode restores the marker fetched
+        // when the reader first opened instead of the marker just saved.
+        reader.state ||= { book: null, modes: [] };
+        reader.state.modes ||= [];
+        if (!modeState) {
+            modeState = { book_id: this.currentBook.id, mode };
+            reader.state.modes.push(modeState);
+        }
+        modeState.current_marker = currentMarker;
+        modeState.furthest_marker = qualified || furthest || modeState.furthest_marker || null;
+        modeState.server_revision = (mutation?.base_revision ?? modeState.server_revision ?? modeState.revision ?? 0) + 1;
+        if (reader.state.book) reader.state.book.last_mode = mode;
+        if (reader.mode === mode) {
+            reader.modeState = modeState;
+            reader.furthestMarker = modeState.furthest_marker;
+            this.updateContinuousReaderProgress();
+        }
     },
 
     updateContinuousReaderProgress() {
