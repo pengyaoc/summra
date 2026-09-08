@@ -4,7 +4,7 @@
 
 - **Status:** Implemented; pending VM acceptance test
 - **Owner:** Product and Engineering
-- **Last updated:** 2026-09-07
+- **Last updated:** 2026-09-07 (mode-resume and reader-surface follow-up)
 - **Target:** Web and installable PWA
 
 ## 1. Summary
@@ -67,7 +67,7 @@ The current backend is therefore migration input, not a contract the new experie
 - **Paging remains the reading model.** The change removes chapter destinations, not book-like pages or page-turn interaction.
 - **Resume is automatic.** A reader should not have to choose a chapter or confirm a saved location.
 - **Location is semantic.** Paragraph anchors survive presentation changes; page numbers and pixels do not.
-- **Modes are independent views.** Each mode retains its own current marker and furthest extent.
+- **Modes are independent views.** Each mode retains its own current marker and furthest extent; changing modes never replaces one mode's saved location with another's.
 - **Structure remains useful.** Parts and chapters organize navigation without fragmenting the reading flow.
 - **Progress is earned.** Opening, previewing, searching, or jumping does not count as reading.
 - **Sync does not seize control.** Remote progress may be suggested, never used to move an active reader unexpectedly.
@@ -222,8 +222,18 @@ Reading Settings contains the four reading-mode controls as well as typography a
 
 Slim footer:
 
-- Whole-book furthest-read percentage for the active mode
-- Current chapter name
+- Whole-book furthest-read percentage for the active mode, centered in the bottom bar
+
+The footer does not repeat the chapter name because the fixed toolbar already
+provides that context.
+
+Reading Settings also provides light, dark, and Sepia themes. Sepia must apply
+to the entire reader surface (including paginated text, footer, and panels),
+not just the settings preview. The default serif choice is **Reader Serif**:
+use the native Apple serif/New York stack where available, with Georgia only as
+a cross-platform fallback. **System** remains the SF-oriented sans-serif
+choice for readers who prefer a sans face; saved legacy `georgia` preferences
+continue to select Reader Serif.
 
 Future reading-time estimates are not shown until there is enough reliable, consent-appropriate reading-speed data.
 
@@ -288,12 +298,16 @@ The first release enables Side-by-Side only at a 1024 CSS px viewport threshold;
 ### 10.5 First-use mapping and independent resume
 
 - Returning to a mode with a saved marker restores that marker.
+- The reader first writes the departing mode's settled marker into that mode's
+  local projection, then hydrates both the destination current marker and
+  destination furthest marker from the destination mode's projection. It must
+  not reuse an in-memory marker or furthest extent from the departing mode.
 - Entering Original, Plain English, or Side-by-Side for the first time maps to the aligned logical paragraph nearest the current visible anchor.
 - Entering Summary for the first time maps to the current anchor's chapter heading, because summary paragraphs do not align with full text.
 - Entering a full-text mode from Summary maps to the first paragraph of the corresponding chapter.
 - The mapped marker is an entry position, not meaningful engagement or furthest-read progress.
 - After entry, each mode advances and resumes independently.
-- A mode change saves the departing mode's settled current marker before resolving the destination marker.
+- A mode change saves the departing mode's settled current marker before resolving the destination marker, cancels any delayed departing-mode save, and discards obsolete segment requests.
 
 ## 11. Table of contents
 

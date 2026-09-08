@@ -1,5 +1,4 @@
-// Unit tests for resolveInitialChapterViewMode — the pure helper that
-// picks the default reading mode on the chapter page.
+// Unit tests for reader mode selection and mode-specific progress.
 //
 // Loads the exact same file the browser loads (frontend/static/js/view_mode.js)
 // inside a stub-window context, so production and tests stay in sync.
@@ -155,4 +154,80 @@ test("saved 'side-by-side' but no modern available → original", () => {
         isScreenTooNarrow: false,
     });
     assert.equal(mode, "original");
+});
+
+test("continuous reader restores each mode's latest in-session marker", async () => {
+    const readerSourcePath = join(here, "..", "..", "frontend", "static", "js", "reader.js");
+    const readerSource = readFileSync(readerSourcePath, "utf8")
+        .replace("export const readerMixin =", "const readerMixin =");
+    const queued = [];
+    const readerSandbox = {
+        clearTimeout,
+        setTimeout,
+        window: {
+            authModule: {
+                queueReaderMutation: async mutation => {
+                    queued.push(mutation);
+                    return mutation;
+                },
+            },
+        },
+    };
+    vm.createContext(readerSandbox);
+    vm.runInContext(readerSource, readerSandbox);
+    const readerMixin = vm.runInContext("readerMixin", readerSandbox);
+    const marker = (mode, ordinal) => ({
+        mode, content_version: 1, chapter_id: 10,
+        paragraph_id: `${mode}-${ordinal}`, offset: 0,
+        quote: `${mode} ${ordinal}`, ordinal, word_position: ordinal * 10,
+    });
+    const originalSaved = marker("original", 1);
+    const plainSaved = marker("plain", 4);
+    const plainFurthest = marker("plain", 6);
+    const originalCurrent = marker("original", 9);
+    const originalFurthest = marker("original", 10);
+    const loaded = [];
+    const app = {
+        currentBook: { id: 7 },
+        continuousReader: {
+            active: true, restoring: false, mode: "original",
+            currentMarker: originalCurrent, furthestMarker: originalFurthest,
+            state: {
+                book: { book_id: 7, last_mode: "original" },
+                modes: [
+                    { book_id: 7, mode: "original", current_marker: originalSaved, furthest_marker: originalSaved, revision: 2 },
+                    { book_id: 7, mode: "plain", current_marker: plainSaved, furthest_marker: plainFurthest, revision: 3 },
+                ],
+            },
+        },
+        isContinuousReaderModeAvailable: () => true,
+        updateContinuousReaderProgress: () => {},
+        mapContinuousMarker: async () => assert.fail("saved mode should not need marker mapping"),
+        loadContinuousReaderAt: async function (destination, chapterId) {
+            loaded.push({ destination, chapterId });
+            this.continuousReader.restoring = false;
+        },
+    };
+    app.saveContinuousReader = readerMixin.saveContinuousReader;
+
+    await readerMixin.switchContinuousReaderMode.call(app, "plain");
+
+    assert.equal(queued[0].mode, "original");
+    assert.equal(app.continuousReader.state.modes[0].current_marker.paragraph_id, "original-9");
+    assert.equal(app.continuousReader.mode, "plain");
+    assert.equal(app.continuousReader.currentMarker.paragraph_id, "plain-4");
+    assert.equal(app.continuousReader.furthestMarker.paragraph_id, "plain-6");
+    assert.equal(loaded[0].destination.paragraph_id, "plain-4");
+
+    app.continuousReader.currentMarker = marker("plain", 7);
+    app.continuousReader.furthestMarker = marker("plain", 8);
+    await readerMixin.switchContinuousReaderMode.call(app, "original");
+
+    assert.equal(queued[1].mode, "plain");
+    assert.equal(app.continuousReader.state.modes[1].current_marker.paragraph_id, "plain-7");
+    assert.equal(app.continuousReader.mode, "original");
+    assert.equal(app.continuousReader.currentMarker.paragraph_id, "original-9");
+    assert.equal(app.continuousReader.furthestMarker.paragraph_id, "original-10");
+    assert.equal(loaded[1].destination.paragraph_id, "original-9");
+    assert.equal(app.continuousReader.state.book.last_mode, "plain");
 });

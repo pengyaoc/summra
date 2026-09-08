@@ -4,6 +4,71 @@
 
 ---
 
+## 2026-09-07: Mode-specific reader progress and reading-surface polish — DONE
+
+### Per-mode progress restoration
+
+- Confirmed the server-side user-state model was already correctly keyed by
+  `(user_id, book_id, mode)` and that the Library deliberately projects only
+  `last_mode` for each book card. No schema, API, or Library-card behavior was
+  changed.
+- Fixed the client-side continuous-reader transition in
+  `frontend/static/js/reader.js`: before changing mode, it persists the
+  outgoing mode's current marker, keeps the in-memory per-mode projection in
+  sync with the local-first mutation, then restores the destination mode's
+  own current and furthest markers. It also cancels delayed page-save timers
+  and resets the per-mode segment request cache during the switch.
+- Result: Original, Plain English, Summary, and Side-by-Side each resume at
+  their own position when toggled; a first visit to a mode still maps the
+  current semantic marker as the initial location. The Library continues to
+  show just the latest saved mode for that book.
+- Added a JavaScript regression test that advances Original, switches to
+  Plain English, advances there, and switches back; it verifies both saved
+  positions and furthest markers remain independent.
+
+### Reader theme, typography, and footer
+
+- Fixed Sepia in the continuous reader. The reading surface, paginated text,
+  footer, panel, and page background now use `#f4ecd8` with `#5c4f3d` text.
+- Centered the bottom reading percentage and removed the redundant bottom
+  chapter title (the fixed top toolbar remains the chapter context). The
+  bottom container is now a `div[role=status]`, which also preserves the
+  existing focused-reading template rule that chapter pages do not render a
+  semantic `<footer>`.
+- Replaced the visible **Georgia** choice with **Reader Serif**, while keeping
+  its stored `georgia` preference key for compatibility. The CSS stack prefers
+  Apple's native New York/system serif (`-apple-system-ui-serif`, `ui-serif`),
+  then falls back through New York/Iowan Old Style to Georgia. The existing
+  **System** choice remains the SF-oriented sans-serif option; Open Sans is
+  unchanged. Apple describes New York as a traditional reading face at small
+  sizes with optical sizing.
+
+### Files changed
+
+- `frontend/static/js/reader.js` — mode-state persistence/restoration and
+  removal of bottom chapter-context updates.
+- `frontend/static/css/style.css` — Sepia reader rules, centered footer, and
+  Reader Serif stack.
+- `frontend/templates/index.html` — simplified progress footer and renamed
+  font label.
+- `tests/js/resolve_view_mode.test.mjs` — mode-switch regression coverage.
+- `frontend/static/js/app.min.js` — regenerated production bundle.
+
+### Validation
+
+- Chrome visual QA against the local reader verified the Sepia surface/text
+  colors, Reader Serif stack, centered percentage (0px center delta), and
+  absence of the removed chapter-context node.
+- `node --test tests/js/*.test.mjs`: 31 passed.
+- `venv/bin/python -m pytest -q tests/test_user_models.py
+  tests/test_api_routes_characterization.py tests/test_footer_copy.py`: 58
+  passed.
+- `npm run build`, `npm run build:check`, and `git diff --check` passed.
+- A broader test run completed with 522 passing tests. Its remaining failures
+  were external Project Gutenberg download/cover checks while DNS access was
+  unavailable; the one local footer assertion in that run was fixed by the
+  semantic-footer adjustment above and passes in the focused suite.
+
 ## 2026-09-07: Continuous Reader + Library direct replacement — DONE
 
 ### Library routing, progress visibility, and card UX follow-up — DONE

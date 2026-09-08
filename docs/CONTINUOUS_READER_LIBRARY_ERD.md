@@ -11,6 +11,9 @@
 - Store immutable reader-content metadata in `data/database.db` alongside the existing books and chapters. The server lazily compiles a new immutable version if source text changes; deployment also compiles the catalog in advance.
 - Store authenticated user state and accepted mutation history in `data/summra.db`.
 - Store anonymous progress, pending mutations, and offline reader data in IndexedDB.
+- Treat `last_mode` as a Library-card selection only. It identifies the one
+  mode shown on a card; it is never a shared resume marker or percentage for
+  the book's other modes.
 - Keep content and user databases physically separate. References from user progress to books, chapters, content versions, and paragraph IDs are validated by application code because SQLite cannot enforce foreign keys across database files.
 - Side-by-Side is a first-class reading mode. It uses persisted alignment rows, not parallel-array indexes. An alignment row may contain Original, Plain English, or both, and has one logical position and one progress weight.
 - Rendered page indexes and pixel positions are presentation state only and never appear in durable storage.
@@ -321,6 +324,9 @@ erDiagram
 - Primary key `(user_id, book_id)`.
 - `book_id` is a logical reference to the content database and is validated on every API request.
 - `last_mode` is one of the four canonical modes.
+- Library joins this value only to the matching `mode_reading_state` row when
+  rendering a card. A mode switch updates `last_mode` through its accepted
+  outgoing-mode mutation, while all other mode rows remain intact.
 - `status` is `preview`, `in_progress`, or `finished`.
 - Continue Reading requires `status = 'in_progress'` and `meaningfully_started_at IS NOT NULL`.
 - Finished ordering uses `finished_at DESC`; Continue Reading ordering uses `last_meaningful_read_at DESC`.
@@ -345,6 +351,11 @@ ON book_reading_state(user_id, status, last_meaningful_read_at DESC);
 - Furthest markers only advance after a qualified sequential event, except explicit content-version remapping.
 - `offset` is constrained to `0.0 <= offset <= 1.0`.
 - Meaningful-engagement counters are accumulated idempotently from accepted mutations.
+- On a client mode switch, the departing mode's settled current marker is
+  written to this mode-specific row/local mirror before the destination mode
+  is loaded. The destination reader state hydrates its own current and
+  furthest markers from its matching mode row; a cross-mode anchor map is
+  used only when that destination row has no current marker.
 
 ### 4.3 `progress_mutation`
 
@@ -471,6 +482,9 @@ erDiagram
 ### 5.2 Transaction boundaries
 
 - A reader save updates `local_book_state`/`local_mode_state`, allocates the next device sequence, and inserts `pending_mutation` in one IndexedDB transaction.
+- The live reader mirrors that same per-mode local result immediately after a
+  save. Consequently, returning to a mode in the same session restores the
+  newly saved marker rather than the opening-time server snapshot.
 - Lifecycle events write the same mutation to IndexedDB before attempting ordinary queued synchronization; a browser termination may defer the network request but cannot lose the local mutation.
 - An acknowledgement updates the local server revision and removes only the acknowledged `mutation_id` in one transaction.
 - Failed and conflicting mutations remain durable.
@@ -527,7 +541,7 @@ Marker rules:
 | `POST /api/progress/v2/mutations` | Content validation metadata and current projections | Mutation log and state projections | Idempotent and transactional. |
 | `GET /api/library` | Book states, last-mode state, content book metadata | None | Returns Continue Reading and Finished cards without N+1 requests. |
 
-`GET /api/library` joins data from the two SQLite databases in application code. It first fetches the user’s ordered state rows from `summra.db`, then performs one batched content query for all referenced books and chapters from `database.db`.
+`GET /api/library` joins data from the two SQLite databases in application code. It first fetches the user’s ordered state rows from `summra.db`, then performs one batched content query for all referenced books and chapters from `database.db`. It joins exactly the row matching `book_reading_state.last_mode`, so a card intentionally shows one latest-mode marker and percentage while every other `mode_reading_state` remains available for reader restoration.
 
 The Library route projection is independent of the transport URL spelling: `/library` and the server-canonical `/library/` resolve to the same client route before the projection is requested. The client resolves authenticated identity before choosing its projection, so a direct visit obtains the account-scoped API result rather than retaining a stale device cache. Personal identity, Library, and progress HTTP responses bypass both browser and service-worker caches, including a client-side `no-store` request to defeat a pre-existing cached response during upgrades; `cached_library`, scoped by identity, is the deliberate offline fallback. Each returned card retains its editorial book destination and carries an explicit reader action using the saved mode/marker.
 
@@ -537,6 +551,9 @@ The Library route projection is independent of the transport URL spelling: `/lib
 - A duplicate `mutation_id` produces the original acknowledgement and never reapplies deltas.
 - Active seconds and sequential-boundary increments are applied once per accepted mutation.
 - Current marker accepts backward movement and TOC navigation.
+- A saved current/furthest marker is scoped to one `(user or device, book,
+  mode)` tuple. A mode switch cannot compare against, restore, or overwrite a
+  marker from another mode; mapping is only an unsaved first-entry anchor.
 - Furthest marker is the maximum qualified word position within the resolved content version.
 - Content-version changes resolve through paragraph identity, explicit mappings, quote, ordinal, chapter opening, then book opening.
 - Completion is book-level. It does not require every mode to reach its end.
@@ -545,7 +562,24 @@ The Library route projection is independent of the transport URL spelling: `/lib
 - A remote marker never moves an active reader automatically.
 - The Library displays server-derived furthest percentage, capped at 99% until book status is `finished`.
 
-## 10. Initialization and removal of the old progress model
+## 10. Reader presentation linkage
+
+Theme and font preferences are presentation-only and are not part of a durable
+reading marker, mutation, Library projection, or merge decision. They may
+reflow paginated content, but restoration always resolves the semantic marker
+from `LOCAL_MODE_STATE`/`MODE_READING_STATE` after that presentation choice is
+applied.
+
+- Sepia applies the same reader surface to paginated content, footer, and
+  panels; it does not change content, markers, word positions, or progress.
+- The visible **Reader Serif** choice uses the native Apple serif/New York
+  stack when available, with Georgia as fallback. The storage preference keeps
+  the legacy `georgia` value so existing users retain the selected serif face.
+- The bottom reader status exposes only the active mode's furthest percentage,
+  centered. Chapter context belongs to the fixed toolbar and is not duplicated
+  in the bottom status surface.
+
+## 11. Initialization and removal of the old progress model
 
 Because existing progress data is disposable test data, implementation should:
 
@@ -558,7 +592,7 @@ Because existing progress data is disposable test data, implementation should:
 
 This reset applies only to `data/summra.db`. It must never delete or replace `data/database.db`, which contains the book corpus and compiled reader content.
 
-## 11. Required validation coverage
+## 12. Required validation coverage
 
 - Stable chapter IDs survive content updates.
 - Paragraph and alignment IDs survive an idempotent compiler rerun.
@@ -573,3 +607,5 @@ This reset applies only to `data/summra.db`. It must never delete or replace `da
 - Completion and manual-unfinish revision ordering is deterministic.
 - Anonymous IndexedDB state merges without changing mutation identity.
 - Desktop-to-narrow Side-by-Side fallback restores the same alignment row and approximate offset in Plain English or Original.
+- Switching Original -> Plain English -> Original in one open reader session
+  restores each mode's latest local marker and furthest marker independently.
