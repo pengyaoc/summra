@@ -506,7 +506,7 @@ Marker rules:
 
 | Case | Alignment representation | Reader behavior |
 | --- | --- | --- |
-| Both sides available | One row with Original and Plain memberships | Two columns at or above 760 px; stacked Original then Plain English below 760 px. |
+| Both sides available | One row with Original and Plain memberships | Available only at or above 1024 CSS px and rendered as two columns. It is unavailable below that width; the reader restores Plain English (or Original) at the same semantic alignment anchor. |
 | Original only | Original membership plus unavailable Plain membership | Preserve row; show explicit Plain English unavailable state. |
 | Plain only | Unavailable Original membership plus Plain membership | Preserve row; show explicit Original unavailable state. |
 | Neither side | Invalid alignment row | Content compiler rejects publication. |
@@ -570,4 +570,4 @@ This reset applies only to `data/summra.db`. It must never delete or replace `da
 - Mutations are idempotent by both mutation ID and device sequence.
 - Completion and manual-unfinish revision ordering is deterministic.
 - Anonymous IndexedDB state merges without changing mutation identity.
-- Desktop-to-stacked Side-by-Side reflow restores the same alignment row and approximate offset.
+- Desktop-to-narrow Side-by-Side fallback restores the same alignment row and approximate offset in Plain English or Original.
