@@ -69,6 +69,19 @@
   unavailable; the one local footer assertion in that run was fixed by the
   semantic-footer adjustment above and passes in the focused suite.
 
+### Commit and production deployment
+
+- Committed all reader, documentation, test, and regenerated-bundle changes as
+  `24294bd` (`Fix per-mode reader resume and polish reading surface`) and
+  pushed `main` to `origin`.
+- Verified `/opt/summra` on `wordpress-2-vm` at `24294bd`; its only untracked
+  files remain the pre-existing VM-local `service.env` and
+  `service.env.bak-pre-oidc-20260906`.
+- Restarted the isolated `summra` systemd user service with its required
+  `XDG_RUNTIME_DIR`. The service is active; both the loopback reader endpoint
+  and `https://pengyaochen.com/summrabook/books/a-christmas-carol-in-prose/read`
+  returned HTTP 200.
+
 ## 2026-09-07: Continuous Reader + Library direct replacement — DONE
 
 ### Library routing, progress visibility, and card UX follow-up — DONE
