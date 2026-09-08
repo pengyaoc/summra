@@ -529,6 +529,8 @@ Marker rules:
 
 `GET /api/library` joins data from the two SQLite databases in application code. It first fetches the user’s ordered state rows from `summra.db`, then performs one batched content query for all referenced books and chapters from `database.db`.
 
+The Library route projection is independent of the transport URL spelling: `/library` and the server-canonical `/library/` resolve to the same client route before the projection is requested. The client resolves authenticated identity before choosing its projection, so a direct visit obtains the account-scoped API result rather than retaining a stale device cache. Each returned card retains its editorial book destination and carries an explicit reader action using the saved mode/marker.
+
 ## 9. Projection and merge invariants
 
 - Local state is written before a network mutation is attempted.

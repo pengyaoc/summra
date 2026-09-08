@@ -146,7 +146,11 @@ Each card shows:
 - Human-readable last-read recency, such as “Yesterday”
 - A Continue action
 
-The entire card is the primary action and opens the active mode at that mode's current marker. The explicit Continue control has the same destination and exists for clarity and keyboard access. The most recently read book receives greater visual weight without preventing at least the next several books from being visible or horizontally reachable.
+The entire card is the primary action and opens the editorial book page. The explicit Continue control opens the active mode at that mode's current marker; it is visually unambiguous and is the sole direct entry to the reader from Library. The most recently read book receives greater visual weight without preventing at least the next several books from being visible or horizontally reachable. Covers use the existing generated/default-cover fallback when the catalog image is unavailable.
+
+Library is a canonical application route: both `/library` and its server-canonical `/library/` form render the same Library screen. A direct visit must never fall through to Home.
+
+On an authenticated direct visit, the shelf waits for identity resolution before choosing a cloud or device-cached projection. It must refresh from the authenticated Library API once identity is known rather than leaving a stale anonymous/device shelf visible.
 
 #### Meaningful engagement rule
 

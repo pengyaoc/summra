@@ -30,7 +30,12 @@
     function currentAppPath() {
         const rawPath = root.location.pathname;
         const base = root.APP_BASE_PATH || '';
-        return stripBasePath(rawPath, base);
+        const path = stripBasePath(rawPath, base);
+        // Flask redirects directory-like routes such as /library to
+        // /library/. Treat that canonical transport URL as the same
+        // application route so a direct Library visit never falls through
+        // to the Home screen.
+        return path.length > 1 ? path.replace(/\/+$/, '') : path;
     }
 
     // Inverse of stripBasePath: prepend the deploy-time base path (e.g.

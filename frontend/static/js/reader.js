@@ -700,6 +700,10 @@ export const readerMixin = {
         this.continuousReader = { active: false };
         this.clearPagination();
         this.showOnlySections('library-section');
+        // On a direct Library load, routing can begin before the async auth
+        // probe has completed. Wait for the shared readiness promise before
+        // choosing between the authenticated projection and device cache.
+        await window.authModule?.initAuth?.();
         document.getElementById('library-nav-btn')?.classList.toggle('hidden', !window.authModule?.currentUser?.());
         const cards = await window.authModule?.getLibrary?.();
         const continueEl = document.getElementById('continue-reading-cards');
@@ -709,13 +713,26 @@ export const readerMixin = {
         if (!cards || !continueEl || !finishedEl) return;
         const render = (book, action) => {
             const rawCover = book.cover_image_url || '';
-            const coverUrl = /^https?:\/\//.test(rawCover) ? rawCover :
-                (rawCover.startsWith('/static/') ? rawCover : `/static/${rawCover.replace(/^\/+/, '')}`);
-            const cover = rawCover ? `<img src="${this.escapeHtml(withBasePath(coverUrl))}" alt="" loading="lazy">` : '';
+            const cover = rawCover && this.getImageHtml
+                ? this.getImageHtml(rawCover, `${book.title} cover`, 'library-card-cover')
+                : '<div class="library-cover-placeholder" aria-hidden="true">📖</div>';
             const chapter = book.current_chapter?.chapter_title || (book.current_chapter ? `Chapter ${book.current_chapter.chapter_number}` : 'Beginning');
+            const percentage = Math.max(0, Math.min(100, Number(book.furthest_percentage) || 0));
+            const mode = (book.last_mode || 'plain').replaceAll('_', ' ');
             const unfinished = book.status === 'finished'
                 ? `<button class="library-mark-unfinished" type="button" data-reader-unfinish="${book.id}">Mark unfinished</button>` : '';
-            return `<article class="library-card" data-reader-book="${book.id}">${cover}<div><h3>${this.escapeHtml(book.title)}</h3><p>${this.escapeHtml(book.author)}</p><p>${this.escapeHtml(book.last_mode.replaceAll('_', ' '))} · ${book.furthest_percentage}%</p><p>${this.escapeHtml(chapter)}</p><button type="button">${action}</button>${unfinished}</div></article>`;
+            return `<article class="library-card" data-reader-book="${book.id}">
+                <div class="library-card-cover-frame">${cover}</div>
+                <div class="library-card-body">
+                    <div class="library-card-meta"><span>${book.status === 'finished' ? 'Finished' : 'Continue reading'}</span><span>${percentage}%</span></div>
+                    <h3>${this.escapeHtml(book.title)}</h3>
+                    <p class="library-card-author">${this.escapeHtml(book.author)}</p>
+                    <p class="library-card-location">${this.escapeHtml(chapter)}</p>
+                    <div class="library-card-progress" aria-label="${percentage}% read"><span style="width: ${percentage}%"></span></div>
+                    <div class="library-card-actions"><button class="library-read-action" type="button" data-library-read="${book.id}">${action}<span aria-hidden="true">→</span></button>${unfinished}</div>
+                    <p class="library-card-mode">${this.escapeHtml(mode)}</p>
+                </div>
+            </article>`;
         };
         continueEl.innerHTML = cards.continue_reading.map(book => render(book, 'Continue')).join('');
         finishedEl.innerHTML = cards.finished.map(book => render(book, 'Read again')).join('');
@@ -726,6 +743,16 @@ export const readerMixin = {
         document.querySelectorAll('[data-reader-book]').forEach(card => card.addEventListener('click', () => {
             const book = this.allBooks.find(item => item.id === Number(card.dataset.readerBook));
             if (book) this.selectBook(book);
+        }));
+        document.querySelectorAll('[data-library-read]').forEach(button => button.addEventListener('click', async event => {
+            event.stopPropagation();
+            const book = this.allBooks.find(item => item.id === Number(button.dataset.libraryRead));
+            if (!book) return;
+            const readerPath = withBasePath(`/books/${book.slug || this.slugify(book.title)}/read`);
+            if (window.location.pathname !== readerPath) {
+                window.history.pushState({ type: 'reader', bookId: book.id }, '', readerPath);
+            }
+            await this.showContinuousReader(book);
         }));
         document.querySelectorAll('[data-reader-unfinish]').forEach(button => button.addEventListener('click', async event => {
             event.stopPropagation();

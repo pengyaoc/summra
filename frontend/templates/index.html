@@ -151,8 +151,9 @@
         <main class="main-content">
             <section class="library-section {% if not initial_data or initial_data.type != 'library' %}hidden{% endif %}" id="library-section">
                 <div class="library-header">
+                    <p class="library-eyebrow">YOUR READING</p>
                     <h1>Your Library</h1>
-                    <p>Books you start appear here, with your place saved automatically.</p>
+                    <p class="library-intro">Your place is saved automatically, wherever you read.</p>
                 </div>
                 <div id="library-offline-note" class="reader-status hidden" role="status">Sync pending</div>
                 <section class="library-shelf" id="continue-reading-shelf">
@@ -164,7 +165,7 @@
                     <div class="library-cards" id="finished-cards"></div>
                 </section>
                 <div class="library-empty hidden" id="library-empty">
-                    <p>Books you start will appear here, with your place saved automatically.</p>
+                    <p>Your next classic will appear here, with your place saved automatically.</p>
                     <a class="hero-cta-primary" href="{{ base_path }}/discover">Find your first classic</a>
                 </div>
             </section>
