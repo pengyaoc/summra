@@ -16,9 +16,9 @@
 
 **Deployment.** Committed as `aa16923`, pushed to `main`, and deployed to `wordpress-2-vm` through the required `sudo -u summra git pull --ff-only origin main` workflow. The `summra` user service was restarted with its `XDG_RUNTIME_DIR` and is active.
 
-**Post-deploy cache correction — IN PROGRESS.** Chrome proved the server and route changes but showed the prior one-card Library response from a one-hour public HTTP cache. Personal identity/Library/progress responses are being made private/no-store and excluded from the service-worker cache; IndexedDB remains the scoped offline Library fallback. This prevents stale personal shelves while preserving offline reading.
+**Post-deploy cache correction — DONE.** Chrome proved the server and route changes but initially showed the prior one-card Library response from a one-hour public HTTP cache. Personal identity/Library/progress responses are now private/no-store and excluded from the service-worker cache; IndexedDB remains the scoped offline Library fallback. This prevents stale personal shelves while preserving offline reading.
 
-The client request itself also now uses `cache: 'no-store'` for those personal endpoints, which bypasses the already-populated legacy HTTP cache during the rollout rather than waiting for its previous one-hour expiry.
+The client request itself also now uses `cache: 'no-store'` for those personal endpoints, which bypasses the already-populated legacy HTTP cache during the rollout rather than waiting for its previous one-hour expiry. Committed as `553c0b8` and `a67912a`, each pushed to `main` and deployed through the required `git pull --ff-only` workflow. Final Chrome verification at the canonical public `/summrabook/library/` route shows both Frankenstein and Pride and Prejudice (1%), with the responsive shelf also checked at 430px.
 
 ### Follow-up reader UX corrections — DONE
 
