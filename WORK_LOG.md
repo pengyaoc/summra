@@ -18,6 +18,8 @@
 
 **Post-deploy cache correction — IN PROGRESS.** Chrome proved the server and route changes but showed the prior one-card Library response from a one-hour public HTTP cache. Personal identity/Library/progress responses are being made private/no-store and excluded from the service-worker cache; IndexedDB remains the scoped offline Library fallback. This prevents stale personal shelves while preserving offline reading.
 
+The client request itself also now uses `cache: 'no-store'` for those personal endpoints, which bypasses the already-populated legacy HTTP cache during the rollout rather than waiting for its previous one-hour expiry.
+
 ### Follow-up reader UX corrections — DONE
 
 - Restoring the editorial book-detail view as the destination for book cards and title links; the dedicated **Read book** control is the only entry to `/books/{slug}/read`.
