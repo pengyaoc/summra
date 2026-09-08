@@ -7,6 +7,8 @@
 - **Last updated:** 2026-09-07 (mode-resume and reader-surface follow-up)
 - **Target:** Web and installable PWA
 
+> **Superseded 2026-09-07:** the "local-first" architecture described throughout this document — the IndexedDB mutation queue, per-device local progress trusted ahead of the server, offline reading/reader-state sync — was removed. The app now assumes an internet connection is always available; reading progress is tracked only in the server DB (`summra.db`) and follows the reader across devices via `/api/progress/v2/*`, with no per-device local copy. Section 15 ("Local reading, offline queue, and cross-device sync") and offline-mode references elsewhere in this document describe removed behavior — kept here as historical design record, not current spec. See `docs/PRD.md` §7d, `docs/ERD.md` (Progress Tracking section), and `WORK_LOG.md` for the current, accurate description and the removal entry.
+
 ## 1. Summary
 
 Summra will move from a chapter-centric reading experience to this product model:

@@ -463,57 +463,6 @@ body.on-chapter-page .header {
     }
 }
 
-/* Offline Badge (PWA) */
-.offline-badge {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 28px;
-    height: 28px;
-    background: linear-gradient(135deg, var(--success-gradient-start) 0%, var(--success-gradient-end) 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(72, 187, 120, 0.4);
-    z-index: 10;
-}
-
-.offline-badge svg {
-    width: 16px;
-    height: 16px;
-    color: white;
-    stroke-width: 3;
-}
-
-@media (max-width: 768px) {
-    .offline-badge {
-        width: 24px;
-        height: 24px;
-        top: 8px;
-        right: 8px;
-    }
-
-    .offline-badge svg {
-        width: 14px;
-        height: 14px;
-    }
-}
-
-@media (max-width: 480px) {
-    .offline-badge {
-        width: 22px;
-        height: 22px;
-        top: 6px;
-        right: 6px;
-    }
-
-    .offline-badge svg {
-        width: 12px;
-        height: 12px;
-    }
-}
-
 .loading {
     text-align: center;
     padding: 60px 20px;
@@ -755,91 +704,6 @@ body.on-chapter-page .header {
     font-size: 1.1rem;
     color: var(--text-light);
     font-style: italic;
-}
-
-/* Save for Offline Button (PWA) */
-.save-offline-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    margin-top: 16px;
-    background: linear-gradient(135deg, var(--cta-gradient-start) 0%, var(--cta-gradient-end) 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
-}
-
-.save-offline-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
-}
-
-.save-offline-btn:active:not(:disabled) {
-    transform: translateY(0);
-}
-
-.save-offline-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-}
-
-.save-offline-btn .offline-icon {
-    width: 20px;
-    height: 20px;
-    stroke-width: 2;
-}
-
-/* Loading state - pulse animation */
-.save-offline-btn.loading {
-    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-    animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.7;
-    }
-}
-
-.save-offline-btn.loading .offline-icon {
-    animation: download 1.5s ease-in-out infinite;
-}
-
-@keyframes download {
-    0% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(4px);
-    }
-    100% {
-        transform: translateY(0);
-    }
-}
-
-/* Saved state - success green */
-.save-offline-btn.saved {
-    background: linear-gradient(135deg, var(--success-gradient-start) 0%, var(--success-gradient-end) 100%);
-    box-shadow: 0 4px 6px rgba(72, 187, 120, 0.3);
-}
-
-.save-offline-btn.saved:hover {
-    transform: none;
-    box-shadow: 0 4px 6px rgba(72, 187, 120, 0.3);
-}
-
-/* Hide button by default - only show when PWA is available */
-.save-offline-btn.hidden {
-    display: none;
 }
 
 /* Book Content Sections */
@@ -4958,8 +4822,8 @@ body.pagination-active {
 .library-header h1 { margin-bottom: .5rem; font-size: clamp(2rem, 4vw, 2.85rem); }
 .library-intro { color: var(--text-light); font-size: 1.08rem; }
 .library-shelf h2 { margin-bottom: 1rem; font-size: 1.45rem; }
-.library-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 520px)); gap: 1rem; }
-.library-card { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 1.1rem; min-height: 180px; padding: 1rem; border: 1px solid var(--border-light); border-radius: 12px; background: var(--card-background); box-shadow: 0 2px 8px rgba(25, 40, 52, .05); cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.library-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+.library-card { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 1.1rem; min-height: 180px; max-width: 520px; padding: 1rem; border: 1px solid var(--border-light); border-radius: 12px; background: var(--card-background); box-shadow: 0 2px 8px rgba(25, 40, 52, .05); cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .library-card:hover { border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-light)); box-shadow: 0 8px 22px rgba(25, 40, 52, .1); transform: translateY(-1px); }
 .library-card-cover-frame { display: flex; align-items: stretch; min-width: 0; }
 .library-card .book-cover-wrapper, .library-cover-placeholder { width: 108px; height: 162px; overflow: hidden; border-radius: 7px; background: #e9edf0; }

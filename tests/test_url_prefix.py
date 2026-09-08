@@ -4,7 +4,7 @@ Bug this guards against:
 Deploying Summra under a path prefix (e.g. Apache's
 `ProxyPass /summrabook/ http://127.0.0.1:5001/`, which strips the prefix
 before forwarding) requires every generated URL — url_for() links, the
-service worker, the PWA manifest, robots.txt, canonical/OG tags, and the
+PWA manifest, robots.txt, canonical/OG tags, and the
 window.APP_BASE_PATH the frontend JS reads — to include that prefix.
 Without PrefixMiddleware reading the proxy's X-Forwarded-Prefix header and
 applying it as SCRIPT_NAME, url_for() has no way to know it isn't being
@@ -58,35 +58,6 @@ def test_prefixed_static_asset_urls(client):
     resp = client.get('/', headers={'X-Forwarded-Prefix': '/summrabook'})
     body = resp.get_data(as_text=True)
     assert '/summrabook/static/css/style.css' in body
-
-
-def test_service_worker_scope_matches_prefix(client):
-    """Service-Worker-Allowed and the precached '/' entry must both live
-    under the deploy prefix, or the browser will refuse/scope it wrong."""
-    resp = client.get('/service-worker.js', headers={'X-Forwarded-Prefix': '/summrabook'})
-    assert resp.status_code == 200
-    assert resp.headers.get('Service-Worker-Allowed') == '/summrabook/'
-    body = resp.get_data(as_text=True)
-    assert "BASE_PATH = \"/summrabook\";" in body
-
-
-def test_service_worker_precache_revision_is_not_the_old_hardcoded_literal(client):
-    """The precached '/' and '/offline' entries' revision must be a real
-    content hash (backend/routes/system.py's _precache_revision()), not the
-    '1.0.1' literal that was never bumped — meaning Workbox never noticed
-    an index.html/offline.html change and refetched the precached shell."""
-    resp = client.get('/service-worker.js')
-    body = resp.get_data(as_text=True)
-    assert "revision: '1.0.1'" not in body
-    import re
-    revisions = re.findall(r"revision: '(\d+)'", body)
-    assert len(revisions) == 2, f"expected 2 precache entries, found: {revisions}"
-    assert revisions[0] == revisions[1], "both precached entries must share one revision"
-    assert revisions[0] != '0', (
-        "revision is '0' — _precache_revision() likely read zero bytes "
-        "(e.g. resolved the wrong directory) rather than hashing real "
-        "template content"
-    )
 
 
 def test_manifest_scope_matches_prefix(client):

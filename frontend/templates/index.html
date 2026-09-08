@@ -155,7 +155,6 @@
                     <h1>Your Library</h1>
                     <p class="library-intro">Your place is saved automatically, wherever you read.</p>
                 </div>
-                <div id="library-offline-note" class="reader-status hidden" role="status">Sync pending</div>
                 <section class="library-shelf" id="continue-reading-shelf">
                     <h2>Continue Reading</h2>
                     <div class="library-cards" id="continue-reading-cards"></div>
@@ -327,16 +326,6 @@
                             <span class="plain-english-coming-soon-icon" aria-hidden="true">✨</span>
                             <span class="plain-english-coming-soon-text">Plain English version coming soon</span>
                         </div>
-                        {% if feature_auth %}
-                        <button class="save-offline-btn hidden" id="save-offline-btn">
-                            <svg class="offline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            <span id="save-offline-text">Save for Offline</span>
-                        </button>
-                        {% endif %}
                     </div>
                 </div>
 

@@ -33,8 +33,8 @@ summra/
 │   ├── gemini_tts_handler.py# Gemini 2.5 Flash TTS client
 │   └── tts_utils.py         # Provider-agnostic chunking, stitching, cache lookup
 ├── frontend/
-│   ├── templates/           # index.html (SPA shell), offline.html, sitemap.xml
-│   └── static/              # css/, js/, covers/, illustrations/, audio/, guides/, images/, manifest.json, service-worker.js
+│   ├── templates/           # index.html (SPA shell), manifest.json, sitemap.xml
+│   └── static/              # css/, js/, covers/, illustrations/, audio/, guides/, images/
 ├── scripts/
 │   ├── content/             # generate_summaries.py (main ingestion), modern-English rewrite, slugs, chapter cleanup, author bios
 │   ├── audio/               # Offline TTS batches, audio backfill, filename migration
@@ -212,7 +212,7 @@ Page routes (server-rendered shell + hash-based SPA):
 - `GET /categories`, `GET /categories/<id>` — Category index + detail
 - `GET /authors/<author_slug>` — Author hub
 - `GET /blog`, `GET /blog/<slug>` — Blog (FEATURE_BLOG)
-- `GET /offline`, `GET /service-worker.js`, `GET /robots.txt`, `GET /sitemap.xml` — PWA + SEO
+- `GET /manifest.json`, `GET /robots.txt`, `GET /sitemap.xml` — PWA installability + SEO
 
 JSON API:
 

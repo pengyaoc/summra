@@ -693,7 +693,6 @@ Reading-progress tracking that persists across devices *for a signed-in visitor*
 
 **7c. Continue Reading Button:**
 - **Location:** Top of book detail page in book-detail-info section
-- **Positioning:** Near Save for Offline button for easy access
 - **Display Logic:** Only shown when user has reading progress for the book
 - **Button Text:** "Continue Reading: [Chapter Name], Page [Number]"
   - Example: "Continue Reading: Chapter 5, Page 3"
@@ -701,18 +700,9 @@ Reading-progress tracking that persists across devices *for a signed-in visitor*
 - **Functionality:**
   - Clicking navigates directly to saved chapter
   - Auto-scrolls to saved page after chapter loads
-  - Purple gradient styling consistent with Save for Offline button
 - **Icon:** 📖 book emoji for visual recognition
 
-**7d. Offline Support (PWA Mode):**
-- **Identity Persistence:** no session cookie of this app's own to persist — identity is re-derived from `X-Remote-Email` on every request. `auth.js` restores the last-known user from `localStorage` instantly on load (for offline support), then confirms/corrects it against `/api/auth/check`.
-- **Offline Progress Tracking:**
-  - Progress saved to localStorage when offline, or whenever anonymous (no signed-in user to sync to)
-  - Auto-sync to server when connection restored *and* signed in
-  - Merge strategy: server takes precedence for conflicts
-- **Service Worker Caching:**
-  - `/api/auth/check` cached (NetworkFirst, 3s timeout, 30-day expiration — matches how long a trusted-header identity realistically stays valid for a PWA that may go offline for extended periods)
-  - Graceful fallback to cached auth state offline
+**7d. Identity Persistence:** no session cookie of this app's own to persist — identity is re-derived from `X-Remote-Email` on every request, confirmed against `/api/auth/check`. There is no offline mode: the app assumes an internet connection is always available (offline support — service worker caching, IndexedDB progress caching — was removed 2026-09-07; see `WORK_LOG.md`). Reading progress is tracked only in the server-side database, keyed by account, so it follows the reader across devices. An earlier IndexedDB-backed local mutation queue let a device trust and restore its own unsynced progress before/without a server round-trip; that per-device local copy was removed 2026-09-07 (see `WORK_LOG.md`) — progress reads and writes now always go through `/api/progress/v2/*`.
 
 **7e. Reading History & Statistics:**
 - **Account View:**
@@ -746,9 +736,7 @@ Reading-progress tracking that persists across devices *for a signed-in visitor*
 - [✅] Chapter completion auto-marked on last page
 - [✅] Completed chapters show visual indicator (grey + checkmark)
 - [✅] Continue Reading button appears on book page when progress exists
-- [✅] Continue Reading button positioned near Save for Offline
 - [✅] Clicking Continue Reading navigates to saved chapter and page
-- [✅] Offline progress syncs to server once online *and* signed in
 - [✅] Account stats show books started and chapters completed
 - [✅] Anonymous visitor never sees the shared-gateway sign-in path named in the UI
 
@@ -1472,7 +1460,6 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 - 📋 Playback speed control
 - 📋 Download summaries as PDF
 - 📋 Export to EPUB for e-readers
-- 📋 Offline mode support
 - 📋 Social sharing features
 - 📋 Comments and discussions
 
@@ -1582,7 +1569,7 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
   - No API key required
 
 ### Technical Stack
-- **Frontend:** Vanilla HTML/CSS/JavaScript (single-page app, hash routing) + PWA service worker
+- **Frontend:** Vanilla HTML/CSS/JavaScript (single-page app, hash routing), installable PWA (no offline support)
 - **Backend:** Python Flask (`backend/app_base.py` for shared routes, `app.py` for dev, `app_prod.py` for prod)
 - **Databases:** SQLite — `data/database.db` for content, `summra.db` (project root) for users + reading progress
 - **Summary / metadata / illustration generation:** Google Gemini (3.5 Flash + fallbacks; 2.5 Flash Image / batch for chapter illustrations)
@@ -1623,7 +1610,6 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 - WCAG Accessibility Guidelines: https://www.w3.org/WAI/WCAG21/quickref/
 - Google Gemini API: https://ai.google.dev/
 - Gemini TTS docs: https://ai.google.dev/gemini-api/docs/speech-generation
-- Workbox (PWA caching): https://developer.chrome.com/docs/workbox/
 
 ---
 
@@ -2120,21 +2106,20 @@ Automated audit system to verify data integrity of chapter text stored in the da
 
 ---
 
-## Progressive Web App (PWA) Features
+## Progressive Web App (PWA) Installability
 
 **Feature Owner:** Engineering Team
-**Priority:** High
-**Status:** ✅ Implemented (2025-12-18)
+**Priority:** Medium
+**Status:** ✅ Implemented — installability only (offline support removed 2026-09-07)
 
 ### Overview
 
-Summra is a Progressive Web App that enables users to install the application on their devices and read book summaries offline, providing a native app-like experience across all platforms.
+Summra can be installed to a device's home screen for a native, browser-chrome-free launch experience. It has no offline mode: the app assumes an internet connection is always available. The previous "Progressive Web App" offering (service worker, automatic page caching, "Save for Offline" book downloads, an offline fallback page) was removed — it caused more problems (stale-cache bugs, iOS cache-eviction workarounds, sync complexity) than it solved. See `WORK_LOG.md` for the removal entry.
 
 ### User Stories
 
 **As a mobile user**, I want to:
 - Install Summra as an app on my home screen
-- Access previously viewed books offline (airplane mode, poor connectivity)
 - Have the app feel native without browser chrome
 
 **As an iOS user**, I want to:
@@ -2145,13 +2130,9 @@ Summra is a Progressive Web App that enables users to install the application on
 - See automatic install prompts from Chrome
 - Install with one tap
 
-**As a commuter**, I want to:
-- Read book summaries on the subway without internet
-- Have pages load instantly from cache
-
 ### Features
 
-#### 1. Installable App
+#### Installable App
 
 **What:**
 - Users can install Summra as a standalone app
@@ -2159,15 +2140,9 @@ Summra is a Progressive Web App that enables users to install the application on
 - Opens in full-screen mode (no browser UI)
 
 **How:**
-- Web App Manifest defines app metadata
-- Service worker enables installation criteria
-- Android: Automatic install prompt
-- iOS: Custom install instructions banner
-
-**User Experience:**
-- **Android:** Chrome shows "Install Summra" banner after visiting site
-- **iOS:** Purple banner slides up with Share icon instructions
-- **Desktop:** Install icon appears in Chrome address bar
+- Web App Manifest (`frontend/templates/manifest.json`, served at `/manifest.json`) defines app metadata
+- Android: Automatic install prompt (`beforeinstallprompt`)
+- iOS: Custom install instructions banner (`#ios-install-banner`)
 
 **Acceptance Criteria:**
 - [✅] Manifest.json with app metadata
@@ -2175,183 +2150,18 @@ Summra is a Progressive Web App that enables users to install the application on
 - [✅] Standalone display mode
 - [✅] Theme color (#1a1a1a)
 - [✅] App opens full-screen when launched from home screen
-
-#### 2. Offline Reading
-
-**What:**
-- Users can access previously visited pages offline
-- Automatic caching of viewed content
-- Graceful offline fallback for new pages
-
-**How:**
-- Service worker intercepts network requests
-- Caches content as users browse
-- Network-First strategy for book data (fresh when online, cached fallback)
-- Cache-First strategy for images (fast loading)
-
-**User Experience:**
-- Browse "Pride and Prejudice" → Automatically cached
-- Read Chapter 1 → Automatically cached
-- Go offline → Can still read visited pages
-- Try new chapter offline → See friendly offline message
-
-**Acceptance Criteria:**
-- [✅] Service worker with Workbox 7.0.0
-- [✅] Network-First caching for book data, summaries, chapters
-- [✅] Cache-First for images (covers, icons)
-- [✅] Stale-While-Revalidate for lists/categories
-- [✅] Cache limits (100 images, 50 books, 100 chapters)
-- [✅] Cache expiration (7-30 days depending on content type)
-
-#### 3. iOS Install Instructions
-
-**What:**
-- Custom install banner for iOS users
-- Shows Safari Share icon + step-by-step instructions
-- Dismissible and non-intrusive
-
-**How:**
-- Detect iOS Safari via user agent
-- Show banner only if not installed and not dismissed
-- Display after 2-second delay
-- Save dismissal to localStorage
-
-**User Experience:**
-- Visit Summra on iPhone Safari
-- After 2 seconds, purple banner slides up from bottom
-- Banner shows: "Tap [Share icon] then 'Add to Home Screen'"
-- User can dismiss with X button (won't show again)
-- Banner doesn't show if already installed
-
-**Acceptance Criteria:**
-- [✅] iOS detection (iPad, iPhone, iPod)
-- [✅] Standalone mode detection (don't show if installed)
-- [✅] Beautiful banner design with gradient
-- [✅] Share icon SVG in instructions
-- [✅] Dismissible (localStorage persistence)
-- [✅] Slide-up animation
-- [✅] Responsive mobile design
-
-#### 4. Offline Fallback Page
-
-**What:**
-- Beautiful fallback page when offline and page not cached
-- Auto-retry connection
-- Explains offline functionality
-
-**How:**
-- Service worker catch-all handler
-- Serves `/offline` page for uncached navigation
-- JavaScript auto-retry every 5 seconds
-- Listens for online event to redirect
-
-**User Experience:**
-- Try to visit new page while offline
-- See purple gradient page with book icon
-- Message: "You're offline. You can still access pages you've visited before!"
-- "Try Again" button
-- Page automatically redirects when connection restored
-
-**Acceptance Criteria:**
-- [✅] Offline fallback page (`/offline`)
-- [✅] Beautiful gradient design
-- [✅] Auto-retry every 5 seconds (max 20 attempts)
-- [✅] Online event listener
-- [✅] Clear messaging about offline mode
+- [✅] iOS install banner, dismissible (`localStorage.installBannerDismissed`), doesn't reappear once dismissed or once installed
 
 ### Technical Implementation
 
-**New Files:**
-- `frontend/static/manifest.json` - Web app manifest
-- `frontend/static/service-worker.js` - Service worker with Workbox
-- `frontend/templates/offline.html` - Offline fallback page
-
-**Modified Files:**
+**Files:**
+- `frontend/templates/manifest.json` - Web app manifest (Jinja-rendered for `base_path`/asset versioning)
 - `frontend/templates/index.html` - Manifest link, iOS meta tags, install banner
-- `frontend/static/js/app.js` - Service worker registration, install prompt
+- `frontend/static/js/app.js` - `setupInstallPrompt()` (iOS banner + Android `beforeinstallprompt`)
 - `frontend/static/css/style.css` - iOS banner styles
-- `backend/app_base.py` - Service worker and offline routes
 
-**Flask Routes:**
-- `/service-worker.js` - Serves service worker with correct headers
-- `/offline` - Serves offline fallback page
-
-### Browser Support
-
-| Feature | Chrome/Edge | Safari iOS | Firefox |
-|---------|-------------|------------|---------|
-| Offline Reading | ✅ Full | ✅ Full | ✅ Full |
-| Install App | ✅ Auto | ✅ Manual | ✅ Auto |
-| Standalone Mode | ✅ Yes | ✅ Yes | ✅ Yes |
-| Storage | ~500MB | ~50MB | ~500MB |
-
-### Caching Strategy
-
-**Automatic Caching:**
-- Content is cached passively as users browse
-- No explicit "Download" button (Phase 1)
-- Users accumulate offline content naturally
-
-**Cache Priorities:**
-1. App shell - Precached immediately
-2. Book covers - Cached on first view
-3. Book data - Cached when book opened
-4. Summaries - Cached when summary read
-5. Chapters - Cached when chapter read
-
-**Storage Management:**
-- Cache auto-expires after configured duration
-- LRU (Least Recently Used) eviction when storage fills
-- Max entries per cache type enforced
-
-### Success Metrics
-
-**Adoption:**
-- Install rate: % of visitors who install app
-- Daily active installs: Users opening from home screen
-- Offline usage: % of sessions while offline
-
-**Performance:**
-- Cache hit rate: % of requests served from cache
-- Offline fallback rate: How often offline page shown
-- Install banner dismissal rate (iOS)
-
-**Quality:**
-- Lighthouse PWA score: Target 90-100
-- Service worker registration success rate: >99%
-- Cache storage errors: <1%
-
-### Future Enhancements (Phase 2)
-
-**Active Download:**
-- "Save for Offline" button on book pages
-- Prefetch all chapters + summary for a book
-- Cache management UI (view/delete saved books)
-- Storage quota display
-
-**Advanced Features:**
-- Background sync for failed requests
-- Push notifications (Android only)
-- Share Target API (share text to Summra)
-- Periodic background sync
-
-### Testing Requirements
-
-**Manual Testing:**
-- [✅] Install on Android Chrome (automatic prompt)
-- [✅] Install on iOS Safari (manual with banner)
-- [✅] Install on desktop Chrome
-- [✅] Browse books, verify caching in DevTools
-- [✅] Toggle offline mode, verify cached pages load
-- [✅] Try uncached page offline, verify fallback shown
-- [✅] Dismiss iOS banner, verify doesn't reappear
-- [✅] Install app, verify iOS banner doesn't show
-
-**Automated Testing:**
-- Lighthouse PWA audit (score 90+)
-- Service worker registration check
-- Manifest validation
-- Cache API functionality
+**Flask Route:**
+- `/manifest.json` - Serves the manifest with correct content type (`backend/routes/system.py`)
 
 ---
 
@@ -2464,7 +2274,7 @@ The following subsystems are **implemented in code but dark by default**, gated 
 
 | Flag | Default | What it gates |
 |------|---------|---------------|
-| `FEATURE_AUTH` | `True` (changed 2026-09-06; was `False`) | Registers the progress-tracking and whoami blueprints (identity + reading-progress tracking, Continue-Reading button, active Save-for-Offline — PRD §7). No longer a registration/login system — see §7's superseded note. Per-host reach of identity is separately controlled by `SUMMRA_AUTH_MODE` (`off`/`optional`/`required`), not this flag. |
+| `FEATURE_AUTH` | `True` (changed 2026-09-06; was `False`) | Registers the progress-tracking and whoami blueprints (identity + reading-progress tracking, Continue-Reading button — PRD §7). No longer a registration/login system — see §7's superseded note. Per-host reach of identity is separately controlled by `SUMMRA_AUTH_MODE` (`off`/`optional`/`required`), not this flag. |
 | `FEATURE_BLOG` | `False` | Editorial blog routes, blog API endpoints, blog entries in `sitemap.xml` (PRD §15) |
 
 **Convention:**

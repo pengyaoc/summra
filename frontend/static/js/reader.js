@@ -709,7 +709,6 @@ export const readerMixin = {
         const continueEl = document.getElementById('continue-reading-cards');
         const finishedEl = document.getElementById('finished-cards');
         const emptyEl = document.getElementById('library-empty');
-        const offline = document.getElementById('library-offline-note');
         if (!cards || !continueEl || !finishedEl) return;
         const render = (book, action) => {
             const rawCover = book.cover_image_url || '';
@@ -739,7 +738,6 @@ export const readerMixin = {
         emptyEl?.classList.toggle('hidden', cards.continue_reading.length + cards.finished.length > 0);
         document.getElementById('continue-reading-shelf')?.classList.toggle('hidden', !cards.continue_reading.length);
         document.getElementById('finished-shelf')?.classList.toggle('hidden', !cards.finished.length);
-        offline?.classList.toggle('hidden', !cards.offline);
         document.querySelectorAll('[data-reader-book]').forEach(card => card.addEventListener('click', () => {
             const book = this.allBooks.find(item => item.id === Number(card.dataset.readerBook));
             if (book) this.selectBook(book);
@@ -770,7 +768,7 @@ export const readerMixin = {
         await window.authModule?.queueReaderMutation?.({
             book_id: bookId, mode, current_marker: modeState.current_marker,
             event_cause: 'manual_unfinish', active_seconds_delta: 0, sequential_boundaries_delta: 0,
-            base_revision: modeState.revision || modeState.server_revision || 0,
+            base_revision: modeState.revision || 0,
         });
     },
 
@@ -1275,22 +1273,30 @@ export const readerMixin = {
             book_id: this.currentBook.id, mode, current_marker: currentMarker,
             qualified_furthest_marker: qualified, event_cause: cause,
             active_seconds_delta: activeSeconds, sequential_boundaries_delta: boundaries,
-            base_revision: modeState?.server_revision ?? modeState?.revision ?? 0,
+            base_revision: modeState?.revision ?? 0,
             ...extra,
         });
-        // Keep the live projection in step with the local-first write. Without
-        // this snapshot, switching back to a mode restores the marker fetched
-        // when the reader first opened instead of the marker just saved.
+        // Keep the in-memory (this tab only) projection in step with the save
+        // just made, so switching modes mid-session reflects it immediately
+        // instead of the marker fetched when the reader first opened. The
+        // durable copy of this state lives only in the server DB.
         reader.state ||= { book: null, modes: [] };
         reader.state.modes ||= [];
-        if (!modeState) {
-            modeState = { book_id: this.currentBook.id, mode };
-            reader.state.modes.push(modeState);
+        const projectionMode = mutation?.projection?.modes?.find(item => item.mode === mode);
+        if (projectionMode) {
+            modeState = projectionMode;
+            const index = reader.state.modes.findIndex(item => item.mode === mode);
+            if (index === -1) reader.state.modes.push(modeState); else reader.state.modes[index] = modeState;
+        } else {
+            if (!modeState) {
+                modeState = { book_id: this.currentBook.id, mode };
+                reader.state.modes.push(modeState);
+            }
+            modeState.current_marker = currentMarker;
+            modeState.furthest_marker = qualified || furthest || modeState.furthest_marker || null;
         }
-        modeState.current_marker = currentMarker;
-        modeState.furthest_marker = qualified || furthest || modeState.furthest_marker || null;
-        modeState.server_revision = (mutation?.base_revision ?? modeState.server_revision ?? modeState.revision ?? 0) + 1;
-        if (reader.state.book) reader.state.book.last_mode = mode;
+        if (mutation?.projection?.book) reader.state.book = mutation.projection.book;
+        else if (reader.state.book) reader.state.book.last_mode = mode;
         if (reader.mode === mode) {
             reader.modeState = modeState;
             reader.furthestMarker = modeState.furthest_marker;
