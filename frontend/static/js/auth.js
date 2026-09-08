@@ -149,7 +149,9 @@ async function cacheProjection(projection) {
 async function getReaderState(bookId) {
     if (currentUser && navigator.onLine) {
         try {
-            const response = await fetch(`${API_BASE}/progress/v2/books/${bookId}`, { credentials: 'include' });
+            const response = await fetch(`${API_BASE}/progress/v2/books/${bookId}`, {
+                credentials: 'include', cache: 'no-store',
+            });
             if (response.ok) {
                 const data = await response.json();
                 await cacheProjection(data.projection);
@@ -220,7 +222,9 @@ async function getLibrary() {
     const scope = currentUser ? `user:${currentUser.id}` : 'device';
     if (currentUser && navigator.onLine) {
         try {
-            const response = await fetch(`${API_BASE}/library`, { credentials: 'include' });
+            const response = await fetch(`${API_BASE}/library`, {
+                credentials: 'include', cache: 'no-store',
+            });
             if (response.ok) {
                 const data = await response.json();
                 const db = await readerDb();
@@ -290,7 +294,9 @@ async function initAuth() {
 
 async function checkAuthStatus() {
     try {
-        const response = await fetch(`${API_BASE}/auth/check`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE}/auth/check`, {
+            credentials: 'include', cache: 'no-store',
+        });
         if (response.status === 403) {
             wrongAccountEmail = (await response.json().catch(() => ({}))).email || null;
             currentUser = null;
