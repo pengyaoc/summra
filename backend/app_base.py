@@ -203,7 +203,18 @@ def add_cache_headers(response):
         response.cache_control.max_age = 31536000  # 1 year
         response.cache_control.public = True
         response.cache_control.immutable = True
-    # API responses - cache for 1 hour
+    # Authentication and reading-state responses are personal. They must not
+    # enter the browser's shared HTTP cache: a stale Library projection hides
+    # recently read books, and a shared cache is inappropriate for identity.
+    elif (
+        request.path == '/api/auth/check'
+        or request.path == '/api/library'
+        or request.path.startswith('/api/progress/')
+    ):
+        response.cache_control.no_cache = True
+        response.cache_control.no_store = True
+        response.cache_control.private = True
+    # Public API responses - cache for 1 hour
     elif request.path.startswith('/api/'):
         response.cache_control.max_age = 3600  # 1 hour
         response.cache_control.public = True

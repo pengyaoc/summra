@@ -80,3 +80,13 @@ def test_whoami_check_reflects_signed_in_state(monkeypatch):
     assert response.status_code == 200
     assert response.json['authenticated'] is True
     assert response.json['user']['email'] == 'me@example.com'
+
+
+def test_authenticated_identity_response_is_never_http_cached(monkeypatch):
+    client = _reload_app_base(
+        monkeypatch, feature_auth=True, auth_mode='optional', allowed_emails='me@example.com'
+    )
+    response = client.get('/api/auth/check', headers={'X-Remote-Email': 'me@example.com'})
+    assert response.status_code == 200
+    assert response.cache_control.no_store
+    assert response.cache_control.private

@@ -16,6 +16,8 @@
 
 **Deployment.** Committed as `aa16923`, pushed to `main`, and deployed to `wordpress-2-vm` through the required `sudo -u summra git pull --ff-only origin main` workflow. The `summra` user service was restarted with its `XDG_RUNTIME_DIR` and is active.
 
+**Post-deploy cache correction — IN PROGRESS.** Chrome proved the server and route changes but showed the prior one-card Library response from a one-hour public HTTP cache. Personal identity/Library/progress responses are being made private/no-store and excluded from the service-worker cache; IndexedDB remains the scoped offline Library fallback. This prevents stale personal shelves while preserving offline reading.
+
 ### Follow-up reader UX corrections — DONE
 
 - Restoring the editorial book-detail view as the destination for book cards and title links; the dedicated **Read book** control is the only entry to `/books/{slug}/read`.

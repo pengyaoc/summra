@@ -107,23 +107,14 @@ if (workbox) {
         })
     );
 
-    // Cache auth check endpoint - Network First with long-lived cache for offline support
-    // Extended cache duration to support extended offline PWA usage (30 days)
+    // Identity and progress are personal and already have purpose-built
+    // IndexedDB offline fallbacks. Never cache an account response in the
+    // service worker, or a direct Library visit can revive an older shelf.
     registerRoute(
-        ({ url }) => url.pathname === BASE_PATH + '/api/auth/check',
-        new NetworkFirst({
-            cacheName: 'auth-cache',
-            plugins: [
-                new CacheableResponsePlugin({
-                    statuses: [0, 200],
-                }),
-                new ExpirationPlugin({
-                    maxEntries: 1,
-                    maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days cache (matches session lifetime)
-                }),
-            ],
-            networkTimeoutSeconds: 3, // Fast fallback to cache after 3s
-        })
+        ({ url }) => url.pathname === BASE_PATH + '/api/auth/check' ||
+            url.pathname === BASE_PATH + '/api/library' ||
+            url.pathname.startsWith(BASE_PATH + '/api/progress/'),
+        new NetworkOnly()
     );
 
     // Cache book data API - Network First (fresh when online, cached fallback)

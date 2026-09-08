@@ -152,6 +152,8 @@ Library is a canonical application route: both `/library` and its server-canonic
 
 On an authenticated direct visit, the shelf waits for identity resolution before choosing a cloud or device-cached projection. It must refresh from the authenticated Library API once identity is known rather than leaving a stale anonymous/device shelf visible.
 
+Authenticated identity, Library, and progress responses are never stored in the HTTP or service-worker caches. The scoped IndexedDB Library projection is the only offline fallback for personal shelf data.
+
 #### Meaningful engagement rule
 
 A book enters Continue Reading after the first of these **sequential-reading** events:
