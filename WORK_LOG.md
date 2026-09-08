@@ -6,13 +6,15 @@
 
 ## 2026-09-07: Continuous Reader + Library direct replacement — DONE
 
-### Library routing, progress visibility, and card UX follow-up — IN PROGRESS
+### Library routing, progress visibility, and card UX follow-up — DONE
 
 - Production diagnosis confirmed that Pride and Prejudice progress is persisted for `pychen007@gmail.com`: the book is `in_progress`, has five accepted sequential boundaries, and the live Library API returns it alongside Frankenstein. The reader write path is therefore healthy.
 - Identified the visibility failures: the public server canonicalizes `/library` to `/library/`, but the client route matcher accepted only the no-trailing-slash spelling and rendered Home after a direct Library visit; and Library could run before the asynchronous identity probe completed, leaving an old device cache onscreen. The route helper now normalizes terminal slashes after stripping `/summrabook`, and Library awaits a shared authentication-ready promise before requesting its account-scoped projection. A focused trailing-route regression test covers the former.
 - Reworked the Library into a compact, responsive reading shelf: reliable existing cover fallback, explicit Continue action to the reader, card click to the editorial book page, readable progress/location treatment, no oversized empty hero gap, and a bounded desktop card width so a single book does not become a blank, full-width panel.
 
 **Chrome validation.** Tested the current source through the Chrome extension at desktop and iPhone-sized (430px) widths. A direct Library visit resolves authenticated state before rendering, shows the saved Frankenstein card with its generated cover, and keeps the mobile card legible without horizontal overflow or a clipped action. The desktop card retains a deliberate reading-card width rather than stretching across the shelf. Reader Chrome was also checked while advancing Pride and Prejudice; its one-row toolbar and content remain intact.
+
+**Deployment.** Committed as `aa16923`, pushed to `main`, and deployed to `wordpress-2-vm` through the required `sudo -u summra git pull --ff-only origin main` workflow. The `summra` user service was restarted with its `XDG_RUNTIME_DIR` and is active.
 
 ### Follow-up reader UX corrections — DONE
 
