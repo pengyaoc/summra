@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-10-12: Site redesign ("Quiet library + study cues") — IN PROGRESS
+
+Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by user: mix of A (warm paper, serif, oxblood accent, home leads with an original → plain-English sentence pair) and C (difficulty level, reading time, progress cues on Discover and book pages). Audience: general. Plan: `docs/superpowers/specs/2026-10-12-site-redesign-design.md` (to be added in phase 0).
+
+### Baseline captured (before any UI change)
+
+- New `tests/e2e/capture_pages.mjs`: full-page JPEG screenshots at 1280×900 and 375×812 of home, discover, books, categories, library, book (Frankenstein), author, reader (plain) and reader (side by side, desktop only). `BASE_URL` and `OUT_DIR` env vars. Waits for network idle + all images complete.
+- Baseline at `docs/redesign/before/local/` (local `main` @ 051244c) and `docs/redesign/before/prod/` (live site). Note: prod's reader still shows the older top-bar mode toggle; local `main` has the continuous reader with modes in the settings panel — the script handles both.
+- Gotcha: the shared venv installs `backend` as an editable package pointing at the main checkout, so `python backend/app.py` in a worktree silently serves main's code. Run with `PYTHONPATH=$PWD` from the worktree root.
+
+---
+
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE
 
 Deployed the site-wide speed-up + reader chapter fix (`b4359b9`) to the VM; public pages verified 200, gzip on, SSR carousel/header live, `chapter_ids` in the reader manifest.
