@@ -27,6 +27,15 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - After screenshots: `docs/redesign/after/phase1/`.
 - Worktree gotcha: `tests/e2e/node_modules` as a symlink isn't covered by the `tests/e2e/node_modules/` ignore pattern — stage files explicitly, never `git add -A`.
 
+### Phase 2 — study cues (DONE)
+
+- New `backend/study_cues.py`: `level_label(cefr)` (upper bound of a CEFR range: ≤B1 Easy, B2 Moderate, C1+ Challenging, else None), `reading_minutes(words)` (ceil at 230 wpm), `summary_excerpt(text)` (first sentence of the first paragraph, markdown stripped, abbreviation/initial-aware, ≤160 chars on a word boundary), plus `add_book_cues` / `add_chapter_cues`.
+- Wired in `backend/models.py` where rows become dicts, so every consumer agrees: `get_all_books`, `get_books_by_category`, `get_book`/`get_book_by_slug` add `level` + `reading_minutes`; the three chapter-metadata queries add `reading_minutes` + `summary_excerpt` via a shared `CHAPTER_CUE_COLUMNS` SQL fragment (private `_text_words` / `_summary_head` columns, popped before returning).
+- **Data gotcha:** `chapters.word_count` is the *summary's* word count (`add_chapter` computes it from `summary`), e.g. Frankenstein chapters sum to 16,802 vs 75,042 for the book. Chapter reading time therefore uses `chapter_text`, word-counted in SQL (whitespace separators + 1; ~2.6% mean / 8.7% max error vs `split()`) so the chapter list never loads full text. The column itself is left as is — other code may rely on it.
+- Real data: 13 Easy, 25 Moderate, 23 Challenging, 29 no level. `/api/books/30/chapters` 18 ms.
+- Deferred: SSR `__INITIAL_DATA__.book` doesn't carry the cues yet (`tests/test_book_page_ssr.py` pins its exact shape); phase 5 renders the meta row in the template instead. Discover's existing "Easy to Read" carousel still matches any level containing A2/B1 (so B1-B2 lands there) — replaced in phase 4. `get_books_by_gutenberg_ids` (home top-10) and the author getters don't select `cefr_level`/`word_count` yet — phases 3/6.
+- Tests: `tests/test_study_cues.py` (34; red against a stub first). pytest 583 passed. e2e smoke, redesign_chrome, book_page_fast_path, listing_pages_catalog, catalog_fetch_once, top10_ssr, reader_opens_at_chapter all green.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE

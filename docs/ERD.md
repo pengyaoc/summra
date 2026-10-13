@@ -124,6 +124,16 @@ names (`--primary-color`, `--secondary-color`, `--background-color`, …) are re
 tokens so un-migrated selectors pick up the new palette; each legacy alias is deleted once its last
 call site is migrated. The reader's dark/sepia themes keep their own tokens.
 
+**Study cues** (`backend/study_cues.py`, redesign phase 2): `level` (Easy / Moderate / Challenging
+from the upper bound of `books.cefr_level`, else null) and `reading_minutes` (ceil(words / 230)) are
+added to book dicts by `add_book_cues()` in `Database.get_all_books`, `get_books_by_category` and
+`get_book`/`get_book_by_slug`, so `/api/books`, `/api/books/<id>` and the category/discover routes all
+carry them. Chapter-list metadata (`get_chapters_metadata*`, i.e. `/api/books/<id>/chapters`) adds
+`reading_minutes` and `summary_excerpt` (first sentence of the chapter summary, markdown stripped,
+≤160 chars). Note `chapters.word_count` counts the chapter *summary*, not the chapter, so chapter
+reading time is computed from `chapter_text` via the `CHAPTER_CUE_COLUMNS` SQL fragment (approximate
+whitespace count, avoids loading full text).
+
 ---
 
 ## Database Schema & ERD
