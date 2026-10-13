@@ -430,6 +430,15 @@ export const paginationMixin = {
                 blockIndex++;
             }
 
+            // Keep a chapter heading with what follows it: a page never ends
+            // on one (its illustration or first paragraph would be on the
+            // next page). Left alone when the heading is the page's only block.
+            if (blockIndex < blocks.length && pageBlocks.length > 1
+                && pageBlocks[pageBlocks.length - 1].startsWith('<h2 class="reader-chapter-heading"')) {
+                pageBlocks.pop();
+                blockIndex--;
+            }
+
             // Save page content
             if (pageBlocks.length > 0) {
                 pages.push(pageBlocks.join(''));

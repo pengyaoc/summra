@@ -4,7 +4,7 @@
 // Peter Pan, Oz, A Christmas Carol) were drawn only by the old chapter view.
 // Once the book page's chapter list opened the continuous reader, they were
 // never shown anywhere. Each illustrated chapter now shows its picture under
-// its heading, in plain/original and side-by-side modes.
+// its heading (below it), in plain/original and side-by-side modes.
 import { chromium } from "playwright";
 
 const BASE = (process.env.BASE_URL || "http://localhost:5001").replace(/\/$/, "");
@@ -37,6 +37,21 @@ await page.waitForFunction(() => document.querySelector(".reader-illustration im
 let ill = await illustrationOnPage();
 expect("plain: chapter illustration is on the opening page", ill && ill.visible && ill.loaded, JSON.stringify(ill));
 expect("plain: uses the chapter's own image", ill && /\/static\/illustrations\/1\/2\.(webp|jpg)/.test(ill.src), ill?.src);
+const order = await page.evaluate(() => {
+  const pg = [...document.querySelectorAll(".pagination-page-container")].find((p) => p.offsetParent !== null) || document;
+  const h = pg.querySelector(".reader-chapter-heading");
+  const f = pg.querySelector(".reader-illustration");
+  return { heading: h?.textContent.trim(), headingFirst: !!(h && f && (h.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) };
+});
+expect("plain: illustration sits below the chapter title on the same page", order.headingFirst, JSON.stringify(order));
+
+// No page ends on a chapter heading (it would be cut off from its picture/text).
+const orphan = await page.evaluate(() => window.summraApp.pagination.pages.filter((html) => {
+  const d = document.createElement("div"); d.innerHTML = html;
+  const blocks = [...d.querySelectorAll("p, h2, figure")];
+  return blocks.length > 1 && blocks[blocks.length - 1].matches("h2.reader-chapter-heading");
+}).length);
+expect("no page ends with a chapter heading", orphan === 0, `${orphan} pages`);
 
 // Side by side keeps it too.
 await page.click("#reader-settings-button");
