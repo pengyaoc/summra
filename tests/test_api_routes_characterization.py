@@ -296,11 +296,6 @@ def test_api_book_related(client, db):
     assert resp.status_code == 200
 
 
-def test_api_discover_carousels(client):
-    resp = client.get('/api/discover/carousels')
-    assert resp.status_code == 200
-
-
 def test_api_books_by_author(client):
     resp = client.get('/api/books/by-author/Jane%20Doe')
     assert resp.status_code == 200

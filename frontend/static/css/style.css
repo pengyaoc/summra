@@ -3640,10 +3640,139 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
    Discover Page
    =========================== */
 
-/* Discover page uses the same layout as categories page */
 #discover-section {
     padding-top: 20px;
     animation: fadeIn 0.3s ease;
+}
+
+.discover-header {
+    max-width: 640px;
+    margin-bottom: 1.5rem;
+}
+
+.discover-header h2 {
+    margin-bottom: 0.4rem;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: clamp(1.75rem, 4vw, 2.4rem);
+    line-height: 1.15;
+}
+
+.discover-header p {
+    color: var(--ink-muted);
+    font-size: 1.02rem;
+}
+
+.discover-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 2rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+}
+
+.discover-filter,
+.discover-sort {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.discover-filter-label {
+    margin-right: 0.25rem;
+    color: var(--ink-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.filter-chip {
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-chip:hover {
+    border-color: var(--ink-muted);
+}
+
+.filter-chip[aria-pressed="true"] {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.filter-chip:focus-visible,
+.discover-sort select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.discover-sort {
+    margin-left: auto;
+}
+
+.discover-sort select {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.88rem;
+}
+
+.discover-count {
+    margin: 1rem 0 1.25rem;
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+}
+
+.discover-empty {
+    padding: 3rem 0;
+    color: var(--ink-muted);
+    text-align: center;
+}
+
+.discover-empty button {
+    margin-left: 0.5rem;
+    padding: 0.4rem 0.9rem;
+}
+
+/* Filtering: the grid carries the active filters; non-matching cards hide.
+   Works on the server-rendered page before any JS runs. */
+.discover-grid[data-filter-level="easy"] > .book-card:not([data-level="easy"]),
+.discover-grid[data-filter-level="moderate"] > .book-card:not([data-level="moderate"]),
+.discover-grid[data-filter-level="challenging"] > .book-card:not([data-level="challenging"]),
+.discover-grid[data-filter-length="short"] > .book-card:not([data-length="short"]),
+.discover-grid[data-filter-length="medium"] > .book-card:not([data-length="medium"]),
+.discover-grid[data-filter-length="long"] > .book-card:not([data-length="long"]) {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .discover-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .discover-filter .discover-filter-label {
+        flex-basis: 100%;
+    }
+
+    .discover-sort {
+        margin-left: 0;
+    }
 }
 
 @media (max-width: 768px) {

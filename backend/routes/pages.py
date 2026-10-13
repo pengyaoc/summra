@@ -5,7 +5,7 @@ Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 """
 import re
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request
 
 from backend.routes import common
 
@@ -62,11 +62,51 @@ def index():
                          top_10_books=_top_10_books())
 
 
+DISCOVER_LEVELS = ('easy', 'moderate', 'challenging')
+DISCOVER_LENGTHS = ('short', 'medium', 'long')
+_LEVEL_RANK = {level: rank for rank, level in enumerate(DISCOVER_LEVELS)}
+# Sort keys; app.js applySortToDiscoverGrid() orders the cards the same way.
+DISCOVER_SORTS = {
+    'title': lambda b: b['title'].lower(),
+    'shortest': lambda b: (b['reading_minutes'] is None, b['reading_minutes'] or 0, b['title'].lower()),
+    'easiest': lambda b: (_LEVEL_RANK.get((b['level'] or '').lower(), len(DISCOVER_LEVELS)), b['title'].lower()),
+}
+
+
+def _query_choice(name, allowed):
+    value = request.args.get(name, '').lower()
+    return value if value in allowed else None
+
+
 @bp.route('/discover')
 def discover():
-    """Serve the discover page with curated book collections"""
-    return render_template('index.html',
-                         meta_title='Discover Classic Books by Difficulty Level | Summra')
+    """One grid of every book, filterable by level and length (?level=,
+    ?length=) and sortable (?sort=). Filtering is done by CSS on the grid's
+    data-filter-* attributes, so the server only sets them."""
+    books = [b for b in common.db.get_all_books() if b.get('slug')]
+    for book in books:
+        book['cover_base'] = _cover_base(book.get('cover_image_url'))
+    level = _query_choice('level', DISCOVER_LEVELS)
+    length = _query_choice('length', DISCOVER_LENGTHS)
+    sort = _query_choice('sort', DISCOVER_SORTS) or 'title'
+    books.sort(key=DISCOVER_SORTS[sort])
+    match_count = sum(
+        1 for b in books
+        if (not level or (b['level'] or '').lower() == level)
+        and (not length or (b['length'] or '').lower() == length)
+    )
+    return render_template(
+        'index.html',
+        meta_title='Discover Classic Books by Level and Length | Summra',
+        initial_data={'type': 'discover'},
+        discover={
+            'books': books,
+            'level': level or 'all',
+            'length': length or 'all',
+            'sort': sort,
+            'count': match_count,
+        },
+    )
 
 
 @bp.route('/library')

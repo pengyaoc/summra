@@ -665,15 +665,9 @@ class SummraApp {
         const header = document.createElement('div');
         header.className = 'category-header';
 
-        // Check if this is for the discover page (no View All links for discover carousels)
-        const isDiscoverPage = containerIdOverride === 'discover-carousels-container';
-
-        // Add View All link (except for "All Books" carousel, discover page, or popular carousel)
-        const viewAllLink = !isDiscoverPage && category.id !== 'all' && category.id !== 'popular'
-            ? `<a href="${withBasePath(`/categories/${category.id}`)}" class="view-all-link">View All →</a>`
-            : category.id === 'all' && !isDiscoverPage
-                ? `<a href="${withBasePath('/books')}" class="view-all-link">View All →</a>`
-                : '';
+        // View All goes to the category page, or to /books for the "All Books" shelf
+        const viewAllHref = category.id === 'all' ? '/books' : `/categories/${category.id}`;
+        const viewAllLink = `<a href="${withBasePath(viewAllHref)}" class="view-all-link">View All →</a>`;
 
         header.innerHTML = `
             <h2 class="category-title">${this.escapeHtml(category.name)}</h2>
@@ -829,33 +823,6 @@ class SummraApp {
 
         scrollContainer.addEventListener('scroll', updateButtonStates);
         setTimeout(() => updateButtonStates(), 100);
-    }
-
-    renderTop10AsStandardCarousel(containerId, title = 'Popular') {
-        // Top 10 most downloaded books from Project Gutenberg (by Gutenberg ID)
-        const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
-
-        // Find books in our database that match these IDs
-        const top10Books = [];
-        top10GutenbergIds.forEach((gutenbergId) => {
-            const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
-            if (book) {
-                top10Books.push(book);
-            }
-        });
-
-        if (top10Books.length === 0) return;
-
-        // Use the standard category carousel rendering
-        const container = document.getElementById(containerId);
-        if (!container) return;
-
-        // Render using the same method as other category carousels
-        this.renderCategoryCarousel(
-            { id: 'popular', name: title },
-            top10Books,
-            containerId
-        );
     }
 
     renderTop10CarouselInContainer(containerId, title = 'Most Popular Classics') {
@@ -2139,82 +2106,98 @@ class SummraApp {
         this.saveScrollPosition();
         this.currentView = 'discover';
         this.setCurrentPage('discover');
-
-        // Show only discover section
         this.showOnlySections('discover-section');
 
-        // Create discover section if it doesn't exist
-        let discoverSection = document.getElementById('discover-section');
-        if (!discoverSection) {
-            discoverSection = this.createDiscoverSection();
-            document.querySelector('.main-content').appendChild(discoverSection);
+        // /discover is server-rendered with every card; reached in-app from
+        // another page, the grid is empty and is filled from the catalog.
+        const grid = document.getElementById('discover-grid');
+        if (!grid.querySelector('.book-card')) {
+            await this.ensureBooksLoaded();
+            this.allBooks
+                .filter(book => book.slug)
+                .forEach(book => grid.appendChild(this.createBookCard(book)));
         }
+        this.wireDiscoverControls();
 
-        // Ensure books are loaded (needed for popular carousel)
-        await this.ensureBooksLoaded();
+        const query = new URLSearchParams(window.location.search);
+        this.setDiscoverFilters({
+            level: query.get('level'),
+            length: query.get('length'),
+            sort: query.get('sort'),
+        }, false);
 
-        // Fetch carousel data
-        try {
-            const response = await fetch(withBasePath('/api/discover/carousels'));
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error('Failed to fetch discover carousels');
-            }
-
-            // Render discover page
-            this.renderDiscoverPage(data);
-
-            this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Summra');
-        } catch (error) {
-            console.error('Error loading discover page:', error);
-            discoverSection.innerHTML = `
-                <div class="error-message">
-                    <h2>Error loading page</h2>
-                    <p>Could not load the discover page. Please try again later.</p>
-                    <button onclick="window.location.href='${summraBasePath()}/'">Go Home</button>
-                </div>
-            `;
-        }
+        this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Summra');
     }
 
-    createDiscoverSection() {
-        const section = document.createElement('div');
-        section.id = 'discover-section';
-        section.className = 'content-section';
-        return section;
-    }
-
-    renderDiscoverPage(data) {
+    // Controls persist across SPA navigations, so wire them once.
+    wireDiscoverControls() {
+        if (this.discoverWired) return;
+        this.discoverWired = true;
         const section = document.getElementById('discover-section');
+        section.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                this.setDiscoverFilters({ ...this.discoverState, [chip.dataset.filter]: chip.dataset.value });
+            });
+        });
+        document.getElementById('discover-sort').addEventListener('change', (e) => {
+            this.setDiscoverFilters({ ...this.discoverState, sort: e.target.value });
+        });
+        section.querySelector('.discover-empty button').addEventListener('click', () => {
+            this.setDiscoverFilters({ sort: this.discoverState.sort });
+        });
+    }
 
-        // Clear existing content
-        section.innerHTML = `
-            <nav class="breadcrumb-nav" id="breadcrumb-nav-discover" aria-label="Breadcrumb">
-                <ol class="breadcrumb-list" id="breadcrumb-list-discover">
-                    <!-- Breadcrumbs will be dynamically loaded here -->
-                </ol>
-            </nav>
-            <div id="discover-popular-carousel-wrapper"></div>
-            <div class="categories-container" id="discover-carousels-container"></div>
-        `;
+    // Filtering is CSS: the grid's data-filter-level / data-filter-length
+    // hide non-matching cards (same mechanism the server-rendered page uses).
+    setDiscoverFilters({ level, length, sort }, updateUrl = true) {
+        const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+        const state = {
+            level: pick(level, ['easy', 'moderate', 'challenging'], 'all'),
+            length: pick(length, ['short', 'medium', 'long'], 'all'),
+            sort: pick(sort, ['title', 'shortest', 'easiest'], 'title'),
+        };
+        this.discoverState = state;
 
-        // Render popular carousel at the top (same as home page top 10)
-        this.renderTop10AsStandardCarousel('discover-popular-carousel-wrapper', 'Popular');
+        const section = document.getElementById('discover-section');
+        const grid = document.getElementById('discover-grid');
+        grid.dataset.filterLevel = state.level;
+        grid.dataset.filterLength = state.length;
+        section.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.setAttribute('aria-pressed', String(chip.dataset.value === state[chip.dataset.filter]));
+        });
+        document.getElementById('discover-sort').value = state.sort;
+        this.applySortToDiscoverGrid(grid, state.sort);
 
-        // Render each carousel using the same method as categories page
-        if (data.carousels && data.carousels.length > 0) {
-            for (const carousel of data.carousels) {
-                this.renderCategoryCarousel(
-                    { id: carousel.id, name: carousel.title, description: carousel.description },
-                    carousel.books,
-                    'discover-carousels-container'
-                );
-            }
-        } else {
-            const container = document.getElementById('discover-carousels-container');
-            container.innerHTML = '<p class="no-content">No collections available at this time.</p>';
+        const count = [...grid.children].filter(card =>
+            (state.level === 'all' || card.dataset.level === state.level) &&
+            (state.length === 'all' || card.dataset.length === state.length)
+        ).length;
+        document.getElementById('discover-count').textContent = `${count} book${count === 1 ? '' : 's'}`;
+        section.querySelector('.discover-empty').classList.toggle('hidden', count > 0);
+
+        if (updateUrl) {
+            const params = new URLSearchParams();
+            if (state.level !== 'all') params.set('level', state.level);
+            if (state.length !== 'all') params.set('length', state.length);
+            if (state.sort !== 'title') params.set('sort', state.sort);
+            const qs = params.toString();
+            window.history.replaceState(window.history.state, '', withBasePath(`/discover${qs ? `?${qs}` : ''}`));
         }
+    }
+
+    // Same ordering as DISCOVER_SORTS in backend/routes/pages.py.
+    applySortToDiscoverGrid(grid, sort) {
+        const levelRank = { easy: 0, moderate: 1, challenging: 2 };
+        const title = card => card.querySelector('.book-card-title').textContent.toLowerCase();
+        const byTitle = (a, b) => (title(a) < title(b) ? -1 : title(a) > title(b) ? 1 : 0);
+        const minutes = card => (card.dataset.minutes ? Number(card.dataset.minutes) : Infinity);
+        const rank = card => levelRank[card.dataset.level] ?? 3;
+        const compare = {
+            title: byTitle,
+            shortest: (a, b) => minutes(a) - minutes(b) || byTitle(a, b),
+            easiest: (a, b) => rank(a) - rank(b) || byTitle(a, b),
+        }[sort];
+        [...grid.children].sort(compare).forEach(card => grid.appendChild(card));
     }
 
     createAuthorDetailSection() {
@@ -2301,6 +2284,11 @@ class SummraApp {
         const bookCard = document.createElement('a');
         bookCard.className = 'book-card';
         bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
+        // Read by Discover's CSS filters and sort (same attributes as the
+        // server-rendered card in _book_card.html).
+        bookCard.dataset.level = (book.level || 'none').toLowerCase();
+        bookCard.dataset.length = (book.length || 'none').toLowerCase();
+        bookCard.dataset.minutes = book.reading_minutes || '';
 
         const levelHtml = book.level
             ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>`
