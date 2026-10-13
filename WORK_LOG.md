@@ -85,6 +85,16 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Tests: `tests/test_home_redesign.py` (10) and `tests/e2e/redesign_home.mjs` (20), red first; `redesign_cards.mjs` +1 (accented direct load). pytest 629 passed; e2e suite green (same 6 pre-existing failures excluded); redesign tests + top10_ssr also pass on the prod bundle.
 - After screenshots: `docs/redesign/after/phase6/`.
 
+### Phase 7 — reader restyle (DONE)
+
+- Structure unchanged: back · chapter / book title · contents · reading settings; reading mode (Summary / Original / Plain English / Side-by-Side) stays in the settings panel — no header toggle (user decision).
+- Light theme: paper toolbar with ink text and hairline (was a black bar), outline buttons, serif chapter title in the toolbar and serif chapter headings. Dark and sepia themes now style the toolbar themselves (dark keeps #1a1a1a with dark borders; sepia gets the sepia background).
+- Progress: thin oxblood bar (`#reader-progress-fill`, updated next to the existing percentage in `reader.js`).
+- Panels: contents and settings on `--surface` with serif headings; active mode in oxblood; settings labels sentence-case ("Reading settings", "Font", "Text size"). Replaced the remaining hard-coded old-blue tints (`rgba(52,152,219,…)`) in font/size/theme controls and the "coming soon" pill.
+- Side by side: hairline between aligned rows in the continuous reader.
+- Tests: new `tests/e2e/redesign_reader.mjs` (15 checks incl. dark theme and mobile), red first; also passes on the prod bundle. pytest 629 passed; e2e suite green (6 pre-existing failures excluded).
+- After screenshots: `docs/redesign/after/phase7/`.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE
