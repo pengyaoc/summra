@@ -57,6 +57,16 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Tests: `tests/test_discover_page.py` (19) and `tests/e2e/redesign_discover.mjs` (19), both red first. pytest 612 passed; e2e suite green (6 pre-existing failures excluded); discover + cards tests also pass against the prod bundle.
 - After screenshots: `docs/redesign/after/phase4/`.
 
+### Phase 5 — book page (DONE)
+
+- Header (server-rendered, `book_meta` in `pages.book_detail`): serif title, author, meta row (level tag · N chapters · reading time · "Plain English" badge), primary "Start reading" button and a "Read side by side" link (`/books/<slug>/read?mode=side_by_side`, hidden without plain English and below 1024px). `renderBookMeta()` in `app.js` rebuilds the same row from `/api/books/<id>/chapters` (whose `book` now carries `level` + `reading_time`). New `Database.count_chapters()`.
+- Order: About this book → summaries → chapters → reading guides → About the author → You may also like. "About the author" is its own `#about-author-section`; `updateAboutSection` toggles both with `.hidden` (and `loadBookMetadata`'s loading state no longer sets inline display on the bio's parent).
+- Chapter list: `createChapterRow()` builds `<a class="chapter-box">` rows (number, title, `summary_excerpt`, `reading_time`, read check). A plain click calls `openChapterInReader(n)` → continuous reader at that chapter, same as a direct `/books/<slug>/chapters/<n>` load. **Behaviour change:** on main, clicking a chapter on the book page opened the old chapter-detail view (with header mode toggle) while the same URL loaded directly opened the continuous reader.
+- Progress: `applyBookProgress()` reads the v2 reader state (`authModule.getReaderState`): button becomes "Continue · <chapter>" (current marker, last-used mode) or "Read again" (finished); chapters before the furthest marker get the check. Removed the dead `showResumeReadingButton` + `.resume-reading-btn` CSS and the `getReadingProgress` / `getCompletedChaptersForBook` stubs (they always returned null / [] on main, so the old resume button and checks never appeared). `showChapterDetailPage` kept — e2e tests drive the legacy view through it.
+- Styling: TOC rows are ruled lines (no grey bars/blue border), serif section headings, sentence-case headings ("About this book", "About the author", "You may also like").
+- Tests: `tests/test_book_page_redesign.py` (8) and `tests/e2e/redesign_book_page.mjs` (17, mocks `/auth/check` and `/progress/v2/books/30` for the signed-in case), both red first; the e2e also passes on the prod bundle. pytest 619 passed; e2e suite green (6 pre-existing failures excluded). The e2e caught one real bug (author section hidden by a stale inline style) and one test bug of mine (hidden sections measured at y=0).
+- After screenshots: `docs/redesign/after/phase5/`.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE

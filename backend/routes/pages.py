@@ -189,6 +189,12 @@ def book_detail(slug):
         initial_data=initial_data,
         author_slug=common.author_name_to_slug(book['author']),
         cover_base=_cover_base(book.get('cover_image_url')),
+        book_meta={
+            'level': book['level'],
+            'reading_time': book['reading_time'],
+            'chapter_count': db.count_chapters(book['id']),
+            'has_plain_english': db.book_has_modern_english(book['id']),
+        },
     )
 
 

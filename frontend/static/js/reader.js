@@ -96,56 +96,6 @@ export const readerMixin = {
         this.showChapterDetail(this.currentBook, chapterNum);
     },
 
-    async showResumeReadingButton() {
-        if (!this.currentBook || !window.authModule) return;
-
-        // Get reading progress
-        const progress = await window.authModule.getReadingProgress(this.currentBook.id);
-
-        // Find the book-detail-info section where we'll add the button
-        const bookDetailInfo = document.querySelector('.book-detail-info');
-        if (!bookDetailInfo) return;
-
-        // Remove existing resume button if any
-        const existingButton = document.getElementById('resume-reading-btn');
-        if (existingButton) {
-            existingButton.remove();
-        }
-
-        // Only show if there's progress
-        if (progress && progress.chapter_number !== null) {
-            // Get chapter title for better display
-            const chapterName = progress.chapter_number === 0 ? 'Preface' : `Chapter ${progress.chapter_number}`;
-
-            // Create resume reading button
-            const resumeBtn = document.createElement('button');
-            resumeBtn.id = 'resume-reading-btn';
-            resumeBtn.className = 'resume-reading-btn';
-            resumeBtn.innerHTML = `
-                <span class="resume-icon">📖</span>
-                <span class="resume-text">Continue Reading: ${chapterName}, Page ${progress.page_number + 1}</span>
-            `;
-
-            // Add click handler to navigate to last read chapter and page
-            resumeBtn.addEventListener('click', async () => {
-                await this.showChapterDetailPage(progress.chapter_number);
-
-                // After chapter loads, navigate to the saved page
-                if (progress.page_number && progress.page_number > 0) {
-                    setTimeout(() => {
-                        if (this.pagination && this.pagination.totalPages > progress.page_number) {
-                            this.pagination.currentPage = progress.page_number;
-                            this.displayCurrentPage();
-                        }
-                    }, 100);
-                }
-            });
-
-            // Insert after the Save for Offline button in book-detail-info section
-            bookDetailInfo.appendChild(resumeBtn);
-        }
-    },
-
     async showMediumDetail(book, restoreScroll = false) {
         this.currentBook = book;
 

@@ -231,7 +231,5 @@ window.authModule = {
     cacheReaderManifest, getCachedReaderManifest, cacheReaderSegment, getCachedReaderSegment,
     // Legacy chapter pages can remain viewable while their routes redirect to
     // the continuous reader. They intentionally no longer persist v1 data.
-    getReadingProgress: async () => null,
-    getCompletedChaptersForBook: async () => [],
     trackChapterView: async () => {}, trackPageChange: async () => {}, onChapterComplete: async () => {},
 };

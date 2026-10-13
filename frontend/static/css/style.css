@@ -686,27 +686,80 @@ body.on-chapter-page .header {
 
 /* Author link styling - make it obvious and clickable */
 .author-link {
-    color: #2563eb;
+    color: var(--ink);
     text-decoration: underline;
+    text-decoration-color: var(--rule-strong);
+    text-underline-offset: 3px;
     cursor: pointer;
 }
 
 .author-link:hover {
-    color: #1d4ed8;
-    text-decoration: underline;
+    color: var(--accent);
+    text-decoration-color: currentColor;
 }
 
 .book-detail-info h2 {
-    font-size: 2rem;
-    color: var(--primary-color);
     margin-bottom: 8px;
-    line-height: 1.2;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    line-height: 1.15;
 }
 
 .book-author {
+    color: var(--ink-muted);
     font-size: 1.1rem;
-    color: var(--text-light);
-    font-style: italic;
+}
+
+/* Meta row: level · chapters · time · Plain English */
+.book-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.9rem;
+    margin-top: 1rem;
+    color: var(--ink-muted);
+    font-size: 0.92rem;
+}
+
+.book-meta:empty {
+    display: none;
+}
+
+.plain-english-badge {
+    padding: 0.1rem 0.55rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.book-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.4rem;
+}
+
+.book-actions .book-read-btn {
+    margin-top: 0;
+}
+
+.book-sxs-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.62rem 1rem;
+    text-decoration: none;
+}
+
+/* Side by side is a wide-screen reading mode (see view_mode.js). */
+@media (max-width: 1023px) {
+    .book-sxs-link {
+        display: none;
+    }
 }
 
 .author {
@@ -718,12 +771,10 @@ body.on-chapter-page .header {
 /* Book Content Sections */
 
 /* About This Book Section */
-.about-section {
+.about-section,
+.about-author-section {
+    max-width: 760px;
     margin-bottom: 48px;
-    padding: 24px;
-    background: var(--section-bg-light);
-    border-radius: 8px;
-    border: 1px solid var(--border-light);
 }
 
 .about-single-column {
@@ -742,10 +793,15 @@ body.on-chapter-page .header {
 }
 
 .about-heading {
-    font-size: 1.25rem;
-    color: var(--primary-color);
+    margin: 0 0 12px;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
     font-weight: 600;
-    margin: 0;
+}
+
+.about-heading-row .about-heading {
+    margin-bottom: 0;
 }
 
 .learn-more-btn {
@@ -947,10 +1003,11 @@ body.on-chapter-page .header {
 }
 
 .chapters-section > h3 {
+    margin: 16px 0 20px 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
     font-size: 1.5rem;
-    color: var(--primary-color);
     font-weight: 600;
-    margin: 16px 0 32px 0;
 }
 
 /* "Plain English version coming soon" pill — shown on books that don't
@@ -1002,10 +1059,11 @@ body.on-chapter-page .header {
 }
 
 .related-books-section > h3 {
-    font-size: 1.5rem;
-    color: var(--primary-color);
-    font-weight: 600;
     margin: 16px 0 24px 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 600;
 }
 
 
@@ -1166,31 +1224,89 @@ body.on-chapter-page .header {
 .chapters-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    border-top: 1px solid var(--rule);
 }
 
+/* Table-of-contents row: number · title + excerpt · time · read check */
 .chapter-box {
-    background: var(--background-color);
-    border: 1px solid var(--border-color);
-    border-left: 4px solid var(--secondary-color);
-    padding: 16px 20px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr) auto 1.25rem;
+    align-items: baseline;
+    gap: 0 1rem;
+    padding: 0.9rem 0.5rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+    text-decoration: none;
+    transition: background 0.15s ease;
 }
 
 .chapter-box:hover {
-    background: #e8f4f8;
-    border-left-color: var(--secondary-color-hover);
-    transform: translateX(4px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    background: var(--paper-deep);
+}
+
+.chapter-box:hover .chapter-box-title {
+    color: var(--accent);
+}
+
+.chapter-box:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.chapter-box-num {
+    color: var(--ink-muted);
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    text-align: right;
 }
 
 .chapter-box-title {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
     font-size: 1.05rem;
     font-weight: 600;
-    color: var(--primary-color);
-    margin: 0;
+}
+
+.chapter-box-excerpt {
+    display: block;
+    overflow: hidden;
+    margin-top: 0.2rem;
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chapter-box-time {
+    color: var(--ink-muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.chapter-box-check {
+    visibility: hidden;
+    color: var(--level-easy-fg);
+    font-weight: 700;
+}
+
+.chapter-box.completed .chapter-box-check {
+    visibility: visible;
+}
+
+@media (max-width: 480px) {
+    .chapter-box {
+        grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+        padding: 0.8rem 0.25rem;
+    }
+
+    .chapter-box-check {
+        display: none;
+    }
+
+    .chapter-box.completed .chapter-box-num {
+        color: var(--level-easy-fg);
+    }
 }
 
 /* Section Headers (for two-level structure) */
@@ -1208,7 +1324,8 @@ body.on-chapter-page .header {
 .section-header h4 {
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--heading-color);
+    color: var(--ink);
+    font-family: var(--font-serif);
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -5234,31 +5351,6 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 
 /* ===== Completed Chapter Styling ===== */
 
-/* Completed chapter indicator */
-.chapter-box.completed {
-    opacity: 0.7;
-    position: relative;
-}
-
-.chapter-box.completed::before {
-    content: '✓';
-    position: absolute;
-    right: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 1.5rem;
-    color: #27ae60;
-    font-weight: bold;
-}
-
-.chapter-box.completed .chapter-title {
-    color: var(--text-muted);
-}
-
-.chapter-box.completed:hover {
-    opacity: 0.85;
-}
-
 /* Completed chapter header styling in chapter view */
 .chapter-header.completed {
     opacity: 0.8;
@@ -5308,55 +5400,4 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 
 /* ===== Resume Reading Button ===== */
 
-.resume-reading-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    margin: 1rem 0;
-    background: linear-gradient(135deg, var(--cta-gradient-start) 0%, var(--cta-gradient-end) 100%);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    width: 100%;
-    justify-content: center;
-}
-
-.resume-reading-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-    background: linear-gradient(135deg, var(--cta-gradient-end) 0%, var(--cta-gradient-start) 100%);
-}
-
-.resume-reading-btn:active {
-    transform: translateY(0);
-}
-
-.resume-icon {
-    font-size: 1.5rem;
-}
-
-.resume-text {
-    font-size: 1rem;
-}
-
 /* Mobile adjustments */
-@media (max-width: 768px) {
-    .resume-reading-btn {
-        padding: 0.875rem 1.25rem;
-        font-size: 0.95rem;
-    }
-
-    .resume-icon {
-        font-size: 1.25rem;
-    }
-
-    .resume-text {
-        font-size: 0.95rem;
-    }
-}

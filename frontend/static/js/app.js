@@ -1022,6 +1022,20 @@ class SummraApp {
             bookAuthor.innerHTML = `by <a href="${withBasePath(`/authors/${authorSlug}`)}" class="author-link">${this.escapeHtml(book.author)}</a>`;
         }
 
+        const slug = book.slug || this.slugify(book.title);
+        const readLabel = document.getElementById('book-read-label');
+        if (readLabel) readLabel.textContent = 'Start reading';
+        const sxsLink = document.getElementById('book-sxs-link');
+        if (sxsLink) {
+            sxsLink.href = withBasePath(`/books/${slug}/read?mode=side_by_side`);
+            sxsLink.onclick = async (e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                e.preventDefault();
+                window.history.pushState({ type: 'reader', bookId: book.id }, '', sxsLink.getAttribute('href'));
+                await this.showContinuousReader(book, { mode: 'side_by_side' });
+            };
+        }
+
         const readButton = document.getElementById('book-read-btn');
         if (readButton) {
             readButton.onclick = async () => {
@@ -1114,8 +1128,8 @@ class SummraApp {
             this.loadRelatedBooks()
         ]);
 
-        // Show resume reading button if user has progress
-        await this.showResumeReadingButton();
+        // Signed-in readers: "Continue · <chapter>" and read checkmarks
+        await this.applyBookProgress(book);
 
         // Update URL
         this.updateURL(book);
@@ -1184,38 +1198,16 @@ class SummraApp {
         // Always call updateReadingGuide to remove loading spinners
         this.updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes);
 
-        // Only show section if we have at least some data
-        if (!hasAbout && !hasBio && !hasCharacterGuide && !hasTimeline && !hasThemes) {
-            if (aboutSection) aboutSection.classList.add('hidden');
-            return;
-        }
+        // "About this book" and "About the author" are separate sections
+        // (the author one sits lower on the page, after the chapters).
+        if (aboutSection) aboutSection.classList.toggle('hidden', !hasAbout);
+        if (aboutText) aboutText.innerHTML = hasAbout ? this.renderMarkdown(book.about_text) : '';
 
-        // Show section
-        if (aboutSection) aboutSection.classList.remove('hidden');
-
-        // Populate about text
-        if (aboutText) {
-            aboutText.innerHTML = hasAbout ? this.renderMarkdown(book.about_text) : '';
-            aboutText.parentElement.style.display = hasAbout ? 'block' : 'none';
-        }
-
-        // Populate author bio
+        const authorSection = document.getElementById('about-author-section');
+        if (authorSection) authorSection.classList.toggle('hidden', !hasBio && !authorName);
         if (authorBioText) {
-            const hasBio = book.author_bio && book.author_bio.trim();
-            if (hasBio) {
-                authorBioText.innerHTML = this.renderMarkdown(book.author_bio);
-                authorBioText.style.display = 'block';
-                authorBioText.parentElement.style.display = 'block';
-            } else {
-                authorBioText.innerHTML = '';
-                authorBioText.style.display = 'none';
-                // Keep the parent visible if we have an author (for the "Learn more" button)
-                if (authorName) {
-                    authorBioText.parentElement.style.display = 'block';
-                } else {
-                    authorBioText.parentElement.style.display = 'none';
-                }
-            }
+            authorBioText.innerHTML = hasBio ? this.renderMarkdown(book.author_bio) : '';
+            authorBioText.classList.toggle('hidden', !hasBio);
         }
     }
 
@@ -1360,9 +1352,8 @@ class SummraApp {
                     <div class="loading-text">Loading book information...</div>
                 </div>
             `;
-            aboutText.parentElement.style.display = 'block';
             authorBioText.innerHTML = '';
-            authorBioText.parentElement.style.display = 'none';
+            document.getElementById('about-author-section')?.classList.add('hidden');
         }
 
         // Show loading spinner in Reading Guide section only if empty
@@ -1548,12 +1539,6 @@ class SummraApp {
             `;
         }
 
-        // Fetch completed chapters for styling
-        let completedChapters = [];
-        if (window.authModule && this.currentBook) {
-            completedChapters = await window.authModule.getCompletedChaptersForBook(this.currentBook.id);
-        }
-
         try {
             const response = await fetch(`${this.apiBase}/books/${this.currentBook.id}/chapters`);
             const data = await response.json();
@@ -1572,6 +1557,7 @@ class SummraApp {
                 // The chapters-list endpoint omits per-chapter modern text for
                 // payload size, so trust the top-level has_modern_english flag.
                 this.updatePlainEnglishUi(data.has_modern_english);
+                this.renderBookMeta(data.book, this.chapters.length, data.has_modern_english);
 
                 chaptersList.innerHTML = '';
 
@@ -1621,20 +1607,7 @@ class SummraApp {
                         // Render chapters in this section (if any)
                         if (hasChapters) {
                             section.chapters.forEach(chapter => {
-                                const box = document.createElement('div');
-                                const isCompleted = completedChapters.includes(chapter.chapter_number);
-                                box.className = 'chapter-box indented' + (isCompleted ? ' completed' : '');
-
-                                const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
-                                const titleEl = document.createElement('h4');
-                                titleEl.className = 'chapter-box-title';
-                                titleEl.textContent = `${chapter.chapter_number}. ${title}`;
-
-                                box.appendChild(titleEl);
-                                box.addEventListener('click', () => {
-                                    this.showChapterDetailPage(chapter.chapter_number);
-                                });
-                                chaptersList.appendChild(box);
+                                chaptersList.appendChild(this.createChapterRow(chapter, true));
                             });
                         }
                     });
@@ -1652,20 +1625,7 @@ class SummraApp {
                         chaptersList.innerHTML = '<p style="color: var(--text-light); font-size: 0.95rem;">Chapters are being generated. Check back soon.</p>';
                     } else {
                         this.chapters.forEach(chapter => {
-                            const box = document.createElement('div');
-                            const isCompleted = completedChapters.includes(chapter.chapter_number);
-                            box.className = 'chapter-box' + (isCompleted ? ' completed' : '');
-
-                            const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
-                            const titleEl = document.createElement('h4');
-                            titleEl.className = 'chapter-box-title';
-                            titleEl.textContent = `${chapter.chapter_number}. ${title}`;
-
-                            box.appendChild(titleEl);
-                            box.addEventListener('click', () => {
-                                this.showChapterDetailPage(chapter.chapter_number);
-                            });
-                            chaptersList.appendChild(box);
+                            chaptersList.appendChild(this.createChapterRow(chapter));
                         });
                     }
                 }
@@ -1676,6 +1636,79 @@ class SummraApp {
         } catch (error) {
             console.error('Error loading chapters:', error);
             chaptersList.innerHTML = '<p class="error">Error loading chapters</p>';
+        }
+    }
+
+    // One row of the book page's table of contents: a link to the chapter
+    // URL that opens the continuous reader there (as a direct load does).
+    createChapterRow(chapter, indented = false) {
+        const row = document.createElement('a');
+        row.className = 'chapter-box' + (indented ? ' indented' : '');
+        row.dataset.chapterId = chapter.id;
+        row.href = withBasePath(`/books/${this.currentBook.slug || this.slugify(this.currentBook.title)}/chapters/${chapter.chapter_number}`);
+        const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
+        row.innerHTML = `
+            <span class="chapter-box-num">${chapter.chapter_number > 0 ? chapter.chapter_number : ''}</span>
+            <span class="chapter-box-body">
+                <h4 class="chapter-box-title">${this.escapeHtml(title)}</h4>
+                ${chapter.summary_excerpt ? `<span class="chapter-box-excerpt">${this.escapeHtml(chapter.summary_excerpt)}</span>` : ''}
+            </span>
+            ${chapter.reading_time ? `<span class="chapter-box-time">${this.escapeHtml(chapter.reading_time)}</span>` : ''}
+            <span class="chapter-box-check" aria-label="Read">✓</span>
+        `;
+        row.addEventListener('click', (e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            this.openChapterInReader(chapter.chapter_number);
+        });
+        return row;
+    }
+
+    async openChapterInReader(chapterNumber) {
+        const book = this.currentBook;
+        const path = withBasePath(`/books/${book.slug || this.slugify(book.title)}/chapters/${chapterNumber}`);
+        if (window.location.pathname !== path) {
+            window.history.pushState({ type: 'reader', bookId: book.id }, '', path);
+        }
+        await this.showContinuousReader(book, { chapter: String(chapterNumber), legacyChapterNumber: true });
+    }
+
+    // Meta row under the book title; same markup the server renders on
+    // /books/<slug> (index.html, book_meta).
+    renderBookMeta(book, chapterCount, hasPlainEnglish) {
+        const meta = document.getElementById('book-meta');
+        if (meta) {
+            meta.innerHTML = [
+                book?.level ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>` : '',
+                `<span class="book-meta-item">${chapterCount} chapter${chapterCount === 1 ? '' : 's'}</span>`,
+                book?.reading_time ? `<span class="book-meta-item">${this.escapeHtml(book.reading_time)}</span>` : '',
+                hasPlainEnglish ? '<span class="plain-english-badge">Plain English</span>' : '',
+            ].join('');
+        }
+        document.getElementById('book-sxs-link')?.classList.toggle('hidden', !hasPlainEnglish);
+    }
+
+    // Reading state comes from the continuous reader's v2 projection: the
+    // current place in the last-used mode labels the button, and chapters
+    // before the furthest place are checked (all of them once finished).
+    async applyBookProgress(book) {
+        await window.authModule?.initAuth?.();
+        const state = await window.authModule?.getReaderState?.(book.id);
+        if (!state?.book || this.currentBook?.id !== book.id) return;
+        const rows = [...document.querySelectorAll('#chapters-list .chapter-box')];
+        const finished = state.book.status === 'finished';
+        const modeState = state.modes?.find(item => item.mode === state.book.last_mode);
+        const index = id => this.chapters.findIndex(chapter => chapter.id === Number(id));
+        const furthest = finished ? rows.length : index(modeState?.furthest_marker?.chapter_id);
+        rows.forEach((row, i) => row.classList.toggle('completed', i < furthest));
+
+        const label = document.getElementById('book-read-label');
+        const current = this.chapters[index(modeState?.current_marker?.chapter_id)];
+        if (!label) return;
+        if (finished) {
+            label.textContent = 'Read again';
+        } else if (current) {
+            label.textContent = `Continue · ${current.chapter_title || `Chapter ${current.chapter_number}`}`;
         }
     }
 

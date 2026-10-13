@@ -311,7 +311,9 @@ def get_chapters(book_id):
         book_data = {
             'id': book['id'],
             'title': book['title'],
-            'author': book['author']
+            'author': book['author'],
+            'level': book['level'],
+            'reading_time': book['reading_time'],
         }
 
         # Add cover image if available
