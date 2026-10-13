@@ -129,8 +129,7 @@ from the upper bound of `books.cefr_level`, else null) and `reading_minutes` (ce
 added to book dicts by `add_book_cues()` in `Database.get_all_books`, `get_books_by_category` and
 `get_book`/`get_book_by_slug`, so `/api/books`, `/api/books/<id>` and the category/discover routes all
 carry them. Chapter-list metadata (`get_chapters_metadata*`, i.e. `/api/books/<id>/chapters`) adds
-`reading_minutes` and `summary_excerpt` (first sentence of the chapter summary, markdown stripped,
-≤160 chars). Note `chapters.word_count` counts the chapter *summary*, not the chapter, so chapter
+`reading_minutes` / `reading_time` (the summary excerpt was removed 2026-10-13). Note `chapters.word_count` counts the chapter *summary*, not the chapter, so chapter
 reading time is computed from `chapter_text` via the `CHAPTER_CUE_COLUMNS` SQL fragment (approximate
 whitespace count, avoids loading full text).
 
@@ -10393,3 +10392,9 @@ body.pagination-active {
 4. **Touch Gestures:** More sophisticated gesture recognition
 5. **Reading Statistics:** Track pages read, time per page, total reading time
 
+
+
+**Reader illustrations** (2026-10-13): the continuous reader renders `chapters.illustration_url` (from
+the manifest's `structure` entries) as a fixed-height `figure.reader-illustration` before each
+chapter heading; `pagination.js` treats that figure as a page block in both regular and
+side-by-side modes.

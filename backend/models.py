@@ -16,16 +16,15 @@ except ImportError:
     from backend import config
     from backend.study_cues import add_book_cues, add_chapter_cues
 
-# Private columns for chapter-list metadata, turned into reading_minutes /
-# summary_excerpt by add_chapter_cues(). Word count is approximated in SQL
+# Private column for chapter-list metadata, turned into reading_minutes /
+# reading_time by add_chapter_cues(). Word count is approximated in SQL
 # (whitespace separators + 1) so the chapter list never loads full chapter
 # text; chapters.word_count can't be used because it counts the *summary*.
 CHAPTER_CUE_COLUMNS = '''
     CASE WHEN chapter_text IS NULL OR TRIM(chapter_text) = '' THEN NULL
          ELSE LENGTH(chapter_text)
               - LENGTH(REPLACE(REPLACE(REPLACE(chapter_text, ' ', ''), CHAR(10), ''), CHAR(9), '')) + 1
-    END AS _text_words,
-    SUBSTR(summary, 1, 600) AS _summary_head'''
+    END AS _text_words'''
 
 
 def slugify(text: str) -> str:

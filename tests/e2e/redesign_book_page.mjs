@@ -1,6 +1,6 @@
 // Redesign phase 5: the book page.
 //  - Meta row: level · chapters · reading time · Plain English badge
-//  - Chapter list: number, title, one-line summary excerpt, reading time;
+//  - Chapter list: number, title, reading time (no excerpt);
 //    rows are links that open the continuous reader at that chapter
 //    (the same reader a direct /books/<slug>/chapters/<n> load opens)
 //  - "Read side by side" opens the reader in side-by-side mode
@@ -33,6 +33,17 @@ const meta = (await page.textContent("#book-meta")).replace(/\s+/g, " ").trim();
 expect("meta row: level, chapters, time, Plain English",
   /Challenging/.test(meta) && meta.includes(`${chapters.length} chapters`) && /5½ hrs/.test(meta) && /Plain English/.test(meta), meta);
 expect("anonymous: button says Start reading", (await page.textContent("#book-read-label")).trim() === "Start reading");
+expect("anonymous: no progress line", !(await page.isVisible("#book-progress")));
+const header = await page.evaluate(() => {
+  const read = document.getElementById("book-read-btn").getBoundingClientRect();
+  const sxs = document.getElementById("book-sxs-link").getBoundingClientRect();
+  const title = document.getElementById("book-title");
+  return { readH: Math.round(read.height), sxsH: Math.round(sxs.height), readTop: Math.round(read.top), sxsTop: Math.round(sxs.top),
+    titleOverflow: title.scrollWidth - title.clientWidth };
+});
+expect("header: both actions share one height", header.readH === header.sxsH && header.readH >= 44, JSON.stringify(header));
+expect("header: actions sit on one row", header.readTop === header.sxsTop, JSON.stringify(header));
+expect("header: title does not overflow", header.titleOverflow <= 0, JSON.stringify(header));
 
 const rows = await page.evaluate(() => [...document.querySelectorAll("#chapters-list .chapter-box")].map((r) => ({
   tag: r.tagName, href: r.getAttribute("href"),
@@ -45,7 +56,7 @@ expect("toc: one row per chapter", rows.length === chapters.length, `${rows.leng
 expect("toc: rows link to chapter URLs",
   rows.every((r, i) => r.tag === "A" && r.href.endsWith(`/books/${SLUG}/chapters/${chapters[i].chapter_number}`)),
   JSON.stringify(rows[0]));
-expect("toc: rows show summary excerpts", rows.filter((r) => r.excerpt.length > 20).length >= rows.length - 1);
+expect("toc: rows have no summary excerpt (cut-off snippets read badly)", rows.every((r) => r.excerpt === ""));
 expect("toc: rows show reading time", rows.every((r) => /^\d+(½)? (min|hrs?)$/.test(r.time)), JSON.stringify(rows.map((r) => r.time)));
 expect("toc: nothing marked read when anonymous", rows.every((r) => !r.completed));
 
@@ -86,6 +97,11 @@ const mp = await mobile.newPage();
 await mp.goto(`${BASE}/books/${SLUG}`, { waitUntil: "networkidle" });
 expect("mobile: side-by-side link hidden", !(await mp.isVisible("#book-sxs-link")));
 expect("mobile: no horizontal scroll", (await mp.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);
+const mbtn = await mp.evaluate(() => {
+  const b = document.getElementById("book-read-btn").getBoundingClientRect();
+  return { height: Math.round(b.height), width: Math.round(b.width), left: Math.round(b.left) };
+});
+expect("mobile: read button on one line, full width under the cover", mbtn.height <= 52 && mbtn.width >= 300, JSON.stringify(mbtn));
 await mobile.close();
 
 // Signed-in reader with progress: furthest point in chapter index 4, last at index 4.
@@ -101,7 +117,12 @@ await sp.goto(`${BASE}/books/${SLUG}`, { waitUntil: "networkidle" });
 await sp.waitForFunction(() => /Continue/.test(document.getElementById("book-read-label").textContent));
 const label = (await sp.textContent("#book-read-label")).trim();
 const expectedTitle = chapters[4].chapter_title || `Chapter ${chapters[4].chapter_number}`;
-expect("progress: button continues at the current chapter", label === `Continue · ${expectedTitle}`, label);
+expect("progress: button says Continue reading", label === "Continue reading", label);
+const progressText = (await sp.textContent("#book-progress-text")).replace(/\s+/g, " ").trim();
+expect("progress: line names the current chapter and count", await sp.isVisible("#book-progress")
+  && progressText.includes(expectedTitle) && progressText.includes(`Chapter 5 of ${chapters.length}`), progressText);
+const fill = await sp.evaluate(() => document.getElementById("book-progress-fill").style.width);
+expect("progress: bar reflects chapters read", fill === `${Math.round(4 * 100 / chapters.length)}%`, fill);
 const done = await sp.evaluate(() => [...document.querySelectorAll("#chapters-list .chapter-box")].map((r) => r.classList.contains("completed")));
 expect("progress: chapters before the furthest point are checked",
   done.slice(0, 4).every(Boolean) && !done.slice(4).some(Boolean), JSON.stringify(done));

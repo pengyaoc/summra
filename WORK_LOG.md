@@ -95,6 +95,13 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Tests: new `tests/e2e/redesign_reader.mjs` (15 checks incl. dark theme and mobile), red first; also passes on the prod bundle. pytest 629 passed; e2e suite green (6 pre-existing failures excluded).
 - After screenshots: `docs/redesign/after/phase7/`.
 
+### Follow-ups from review (2026-10-13)
+
+- **Chapter illustrations restored.** On main they were drawn only by the old chapter view; once phase 5 sent book-page chapter clicks to the continuous reader they were unreachable (Alice, Peter Pan, Oz, A Christmas Carol — 58 chapters). The continuous reader now renders each illustrated chapter's picture as a frontispiece just before its heading (`continuousIllustrationHtml`, URLs from `illustrationSources`, shared with the old view), in all modes incl. side by side; fixed-height `figure.reader-illustration` registered as a pagination block in `pagination.js`. Click opens the existing lightbox. Test: `tests/e2e/reader_illustrations.mjs`.
+- **Chapter-list excerpts removed** (user: cut-off snippets that mostly restated "Chapter N, '<title>'"). Rows are number · title · time · check. Dropped `summary_excerpt` from the API, `study_cues.summary_excerpt` and the `_summary_head` SQL column; `first_sentence` stays (home hero).
+- **Book header redesigned** (user): framed 220px cover with shadow, balanced serif title, both actions 48px and on one row ("Side by side" is a surface button with a two-column icon), button label is just "Start reading" / "Continue reading" / "Read again", and a progress line under it ("Chapter 6 of 13 · The Five Orange Pips" + thin bar) for signed-in readers. Phones: cover beside title/author/meta, actions and progress full width below. `redesign_book_page.mjs` updated (24 checks).
+- pytest 622 passed; e2e suite green (6 pre-existing failures excluded); book page + illustrations pass on the prod bundle.
+
 ### Phase 8 — build, compare, deploy (PARTIAL — deploy pending approval)
 
 - `app.min.js` rebuilt and fresh (`check-build-fresh`); every redesign e2e test also passes against the prod-mode bundle (app_prod on :5003).
