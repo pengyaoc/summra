@@ -3,18 +3,63 @@ detail/summary/chapter, category detail/list, all-books.
 
 Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 """
+import re
+
 from flask import Blueprint, render_template
 
 from backend.routes import common
 
 bp = Blueprint('pages', __name__)
 
+# "Where Most Readers Start" carousel: Project Gutenberg's most-downloaded
+# titles, in rank order. Mirrored in app.js (renderTop10Carousel et al.),
+# which renders the same carousel client-side when home is reached via SPA
+# navigation instead of a full page load.
+TOP_10_GUTENBERG_IDS = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345]
+
+
+def _cover_base(cover_image_url):
+    """Static-relative cover path without extension (e.g. 'covers/30'), for
+    the webp/jpg <picture> pair that getImageHtml() in app.js also builds."""
+    if not cover_image_url or cover_image_url.startswith('http'):
+        return ''
+    base = re.sub(r'\.(png|jpe?g|webp)$', '', cover_image_url.lstrip('/'), flags=re.I)
+    return base[len('static/'):] if base.startswith('static/') else base
+
+
+def _initial_book(book, slug):
+    """__INITIAL_DATA__.book for every /books/<slug>/... route. The client
+    renders from it without waiting for /api/books, so it uses that
+    endpoint's field names and cover_image_url shape."""
+    cover = book.get('cover_image_url')
+    return {
+        'id': book['id'],
+        'title': book['title'],
+        'author': book['author'],
+        'slug': slug,
+        'cover_image_url': f"/static/{cover}" if cover and not cover.startswith('http') else cover,
+    }
+
+
+def _top_10_books():
+    """Ranked top-10 books with cover paths split into webp/jpg variants,
+    matching getImageHtml() in app.js."""
+    found = {b['gutenberg_id']: b for b in common.db.get_books_by_gutenberg_ids(TOP_10_GUTENBERG_IDS)}
+    ranked = []
+    for rank, gid in enumerate(TOP_10_GUTENBERG_IDS, start=1):
+        book = found.get(gid)
+        if not book or not book.get('slug'):
+            continue
+        ranked.append({**book, 'rank': rank, 'cover_base': _cover_base(book.get('cover_image_url'))})
+    return ranked
+
 
 @bp.route('/')
 def index():
     """Serve the main page"""
     return render_template('index.html',
-                         meta_title='Summra — Read the Classics in Plain English')
+                         meta_title='Summra — Read the Classics in Plain English',
+                         top_10_books=_top_10_books())
 
 
 @bp.route('/discover')
@@ -88,12 +133,7 @@ def book_detail(slug):
     # Pass initial data to speed up client-side rendering
     initial_data = {
         'type': 'book',
-        'book': {
-            'id': book['id'],
-            'title': book['title'],
-            'author': book['author'],
-            'slug': slug
-        },
+        'book': _initial_book(book, slug),
         'breadcrumbs': breadcrumbs
     }
 
@@ -106,7 +146,9 @@ def book_detail(slug):
         og_type='book',
         og_image=og_image,
         structured_data=combined_structured_data,
-        initial_data=initial_data
+        initial_data=initial_data,
+        author_slug=common.author_name_to_slug(book['author']),
+        cover_base=_cover_base(book.get('cover_image_url')),
     )
 
 
@@ -155,12 +197,7 @@ def book_summary_detail(slug):
     # Pass initial data
     initial_data = {
         'type': 'book-summary',
-        'book': {
-            'id': book['id'],
-            'title': book['title'],
-            'author': book['author'],
-            'slug': slug
-        }
+        'book': _initial_book(book, slug)
     }
 
     return render_template(
@@ -193,7 +230,7 @@ def book_reader(slug):
         canonical_url=f"{common.site_origin()}/books/{slug}/read",
         initial_data={
             'type': 'reader',
-            'book': {'id': book['id'], 'title': book['title'], 'author': book['author'], 'slug': slug},
+            'book': _initial_book(book, slug),
         },
     )
 
@@ -250,12 +287,7 @@ def book_chapter_detail(slug, chapter_number):
     # Pass initial data
     initial_data = {
         'type': 'chapter',
-        'book': {
-            'id': book['id'],
-            'title': book['title'],
-            'author': book['author'],
-            'slug': slug
-        },
+        'book': _initial_book(book, slug),
         'chapter_number': chapter_number
     }
 

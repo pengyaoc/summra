@@ -536,6 +536,22 @@ class Database:
         conn.commit()
         conn.close()
 
+    def get_books_by_gutenberg_ids(self, gutenberg_ids: List[int]) -> List[Dict]:
+        """Get books matching the given Gutenberg IDs (unordered, no categories)"""
+        if not gutenberg_ids:
+            return []
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        placeholders = ','.join('?' * len(gutenberg_ids))
+        cursor.execute(
+            f'SELECT id, title, gutenberg_id, cover_image_url, slug FROM books '
+            f'WHERE gutenberg_id IN ({placeholders})',
+            list(gutenberg_ids),
+        )
+        books = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return books
+
     def get_all_books(self) -> List[Dict]:
         """Get all books with their categories"""
         conn = self.get_connection()
@@ -546,9 +562,19 @@ class Database:
 
         books = [dict(row) for row in rows]
 
-        # Add categories to each book
+        # Add categories to each book — one query for all books (same rows and
+        # order as get_book_categories), not one query + connection per book.
+        cursor.execute('''
+            SELECT bc.book_id AS _book_id, c.* FROM categories c
+            INNER JOIN book_categories bc ON c.id = bc.category_id
+            ORDER BY c.name
+        ''')
+        categories_by_book = {}
+        for row in cursor.fetchall():
+            category = dict(row)
+            categories_by_book.setdefault(category.pop('_book_id'), []).append(category)
         for book in books:
-            book['categories'] = self.get_book_categories(book['id'])
+            book['categories'] = categories_by_book.get(book['id'], [])
 
         conn.close()
         return books
@@ -1149,7 +1175,7 @@ class Database:
 
         cursor.execute('''
             SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                   b.gutenberg_id, b.cover_image_url, b.created_at
+                   b.gutenberg_id, b.cover_image_url, b.created_at, b.slug, b.cefr_level
             FROM books b
             INNER JOIN book_categories bc ON b.id = bc.book_id
             WHERE bc.category_id = ?
@@ -2164,6 +2190,22 @@ class Database:
                        first_word_offset, last_word_offset, byte_count, unit_count, oversized_unit, etag
                 FROM reader_segment WHERE content_version_id = ? ORDER BY mode, ordinal
             ''', (version['id'],)).fetchall()]
+            # Chapters per segment (in reading order), so the client can open
+            # a chapter's segment directly instead of scanning segments.
+            chapter_ids = {}
+            for row in conn.execute('''
+                SELECT segment_id, chapter_id, MIN(ordinal) AS first_ordinal
+                FROM reader_paragraph WHERE content_version_id = ? AND segment_id IS NOT NULL
+                GROUP BY segment_id, chapter_id
+                UNION ALL
+                SELECT segment_id, chapter_id, MIN(ordinal) AS first_ordinal
+                FROM reader_alignment_row WHERE content_version_id = ? AND segment_id IS NOT NULL
+                GROUP BY segment_id, chapter_id
+                ORDER BY segment_id, first_ordinal
+            ''', (version['id'], version['id'])):
+                chapter_ids.setdefault(row['segment_id'], []).append(row['chapter_id'])
+            for segment in segments:
+                segment['chapter_ids'] = chapter_ids.get(segment['id'], [])
             structure = [dict(row) for row in conn.execute('''
                 SELECT s.kind, s.section_id, s.chapter_id, s.ordinal, s.title,
                        c.chapter_number, c.illustration_url

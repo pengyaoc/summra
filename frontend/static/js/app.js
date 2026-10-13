@@ -217,54 +217,46 @@ class SummraApp {
             await this.showBlogIndex(true);
         } else if (discoverMatch) {
             await this.showDiscoverPage(true);
-        }
-        // Routes that need books data - load books first
-        else {
-            // Ensure books are loaded for book-related routes
-            await this.ensureBooksLoaded();
-
-            if (readerMatch) {
-                const bookSlug = readerMatch[1];
-                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
-                if (book) {
-                    const query = new URLSearchParams(window.location.search);
-                    await this.showContinuousReader(book, {
-                        mode: query.get('mode'),
-                        chapter: query.get('chapter'),
-                    });
-                }
-            } else if (authorMatch) {
-                const authorName = decodeURIComponent(authorMatch[1]);
-                await this.showAuthorDetail(authorName, true);
-            } else if (chapterMatch) {
-                const bookSlug = chapterMatch[1];
-                const chapterNum = parseInt(chapterMatch[2]);
-                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
-                if (book) {
-                    // Legacy chapter URLs open the same continuous reader at
-                    // the requested chapter, without a chapter destination.
-                    await this.showContinuousReader(book, { chapter: String(chapterNum), legacyChapterNumber: true });
-                }
-            } else if (mediumMatch) {
-                const bookSlug = mediumMatch[1];
-                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
-                if (book) {
-                    await this.showMediumDetail(book, true);
-                }
-            } else if (bookMatch) {
-                const bookSlug = bookMatch[1];
-                const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookSlug);
-                if (book) {
-                    await this.selectBook(book, true);
-                }
-            } else if (categoryMatch) {
-                const categoryId = parseInt(categoryMatch[1]);
-                await this.showCategoryDetail(categoryId, true);
-            } else if (categoriesMatch) {
-                await this.showAllCategories(true);
-            } else if (allBooksMatch) {
-                await this.showAllBooksGrid(true);
+        } else if (readerMatch) {
+            const book = await this.resolveBookBySlug(readerMatch[1]);
+            if (book) {
+                const query = new URLSearchParams(window.location.search);
+                await this.showContinuousReader(book, {
+                    mode: query.get('mode'),
+                    chapter: query.get('chapter'),
+                });
             }
+        } else if (chapterMatch) {
+            const chapterNum = parseInt(chapterMatch[2]);
+            const book = await this.resolveBookBySlug(chapterMatch[1]);
+            if (book) {
+                // Legacy chapter URLs open the same continuous reader at
+                // the requested chapter, without a chapter destination.
+                await this.showContinuousReader(book, { chapter: String(chapterNum), legacyChapterNumber: true });
+            }
+        } else if (mediumMatch) {
+            const book = await this.resolveBookBySlug(mediumMatch[1]);
+            if (book) {
+                await this.showMediumDetail(book, true);
+            }
+        } else if (bookMatch) {
+            const book = await this.resolveBookBySlug(bookMatch[1]);
+            if (book) {
+                await this.selectBook(book, true);
+            }
+        } else if (authorMatch) {
+            // Author pages load from /api/authors/*, not the catalog.
+            const authorName = decodeURIComponent(authorMatch[1]);
+            await this.showAuthorDetail(authorName, true);
+        } else if (categoryMatch) {
+            // Filters the catalog if it's already loaded, otherwise uses
+            // /api/categories/<id>/books — no need to wait for the catalog.
+            const categoryId = parseInt(categoryMatch[1]);
+            await this.showCategoryDetail(categoryId, true);
+        } else if (categoriesMatch) {
+            await this.showAllCategories(true);
+        } else if (allBooksMatch) {
+            await this.showAllBooksGrid(true);
         }
     }
 
@@ -764,47 +756,69 @@ class SummraApp {
     }
 
     renderTop10Carousel() {
-        // Top 10 most downloaded books from Project Gutenberg (by Gutenberg ID)
-        // Using popular books we have in our database
-        const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
-
-        // Find books in our database that match these IDs
-        const top10Books = [];
-        top10GutenbergIds.forEach((gutenbergId, index) => {
-            const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
-            if (book) {
-                top10Books.push({ book, rank: index + 1 });
-            }
-        });
-
         const scrollContainer = document.getElementById('top-10-scroll');
-        if (!scrollContainer || top10Books.length === 0) return;
+        if (!scrollContainer) return;
 
-        // Clear skeleton loading cards
-        scrollContainer.innerHTML = '';
+        // On a full page load of / the cards are server-rendered (see
+        // TOP_10_GUTENBERG_IDS in backend/routes/pages.py). Only build them
+        // here when home was reached via SPA navigation from another route.
+        if (!scrollContainer.querySelector('.top-10-book-card')) {
+            // Top 10 most downloaded books from Project Gutenberg (by Gutenberg ID)
+            const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
 
-        // Create book cards with rank overlays
-        top10Books.forEach(({ book, rank }) => {
-            const bookCard = document.createElement('div');
-            bookCard.className = 'top-10-book-card';
+            const top10Books = [];
+            top10GutenbergIds.forEach((gutenbergId, index) => {
+                const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
+                if (book) {
+                    top10Books.push({ book, rank: index + 1 });
+                }
+            });
+            if (top10Books.length === 0) return;
 
-            const cardInner = document.createElement('div');
-            cardInner.className = 'top-10-book-card-inner';
+            // Clear skeleton loading cards
+            scrollContainer.innerHTML = '';
 
-            const coverImageHtml = book.cover_image_url
-                ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, '')
-                : '';
+            // Create book cards with rank overlays
+            top10Books.forEach(({ book, rank }) => {
+                const bookCard = document.createElement('a');
+                bookCard.className = 'top-10-book-card';
+                bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
 
-            cardInner.innerHTML = `
-                ${coverImageHtml}
-                <div class="top-10-rank-overlay">
-                    <div class="top-10-rank-number">${rank}</div>
-                </div>
-            `;
+                const cardInner = document.createElement('div');
+                cardInner.className = 'top-10-book-card-inner';
 
-            bookCard.appendChild(cardInner);
-            bookCard.addEventListener('click', () => this.selectBook(book));
-            scrollContainer.appendChild(bookCard);
+                const coverImageHtml = book.cover_image_url
+                    ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, '')
+                    : '';
+
+                cardInner.innerHTML = `
+                    ${coverImageHtml}
+                    <div class="top-10-rank-overlay">
+                        <div class="top-10-rank-number">${rank}</div>
+                    </div>
+                `;
+
+                bookCard.appendChild(cardInner);
+                scrollContainer.appendChild(bookCard);
+            });
+        }
+
+        // Listeners attach once; the container and buttons persist across
+        // SPA navigations, so re-adding them would stack duplicate handlers.
+        if (this.top10CarouselWired) return;
+        this.top10CarouselWired = true;
+
+        // Cards are real links (crawlable, middle-click opens a tab); a plain
+        // click opens the book in-app like every other book card.
+        scrollContainer.addEventListener('click', async (e) => {
+            const card = e.target.closest('a.top-10-book-card');
+            if (!card || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            await this.ensureBooksLoaded();
+            const slug = decodeURIComponent(card.pathname.split('/').pop());
+            const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === slug);
+            if (book) this.selectBook(book);
         });
 
         // Setup carousel navigation
@@ -951,12 +965,14 @@ class SummraApp {
         container.appendChild(carouselSection);
     }
 
-    async loadBooks() {
-        // Skip if already loaded
-        if (this.booksLoaded) {
-            return;
-        }
+    loadBooks() {
+        // One shared request: concurrent callers (router, HeroSearch) await the
+        // same in-flight fetch instead of each downloading the catalog.
+        this.booksPromise ||= this.fetchAllBooks();
+        return this.booksPromise;
+    }
 
+    async fetchAllBooks() {
         try {
             const response = await fetch(`${this.apiBase}/books`);
             const data = await response.json();
@@ -972,6 +988,19 @@ class SummraApp {
             console.error('Error loading books:', error);
             this.booksLoaded = true;
         }
+    }
+
+    // Resolve a /books/<slug>/... route's book. On a full page load the
+    // server embedded it in __INITIAL_DATA__ (see _initial_book() in
+    // backend/routes/pages.py), so there's no need to wait for the whole
+    // /api/books catalog just to look up one slug.
+    async resolveBookBySlug(slug) {
+        if (!this.booksLoaded) {
+            const initial = window.__INITIAL_DATA__?.book;
+            if (initial?.slug === slug) return initial;
+            await this.ensureBooksLoaded();
+        }
+        return this.allBooks.find(b => (b.slug || this.slugify(b.title)) === slug) || null;
     }
 
     async ensureBooksLoaded() {
@@ -1846,8 +1875,11 @@ class SummraApp {
         // Show only hero section (uses centralized section management)
         this.showOnlySections('hero-section');
 
-        // Load books only when needed for home page
-        await this.ensureBooksLoaded();
+        // Books are only needed to build the top-10 carousel client-side;
+        // a full page load of / already has it server-rendered.
+        if (!document.querySelector('#top-10-scroll .top-10-book-card')) {
+            await this.ensureBooksLoaded();
+        }
 
         // Render top 10 carousel
         this.renderTop10Carousel();
@@ -1966,12 +1998,13 @@ class SummraApp {
         // Show only all categories section
         this.showOnlySections('all-categories-section');
 
-        // Load books first (needed for filtering by category)
-        await this.ensureBooksLoaded();
-
-        // Load all categories with books
+        // Load the catalog (needed for filtering by category) and the
+        // category list in parallel
         try {
-            const response = await fetch(`${this.apiBase}/categories`);
+            const [response] = await Promise.all([
+                fetch(`${this.apiBase}/categories`),
+                this.ensureBooksLoaded(),
+            ]);
             const data = await response.json();
 
             if (data.success) {
@@ -2635,8 +2668,9 @@ class HeroSearch {
     }
 
     init() {
-        // Fetch all books for search
-        this.fetchBooks();
+        // The catalog is only needed once the reader searches; most pages
+        // render without it, so don't download it on every page load.
+        this.searchInput.addEventListener('focus', () => this.fetchBooks(), { once: true });
 
         // Add input event listener with debouncing
         this.searchInput.addEventListener('input', (e) => {
@@ -2648,7 +2682,8 @@ class HeroSearch {
                 return;
             }
 
-            this.debounceTimer = setTimeout(() => {
+            this.debounceTimer = setTimeout(async () => {
+                await this.fetchBooks();
                 this.performSearch(query);
             }, 300);
         });
@@ -2672,13 +2707,8 @@ class HeroSearch {
     }
 
     async fetchBooks() {
-        try {
-            const response = await fetch(withBasePath('/api/books'));
-            const data = await response.json();
-            this.allBooks = data.books || [];
-        } catch (error) {
-            console.error('Error fetching books for search:', error);
-        }
+        await window.summraApp.ensureBooksLoaded();
+        this.allBooks = window.summraApp.allBooks;
     }
 
     slugify(text) {

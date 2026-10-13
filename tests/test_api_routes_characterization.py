@@ -276,6 +276,16 @@ def test_api_category_books(client, db):
     assert data['success'] is True
 
 
+def test_api_category_books_have_book_page_fields(client, db):
+    """The category page renders from this endpoint (not /api/books) on a
+    full page load, and its cards open book pages by slug — so each book
+    needs the same identifying fields /api/books returns."""
+    data = client.get(f"/api/categories/{db.ids['cat_fiction']}/books").get_json()
+    book = next(b for b in data['books'] if b['id'] == db.ids['book_id'])
+    assert book['slug'] == 'the-test-novel'
+    assert 'cefr_level' in book
+
+
 def test_api_book_categories(client, db):
     resp = client.get(f"/api/books/{db.ids['book_id']}/categories")
     assert resp.status_code == 200
