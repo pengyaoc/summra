@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE
+
+Deployed the site-wide speed-up + reader chapter fix (`b4359b9`) to the VM; public pages verified 200, gzip on, SSR carousel/header live, `chapter_ids` in the reader manifest.
+
+The deploy exposed stale facts in CLAUDE.md's deploy section, now corrected (real values stay in the gitignored `.prod-metadata.local.md`, which gained `<GCP_ACCOUNT>`, `<SERVICE_UID>`, `<GUNICORN_PORT>`, `<APACHE_PROXY_CONF>`):
+- gunicorn is a systemd **user** service of the service user (needs `sudo -u <SERVICE_USER> XDG_RUNTIME_DIR=/run/user/<SERVICE_UID> systemctl --user ...`), not a system unit.
+- It binds `:5001` via `GUNICORN_BIND` in `service.env`, not `:5000`.
+- Apache (with OIDC) fronts it, not nginx; Apache gzips static files only.
+- The VM checkout's branch tracks a deleted upstream, so the pull step now uses `git pull --ff-only origin main` behind a `merge-base --is-ancestor` guard.
+- Only one gcloud account/project can reach the VM; local gcloud config now defaults to them.
+
+---
+
 ## 2026-10-12: Chapter destinations open the reader on the right page — DONE (not deployed)
 
 ### Bug
