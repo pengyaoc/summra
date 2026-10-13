@@ -947,10 +947,10 @@ export const readerMixin = {
                 if (unit.chapter_id !== activeChapter) {
                     activeChapter = unit.chapter_id;
                     const title = unit.chapter_title || `Chapter ${unit.chapter_number || ''}`;
-                    // Illustration first, as a frontispiece: the chapter's
-                    // opening page (findContinuousPageForChapter) then shows it.
-                    html.push(this.continuousIllustrationHtml(unit.chapter_id, title));
+                    // Illustration below the heading; pagination keeps the
+                    // heading on the same page as what follows it.
                     html.push(`<h2 class="reader-chapter-heading" data-reader-chapter="${unit.chapter_id}">${this.escapeHtml(title)}</h2>`);
+                    html.push(this.continuousIllustrationHtml(unit.chapter_id, title));
                 }
                 if (reader.mode === 'side_by_side') {
                     const original = unit.members.original;
