@@ -116,6 +116,14 @@ sticky-header UI's border color both happen to render the same gray). Every hex 
 written directly in the file (not a token) occurs exactly once — there's nothing left to
 deduplicate.
 
+*Redesign (2026-10-12, spec `docs/superpowers/specs/2026-10-12-site-redesign-design.md`):* a
+design-system layer sits at the top of `:root` — `--paper`, `--surface`, `--ink`, `--ink-muted`,
+`--rule`, `--accent` (+ `--accent-hover`), `--font-serif`, `--font-sans`, and the
+`--level-{easy,moderate,challenging}-{bg,fg}` tag colors. During migration the legacy token
+names (`--primary-color`, `--secondary-color`, `--background-color`, …) are re-pointed at the new
+tokens so un-migrated selectors pick up the new palette; each legacy alias is deleted once its last
+call site is migrated. The reader's dark/sepia themes keep their own tokens.
+
 ---
 
 ## Database Schema & ERD
