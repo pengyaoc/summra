@@ -40,7 +40,9 @@ def test_json_is_gzipped(client):
 def test_html_is_gzipped(client):
     resp = client.get('/', headers=GZ)
     assert resp.headers['Content-Encoding'] == 'gzip'
-    assert b'Where Most Readers' in gzip.decompress(resp.data)
+    # Structural marker, not copy: the home headings were rewritten in the
+    # 2026-10 redesign ("Where Most Readers Start" became "Start here").
+    assert b'id="hero-section"' in gzip.decompress(resp.data)
 
 
 def test_not_gzipped_without_accept_encoding(client):

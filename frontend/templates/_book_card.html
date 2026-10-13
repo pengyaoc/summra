@@ -1,15 +1,17 @@
 {# Server-rendered book card. Keep in step with createBookCard() /
    bookCoverHtml() in app.js, which build the same markup client-side
    (tests/test_discover_page.py pins this structure). Import with context so
-   base_path is available. #}
-{% macro book_card(book) -%}
-<a class="book-card" href="{{ base_path }}/books/{{ book.slug }}" data-level="{{ (book.level or 'none')|lower }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}">
+   base_path is available. `cls` and `rank` serve the home "Start here"
+   shelf (class top-10-book-card, small "No. N" badge on the cover). #}
+{% macro book_card(book, cls='book-card', rank=none) -%}
+<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-level="{{ (book.level or 'none')|lower }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}">
     <div class="book-card-cover">
         <span class="book-card-cover-title" aria-hidden="true">{{ book.title }}</span>{% if book.cover_base %}
         <picture>
             <source srcset="{{ url_for('static', filename=book.cover_base ~ '.webp') }}" type="image/webp">
             <img src="{{ url_for('static', filename=book.cover_base ~ '.jpg') }}" alt="{{ book.title }} cover" loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">
-        </picture>{% endif %}
+        </picture>{% endif %}{% if rank %}
+        <span class="book-card-rank">No. <span class="top-10-rank-number">{{ rank }}</span></span>{% endif %}
     </div>
     <h3 class="book-card-title">{{ book.title }}</h3>
     <p class="book-card-author">{{ book.author }}</p>

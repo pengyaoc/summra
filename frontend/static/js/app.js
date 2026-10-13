@@ -161,6 +161,10 @@ class SummraApp {
             const link = e.target.closest('a[href^="/"]');
             if (!link) return;
 
+            // Leave new-tab clicks to the browser, and clicks another handler
+            // already took (book cards, chapter rows) to that handler.
+            if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+
             const href = link.getAttribute('href');
 
             // Skip external links and download links
@@ -758,48 +762,21 @@ class SummraApp {
             // Clear skeleton loading cards
             scrollContainer.innerHTML = '';
 
-            // Create book cards with rank overlays
+            // Same card as the server-rendered shelf (book_card macro)
             top10Books.forEach(({ book, rank }) => {
-                const bookCard = document.createElement('a');
-                bookCard.className = 'top-10-book-card';
-                bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
-
-                const cardInner = document.createElement('div');
-                cardInner.className = 'top-10-book-card-inner';
-
-                const coverImageHtml = book.cover_image_url
-                    ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, '')
-                    : '';
-
-                cardInner.innerHTML = `
-                    ${coverImageHtml}
-                    <div class="top-10-rank-overlay">
-                        <div class="top-10-rank-number">${rank}</div>
-                    </div>
-                `;
-
-                bookCard.appendChild(cardInner);
-                scrollContainer.appendChild(bookCard);
+                scrollContainer.appendChild(this.createBookCard(book, { className: 'top-10-book-card', rank }));
             });
         }
 
         // Listeners attach once; the container and buttons persist across
         // SPA navigations, so re-adding them would stack duplicate handlers.
-        if (this.top10CarouselWired) return;
+        // Arrow state is recomputed each time home is shown: a scroll event
+        // while the section was hidden (zero width) leaves them disabled.
+        if (this.top10CarouselWired) {
+            this.updateTop10Buttons();
+            return;
+        }
         this.top10CarouselWired = true;
-
-        // Cards are real links (crawlable, middle-click opens a tab); a plain
-        // click opens the book in-app like every other book card.
-        scrollContainer.addEventListener('click', async (e) => {
-            const card = e.target.closest('a.top-10-book-card');
-            if (!card || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            await this.ensureBooksLoaded();
-            const slug = decodeURIComponent(card.pathname.split('/').pop());
-            const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === slug);
-            if (book) this.selectBook(book);
-        });
 
         // Setup carousel navigation
         const leftBtn = document.getElementById('top-10-nav-left');
@@ -821,6 +798,7 @@ class SummraApp {
             rightBtn.disabled = scrollContainer.scrollLeft + scrollContainer.clientWidth >= scrollContainer.scrollWidth - 1;
         };
 
+        this.updateTop10Buttons = updateButtonStates;
         scrollContainer.addEventListener('scroll', updateButtonStates);
         setTimeout(() => updateButtonStates(), 100);
     }
@@ -948,6 +926,9 @@ class SummraApp {
     // backend/routes/pages.py), so there's no need to wait for the whole
     // /api/books catalog just to look up one slug.
     async resolveBookBySlug(slug) {
+        // Route params come from location.pathname, which percent-encodes
+        // non-ASCII slugs (louise-de-la-valli%C3%A8re); slugs are stored decoded.
+        try { slug = decodeURIComponent(slug); } catch (_) { /* malformed: match as-is */ }
         if (!this.booksLoaded) {
             const initial = window.__INITIAL_DATA__?.book;
             if (initial?.slug === slug) return initial;
@@ -1026,15 +1007,7 @@ class SummraApp {
         const readLabel = document.getElementById('book-read-label');
         if (readLabel) readLabel.textContent = 'Start reading';
         const sxsLink = document.getElementById('book-sxs-link');
-        if (sxsLink) {
-            sxsLink.href = withBasePath(`/books/${slug}/read?mode=side_by_side`);
-            sxsLink.onclick = async (e) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-                e.preventDefault();
-                window.history.pushState({ type: 'reader', bookId: book.id }, '', sxsLink.getAttribute('href'));
-                await this.showContinuousReader(book, { mode: 'side_by_side' });
-            };
-        }
+        if (sxsLink) sxsLink.href = withBasePath(`/books/${slug}/read?mode=side_by_side`);
 
         const readButton = document.getElementById('book-read-btn');
         if (readButton) {
@@ -1640,7 +1613,8 @@ class SummraApp {
     }
 
     // One row of the book page's table of contents: a link to the chapter
-    // URL that opens the continuous reader there (as a direct load does).
+    // URL, which the router opens in the continuous reader at that chapter
+    // (same as a direct load).
     createChapterRow(chapter, indented = false) {
         const row = document.createElement('a');
         row.className = 'chapter-box' + (indented ? ' indented' : '');
@@ -1656,21 +1630,7 @@ class SummraApp {
             ${chapter.reading_time ? `<span class="chapter-box-time">${this.escapeHtml(chapter.reading_time)}</span>` : ''}
             <span class="chapter-box-check" aria-label="Read">✓</span>
         `;
-        row.addEventListener('click', (e) => {
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-            e.preventDefault();
-            this.openChapterInReader(chapter.chapter_number);
-        });
         return row;
-    }
-
-    async openChapterInReader(chapterNumber) {
-        const book = this.currentBook;
-        const path = withBasePath(`/books/${book.slug || this.slugify(book.title)}/chapters/${chapterNumber}`);
-        if (window.location.pathname !== path) {
-            window.history.pushState({ type: 'reader', bookId: book.id }, '', path);
-        }
-        await this.showContinuousReader(book, { chapter: String(chapterNumber), legacyChapterNumber: true });
     }
 
     // Meta row under the book title; same markup the server renders on
@@ -1855,6 +1815,8 @@ class SummraApp {
 
         // Render top 10 carousel
         this.renderTop10Carousel();
+        this.wireHeroExamples();
+        this.renderHomeContinue();
 
         this.currentBook = null;
         this.currentCategory = null;
@@ -1872,6 +1834,35 @@ class SummraApp {
 
         // Update page title
         this.updatePageTitle('Free Classic Book Summaries, Chapter Summaries & Full Text | Summra');
+    }
+
+    // "Another example" steps through the hero's sentence pairs.
+    wireHeroExamples() {
+        const next = document.getElementById('hero-sentence-next');
+        if (!next || this.heroExamplesWired) return;
+        this.heroExamplesWired = true;
+        next.addEventListener('click', () => {
+            const pairs = [...document.querySelectorAll('#hero-examples .hero-sentence')];
+            const current = pairs.findIndex(pair => !pair.hidden);
+            pairs.forEach((pair, i) => { pair.hidden = i !== (current + 1) % pairs.length; });
+        });
+    }
+
+    // Signed-in readers with a book in progress get it at the top of home.
+    async renderHomeContinue() {
+        const section = document.getElementById('home-continue');
+        const container = document.getElementById('home-continue-cards');
+        if (!section || !container) return;
+        await window.authModule?.initAuth?.();
+        if (!window.authModule?.currentUser?.()) {
+            section.classList.add('hidden');
+            return;
+        }
+        const library = await window.authModule.getLibrary();
+        const books = (library?.continue_reading || []).slice(0, 3);
+        if (this.currentView !== 'home') return;
+        this.renderLibraryCards(container, books, 'Continue');
+        section.classList.toggle('hidden', books.length === 0);
     }
 
     // Keep backward compatibility
@@ -2146,6 +2137,9 @@ class SummraApp {
         const grid = document.getElementById('discover-grid');
         if (!grid.querySelector('.book-card')) {
             await this.ensureBooksLoaded();
+        }
+        // Re-check after the await: a second navigation may have filled it.
+        if (!grid.querySelector('.book-card')) {
             this.allBooks
                 .filter(book => book.slug)
                 .forEach(book => grid.appendChild(this.createBookCard(book)));
@@ -2311,11 +2305,12 @@ class SummraApp {
     }
 
     // The one book card used by every listing (Books, Categories, Discover,
-    // Author, "You may also like"). A real link so it's crawlable and
-    // middle-click opens a tab; a plain click opens the book in-app.
-    createBookCard(book) {
+    // Author, "You may also like", home "Start here"). A real link: the
+    // delegated handler in setupRouting() opens it in-app, and modified
+    // clicks open a new tab.
+    createBookCard(book, { className = 'book-card', rank = null } = {}) {
         const bookCard = document.createElement('a');
-        bookCard.className = 'book-card';
+        bookCard.className = className;
         bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
         // Read by Discover's CSS filters and sort (same attributes as the
         // server-rendered card in _book_card.html).
@@ -2331,23 +2326,18 @@ class SummraApp {
             : '';
 
         bookCard.innerHTML = `
-            ${this.bookCoverHtml(book)}
+            ${this.bookCoverHtml(book, rank)}
             <h3 class="book-card-title">${this.escapeHtml(book.title)}</h3>
             <p class="book-card-author">${this.escapeHtml(book.author)}</p>
             ${levelHtml || timeHtml ? `<p class="book-card-meta">${levelHtml}${timeHtml}</p>` : ''}
         `;
-        bookCard.addEventListener('click', (e) => {
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-            e.preventDefault();
-            this.selectBook(book);
-        });
         return bookCard;
     }
 
     // 2:3 cover box. The title is set in serif underneath the image, so a
     // slow or missing cover reads as a deliberate plain cover rather than a
     // grey blob, and every card keeps the same shape while loading.
-    bookCoverHtml(book) {
+    bookCoverHtml(book, rank = null) {
         const sources = book.cover_image_url ? this.coverSources(book.cover_image_url) : null;
         const picture = sources ? `
                 <picture>
@@ -2355,9 +2345,10 @@ class SummraApp {
                     <img src="${this.escapeHtml(sources.jpg)}" alt="${this.escapeHtml(`${book.title} cover`)}"
                          loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">
                 </picture>` : '';
+        const rankHtml = rank ? `<span class="book-card-rank">No. <span class="top-10-rank-number">${rank}</span></span>` : '';
         return `
             <div class="book-card-cover">
-                <span class="book-card-cover-title" aria-hidden="true">${this.escapeHtml(book.title)}</span>${picture}
+                <span class="book-card-cover-title" aria-hidden="true">${this.escapeHtml(book.title)}</span>${picture}${rankHtml}
             </div>
         `;
     }
@@ -2676,10 +2667,12 @@ Object.assign(SummraApp.prototype, audioMixin);
 Object.assign(SummraApp.prototype, readerMixin);
 
 // Hero Search Functionality
+// Typeahead book search. One instance drives the home hero's box, another
+// the header's (see DOMContentLoaded below).
 class HeroSearch {
-    constructor() {
-        this.searchInput = document.getElementById('hero-search-input');
-        this.searchResults = document.getElementById('hero-search-results');
+    constructor(inputId = 'hero-search-input', resultsId = 'hero-search-results') {
+        this.searchInput = document.getElementById(inputId);
+        this.searchResults = document.getElementById(resultsId);
         this.debounceTimer = null;
         this.allBooks = [];
 
@@ -2761,7 +2754,7 @@ class HeroSearch {
         if (results.length === 0) {
             this.searchResults.innerHTML = `
                 <div class="hero-search-no-results">
-                    No books found for "${query}"
+                    No books found for "${window.summraApp.escapeHtml(query)}"
                 </div>
             `;
             this.showResults();
@@ -2770,12 +2763,13 @@ class HeroSearch {
 
         const resultsHtml = results.map(book => {
             const bookSlug = book.slug || this.slugify(book.title);
+            const cover = book.cover_image_url ? window.summraApp.coverSources(book.cover_image_url).jpg : '';
             return `
-                <div class="hero-search-result-item" data-slug="${bookSlug}">
-                    <img src="${summraBasePath()}/static/covers/${book.cover_image}"
-                         alt="${book.title}"
+                <div class="hero-search-result-item" data-slug="${window.summraApp.escapeHtml(bookSlug)}">
+                    ${cover ? `<img src="${window.summraApp.escapeHtml(cover)}"
+                         alt=""
                          class="hero-search-result-cover"
-                         onerror="this.style.display='none'">
+                         onerror="this.style.display='none'">` : ''}
                     <div class="hero-search-result-info">
                         <h4 class="hero-search-result-title">${this.highlightMatch(book.title, query)}</h4>
                         <p class="hero-search-result-author">${this.highlightMatch(book.author, query)}</p>
@@ -2801,9 +2795,13 @@ class HeroSearch {
         this.showResults();
     }
 
+    // Escapes both the text and the query, so neither can inject markup.
     highlightMatch(text, query) {
-        const regex = new RegExp(`(${query})`, 'gi');
-        return text.replace(regex, '<strong>$1</strong>');
+        const escape = window.summraApp.escapeHtml.bind(window.summraApp);
+        const pattern = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return text.split(new RegExp(`(${pattern})`, 'gi'))
+            .map((part, i) => (i % 2 ? `<strong>${escape(part)}</strong>` : escape(part)))
+            .join('');
     }
 
     showResults() {
@@ -2820,27 +2818,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Store app instance globally for use by other components
     window.summraApp = new SummraApp();
     window.heroSearchInstance = new HeroSearch();
+    window.headerSearchInstance = new HeroSearch('header-search-input', 'header-search-results');
 
-    // Handle hero banner CTAs with data-route attribute (use pushState to preserve audio)
-    const heroCtas = document.querySelectorAll('[data-route]');
-    heroCtas.forEach(cta => {
-        cta.addEventListener('click', (e) => {
-            e.preventDefault();
-            const route = cta.dataset.route;
-
-            // Special handling for "Read" CTA
-            if (cta.id === 'hero-read-cta') {
-                // Check screen width to determine which view mode to set
-                const isMobile = window.innerWidth < 1024;
-                const viewMode = isMobile ? 'modern' : 'side-by-side';
-
-                // Set the view mode preference before navigation
-                localStorage.setItem('reading_chapterViewMode', viewMode);
-            }
-
-            // Use pushState for client-side navigation (preserves audio)
-            window.history.pushState(null, '', withBasePath(`/${route}`));
-            window.summraApp.handleRoute();
-        });
+    // Header search: the magnifier opens a search box available on every page.
+    const headerSearch = document.getElementById('header-search');
+    const headerToggle = document.getElementById('header-search-toggle');
+    headerToggle?.addEventListener('click', () => {
+        const open = headerSearch.classList.toggle('open');
+        headerToggle.setAttribute('aria-expanded', String(open));
+        if (open) document.getElementById('header-search-input').focus();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && headerSearch?.classList.contains('open')) {
+            headerSearch.classList.remove('open');
+            headerToggle.setAttribute('aria-expanded', 'false');
+        }
     });
 });

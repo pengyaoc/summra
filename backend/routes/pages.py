@@ -4,10 +4,12 @@ detail/summary/chapter, category detail/list, all-books.
 Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 """
 import re
+import time
 
 from flask import Blueprint, render_template, request
 
 from backend.routes import common
+from backend.study_cues import first_sentence, level_label
 
 bp = Blueprint('pages', __name__)
 
@@ -52,6 +54,67 @@ def _top_10_books():
             continue
         ranked.append({**book, 'rank': rank, 'cover_base': _cover_base(book.get('cover_image_url'))})
     return ranked
+
+
+# Home hero examples: (book slug, chapter number). Each shows the chapter's
+# opening sentence next to its plain-English rewrite; picked because the
+# first sentences line up one-to-one. Missing books/rewrites are skipped.
+HERO_EXAMPLES = [
+    ('pride-and-prejudice', 1),
+    ('jane-eyre', 1),
+    ('frankenstein', 1),
+    ('great-expectations', 1),
+]
+
+
+def _opening(text, title):
+    """First sentence of the first paragraph that isn't the chapter title."""
+    for paragraph in (text or '').split('\n\n'):
+        if paragraph.strip() and paragraph.strip().lower() != (title or '').strip().lower():
+            return first_sentence(paragraph)
+    return None
+
+
+def _hero_examples():
+    db = common.db
+    examples = []
+    for slug, chapter_number in HERO_EXAMPLES:
+        book = db.get_book_by_slug(slug)
+        chapter = book and db.get_chapter(book['id'], chapter_number)
+        if not chapter:
+            continue
+        original = _opening(chapter.get('chapter_text'), chapter.get('chapter_title'))
+        plain = _opening(chapter.get('modern_english_text'), chapter.get('chapter_title'))
+        if original and plain:
+            examples.append({'original': original, 'plain': plain, 'title': book['title'],
+                             'author': book['author'], 'slug': slug})
+    return examples
+
+
+def _level_counts():
+    counts = {level: 0 for level in ('Easy', 'Moderate', 'Challenging')}
+    for cefr, n in common.db.count_books_by_cefr().items():
+        label = level_label(cefr)
+        if label:
+            counts[label] += n
+    return counts
+
+
+# The home section is rendered (hidden) on every page so in-app navigation
+# can just reveal it, so its content is needed everywhere. It only changes
+# when books are ingested, so cache it briefly per database.
+_HOME_CONTENT_TTL = 300
+_home_content_cache = {}
+
+
+@bp.app_context_processor
+def home_content():
+    key = getattr(common.db, 'db_path', None)
+    cached = _home_content_cache.get(key)
+    if not cached or time.monotonic() - cached[0] > _HOME_CONTENT_TTL:
+        cached = (time.monotonic(), {'hero_examples': _hero_examples(), 'level_counts': _level_counts()})
+        _home_content_cache[key] = cached
+    return cached[1]
 
 
 @bp.route('/')

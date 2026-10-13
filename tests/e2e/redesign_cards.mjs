@@ -103,6 +103,12 @@ await page.waitForFunction(() => document.querySelector("#book-title")?.textCont
 expect("click: accented slug opens its book page",
   decodeURIComponent(new URL(page.url()).pathname).endsWith("/books/louise-de-la-vallière"), page.url());
 
+// Direct load of an accented slug hydrates too (chapters list renders).
+await page.goto(`${BASE}/books/louise-de-la-valli%C3%A8re`, { waitUntil: "networkidle" });
+const louiseRows = await page.waitForFunction(() => document.querySelectorAll("#chapters-list .chapter-box").length, null, { timeout: 8000 })
+  .then((h) => h.jsonValue()).catch(() => 0);
+expect("direct load: accented slug renders its chapters", louiseRows > 0, `${louiseRows} rows`);
+
 expect("no console errors", consoleErrors.length === 0, consoleErrors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);

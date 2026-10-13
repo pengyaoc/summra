@@ -114,6 +114,15 @@
                     <a href="{{ base_path }}/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
                     {% endif %}
                 </div>
+                <div class="header-search" id="header-search">
+                    <button type="button" class="header-search-toggle" id="header-search-toggle" aria-label="Search books" aria-expanded="false" aria-controls="header-search-panel">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+                    </button>
+                    <div class="header-search-panel" id="header-search-panel">
+                        <input type="search" class="hero-search-input header-search-input" id="header-search-input" placeholder="Search books or authors" aria-label="Search books or authors" autocomplete="off">
+                        <div class="hero-search-results hidden" id="header-search-results"></div>
+                    </div>
+                </div>
                 {% if feature_auth %}
                 <!-- Hidden by default: most visitors here are anonymous, and
                      this button is the *account* view, not the sign-in
@@ -169,43 +178,78 @@
                 </div>
             </section>
 
-            {# Hero Sections (Apple-style) — always rendered (not swapped for an
-               empty placeholder on sub-pages) so app.js's showHomeSection() only
-               ever needs to toggle `hidden`, never rebuild this markup from a JS
-               template literal. The two used to drift apart (different hero copy
-               depending on whether you landed on / directly vs navigated here
-               client-side) until they were unified into this one copy. #}
-            <div id="hero-section"{% if initial_data and initial_data.type in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author', 'library', 'reader'] %} class="hidden"{% endif %}>
-                <!-- Main Hero Banner -->
-                <section class="hero-banner hero-main">
-                    <div class="hero-banner-content">
-                        <h1 class="hero-banner-title">Read the Classics in Plain&nbsp;English</h1>
-                        <p class="hero-banner-subtitle">Every sentence rewritten — no abbreviation, no shortcuts, no fear.</p>
+            {% from '_book_card.html' import book_card with context %}
+            {# Home — always rendered (only `hidden` toggles) so app.js's
+               showHomeSection() never rebuilds this markup from a template
+               literal. Redesign (2026-10-12): paper hero with a real
+               original → plain-English sentence pair, then Continue reading
+               (signed in), Start here, Choose by level, How it works. #}
+            <div id="hero-section"{% if initial_data and initial_data.type in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author', 'library', 'reader', 'discover'] %} class="hidden"{% endif %}>
+                <section class="home-hero hero-main">
+                    <div class="home-hero-copy">
+                        <h1 class="hero-banner-title">Read the classics in plain&nbsp;English.</h1>
+                        <p class="hero-banner-subtitle">Every sentence rewritten into modern prose — nothing cut, nothing summarised. Read it on its own, or side by side with the original.</p>
                         <div class="hero-search-container">
                             <div class="hero-search-wrapper">
                                 <input type="text"
                                        class="hero-search-input"
                                        id="hero-search-input"
-                                       placeholder="Search for a book or author..."
+                                       placeholder="Search for a book or author"
+                                       aria-label="Search for a book or author"
                                        autocomplete="off">
                                 <div class="hero-search-results hidden" id="hero-search-results">
                                     <!-- Typeahead results will be populated here -->
                                 </div>
                             </div>
                         </div>
+                        <div class="hero-banner-ctas">
+                            <a href="{{ base_path }}/discover" class="hero-cta-primary">Find your next classic</a>
+                        </div>
                     </div>
+                    {% if hero_examples %}
+                    <div class="hero-examples" id="hero-examples">
+                        {% for ex in hero_examples %}
+                        <figure class="hero-sentence"{% if not loop.first %} hidden{% endif %}>
+                            <div class="hero-sentence-row">
+                                <span class="hero-sentence-label">Original</span>
+                                <blockquote class="hero-sentence-original">{{ ex.original }}</blockquote>
+                            </div>
+                            <div class="hero-sentence-row">
+                                <span class="hero-sentence-label">Plain English</span>
+                                <p class="hero-sentence-plain">{{ ex.plain }}</p>
+                            </div>
+                            <figcaption class="hero-sentence-source"><a href="{{ base_path }}/books/{{ ex.slug }}">{{ ex.title }}</a> · {{ ex.author }}</figcaption>
+                        </figure>
+                        {% endfor %}
+                        {% if hero_examples|length > 1 %}
+                        <button type="button" class="hero-sentence-next" id="hero-sentence-next">Another example →</button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </section>
 
-                <!-- Discover Banner -->
-                <section class="hero-banner hero-discover">
-                    <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Where Most Readers&nbsp;Start</h2>
+                <!-- Continue reading (signed-in readers with progress; filled by app.js) -->
+                <section class="home-section hidden" id="home-continue">
+                    <div class="home-section-head">
+                        <h2>Continue reading</h2>
+                        <a href="{{ base_path }}/library" class="home-section-link">Your library →</a>
+                    </div>
+                    <div class="library-cards" id="home-continue-cards"></div>
+                </section>
+
+                <!-- Start here: the ranked top-10 shelf -->
+                <section class="home-section hero-discover">
+                    <div class="home-section-head">
+                        <div>
+                            <h2 class="hero-banner-heading">Start here</h2>
+                            <p class="home-section-sub">The ten classics readers open most.</p>
+                        </div>
+                        <a href="{{ base_path }}/books" class="home-section-link">All books →</a>
                     </div>
 
-                    <!-- Top 10 Books Carousel (direct child of section, breaks out on mobile) -->
                     <div class="top-10-carousel-wrapper">
                         <div class="carousel-container top-10-carousel">
-                            <button class="carousel-nav-btn left" id="top-10-nav-left">
+                            <button class="carousel-nav-btn left" id="top-10-nav-left" aria-label="Scroll left">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M15 18l-6-6 6-6"></path>
                                 </svg>
@@ -214,101 +258,69 @@
                                 {% if top_10_books %}
                                 {# Server-rendered so covers start downloading during HTML parse, without waiting for app.min.js + /api/books. #}
                                 {% for book in top_10_books %}
-                                <a class="top-10-book-card" href="{{ base_path }}/books/{{ book.slug }}">
-                                    <div class="top-10-book-card-inner">
-                                        {% if book.cover_base %}
-                                        <picture>
-                                            <source srcset="{{ url_for('static', filename=book.cover_base ~ '.webp') }}" type="image/webp">
-                                            <img src="{{ url_for('static', filename=book.cover_base ~ '.jpg') }}" alt="{{ book.title }} cover" width="300" height="450" decoding="async" loading="lazy">
-                                        </picture>
-                                        {% endif %}
-                                        <div class="top-10-rank-overlay">
-                                            <div class="top-10-rank-number">{{ book.rank }}</div>
-                                        </div>
-                                    </div>
-                                </a>
+                                {{ book_card(book, 'top-10-book-card', book.rank) }}
                                 {% endfor %}
                                 {% else %}
                                 <!-- Loading skeleton cards (will be replaced when books load) -->
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
-                                <div class="skeleton-book-card"></div>
+                                {% for _ in range(10) %}<div class="skeleton-book-card"></div>{% endfor %}
                                 {% endif %}
                             </div>
-                            <button class="carousel-nav-btn right" id="top-10-nav-right">
+                            <button class="carousel-nav-btn right" id="top-10-nav-right" aria-label="Scroll right">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M9 18l6-6-6-6"></path>
                                 </svg>
                             </button>
                         </div>
                     </div>
+                </section>
 
-                    <div class="hero-banner-content">
-                        <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="discover">Explore Classics</a>
-                            <a href="javascript:void(0)" class="hero-cta-secondary" data-route="books">Browse All Books</a>
-                        </div>
+                <!-- Choose by level: links into a filtered Discover -->
+                {% set lc = level_counts or {} %}
+                <section class="home-section">
+                    <div class="home-section-head">
+                        <h2>Choose by level</h2>
+                    </div>
+                    <div class="level-cards">
+                        {% for key, label, desc in [
+                            ('easy', 'Easy', 'Shorter sentences and familiar words. A gentle place to start.'),
+                            ('moderate', 'Moderate', 'Richer vocabulary — the classics most people meet in school.'),
+                            ('challenging', 'Challenging', 'Dense, older English, where the plain-English version helps most.')] %}
+                        {% set n = lc.get(label, 0) %}
+                        <a class="level-card level-card--{{ key }}" href="{{ base_path }}/discover?level={{ key }}">
+                            <span class="level-tag level-tag--{{ key }}">{{ label }}</span>
+                            <p class="level-card-desc">{{ desc }}</p>
+                            <span class="level-card-count">{{ n }} book{{ '' if n == 1 else 's' }} →</span>
+                        </a>
+                        {% endfor %}
                     </div>
                 </section>
 
-                <!-- Learn Banner -->
-                <section class="hero-banner hero-learn">
-                    <div class="hero-banner-content">
-                        <h2 class="hero-banner-heading">Classic Literature, Made&nbsp;Easy</h2>
-
-                        <!-- 3-Column Features Grid -->
-                        <div class="learn-features-grid">
-                            <!-- Column 1: Plain English Rewrites -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="{{ url_for('static', filename='images/infographic.webp') }}{{ asset_v('images/infographic.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/infographic.jpg') }}{{ asset_v('images/infographic.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/infographic.jpg') }}{{ asset_v('images/infographic.jpg') }}" alt="Plain English rewrites of every classic" class="learn-feature-image" loading="lazy" decoding="async">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">Plain English Rewrites</h3>
-                                <p class="learn-feature-description">Every sentence of every classic, rewritten into modern, readable prose. Same book, easier language — no abbreviation, no shortcuts.</p>
-                            </div>
-
-                            <!-- Column 2: Side-by-Side Reading -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="{{ url_for('static', filename='images/chapter_view.webp') }}{{ asset_v('images/chapter_view.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/chapter_view.jpg') }}{{ asset_v('images/chapter_view.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/chapter_view.jpg') }}{{ asset_v('images/chapter_view.jpg') }}" alt="Original and plain English side by side" class="learn-feature-image" loading="lazy" decoding="async">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">Side-by-Side Reading</h3>
-                                <p class="learn-feature-description">See the original and the plain English version next to each other. Read the way that works for you.</p>
-                            </div>
-
-                            <!-- Column 3: Built for Real Reading -->
-                            <div class="learn-feature-card">
-                                <div class="learn-feature-icon">
-                                    <picture>
-                                        <source srcset="{{ url_for('static', filename='images/summary.webp') }}{{ asset_v('images/summary.webp') }}" type="image/webp">
-                                        <source srcset="{{ url_for('static', filename='images/summary.jpg') }}{{ asset_v('images/summary.jpg') }}" type="image/jpeg">
-                                        <img src="{{ url_for('static', filename='images/summary.jpg') }}{{ asset_v('images/summary.jpg') }}" alt="Kindle-style reading experience with themes and font controls" class="learn-feature-image" loading="lazy" decoding="async">
-                                    </picture>
-                                </div>
-                                <h3 class="learn-feature-title">Built for Real Reading</h3>
-                                <p class="learn-feature-description">Kindle-style pages, themes, and font controls. Plus summaries and visual guides when you want to go deeper.</p>
-                            </div>
-                        </div>
-
-                        <div class="hero-banner-ctas">
-                            <a href="javascript:void(0)" class="hero-cta-primary" data-route="books/jane-eyre">See Example: Jane Eyre</a>
-                        </div>
+                <!-- How it works -->
+                <section class="home-section home-how">
+                    <div class="home-section-head">
+                        <h2>How it works</h2>
                     </div>
+                    <div class="how-grid">
+                        <ol class="how-steps">
+                            <li><strong>Pick a classic.</strong> Filter by level and length, or search by title or author.</li>
+                            <li><strong>Read it in plain English.</strong> Every sentence is rewritten, so nothing is cut or summarised.</li>
+                            <li><strong>Check the original any time.</strong> Switch to side by side; your place is saved as you go.</li>
+                        </ol>
+                        {% set sxs = hero_examples[1] if hero_examples and hero_examples|length > 1 else (hero_examples[0] if hero_examples else none) %}
+                        {% if sxs %}
+                        <div class="how-sxs" role="img" aria-label="Side-by-side example from {{ sxs.title }}">
+                            <div class="how-sxs-col">
+                                <span class="hero-sentence-label">Original</span>
+                                <p>{{ sxs.original }}</p>
+                            </div>
+                            <div class="how-sxs-col">
+                                <span class="hero-sentence-label">Plain English</span>
+                                <p>{{ sxs.plain }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <a href="{{ base_path }}/books/jane-eyre" class="home-section-link">See a full example: Jane Eyre →</a>
                 </section>
             </div>
 
@@ -678,7 +690,6 @@
                  length. Server-rendered on /discover (see pages.discover);
                  on other pages the grid is empty and showDiscoverPage() fills
                  it from the catalog. Filtering is CSS on data-filter-*. -->
-            {% from '_book_card.html' import book_card with context %}
             {% set d = discover or {'books': [], 'level': 'all', 'length': 'all', 'sort': 'title', 'count': 0} %}
             <section class="discover-section {% if not initial_data or initial_data.type != 'discover' %}hidden{% endif %}" id="discover-section">
                 <nav class="breadcrumb-nav" id="breadcrumb-nav-discover" aria-label="Breadcrumb">
