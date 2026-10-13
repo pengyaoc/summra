@@ -133,6 +133,17 @@ await sp.goto(`${BASE}/`, { waitUntil: "networkidle" });
 await sp.waitForSelector("#home-continue:not(.hidden) .library-card", { timeout: 5000 }).catch(() => {});
 expect("signed in: Continue reading shows the book in progress",
   /Frankenstein/.test(await sp.textContent("#home-continue").catch(() => "")) && await sp.isVisible("#home-continue"));
+for (const width of [1280, 375]) {
+  await sp.setViewportSize({ width, height: 900 });
+  await sp.waitForFunction(() => document.querySelector("#home-continue .library-card img")?.complete);
+  const cover = await sp.evaluate(() => {
+    const box = document.querySelector("#home-continue .library-card .book-card-cover").getBoundingClientRect();
+    const img = document.querySelector("#home-continue .library-card img").getBoundingClientRect();
+    return { ratio: +(box.height / box.width).toFixed(2), boxH: document.querySelector("#home-continue .library-card .book-card-cover").clientHeight, imgH: Math.round(img.height) };
+  });
+  expect(`continue card (${width}px): whole cover at 2:3, not cropped to the card height`,
+    Math.abs(cover.ratio - 1.5) < 0.03 && Math.abs(cover.imgH - cover.boxH) <= 1, JSON.stringify(cover));
+}
 await signed.close();
 
 expect("no console errors", errors.length === 0, errors.join(" | "));
