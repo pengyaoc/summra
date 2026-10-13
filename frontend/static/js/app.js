@@ -708,21 +708,7 @@ class SummraApp {
         }
 
         shuffledBooks.forEach(book => {
-            const bookCard = document.createElement('div');
-            bookCard.className = 'carousel-book-card';
-
-            const coverImageHtml = book.cover_image_url
-                ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'carousel-book-cover')
-                : '';
-
-            bookCard.innerHTML = `
-                ${coverImageHtml}
-                <h4 class="carousel-book-title">${this.escapeHtml(book.title)}</h4>
-                <p class="carousel-book-author">${this.escapeHtml(book.author)}</p>
-            `;
-
-            bookCard.addEventListener('click', () => this.selectBook(book));
-            scrollContainer.appendChild(bookCard);
+            scrollContainer.appendChild(this.createBookCard(book));
         });
 
         // Carousel navigation logic
@@ -1803,21 +1789,7 @@ class SummraApp {
                     scrollContainer.className = 'related-books-scroll';
 
                     relatedBooks.forEach(book => {
-                        const bookCard = document.createElement('div');
-                        bookCard.className = 'related-book-card';
-
-                        const coverImageHtml = book.cover_image_url
-                            ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'related-book-cover')
-                            : '';
-
-                        bookCard.innerHTML = `
-                            ${coverImageHtml}
-                            <h4 class="related-book-title">${this.escapeHtml(book.title)}</h4>
-                            <p class="related-book-author">${this.escapeHtml(book.author)}</p>
-                        `;
-
-                        bookCard.addEventListener('click', () => this.selectBook(book));
-                        scrollContainer.appendChild(bookCard);
+                        scrollContainer.appendChild(this.createBookCard(book));
                     });
 
                     // Carousel navigation logic
@@ -2322,24 +2294,51 @@ class SummraApp {
         }
     }
 
+    // The one book card used by every listing (Books, Categories, Discover,
+    // Author, "You may also like"). A real link so it's crawlable and
+    // middle-click opens a tab; a plain click opens the book in-app.
     createBookCard(book) {
-        const bookCard = document.createElement('div');
+        const bookCard = document.createElement('a');
         bookCard.className = 'book-card';
+        bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
 
-        const coverImageHtml = book.cover_image_url
-            ? this.getImageHtml(book.cover_image_url, `${book.title} cover`, 'book-cover')
+        const levelHtml = book.level
+            ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>`
+            : '';
+        const timeHtml = book.reading_time
+            ? `<span class="book-card-time">${this.escapeHtml(book.reading_time)}</span>`
             : '';
 
         bookCard.innerHTML = `
-            ${coverImageHtml}
-            <h3>${this.escapeHtml(book.title)}</h3>
-            <p class="author">by ${this.escapeHtml(book.author)}</p>
-            <div class="meta">
-                <p>${this.formatNumber(book.word_count)} words</p>
+            ${this.bookCoverHtml(book)}
+            <h3 class="book-card-title">${this.escapeHtml(book.title)}</h3>
+            <p class="book-card-author">${this.escapeHtml(book.author)}</p>
+            ${levelHtml || timeHtml ? `<p class="book-card-meta">${levelHtml}${timeHtml}</p>` : ''}
+        `;
+        bookCard.addEventListener('click', (e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            this.selectBook(book);
+        });
+        return bookCard;
+    }
+
+    // 2:3 cover box. The title is set in serif underneath the image, so a
+    // slow or missing cover reads as a deliberate plain cover rather than a
+    // grey blob, and every card keeps the same shape while loading.
+    bookCoverHtml(book) {
+        const sources = book.cover_image_url ? this.coverSources(book.cover_image_url) : null;
+        const picture = sources ? `
+                <picture>
+                    <source srcset="${this.escapeHtml(sources.webp)}" type="image/webp">
+                    <img src="${this.escapeHtml(sources.jpg)}" alt="${this.escapeHtml(`${book.title} cover`)}"
+                         loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">
+                </picture>` : '';
+        return `
+            <div class="book-card-cover">
+                <span class="book-card-cover-title" aria-hidden="true">${this.escapeHtml(book.title)}</span>${picture}
             </div>
         `;
-        bookCard.addEventListener('click', () => this.selectBook(book));
-        return bookCard;
     }
 
     async showBlogIndex(restoreScroll = false) {
@@ -2395,10 +2394,6 @@ class SummraApp {
         return div.innerHTML;
     }
 
-    formatNumber(num) {
-        return num.toLocaleString();
-    }
-
     // ===== Skeleton Loading Helpers =====
 
     createImageWithSkeleton(src, alt, className) {
@@ -2441,12 +2436,8 @@ class SummraApp {
         return wrapper;
     }
 
-    getImageHtml(imageUrl, alt, className) {
-        if (!imageUrl) return '';
-
-        // Escape attributes for safety
-        const escapedAlt = this.escapeHtml(alt);
-
+    // WebP + JPG URLs for a stored cover path.
+    coverSources(imageUrl) {
         // Prepend /static/ to the path if it starts with /covers/ or covers/ (for consistency with other pages)
         let fullImageUrl = imageUrl;
         if (imageUrl.startsWith('/covers/')) {
@@ -2458,14 +2449,23 @@ class SummraApp {
 
         // Get base URL without extension
         const urlWithoutExt = fullImageUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+        return { webp: urlWithoutExt + '.webp', jpg: urlWithoutExt + '.jpg' };
+    }
+
+    getImageHtml(imageUrl, alt, className) {
+        if (!imageUrl) return '';
+
+        // Escape attributes for safety
+        const escapedAlt = this.escapeHtml(alt);
+        const sources = this.coverSources(imageUrl);
 
         // Create picture element with WebP source and JPG fallback
         return `
             <div class="book-cover-wrapper">
                 <div class="book-cover-skeleton"></div>
                 <picture>
-                    <source srcset="${this.escapeHtml(urlWithoutExt + '.webp')}" type="image/webp">
-                    <img src="${this.escapeHtml(urlWithoutExt + '.jpg')}"
+                    <source srcset="${this.escapeHtml(sources.webp)}" type="image/webp">
+                    <img src="${this.escapeHtml(sources.jpg)}"
                          alt="${escapedAlt}"
                          class="${className}"
                          loading="lazy"

@@ -711,10 +711,7 @@ export const readerMixin = {
         const emptyEl = document.getElementById('library-empty');
         if (!cards || !continueEl || !finishedEl) return;
         const render = (book, action) => {
-            const rawCover = book.cover_image_url || '';
-            const cover = rawCover && this.getImageHtml
-                ? this.getImageHtml(rawCover, `${book.title} cover`, 'library-card-cover')
-                : '<div class="library-cover-placeholder" aria-hidden="true">📖</div>';
+            const cover = this.bookCoverHtml(book);
             const chapter = book.current_chapter?.chapter_title || (book.current_chapter ? `Chapter ${book.current_chapter.chapter_number}` : 'Beginning');
             const percentage = Math.max(0, Math.min(100, Number(book.furthest_percentage) || 0));
             const mode = (book.last_mode || 'plain').replaceAll('_', ' ');

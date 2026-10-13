@@ -134,6 +134,13 @@ carry them. Chapter-list metadata (`get_chapters_metadata*`, i.e. `/api/books/<i
 reading time is computed from `chapter_text` via the `CHAPTER_CUE_COLUMNS` SQL fragment (approximate
 whitespace count, avoids loading full text).
 
+**Book card** (redesign phase 3): `createBookCard(book)` in `app.js` is the single card for every
+book listing (Books grid, category/discover carousels via `createCarousel`, author page, "You may
+also like"). It renders an `<a>` to `/books/<slug>` and uses `bookCoverHtml(book)` — a 2:3 cover
+box with the title in serif behind a lazy `<picture>` — which Library cards in `reader.js` reuse.
+Cover URL normalisation lives in `coverSources(url)`, shared with `getImageHtml`. Each card reads
+`level` and `reading_time` from the API (`format_reading_time` in `backend/study_cues.py`).
+
 ---
 
 ## Database Schema & ERD

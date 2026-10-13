@@ -1449,7 +1449,7 @@ class Database:
 
         if exclude_book_id:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
                 FROM books
                 WHERE author_id = ? AND id != ?
                 ORDER BY title
@@ -1457,7 +1457,7 @@ class Database:
             ''', (author_id, exclude_book_id, limit))
         else:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
                 FROM books
                 WHERE author_id = ?
                 ORDER BY title
@@ -1467,7 +1467,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_book_cues(dict(row)) for row in rows]
 
     def get_books_by_author_name(self, author_name: str, exclude_book_id: int = None, limit: int = 20) -> List[Dict]:
         """Get books by author name, optionally excluding a specific book"""
@@ -1476,7 +1476,7 @@ class Database:
 
         if exclude_book_id:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
                 FROM books
                 WHERE LOWER(author) = LOWER(?) AND id != ?
                 ORDER BY title
@@ -1484,7 +1484,7 @@ class Database:
             ''', (author_name, exclude_book_id, limit))
         else:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
                 FROM books
                 WHERE LOWER(author) = LOWER(?)
                 ORDER BY title
@@ -1494,7 +1494,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_book_cues(dict(row)) for row in rows]
 
     def get_books_in_same_categories(self, book_id: int, limit: int = 10) -> List[Dict]:
         """
@@ -1526,7 +1526,7 @@ class Database:
             # Get books from this category that we haven't seen yet
             cursor.execute('''
                 SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                       b.gutenberg_id, b.cover_image_url, b.slug
+                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level
                 FROM books b
                 INNER JOIN book_categories bc ON b.id = bc.book_id
                 WHERE bc.category_id = ? AND b.id NOT IN ({})
@@ -1538,7 +1538,7 @@ class Database:
 
             for book in category_books:
                 if book['id'] not in seen_book_ids:
-                    related_books.append(dict(book))
+                    related_books.append(add_book_cues(dict(book)))
                     seen_book_ids.add(book['id'])
 
                     # Stop if we've reached the limit
@@ -1557,7 +1557,7 @@ class Database:
         if exclude_book_id:
             cursor.execute('''
                 SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                       b.gutenberg_id, b.cover_image_url, b.slug
+                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level
                 FROM books b
                 INNER JOIN authors a ON b.author_id = a.id
                 WHERE a.country = ? AND b.id != ?
@@ -1567,7 +1567,7 @@ class Database:
         else:
             cursor.execute('''
                 SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                       b.gutenberg_id, b.cover_image_url, b.slug
+                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level
                 FROM books b
                 INNER JOIN authors a ON b.author_id = a.id
                 WHERE a.country = ?
@@ -1578,7 +1578,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_book_cues(dict(row)) for row in rows]
 
     def get_related_books(self, book_id: int) -> Dict:
         """
