@@ -570,7 +570,7 @@ class SummraApp {
         const tabs = document.querySelectorAll('.summary-tab');
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
-                const targetTab = e.target.dataset.tab;
+                const targetTab = e.currentTarget.dataset.tab;
 
                 // If switching to full summary and short summary is expanded, collapse it
                 if (targetTab === '2000-word' && this.conciseSummaryExpanded) {
@@ -578,11 +578,15 @@ class SummraApp {
                 }
 
                 // Remove active class from all tabs and contents
-                document.querySelectorAll('.summary-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.summary-tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
                 document.querySelectorAll('.summary-tab-content').forEach(c => c.classList.remove('active'));
 
                 // Add active class to clicked tab and corresponding content
-                e.target.classList.add('active');
+                e.currentTarget.classList.add('active');
+                e.currentTarget.setAttribute('aria-selected', 'true');
                 const targetContent = document.getElementById(`tab-${targetTab}`);
                 if (targetContent) {
                     targetContent.classList.add('active');
@@ -1381,8 +1385,23 @@ class SummraApp {
         // Collapse the summary
         previewContainer.classList.remove('expanded');
         previewFade.classList.remove('hidden');
-        expandButton.textContent = 'Read more';
+        this.setSummaryMoreLabel(expandButton, false);
         this.conciseSummaryExpanded = false;
+    }
+
+    // "Read more ⌄" / "Show less ⌃" on the short summary.
+    setSummaryMoreLabel(button, expanded) {
+        const chevron = expanded ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6';
+        button.innerHTML = `${expanded ? 'Show less' : 'Read more'}<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="${chevron}"></path></svg>`;
+        button.setAttribute('aria-expanded', String(expanded));
+    }
+
+    // " · 3 min" next to Short / Full in the summary switch.
+    setSummaryReadingTime(elementId, markdown) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const words = (markdown || '').split(/\s+/).filter(Boolean).length;
+        el.textContent = words ? ` · ${Math.max(1, Math.ceil(words / 230))} min` : '';
     }
 
     async loadConciseSummary() {
@@ -1404,6 +1423,7 @@ class SummraApp {
 
             if (data.success && data.summary) {
                 conciseSummaryText.innerHTML = this.renderMarkdown(data.summary.content);
+                this.setSummaryReadingTime('concise-summary-time', data.summary.content);
 
                 // Store concise summary data for TTS
                 this.conciseSummaryContent = data.summary.content;
@@ -1434,15 +1454,15 @@ class SummraApp {
                                 // Expand
                                 previewContainer.classList.add('expanded');
                                 previewFade.classList.add('hidden');
-                                expandButton.textContent = 'Show Less ↑';
+                                this.setSummaryMoreLabel(expandButton, true);
                             } else {
                                 // Collapse
                                 previewContainer.classList.remove('expanded');
                                 previewFade.classList.remove('hidden');
-                                expandButton.textContent = 'Read more';
+                                this.setSummaryMoreLabel(expandButton, false);
 
-                                // Scroll back to the top of the Quick Summary section
-                                document.getElementById('concise-summary-section').scrollIntoView({
+                                // Scroll back to the top of the summary
+                                document.getElementById('summary-tabs-section')?.scrollIntoView({
                                     behavior: 'smooth',
                                     block: 'start'
                                 });
@@ -1481,6 +1501,7 @@ class SummraApp {
                 this.mediumSummaryHasAudio = data.has_audio || false; // Cache the audio flag
                 // Show full content in preview (will be faded by CSS)
                 mediumPreviewText.innerHTML = this.renderMarkdown(this.mediumSummaryContent);
+                this.setSummaryReadingTime('medium-summary-time', this.mediumSummaryContent);
 
                 // Update the unified TTS button
                 this.updateSummaryTTSButton();

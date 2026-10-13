@@ -138,9 +138,9 @@
                      so the bare attribute alone silently does nothing here.
                      auth.js's updateAuthUI() removes `.hidden` only once a
                      real signed-in user is confirmed. -->
-                <button class="header-nav-btn user-account-btn hidden" id="user-account-btn">
-                    <span class="user-icon">👤</span>
-                    <span class="user-name" id="header-user-name">Account</span>
+                <button type="button" class="header-account user-account-btn hidden" id="user-account-btn" aria-label="Account">
+                    <span class="account-avatar" id="account-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.5"></circle><path d="M5 19.5c1.4-3.2 4-4.8 7-4.8s5.6 1.6 7 4.8"></path></svg></span>
+                    <span class="sr-only" id="header-user-name">Account</span>
                 </button>
                 {% endif %}
             </div>
@@ -389,13 +389,14 @@
                 <!-- Main Content Area -->
                 <div class="book-content" id="book-content">
                     <!-- Tabbed Summary Section -->
-                    <div class="summary-tabs-section" id="summary-tabs-section">
-                        <div class="summary-tabs-header-container">
-                            <div class="summary-tabs-header">
-                                <button class="summary-tab active" data-tab="500-word">Short Summary</button>
-                                <button class="summary-tab" data-tab="2000-word">Full Summary</button>
+                    <div class="summary-tabs-section book-summary" id="summary-tabs-section">
+                        <div class="book-summary-head">
+                            <h3 class="book-summary-title">Summary</h3>
+                            <div class="summary-switch" role="tablist" aria-label="Summary length">
+                                <button type="button" class="summary-tab active" data-tab="500-word" role="tab" aria-selected="true">Short<span class="summary-tab-time" id="concise-summary-time"></span></button>
+                                <button type="button" class="summary-tab" data-tab="2000-word" role="tab" aria-selected="false">Full<span class="summary-tab-time" id="medium-summary-time"></span></button>
                             </div>
-                            <button class="tts-button-inline" id="active-summary-tts-button">🔊 Listen</button>
+                            <button type="button" class="listen-btn hidden" id="active-summary-tts-button"></button>
                         </div>
 
                         <!-- 500-word Summary Tab Content -->
@@ -404,7 +405,7 @@
                                 <div class="summary-text concise-preview-text" id="concise-summary-text"></div>
                                 <div class="concise-preview-fade" id="concise-preview-fade"></div>
                             </div>
-                            <button class="expand-link centered hidden" id="concise-expand-button">Read more</button>
+                            <button type="button" class="summary-more hidden" id="concise-expand-button" aria-expanded="false">Read more<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
                         </div>
 
                         <!-- 2000-word Summary Tab Content -->
@@ -413,7 +414,7 @@
                                 <div class="summary-text medium-preview-text" id="medium-preview-text"></div>
                                 <div class="preview-fade"></div>
                             </div>
-                            <button class="expand-link centered" id="medium-expand-button">Read more</button>
+                            <button type="button" class="btn-secondary summary-full-link" id="medium-expand-button">Read the full summary <span aria-hidden="true">→</span></button>
                         </div>
                     </div>
 
@@ -497,7 +498,7 @@
                 <div class="medium-detail-content">
                     <div class="section-header">
                         <h3>Full Summary</h3>
-                        <button class="tts-button-inline" id="medium-detail-tts-button">🔊 Listen</button>
+                        <button type="button" class="listen-btn hidden" id="medium-detail-tts-button" data-listen-type="medium"></button>
                     </div>
                     <div class="summary-text" id="medium-detail-text"></div>
                 </div>
@@ -819,7 +820,7 @@
     <div class="persistent-audio-player hidden" id="persistent-player">
         <div class="player-content">
             <div class="player-info">
-                <div class="now-playing-icon">🎵</div>
+                <div class="now-playing-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"></path><rect x="3" y="14" width="4.5" height="6" rx="1.5"></rect><rect x="16.5" y="14" width="4.5" height="6" rx="1.5"></rect></svg></div>
                 <div class="player-text">
                     <div class="player-title" id="player-title">No audio playing</div>
                     <div class="player-subtitle" id="player-subtitle"></div>
@@ -827,8 +828,8 @@
             </div>
             <div class="player-controls">
                 <audio id="persistent-audio-element"></audio>
-                <button class="player-btn" id="player-stop" title="Stop and clear">⏹</button>
-                <button class="player-btn" id="player-play-pause" title="Play/Pause">▶</button>
+                <button type="button" class="player-btn player-btn-stop" id="player-stop" title="Stop" aria-label="Stop"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"></rect></svg></button>
+                <button type="button" class="player-btn player-btn-main" id="player-play-pause" title="Play" aria-label="Play"></button>
                 <div class="player-progress">
                     <div class="progress-bar">
                         <div class="progress-fill" id="progress-fill"></div>
@@ -900,37 +901,31 @@
                  before the auth check resolves or a session that expires
                  mid-visit. -->
             <div class="user-modal-view" id="signed-out-view">
-                <h2 class="user-modal-title">Reading Progress</h2>
+                <h2 class="user-modal-title">Reading progress</h2>
                 <p class="user-modal-subtitle">Saved on this device.</p>
             </div>
 
             <!-- Signed-in view -->
             <div class="user-modal-view hidden" id="account-view">
-                <h2 class="user-modal-title">My Account</h2>
+                <h2 class="user-modal-title">Your account</h2>
 
                 <div class="account-info">
                     <div class="account-item" id="account-email-row">
-                        <span class="account-label">Email:</span>
+                        <span class="account-label">Email</span>
                         <span class="account-value" id="account-email"></span>
                     </div>
                     <div class="account-item" id="account-created-row">
-                        <span class="account-label">Member since:</span>
+                        <span class="account-label">Member since</span>
                         <span class="account-value" id="account-created"></span>
                     </div>
                 </div>
 
                 <div class="account-stats">
-                    <h3>Reading Progress</h3>
-                    <p class="account-stats-description">Your reading history is tracked across all your devices.</p>
-                    <div class="account-stat-item">
-                        <span class="stat-label">In progress:</span>
-                        <span class="stat-value" id="books-in-progress-count">0</span>
-                    </div>
-                    <div class="account-stat-item">
-                        <span class="stat-label">Finished:</span>
-                        <span class="stat-value" id="books-finished-count">0</span>
-                    </div>
+                    <div class="account-stat"><span class="stat-value" id="books-in-progress-count">0</span><span class="stat-label">In progress</span></div>
+                    <div class="account-stat"><span class="stat-value" id="books-finished-count">0</span><span class="stat-label">Finished</span></div>
                 </div>
+                <p class="account-stats-description">Your place is saved as you read, on every device you sign in on.</p>
+                <a class="btn-secondary account-library-link" id="account-library-link" href="{{ base_path }}/library">Open your library <span aria-hidden="true">→</span></a>
             </div>
         </div>
     </div>
