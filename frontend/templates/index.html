@@ -671,6 +671,54 @@
                 <div class="categories-container" id="all-categories-container"></div>
             </section>
 
+            <!-- Discover Section: one grid of every book, filtered by level and
+                 length. Server-rendered on /discover (see pages.discover);
+                 on other pages the grid is empty and showDiscoverPage() fills
+                 it from the catalog. Filtering is CSS on data-filter-*. -->
+            {% from '_book_card.html' import book_card with context %}
+            {% set d = discover or {'books': [], 'level': 'all', 'length': 'all', 'sort': 'title', 'count': 0} %}
+            <section class="discover-section {% if not initial_data or initial_data.type != 'discover' %}hidden{% endif %}" id="discover-section">
+                <nav class="breadcrumb-nav" id="breadcrumb-nav-discover" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list" id="breadcrumb-list-discover">
+                        <!-- Breadcrumbs will be dynamically loaded here -->
+                    </ol>
+                </nav>
+
+                <header class="discover-header">
+                    <h2>Find your next classic</h2>
+                    <p>Every book is rewritten in plain English. Choose by how demanding the original is and how long it takes to read.</p>
+                </header>
+
+                <div class="discover-controls">
+                    <div class="discover-filter" role="group" aria-label="Level">
+                        <span class="discover-filter-label">Level</span>
+                        {% for value, label in [('all', 'All'), ('easy', 'Easy'), ('moderate', 'Moderate'), ('challenging', 'Challenging')] %}
+                        <button type="button" class="filter-chip" data-filter="level" data-value="{{ value }}" aria-pressed="{{ 'true' if d.level == value else 'false' }}">{{ label }}</button>
+                        {% endfor %}
+                    </div>
+                    <div class="discover-filter" role="group" aria-label="Length">
+                        <span class="discover-filter-label">Length</span>
+                        {% for value, label in [('all', 'All'), ('short', 'Short'), ('medium', 'Medium'), ('long', 'Long')] %}
+                        <button type="button" class="filter-chip" data-filter="length" data-value="{{ value }}" aria-pressed="{{ 'true' if d.length == value else 'false' }}">{{ label }}</button>
+                        {% endfor %}
+                    </div>
+                    <label class="discover-sort">
+                        <span class="discover-filter-label">Sort</span>
+                        <select id="discover-sort">
+                            {% for value, label in [('title', 'A–Z'), ('shortest', 'Shortest first'), ('easiest', 'Easiest first')] %}
+                            <option value="{{ value }}"{% if d.sort == value %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+
+                <p class="discover-count" id="discover-count" aria-live="polite">{{ d.count }} book{{ '' if d.count == 1 else 's' }}</p>
+                <div class="books-grid discover-grid" id="discover-grid" data-filter-level="{{ d.level }}" data-filter-length="{{ d.length }}">{% for book in d.books %}
+                    {{ book_card(book) }}{% endfor %}
+                </div>
+                <p class="discover-empty{% if d.count or not d.books %} hidden{% endif %}">No books match these filters. <button type="button" class="btn-secondary">Clear filters</button></p>
+            </section>
+
             <!-- Blog Index Section -->
             {% if feature_blog %}
             <section class="blog-index-section {% if not initial_data or initial_data.type != 'blog' %}hidden{% endif %}" id="blog-index-section">

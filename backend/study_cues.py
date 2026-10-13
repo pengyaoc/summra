@@ -9,6 +9,11 @@ import re
 
 WORDS_PER_MINUTE = 230
 
+# Book length buckets for Discover, by word count: under 50k ("read in a
+# day or two"), under 120k, and longer.
+SHORT_MAX_WORDS = 50_000
+MEDIUM_MAX_WORDS = 120_000
+
 # CEFR → plain label, keyed on the *upper* bound of a range ("B1-B2" reads as
 # B2), so a book is never labelled easier than its hardest stretch.
 _LEVEL_BY_CEFR = {
@@ -34,6 +39,15 @@ def reading_minutes(words):
     if not words or words <= 0:
         return None
     return math.ceil(words / WORDS_PER_MINUTE)
+
+
+def length_label(words):
+    """'Short' / 'Medium' / 'Long' for a book's word count, else None."""
+    if not words or words <= 0:
+        return None
+    if words < SHORT_MAX_WORDS:
+        return 'Short'
+    return 'Medium' if words < MEDIUM_MAX_WORDS else 'Long'
 
 
 def format_reading_time(minutes):
@@ -75,11 +89,12 @@ def summary_excerpt(text, limit=160):
 
 
 def add_book_cues(book):
-    """Add `level`, `reading_minutes` and `reading_time` to a book dict
+    """Add `level`, `reading_minutes`, `reading_time` and `length` to a book dict
     (in place) and return it."""
     book['level'] = level_label(book.get('cefr_level'))
     book['reading_minutes'] = reading_minutes(book.get('word_count'))
     book['reading_time'] = format_reading_time(book['reading_minutes'])
+    book['length'] = length_label(book.get('word_count'))
     return book
 
 

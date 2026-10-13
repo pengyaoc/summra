@@ -46,6 +46,17 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Tests: pytest `test_study_cues.py` +11 (format, author/related cues). New `tests/e2e/redesign_cards.mjs` (19 checks: links, 2:3 covers, Frankenstein = Challenging / 5½ hrs, uniform row heights, serif placeholder with covers blocked, shared card on categories/discover/author/related, in-app click incl. the accented `louise-de-la-vallière` slug). pytest 594 passed; e2e suite green (same 6 pre-existing failures excluded). One unexplained `redesign_cards` timeout inside a full-suite run; not reproducible in 7 further runs, including the same ordering.
 - After screenshots: `docs/redesign/after/phase3/`.
 
+### Phase 4 — Discover grid (DONE)
+
+- `/discover` (`backend/routes/pages.py`) server-renders every book as a card (`frontend/templates/_book_card.html` macro, mirrors `createBookCard`), with Level (All/Easy/Moderate/Challenging) and Length (All/Short/Medium/Long) chips and a Sort select (A–Z / Shortest first / Easiest first). `?level=&length=&sort=` are read server-side; unknown values fall back to defaults.
+- Filtering is pure CSS on the grid's `data-filter-level` / `data-filter-length` vs each card's `data-level` / `data-length`, so it works before JS and server/client share one mechanism. `showDiscoverPage` fills the grid from the catalog on in-app navigation, wires chips once, updates count, empty state ("Clear filters") and the URL via `replaceState`. `applySortToDiscoverGrid` matches `DISCOVER_SORTS` in Python.
+- `study_cues.length_label`: Short < 50k words, Medium < 120k, else Long (21 / 33 / 36 books).
+- Removed: `backend/routes/discover.py` (`/api/discover/carousels`), its blueprint registration and its characterization test (endpoint only served the old carousels; now 404, pinned by a test); `renderDiscoverPage`, `createDiscoverSection`, `renderTop10AsStandardCarousel` and the dead `isDiscoverPage`/`popular` branch.
+- The "404 on Discover" from the first review was my own visit to a nonexistent `/explore` URL — no bug.
+- /discover HTML: 16 KB gzipped (was 9 KB) and TTFB 66 ms, but cards now paint without waiting for /api/books + carousels.
+- Tests: `tests/test_discover_page.py` (19) and `tests/e2e/redesign_discover.mjs` (19), both red first. pytest 612 passed; e2e suite green (6 pre-existing failures excluded); discover + cards tests also pass against the prod bundle.
+- After screenshots: `docs/redesign/after/phase4/`.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE
