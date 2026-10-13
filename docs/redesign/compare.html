@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summra redesign: before and after</title>
+<style>
+:root { --paper:#F6F1E7; --surface:#FBF8F1; --ink:#2B2622; --muted:#6B5F55; --rule:#E8DFCF; --accent:#8A2E2E; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { position:sticky; top:0; z-index:2; display:flex; flex-wrap:wrap; align-items:center; gap:1rem 2rem; padding:1rem 1.5rem; border-bottom:1px solid var(--rule); background:var(--paper); }
+h1 { margin:0; font:600 1.5rem/1.2 "New York", "Iowan Old Style", Georgia, serif; }
+nav a { margin-right:1rem; color:var(--accent); }
+.tabs button { padding:.35rem .9rem; border:1px solid #D6CAB5; border-radius:999px; background:transparent; color:var(--ink); font:inherit; cursor:pointer; }
+.tabs button[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+main { padding:1rem 1.5rem 4rem; }
+.pair { padding:1.5rem 0; border-bottom:1px solid var(--rule); }
+.pair h2 { margin:0 0 .75rem; font:600 1.25rem "New York", Georgia, serif; }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; align-items:start; }
+figure { margin:0; }
+figcaption { margin-bottom:.4rem; color:var(--muted); font-size:.8rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+img { display:block; width:100%; border:1px solid var(--rule); border-radius:6px; background:#fff; }
+.mobile .cols { grid-template-columns:repeat(2, minmax(0, 375px)); justify-content:start; }
+[hidden] { display:none; }
+@media (max-width:700px) { .cols, .mobile .cols { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Summra redesign: before and after</h1>
+  <div class="tabs" role="group" aria-label="Screen size">
+    <button type="button" data-show="desktop" aria-pressed="true">Desktop</button>
+    <button type="button" data-show="mobile" aria-pressed="false">Mobile</button>
+  </div>
+  <p style="margin:0;color:var(--muted);font-size:.9rem">Before: local <code>main</code> @ 051244c. After: <code>redesign</code> branch, phase 7. Click an image to open it full size.</p>
+</header>
+<main>
+  <div id="desktop"><section class="pair" id="desktop-home">
+  <h2>Home</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/home.jpg"><img src="before/local/desktop/home.jpg" loading="lazy" alt="Home before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/home.jpg"><img src="after/phase7/desktop/home.jpg" loading="lazy" alt="Home after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-discover">
+  <h2>Discover</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/discover.jpg"><img src="before/local/desktop/discover.jpg" loading="lazy" alt="Discover before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/discover.jpg"><img src="after/phase7/desktop/discover.jpg" loading="lazy" alt="Discover after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-books">
+  <h2>Books</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/books.jpg"><img src="before/local/desktop/books.jpg" loading="lazy" alt="Books before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/books.jpg"><img src="after/phase7/desktop/books.jpg" loading="lazy" alt="Books after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-categories">
+  <h2>Categories</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/categories.jpg"><img src="before/local/desktop/categories.jpg" loading="lazy" alt="Categories before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/categories.jpg"><img src="after/phase7/desktop/categories.jpg" loading="lazy" alt="Categories after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-book">
+  <h2>Book page (Frankenstein)</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/book.jpg"><img src="before/local/desktop/book.jpg" loading="lazy" alt="Book page (Frankenstein) before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/book.jpg"><img src="after/phase7/desktop/book.jpg" loading="lazy" alt="Book page (Frankenstein) after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-author">
+  <h2>Author page</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/author.jpg"><img src="before/local/desktop/author.jpg" loading="lazy" alt="Author page before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/author.jpg"><img src="after/phase7/desktop/author.jpg" loading="lazy" alt="Author page after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-library">
+  <h2>Library</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/library.jpg"><img src="before/local/desktop/library.jpg" loading="lazy" alt="Library before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/library.jpg"><img src="after/phase7/desktop/library.jpg" loading="lazy" alt="Library after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-reader-plain">
+  <h2>Reader — plain English</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/reader-plain.jpg"><img src="before/local/desktop/reader-plain.jpg" loading="lazy" alt="Reader — plain English before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/reader-plain.jpg"><img src="after/phase7/desktop/reader-plain.jpg" loading="lazy" alt="Reader — plain English after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="desktop-reader-side-by-side">
+  <h2>Reader — side by side</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/desktop/reader-side-by-side.jpg"><img src="before/local/desktop/reader-side-by-side.jpg" loading="lazy" alt="Reader — side by side before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/desktop/reader-side-by-side.jpg"><img src="after/phase7/desktop/reader-side-by-side.jpg" loading="lazy" alt="Reader — side by side after"></a></figure>
+  </div>
+</section></div>
+  <div id="mobile" class="mobile" hidden><section class="pair" id="mobile-home">
+  <h2>Home</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/home.jpg"><img src="before/local/mobile/home.jpg" loading="lazy" alt="Home before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/home.jpg"><img src="after/phase7/mobile/home.jpg" loading="lazy" alt="Home after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-discover">
+  <h2>Discover</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/discover.jpg"><img src="before/local/mobile/discover.jpg" loading="lazy" alt="Discover before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/discover.jpg"><img src="after/phase7/mobile/discover.jpg" loading="lazy" alt="Discover after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-books">
+  <h2>Books</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/books.jpg"><img src="before/local/mobile/books.jpg" loading="lazy" alt="Books before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/books.jpg"><img src="after/phase7/mobile/books.jpg" loading="lazy" alt="Books after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-categories">
+  <h2>Categories</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/categories.jpg"><img src="before/local/mobile/categories.jpg" loading="lazy" alt="Categories before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/categories.jpg"><img src="after/phase7/mobile/categories.jpg" loading="lazy" alt="Categories after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-book">
+  <h2>Book page (Frankenstein)</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/book.jpg"><img src="before/local/mobile/book.jpg" loading="lazy" alt="Book page (Frankenstein) before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/book.jpg"><img src="after/phase7/mobile/book.jpg" loading="lazy" alt="Book page (Frankenstein) after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-author">
+  <h2>Author page</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/author.jpg"><img src="before/local/mobile/author.jpg" loading="lazy" alt="Author page before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/author.jpg"><img src="after/phase7/mobile/author.jpg" loading="lazy" alt="Author page after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-library">
+  <h2>Library</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/library.jpg"><img src="before/local/mobile/library.jpg" loading="lazy" alt="Library before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/library.jpg"><img src="after/phase7/mobile/library.jpg" loading="lazy" alt="Library after"></a></figure>
+  </div>
+</section>
+<section class="pair" id="mobile-reader-plain">
+  <h2>Reader — plain English</h2>
+  <div class="cols">
+    <figure><figcaption>Before</figcaption><a href="before/local/mobile/reader-plain.jpg"><img src="before/local/mobile/reader-plain.jpg" loading="lazy" alt="Reader — plain English before"></a></figure>
+    <figure><figcaption>After</figcaption><a href="after/phase7/mobile/reader-plain.jpg"><img src="after/phase7/mobile/reader-plain.jpg" loading="lazy" alt="Reader — plain English after"></a></figure>
+  </div>
+</section></div>
+</main>
+<script>
+document.querySelectorAll('[data-show]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('[data-show]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+    document.getElementById('desktop').hidden = btn.dataset.show !== 'desktop';
+    document.getElementById('mobile').hidden = btn.dataset.show !== 'mobile';
+  });
+});
+</script>
+</body>
+</html>
