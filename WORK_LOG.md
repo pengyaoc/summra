@@ -95,6 +95,13 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Tests: new `tests/e2e/redesign_reader.mjs` (15 checks incl. dark theme and mobile), red first; also passes on the prod bundle. pytest 629 passed; e2e suite green (6 pre-existing failures excluded).
 - After screenshots: `docs/redesign/after/phase7/`.
 
+### Phase 8 — build, compare, deploy (PARTIAL — deploy pending approval)
+
+- `app.min.js` rebuilt and fresh (`check-build-fresh`); every redesign e2e test also passes against the prod-mode bundle (app_prod on :5003).
+- Comparison page: `docs/redesign/compare.html` (before = local main @ 051244c, after = phase 7; desktop/mobile toggle; 17 screen pairs).
+- Local perf (perf.mjs, 3 runs, FCP / total bytes): home 284·84·68 → 272·72·72 ms, 1676 → 1461 KB; book page 56·52·52 → 60·56·56 ms, 1635 → 1655 KB; /discover 48·52·48 → 72·100·80 ms (server-renders 90 cards; main's earlier paint is an empty shell that then waits for two API calls), 4144 → 3562 KB.
+- **Not done:** fast-forwarding `main` to `redesign` (11 commits, clean FF from origin/main 051244c) and pushing were blocked by the session's permission classifier, so the VM deploy (CLAUDE.md steps 1–3; backend changed → restart needed; no DB copy needed) has not run. Prod still serves the pre-redesign build.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE
