@@ -30,6 +30,7 @@ html {
     --accent: #8A2E2E;
     --accent-hover: #742525;
     --on-accent: #FFFFFF;
+    --accent-bright: #B23A3A; /* accent on the dark hero band */
     --font-serif: 'New York', 'Iowan Old Style', Baskerville, 'Hoefler Text', Georgia, 'Times New Roman', serif;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --level-easy-bg: #E3EBDD;
@@ -4613,91 +4614,98 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     background: var(--surface);
 }
 
-/* The open book */
-.hero-book-pages {
+/* The text thread */
+.hero-thread-messages {
     display: grid;
-    border-radius: 3px;
-    background: var(--surface);
-    /* page edges stacked under the spread, then the book's shadow */
-    box-shadow: 0 3px 0 -1px var(--paper-deep), 0 6px 0 -2px var(--rule-strong), 0 26px 50px rgba(0, 0, 0, 0.45);
 }
 
 .hero-sentence {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* like a chat: newest message sits at the bottom */
     grid-area: 1 / 1;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr auto;
     margin: 0;
 }
 
 .hero-sentence[hidden] {
-    display: grid;
+    display: flex;
     visibility: hidden;
 }
 
-.hero-page {
-    padding: 1.9rem 1.7rem 1.2rem;
-}
-
-/* Shading toward the spine */
-.hero-page--original {
-    border-right: 1px solid var(--rule-strong);
-    box-shadow: inset -18px 0 22px -18px rgba(43, 38, 34, 0.28);
-}
-
-.hero-page--plain {
-    box-shadow: inset 18px 0 22px -18px rgba(43, 38, 34, 0.28);
-}
-
-.hero-sentence-label {
-    display: block;
-    margin-bottom: 0.7rem;
-    color: var(--ink-muted);
-    font-size: 0.7rem;
+.hero-sentence-source {
+    margin: 0 0 0.45rem 0.25rem;
+    color: var(--rule-strong);
+    font-size: 0.8rem;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
 
-.hero-page--plain .hero-sentence-label {
-    color: var(--accent);
+.hero-sentence-source a {
+    color: inherit;
+    font-weight: 400;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
-.hero-sentence-original {
+.hero-bubble {
+    max-width: 85%;
     margin: 0;
+    padding: 0.85rem 1.1rem;
+    border-radius: 18px;
+}
+
+.hero-bubble--original {
+    align-self: flex-start;
+    border-bottom-left-radius: 5px;
+    background: var(--paper-deep);
     color: var(--ink-muted);
     font-family: var(--font-serif);
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-style: italic;
-    line-height: 1.55;
+    line-height: 1.5;
+}
+
+.hero-bubble--plain {
+    align-self: flex-end;
+    margin-top: 1rem;
+    border-bottom-right-radius: 5px;
+    background: var(--accent-bright);
+    color: #fff;
+}
+
+.hero-bubble--plain .hero-sentence-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
 }
 
 .hero-sentence-plain {
     margin: 0;
-    color: var(--ink);
-    font-family: var(--font-serif);
-    font-size: 1.2rem;
-    line-height: 1.5;
+    font-size: 1.15rem;
+    font-weight: 500;
+    line-height: 1.45;
 }
 
-.hero-sentence-source {
-    grid-column: 1 / -1;
-    padding: 0.7rem 1.7rem 0.9rem;
-    border-top: 1px solid var(--rule);
-    color: var(--ink-muted);
-    font-size: 0.82rem;
-    text-align: center;
+/* The reply pops in, like a message arriving. */
+.hero-sentence:not([hidden]) .hero-bubble--plain {
+    animation: hero-reply-in 0.35s ease-out 0.2s both;
 }
 
-.hero-sentence-source a {
-    color: var(--ink);
-    font-family: var(--font-serif);
-    font-style: italic;
+@keyframes hero-reply-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-sentence:not([hidden]) .hero-bubble--plain {
+        animation: none;
+    }
 }
 
 .hero-sentence-next {
     display: block;
-    margin: 1.4rem 0 0 auto;
+    margin: 1rem 0 0 auto;
     padding: 0;
     border: 0;
     background: none;
@@ -4989,24 +4997,8 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
         padding-bottom: 2.5rem;
     }
 
-    /* Phones: the pages stack, with the fold running across. */
-    .hero-sentence {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
-    }
-
-    .hero-page {
-        padding: 1.3rem 1.25rem 1rem;
-    }
-
-    .hero-page--original {
-        border-right: 0;
-        border-bottom: 1px solid var(--rule-strong);
-        box-shadow: inset 0 -16px 20px -16px rgba(43, 38, 34, 0.25);
-    }
-
-    .hero-page--plain {
-        box-shadow: inset 0 16px 20px -16px rgba(43, 38, 34, 0.25);
+    .hero-bubble {
+        max-width: 88%;
     }
 
     .level-cards,
