@@ -54,7 +54,8 @@ const readBtnBg = await page.evaluate(() => {
 expect("book page: Read button is oxblood", readBtnBg === ACCENT, readBtnBg);
 
 // Non-reader pages sit on one paper background: no full-width white or
-// surface-coloured bands (reader pages use --surface on purpose).
+// surface-coloured bands (reader pages use --surface on purpose; the home
+// hero is a deliberate dark ink band).
 for (const path of ["/", "/books/frankenstein", "/library"]) {
   await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
   const bands = await page.evaluate((paper) => [...document.querySelectorAll("main *")]
@@ -63,6 +64,7 @@ for (const path of ["/", "/books/frankenstein", "/library"]) {
       const cs = getComputedStyle(el);
       if (r.width < 900 || r.height < 300) return false;
       if (cs.backgroundImage.includes("url(")) return false; // image heroes
+      if (el.classList.contains("hero-main")) return false; // the home hero is a deliberate ink band (2026-10-13)
       return cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== paper
         || /gradient/.test(cs.backgroundImage) && /255, 255, 255/.test(cs.backgroundImage);
     })

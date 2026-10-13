@@ -189,40 +189,33 @@
                     <div class="home-hero-copy">
                         <h1 class="hero-banner-title">Read the classics in plain&nbsp;English.</h1>
                         <p class="hero-banner-subtitle">Every sentence rewritten into modern prose — nothing cut, nothing summarised. Read it on its own, or side by side with the original.</p>
-                        <div class="hero-search-container">
-                            <div class="hero-search-wrapper">
-                                <input type="text"
-                                       class="hero-search-input"
-                                       id="hero-search-input"
-                                       placeholder="Search for a book or author"
-                                       aria-label="Search for a book or author"
-                                       autocomplete="off">
-                                <div class="hero-search-results hidden" id="hero-search-results">
-                                    <!-- Typeahead results will be populated here -->
-                                </div>
-                            </div>
-                        </div>
                         <div class="hero-banner-ctas">
-                            <a href="{{ base_path }}/discover" class="hero-cta-primary">Find your next classic</a>
+                            <a href="{{ base_path }}/discover" class="hero-cta-primary">Find your next classic <span aria-hidden="true">→</span></a>
                         </div>
                     </div>
                     {% if hero_examples %}
-                    <div class="hero-examples" id="hero-examples">
-                        {% for ex in hero_examples %}
-                        <figure class="hero-sentence"{% if not loop.first %} hidden{% endif %}>
-                            <div class="hero-sentence-row">
-                                <span class="hero-sentence-label">Original</span>
-                                <blockquote class="hero-sentence-original">{{ ex.original }}</blockquote>
-                            </div>
-                            <div class="hero-sentence-row">
-                                <span class="hero-sentence-label">Plain English</span>
-                                <p class="hero-sentence-plain">{{ ex.plain }}</p>
-                            </div>
-                            <figcaption class="hero-sentence-source"><a href="{{ base_path }}/books/{{ ex.slug }}">{{ ex.title }}</a> · {{ ex.author }}</figcaption>
-                        </figure>
-                        {% endfor %}
+                    <!-- An open book: original on the left page, plain English on
+                         the right. Every example sits in the same grid cell
+                         (hidden ones are invisible, not removed), so the book is
+                         as tall as the longest example and never resizes. -->
+                    <div class="hero-book" id="hero-examples">
+                        <div class="hero-book-pages">
+                            {% for ex in hero_examples %}
+                            <figure class="hero-sentence"{% if not loop.first %} hidden{% endif %}>
+                                <div class="hero-page hero-page--original">
+                                    <span class="hero-sentence-label">Original</span>
+                                    <blockquote class="hero-sentence-original">{{ ex.original }}</blockquote>
+                                </div>
+                                <div class="hero-page hero-page--plain">
+                                    <span class="hero-sentence-label">Plain English</span>
+                                    <p class="hero-sentence-plain">{{ ex.plain }}</p>
+                                </div>
+                                <figcaption class="hero-sentence-source"><a href="{{ base_path }}/books/{{ ex.slug }}">{{ ex.title }}</a> · {{ ex.author }}</figcaption>
+                            </figure>
+                            {% endfor %}
+                        </div>
                         {% if hero_examples|length > 1 %}
-                        <button type="button" class="hero-sentence-next" id="hero-sentence-next">Another example →</button>
+                        <button type="button" class="hero-sentence-next" id="hero-sentence-next">Turn the page <span aria-hidden="true">→</span></button>
                         {% endif %}
                     </div>
                     {% endif %}
