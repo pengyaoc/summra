@@ -776,7 +776,7 @@ export const readerMixin = {
             recoveryNotice,
             furthestMarker: modeState?.furthest_marker || null,
             segmentIds: [], currentSegmentId: null, chapterId,
-            lastDisplayedOrdinal: null, pageTurnAt: Date.now(), terminalTimer: null,
+            forwardTurn: false, pageTurnAt: Date.now(), terminalTimer: null,
         };
         this.setupContinuousReaderChrome();
         this.setupContinuousReaderLifecycle();
@@ -813,7 +813,7 @@ export const readerMixin = {
             destination = await this.mapContinuousMarker(previousMarker, previousMode, nextMode);
         }
         reader.currentMarker = destination;
-        reader.lastDisplayedOrdinal = null;
+        reader.forwardTurn = false;
         await this.loadContinuousReaderAt(destination, destination?.chapter_id || previousMarker?.chapter_id);
     },
 
@@ -1033,7 +1033,6 @@ export const readerMixin = {
             ordinal: Number(anchor.dataset.readerOrdinal),
         };
         reader.currentMarker.word_position = this.continuousMarkerWordPosition(reader.currentMarker);
-        reader.lastDisplayedOrdinal = reader.currentMarker.ordinal;
         const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === reader.currentMarker.chapter_id);
         document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
         this.updateContinuousReaderProgress();
@@ -1238,11 +1237,14 @@ export const readerMixin = {
             ordinal: Number(anchor.dataset.readerOrdinal),
         };
         marker.word_position = this.continuousMarkerWordPosition(marker);
-        const sequential = reader.lastDisplayedOrdinal !== null && marker.ordinal === reader.lastDisplayedOrdinal + 1;
+        // Sequential = arrived by turning forward one page (or into the next
+        // section). Comparing paragraph ordinals missed nearly every turn: a
+        // page holds several paragraphs, and long ones span pages.
+        const sequential = reader.forwardTurn === true;
+        reader.forwardTurn = false;
         const activeSeconds = document.visibilityState === 'visible'
             ? Math.min(60, Math.floor((Date.now() - reader.pageTurnAt) / 1000)) : 0;
         reader.pageTurnAt = Date.now();
-        reader.lastDisplayedOrdinal = marker.ordinal;
         reader.currentMarker = marker;
         const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === marker.chapter_id);
         document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
@@ -1303,10 +1305,11 @@ export const readerMixin = {
         }
     },
 
+    // Footer % and bar show where you are now (furthest is what's saved).
     updateContinuousReaderProgress() {
         const reader = this.continuousReader;
         const mode = reader?.manifest?.modes?.find(item => item.mode === reader.mode);
-        const marker = reader?.furthestMarker;
+        const marker = reader?.currentMarker || reader?.furthestMarker;
         const wordPosition = this.continuousMarkerWordPosition(marker);
         const percentage = mode?.total_word_count && marker
             ? Math.min(99, Math.max(0, Math.round(wordPosition * 100 / mode.total_word_count)))
@@ -1332,6 +1335,7 @@ export const readerMixin = {
         const loaded = await this.fetchContinuousSegment(id);
         if (!loaded) return;
         reader.currentSegmentId = id;
+        if (direction > 0) reader.forwardTurn = true;
         this.renderContinuousSegments([loaded], null);
     },
 };

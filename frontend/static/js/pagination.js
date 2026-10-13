@@ -887,6 +887,8 @@ export const paginationMixin = {
 
         this.pagination.isNavigating = true;
         this.pagination.currentPage++;
+        // A one-page forward turn is what counts as sequential reading.
+        if (this.continuousReader?.active) this.continuousReader.forwardTurn = true;
         this.displayCurrentPage();
 
         setTimeout(() => {
