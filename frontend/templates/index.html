@@ -187,35 +187,33 @@
             <div id="hero-section"{% if initial_data and initial_data.type in ['blog', 'blog-post', 'book', 'book-summary', 'chapter', 'category', 'all-categories', 'all-books', 'author', 'library', 'reader', 'discover'] %} class="hidden"{% endif %}>
                 <section class="home-hero hero-main">
                     <div class="home-hero-copy">
-                        <h1 class="hero-banner-title">Read the classics in plain&nbsp;English.</h1>
-                        <p class="hero-banner-subtitle">Every sentence rewritten into modern prose — nothing cut, nothing summarised. Read it on its own, or side by side with the original.</p>
+                        <h1 class="hero-banner-title">Classics, minus the confusion.</h1>
+                        <p class="hero-banner-subtitle">Read the real book, with every line rewritten in today's English. Stuck on a sentence? The original is right there next to it.</p>
                         <div class="hero-banner-ctas">
-                            <a href="{{ base_path }}/discover" class="hero-cta-primary">Find your next classic <span aria-hidden="true">→</span></a>
+                            <a href="{{ base_path }}/discover" class="hero-cta-primary">Find your book <span aria-hidden="true">→</span></a>
                         </div>
                     </div>
                     {% if hero_examples %}
-                    <!-- An open book: original on the left page, plain English on
-                         the right. Every example sits in the same grid cell
-                         (hidden ones are invisible, not removed), so the book is
-                         as tall as the longest example and never resizes. -->
-                    <div class="hero-book" id="hero-examples">
-                        <div class="hero-book-pages">
+                    <!-- A text thread: the author's original line arrives as a
+                         message, the plain-English version replies. Every example
+                         sits in the same grid cell (hidden ones are invisible, not
+                         removed), so the thread is as tall as the longest example
+                         and "Show me another" never moves the content below. -->
+                    <div class="hero-thread" id="hero-examples">
+                        <div class="hero-thread-messages">
                             {% for ex in hero_examples %}
                             <figure class="hero-sentence"{% if not loop.first %} hidden{% endif %}>
-                                <div class="hero-page hero-page--original">
-                                    <span class="hero-sentence-label">Original</span>
-                                    <blockquote class="hero-sentence-original">{{ ex.original }}</blockquote>
-                                </div>
-                                <div class="hero-page hero-page--plain">
+                                <figcaption class="hero-sentence-source">{{ ex.author }} · <a href="{{ base_path }}/books/{{ ex.slug }}">{{ ex.title }}</a></figcaption>
+                                <blockquote class="hero-bubble hero-bubble--original hero-sentence-original">{{ ex.original }}</blockquote>
+                                <div class="hero-bubble hero-bubble--plain">
                                     <span class="hero-sentence-label">Plain English</span>
                                     <p class="hero-sentence-plain">{{ ex.plain }}</p>
                                 </div>
-                                <figcaption class="hero-sentence-source"><a href="{{ base_path }}/books/{{ ex.slug }}">{{ ex.title }}</a> · {{ ex.author }}</figcaption>
                             </figure>
                             {% endfor %}
                         </div>
                         {% if hero_examples|length > 1 %}
-                        <button type="button" class="hero-sentence-next" id="hero-sentence-next">Turn the page <span aria-hidden="true">→</span></button>
+                        <button type="button" class="hero-sentence-next" id="hero-sentence-next">Show me another <span aria-hidden="true">↻</span></button>
                         {% endif %}
                     </div>
                     {% endif %}

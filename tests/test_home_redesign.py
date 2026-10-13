@@ -64,7 +64,8 @@ def test_hero_shows_original_and_plain_english_sentence(client):
     pair = pairs[0]
     assert 'It is a truth universally acknowledged, that a single man must be in want of a wife.' in pair
     assert 'Everyone knows that a single man with a lot of money needs a wife.' in pair
-    assert re.search(r'<figcaption[^>]*>.*Pride and Prejudice.*Jane Austen', pair, re.S)
+    caption = re.search(r'<figcaption[^>]*>(.*?)</figcaption>', pair, re.S).group(1)
+    assert 'Pride and Prejudice' in caption and 'Jane Austen' in caption, caption
     assert 'Chapter 1' not in re.sub(r'<figcaption.*?</figcaption>', '', pair, flags=re.S), \
         'the chapter title paragraph must not be used as the sentence'
 

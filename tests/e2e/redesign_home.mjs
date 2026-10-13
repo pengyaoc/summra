@@ -1,6 +1,6 @@
 // Redesign phase 6: home page and header search.
 //  - Paper hero (no cover wall) with an original → plain-English sentence
-//    pair; "Another example" cycles through the pairs
+//    pair; "Show me another" cycles through the pairs
 //  - "Start here" shelf uses the book card (title, level, time) with a small
 //    rank badge instead of big numerals
 //  - "Choose by level" cards open a filtered Discover
@@ -54,12 +54,26 @@ expect("hero: dark band with high-contrast title", lum(band.bg) < 0.05 && ratio 
 expect("hero: band spans the full window width", Math.abs(band.width - band.vw) <= 1, JSON.stringify(band));
 expect("hero: tagline in the serif", /serif/.test(band.subFont) && !/sans-serif$/.test(band.subFont), band.subFont);
 expect("hero: one search field on screen (header only)", !band.heroSearch && band.searchFields === 1, JSON.stringify(band));
-const spread = await page.evaluate(() => {
+// Option 2 "text thread": the original arrives as a message from the author,
+// the plain-English version replies from the right.
+const thread = (pg) => pg.evaluate(() => {
   const f = [...document.querySelectorAll(".hero-sentence")].find((x) => !x.hidden);
-  const o = f.querySelector(".hero-page--original").getBoundingClientRect(), p = f.querySelector(".hero-page--plain").getBoundingClientRect();
-  return { oRight: Math.round(o.right), pLeft: Math.round(p.left), oTop: Math.round(o.top), pTop: Math.round(p.top) };
+  const t = f.getBoundingClientRect();
+  const o = f.querySelector(".hero-bubble--original").getBoundingClientRect(), p = f.querySelector(".hero-bubble--plain").getBoundingClientRect();
+  return { tL: Math.round(t.left), tR: Math.round(t.right), tW: Math.round(t.width),
+    oL: Math.round(o.left), oR: Math.round(o.right), oB: Math.round(o.bottom), oW: Math.round(o.width),
+    pL: Math.round(p.left), pR: Math.round(p.right), pT: Math.round(p.top), pW: Math.round(p.width),
+    sender: f.querySelector(".hero-sentence-source")?.textContent.replace(/\s+/g, " ").trim(),
+    replyLabel: f.querySelector(".hero-bubble--plain .hero-sentence-label")?.textContent.trim() };
 });
-expect("hero: original and plain English face each other as two pages", spread.oRight <= spread.pLeft + 1 && Math.abs(spread.oTop - spread.pTop) < 4, JSON.stringify(spread));
+const isThread = (t) => Math.abs(t.oL - t.tL) <= 1 && Math.abs(t.pR - t.tR) <= 1 && t.pT >= t.oB
+  && t.oW < t.tW * 0.92 && t.pW < t.tW * 0.92;
+const desk = await thread(page);
+expect("hero: original arrives left, plain English replies right, below it", isThread(desk), JSON.stringify(desk));
+expect("hero: the message is from the author; the reply is labelled Plain English",
+  /Austen|Dickens|Shelley|Carroll|Brontë|Doyle|Twain|Wilde|Stevenson|·/.test(desk.sender || "") && desk.replyLabel === "Plain English", JSON.stringify(desk));
+const copy = await page.evaluate(() => document.querySelector(".hero-main").textContent);
+expect("hero: friendly copy (no 'summarised' / 'prose')", !/summari[sz]ed|prose/i.test(copy), copy.replace(/\s+/g, " ").slice(0, 160));
 const heights = [];
 const exampleCount = await page.locator(".hero-sentence").count();
 for (let i = 0; i <= exampleCount; i += 1) {
@@ -145,12 +159,8 @@ await mobile.route(/\/auth\/check$/, (r) => r.fulfill({ json: { authenticated: f
 const mp = await mobile.newPage();
 await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
 expect("mobile: no horizontal scroll", (await mp.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);
-const mSpread = await mp.evaluate(() => {
-  const f = [...document.querySelectorAll(".hero-sentence")].find((x) => !x.hidden);
-  return { oBottom: Math.round(f.querySelector(".hero-page--original").getBoundingClientRect().bottom),
-    pTop: Math.round(f.querySelector(".hero-page--plain").getBoundingClientRect().top) };
-});
-expect("mobile: book pages stack (original above plain English)", mSpread.pTop >= mSpread.oBottom, JSON.stringify(mSpread));
+const mThread = await thread(mp);
+expect("mobile: same thread layout on a phone", isThread(mThread), JSON.stringify(mThread));
 await mobile.close();
 
 // Signed-in reader with a book in progress sees Continue reading
