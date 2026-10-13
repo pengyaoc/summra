@@ -11,8 +11,21 @@ from typing import Optional, List, Dict
 
 try:
     from . import config
+    from .study_cues import add_book_cues, add_chapter_cues
 except ImportError:
     from backend import config
+    from backend.study_cues import add_book_cues, add_chapter_cues
+
+# Private columns for chapter-list metadata, turned into reading_minutes /
+# summary_excerpt by add_chapter_cues(). Word count is approximated in SQL
+# (whitespace separators + 1) so the chapter list never loads full chapter
+# text; chapters.word_count can't be used because it counts the *summary*.
+CHAPTER_CUE_COLUMNS = '''
+    CASE WHEN chapter_text IS NULL OR TRIM(chapter_text) = '' THEN NULL
+         ELSE LENGTH(chapter_text)
+              - LENGTH(REPLACE(REPLACE(REPLACE(chapter_text, ' ', ''), CHAR(10), ''), CHAR(9), '')) + 1
+    END AS _text_words,
+    SUBSTR(summary, 1, 600) AS _summary_head'''
 
 
 def slugify(text: str) -> str:
@@ -498,7 +511,7 @@ class Database:
         conn.close()
 
         if row:
-            return dict(row)
+            return add_book_cues(dict(row))
         return None
 
     def get_book(self, book_id: int) -> Optional[Dict]:
@@ -560,7 +573,7 @@ class Database:
         cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at, slug, cefr_level FROM books ORDER BY title')
         rows = cursor.fetchall()
 
-        books = [dict(row) for row in rows]
+        books = [add_book_cues(dict(row)) for row in rows]
 
         # Add categories to each book — one query for all books (same rows and
         # order as get_book_categories), not one query + connection per book.
@@ -698,8 +711,9 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
-            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url
+        cursor.execute(f'''
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url,
+                   {CHAPTER_CUE_COLUMNS}
             FROM chapters
             WHERE book_id = ?
             ORDER BY chapter_number
@@ -708,7 +722,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_chapter_cues(dict(row)) for row in rows]
 
     def book_has_modern_english(self, book_id: int) -> bool:
         """True iff at least one chapter for this book has non-empty modern_english_text.
@@ -916,8 +930,9 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
-            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url
+        cursor.execute(f'''
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url,
+                   {CHAPTER_CUE_COLUMNS}
             FROM chapters
             WHERE section_id = ?
             ORDER BY chapter_number
@@ -926,7 +941,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_chapter_cues(dict(row)) for row in rows]
 
     def get_chapters_without_section(self, book_id: int) -> List[Dict]:
         """Get chapters that don't belong to any section (preface/introduction chapters)"""
@@ -951,8 +966,9 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
-            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url
+        cursor.execute(f'''
+            SELECT id, book_id, chapter_number, chapter_title, word_count, section_id, illustration_url,
+                   {CHAPTER_CUE_COLUMNS}
             FROM chapters
             WHERE book_id = ? AND section_id IS NULL
             ORDER BY chapter_number
@@ -961,7 +977,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_chapter_cues(dict(row)) for row in rows]
 
     def _build_book_structure(self, book_id: int, metadata_only: bool) -> Dict:
         """Shared control flow for get_book_structure/get_book_structure_metadata —
@@ -1185,7 +1201,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [dict(row) for row in rows]
+        return [add_book_cues(dict(row)) for row in rows]
 
     def clear_book_categories(self, book_id: int):
         """Remove all categories from a book"""
