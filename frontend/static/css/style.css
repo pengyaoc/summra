@@ -4254,8 +4254,8 @@ body.pagination-active {
 .library-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
 .library-card { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 1.1rem; min-height: 180px; max-width: 520px; padding: 1rem; border: 1px solid var(--border-light); border-radius: 12px; background: var(--card-background); box-shadow: 0 2px 8px rgba(25, 40, 52, .05); cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .library-card:hover { border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-light)); box-shadow: 0 8px 22px rgba(25, 40, 52, .1); transform: translateY(-1px); }
-.library-card-cover-frame { display: flex; align-items: stretch; min-width: 0; }
-.library-card .book-card-cover { width: 108px; margin: 0; padding: 10%; }
+.library-card-cover-frame { display: flex; align-items: flex-start; min-width: 0; }
+.library-card .book-card-cover { width: 108px; height: auto; margin: 0; padding: 10%; }
 .library-card .book-card-cover-title { font-size: .85rem; }
 .library-card-body { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .library-card-meta { display: flex; width: 100%; justify-content: space-between; gap: .75rem; color: var(--text-light); font-size: .76rem; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
