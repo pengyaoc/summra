@@ -724,6 +724,13 @@ class Database:
 
         return [add_chapter_cues(dict(row)) for row in rows]
 
+    def count_chapters(self, book_id: int) -> int:
+        """Number of chapters in a book (for the book page's meta row)."""
+        conn = self.get_connection()
+        count = conn.execute('SELECT COUNT(*) FROM chapters WHERE book_id = ?', (book_id,)).fetchone()[0]
+        conn.close()
+        return count
+
     def book_has_modern_english(self, book_id: int) -> bool:
         """True iff at least one chapter for this book has non-empty modern_english_text.
 

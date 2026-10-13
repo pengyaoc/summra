@@ -345,10 +345,16 @@
                     <div class="book-detail-info">
                         <h2 id="book-title">{% if ssr_book %}{{ ssr_book.title }}{% endif %}</h2>
                         <p class="book-author" id="book-author">{% if ssr_book %}by <a href="{{ base_path }}/authors/{{ author_slug }}" class="author-link">{{ ssr_book.author }}</a>{% endif %}</p>
-                        <button class="book-read-btn" id="book-read-btn" type="button">
-                            <span aria-hidden="true">Read book</span>
-                            <span class="book-read-btn-arrow" aria-hidden="true">→</span>
-                        </button>
+                        {# Meta row: kept in step with renderBookMeta() in app.js. #}
+                        {% set bm = book_meta if ssr_book else none %}
+                        <p class="book-meta" id="book-meta">{% if bm %}{% if bm.level %}<span class="level-tag level-tag--{{ bm.level|lower }}">{{ bm.level }}</span>{% endif %}<span class="book-meta-item">{{ bm.chapter_count }} chapter{{ '' if bm.chapter_count == 1 else 's' }}</span>{% if bm.reading_time %}<span class="book-meta-item">{{ bm.reading_time }}</span>{% endif %}{% if bm.has_plain_english %}<span class="plain-english-badge">Plain English</span>{% endif %}{% endif %}</p>
+                        <div class="book-actions">
+                            <button class="book-read-btn" id="book-read-btn" type="button">
+                                <span id="book-read-label">Start reading</span>
+                                <span class="book-read-btn-arrow" aria-hidden="true">→</span>
+                            </button>
+                            <a class="btn-secondary book-sxs-link{% if not (bm and bm.has_plain_english) %} hidden{% endif %}" id="book-sxs-link" href="{{ base_path }}/books/{{ ssr_book.slug if ssr_book else '' }}/read?mode=side_by_side">Read side by side</a>
+                        </div>
                         <!-- Coming-soon banner shown when the book has no modern English translation yet. -->
                         <div class="plain-english-coming-soon hidden" id="plain-english-coming-soon" role="status">
                             <span class="plain-english-coming-soon-icon" aria-hidden="true">✨</span>
@@ -359,46 +365,8 @@
 
                 <!-- About This Book Section -->
                 <div class="about-section hidden" id="about-section">
-                    <!-- About This Book -->
-                    <div class="about-single-column">
-                        <h3 class="about-heading">About This Book</h3>
-                        <p class="about-text" id="about-text"></p>
-                    </div>
-
-                    <!-- About the Author -->
-                    <div class="about-single-column">
-                        <div class="about-heading-row">
-                            <h3 class="about-heading">About the Author</h3>
-                            <a href="#" class="learn-more-btn hidden" id="author-learn-more-btn">Learn more →</a>
-                        </div>
-                        <p class="author-bio-text" id="author-bio-text"></p>
-                    </div>
-                </div>
-
-                <!-- Reading Guide Section (Standalone) -->
-                <div class="reading-guide-section hidden" id="reading-guide-section">
-                    <div class="reading-guide-tabs-header">
-                        <button class="reading-guide-tab active" data-reading-tab="themes">Themes</button>
-                        <button class="reading-guide-tab" data-reading-tab="characters">Characters</button>
-                        <button class="reading-guide-tab" data-reading-tab="timeline">Timeline</button>
-                    </div>
-
-                    <div class="reading-guide-tabs-content">
-                        <!-- Themes Tab -->
-                        <div class="reading-guide-tab-content active" id="reading-tab-themes">
-                            <img id="themes-guide-image" class="guide-image" alt="Themes" loading="lazy" decoding="async" />
-                        </div>
-
-                        <!-- Characters Tab -->
-                        <div class="reading-guide-tab-content" id="reading-tab-characters">
-                            <img id="character-guide-image" class="guide-image" alt="Character Guide" loading="lazy" decoding="async" />
-                        </div>
-
-                        <!-- Timeline Tab -->
-                        <div class="reading-guide-tab-content" id="reading-tab-timeline">
-                            <img id="timeline-guide-image" class="guide-image" alt="Timeline" loading="lazy" decoding="async" />
-                        </div>
-                    </div>
+                    <h3 class="about-heading">About this book</h3>
+                    <p class="about-text" id="about-text"></p>
                 </div>
 
                 <!-- Main Content Area -->
@@ -438,9 +406,44 @@
                         <div class="chapters-list" id="chapters-list"></div>
                     </div>
 
+                    <!-- Reading Guide Section (Standalone) -->
+                    <div class="reading-guide-section hidden" id="reading-guide-section">
+                        <div class="reading-guide-tabs-header">
+                            <button class="reading-guide-tab active" data-reading-tab="themes">Themes</button>
+                            <button class="reading-guide-tab" data-reading-tab="characters">Characters</button>
+                            <button class="reading-guide-tab" data-reading-tab="timeline">Timeline</button>
+                        </div>
+
+                        <div class="reading-guide-tabs-content">
+                            <!-- Themes Tab -->
+                            <div class="reading-guide-tab-content active" id="reading-tab-themes">
+                                <img id="themes-guide-image" class="guide-image" alt="Themes" loading="lazy" decoding="async" />
+                            </div>
+
+                            <!-- Characters Tab -->
+                            <div class="reading-guide-tab-content" id="reading-tab-characters">
+                                <img id="character-guide-image" class="guide-image" alt="Character Guide" loading="lazy" decoding="async" />
+                            </div>
+
+                            <!-- Timeline Tab -->
+                            <div class="reading-guide-tab-content" id="reading-tab-timeline">
+                                <img id="timeline-guide-image" class="guide-image" alt="Timeline" loading="lazy" decoding="async" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- About the Author -->
+                    <div class="about-author-section hidden" id="about-author-section">
+                        <div class="about-heading-row">
+                            <h3 class="about-heading">About the author</h3>
+                            <a href="#" class="learn-more-btn hidden" id="author-learn-more-btn">Learn more →</a>
+                        </div>
+                        <p class="author-bio-text" id="author-bio-text"></p>
+                    </div>
+
                     <!-- Related Books Section -->
                     <div class="related-books-section hidden" id="related-books-section">
-                        <h3>You May Also Like</h3>
+                        <h3>You may also like</h3>
                         <div class="related-books-carousel" id="related-books-carousel"></div>
                     </div>
                 </div>
