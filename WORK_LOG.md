@@ -14,6 +14,19 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Baseline at `docs/redesign/before/local/` (local `main` @ 051244c) and `docs/redesign/before/prod/` (live site). Note: prod's reader still shows the older top-bar mode toggle; local `main` has the continuous reader with modes in the settings panel — the script handles both.
 - Gotcha: the shared venv installs `backend` as an editable package pointing at the main checkout, so `python backend/app.py` in a worktree silently serves main's code. Run with `PYTHONPATH=$PWD` from the worktree root.
 
+### Phase 0 — spec + docs (DONE, e377cb4)
+
+### Phase 1 — tokens + global chrome (DONE)
+
+- `style.css` `:root`: new design-system tokens (`--paper`, `--paper-deep`, `--surface`, `--ink`, `--ink-muted`, `--rule`, `--rule-strong`, `--accent`, `--accent-hover`, `--on-accent`, `--font-serif`, `--font-sans`, `--level-*`). Legacy tokens (`--primary-color`, `--secondary-color`, `--background-color`, `--card-background`, `--text-*`, `--border-*`, `--hero-accent`, …) now alias onto them, so un-migrated pages pick up the palette.
+- Header: paper background, ink nav, hairline rule (was black). Body: paper, system sans (dropped 'Amazon Ember'). Buttons: `.btn-primary`, `.book-read-btn`, `.hero-cta-primary` are oxblood; `.btn-secondary` is an ink outline.
+- Footer: tagline + Discover/Books/Categories links + © line (kept "Plain English rewrites of classic literature", which `tests/test_footer_copy.py` protects).
+- Page sections that painted white/surface bands on paper (`.summary-section`, `.hero-learn`, `.library-section` gradient, summary "Read more" fades) now sit on paper. Reader sections keep `--surface` by design.
+- Deferred to the home phase: header search icon; Categories stays in the nav until Discover absorbs it.
+- Tests: new `tests/e2e/redesign_chrome.mjs` (20 checks: paper bg, header, ink nav, serif wordmark, footer links, oxblood CTA, no off-paper bands, no console errors) — written first, failed, now green. pytest 549 passed. e2e: all green except 6 scenarios that also fail on unmodified main (stale tests for the old chapter-detail view + a blog test needing posts) — flagged as a separate task.
+- After screenshots: `docs/redesign/after/phase1/`.
+- Worktree gotcha: `tests/e2e/node_modules` as a symlink isn't covered by the `tests/e2e/node_modules/` ignore pattern — stage files explicitly, never `git add -A`.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE

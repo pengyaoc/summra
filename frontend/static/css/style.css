@@ -15,17 +15,41 @@ html {
 }
 
 :root {
-    --primary-color: #2c3e50;
-    --secondary-color: #3498db;
+    /* Design system ("quiet library", redesign 2026-10-12 — see
+       docs/superpowers/specs/2026-10-12-site-redesign-design.md). New
+       selectors use these; the legacy names below alias onto them until
+       their call sites are migrated. */
+    --paper: #F6F1E7;
+    --paper-deep: #EFE7D8;
+    --surface: #FBF8F1;
+    --ink: #2B2622;
+    --ink-muted: #6B5F55;
+    --rule: #E8DFCF;
+    --rule-strong: #D6CAB5;
+    --accent: #8A2E2E;
+    --accent-hover: #742525;
+    --on-accent: #FFFFFF;
+    --font-serif: 'New York', 'Iowan Old Style', Baskerville, 'Hoefler Text', Georgia, 'Times New Roman', serif;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --level-easy-bg: #E3EBDD;
+    --level-easy-fg: #3E5A36;
+    --level-moderate-bg: #F3E6CC;
+    --level-moderate-fg: #7A5A1E;
+    --level-challenging-bg: #F1DEDA;
+    --level-challenging-fg: #7A2828;
+
+    /* Legacy tokens, re-pointed at the design system. */
+    --primary-color: var(--ink);
+    --secondary-color: var(--accent);
     --accent-color: #e74c3c;
-    --background-color: #ecf0f1;
-    --card-background: #ffffff;
-    --text-color: #2c3e50;
-    --text-light: #7f8c8d;
-    --text-muted: #95a5a6;
-    --border-color: #bdc3c7;
-    --border-light: #e0e0e0;
-    --secondary-color-hover: #2980b9;
+    --background-color: var(--paper-deep);
+    --card-background: var(--surface);
+    --text-color: var(--ink);
+    --text-light: var(--ink-muted);
+    --text-muted: #8C8178;
+    --border-color: var(--rule-strong);
+    --border-light: var(--rule);
+    --secondary-color-hover: var(--accent-hover);
     --sticky-header-accent: #333333;
     --sticky-header-border: #666666;
     --reading-theme-dark-bg: #1a1a1a;
@@ -44,13 +68,13 @@ html {
     --reading-theme-dark-border: #444;
     --sticky-header-muted: #999999;
     --sticky-header-active: #444444;
-    --hero-accent: #2997ff;
+    --hero-accent: var(--accent);
     --error-bg-light: #fee;
-    --section-bg-light: #f8f9fa;
-    --cover-placeholder-bg: #f7fafc;
+    --section-bg-light: var(--surface);
+    --cover-placeholder-bg: var(--rule);
     --admin-modal-bg: #f5f5f5;
     --border-subtle: #ddd;
-    --book-author-text: #718096;
+    --book-author-text: var(--ink-muted);
     --success-gradient-start: #48bb78;
     --success-gradient-end: #38a169;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -58,8 +82,8 @@ html {
 }
 
 body {
-    font-family: 'Amazon Ember', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--card-background);
+    font-family: var(--font-sans);
+    background-color: var(--paper);
     color: var(--text-color);
     line-height: 1.6;
     /* Why: 100vh on iOS WebKit resolves to the LARGE viewport (toolbar fully
@@ -83,9 +107,9 @@ body {
 
 /* Header */
 .header {
-    background: #1a1a1a;
-    color: white;
-    box-shadow: var(--shadow);
+    background: var(--paper);
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule);
     width: 100vw;
     position: relative;
     left: 50%;
@@ -117,7 +141,7 @@ body.on-chapter-page .header {
     display: flex;
     align-items: center;
     gap: 12px;
-    color: white;
+    color: var(--ink);
     text-decoration: none;
     cursor: pointer;
     transition: opacity 0.2s ease;
@@ -147,7 +171,7 @@ body.on-chapter-page .header {
 
 .header-nav-btn {
     background: transparent;
-    color: white;
+    color: var(--ink);
     border: none;
     padding: 0;
     font-size: 0.95rem;
@@ -160,12 +184,13 @@ body.on-chapter-page .header {
 }
 
 .header-nav-btn:hover {
-    opacity: 0.8;
+    color: var(--accent);
     text-decoration: underline;
+    text-underline-offset: 4px;
 }
 
 .logo {
-    font-family: 'New York', Baskerville, 'Baskerville Old Face', 'Hoefler Text', Garamond, 'Times New Roman', serif;
+    font-family: var(--font-serif);
     font-size: 1.5rem;
     font-style: normal;
     margin: 0;
@@ -547,7 +572,7 @@ body.on-chapter-page .header {
 
 /* Summary Section */
 .summary-section {
-    background: var(--card-background);
+    background: transparent;
     width: 100vw;
     position: relative;
     left: 50%;
@@ -1202,7 +1227,7 @@ body.on-chapter-page .header {
     left: 0;
     right: 0;
     height: 120px;
-    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+    background: linear-gradient(to bottom, rgba(246,241,231,0), var(--paper));
     pointer-events: none;
     transition: opacity 0.3s ease;
 }
@@ -1229,7 +1254,7 @@ body.on-chapter-page .header {
     left: 0;
     right: 0;
     height: 120px;
-    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,1));
+    background: linear-gradient(to bottom, rgba(246,241,231,0), var(--paper));
     pointer-events: none;
 }
 
@@ -1577,13 +1602,36 @@ body.on-chapter-page .header {
     padding: 32px 0;
     margin-top: 40px;
     margin-bottom: 100px; /* Space for persistent player */
-    border-top: 1px solid var(--border-color);
-    color: var(--text-light);
+    border-top: 1px solid var(--rule);
+    color: var(--ink-muted);
+}
+
+.footer-tagline {
+    font-family: var(--font-serif);
+    color: var(--ink);
+}
+
+.footer-links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin-top: 12px;
+}
+
+.footer-links a {
+    color: var(--ink-muted);
+    text-decoration: none;
+}
+
+.footer-links a:hover {
+    color: var(--accent);
+    text-decoration: underline;
 }
 
 .footer .small {
-    font-size: 0.9rem;
-    margin-top: 8px;
+    font-size: 0.85rem;
+    margin-top: 12px;
 }
 
 /* Wrong-account notice (auth.js's checkAuthStatus 403 handling) — shown
@@ -1905,7 +1953,7 @@ body.on-chapter-page .header {
 
 /* Learn Hero */
 .hero-learn {
-    background: white;
+    background: transparent;
     color: black;
     min-height: 600px;
     padding: 4rem 2rem 5rem 2rem;
@@ -2435,7 +2483,7 @@ body.on-chapter-page .header {
 }
 
 .hero-cta-primary {
-    background: #0071e3;
+    background: var(--accent);
     color: white;
     padding: 0.75rem 1.5rem;
     border-radius: 980px;
@@ -2447,7 +2495,7 @@ body.on-chapter-page .header {
 }
 
 .hero-cta-primary:hover {
-    background: #0077ed;
+    background: var(--accent-hover);
 }
 
 .hero-cta-secondary {
@@ -2464,7 +2512,7 @@ body.on-chapter-page .header {
 }
 
 .hero-cta-secondary:hover {
-    background: rgba(41, 151, 255, 0.1);
+    background: var(--paper-deep);
 }
 
 /* Hero Search Bar */
@@ -4813,7 +4861,7 @@ body.pagination-active {
     box-sizing: border-box;
     min-height: calc(100vh - 76px);
     padding: 3.25rem max(1.25rem, calc((100vw - 1120px) / 2)) 4rem;
-    background: linear-gradient(180deg, #f7f8f8 0, var(--card-background) 340px);
+    background: var(--paper);
 }
 
 .library-header,
@@ -4853,8 +4901,8 @@ body.pagination-active {
     .library-card-mode { display: none; }
 }
 
-.book-read-btn { display: inline-flex; align-items: center; gap: .55rem; margin-top: 1rem; padding: .65rem 1rem; border: 0; border-radius: 7px; background: var(--primary-color); color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
-.book-read-btn:hover { filter: brightness(.94); }
+.book-read-btn { display: inline-flex; align-items: center; gap: .55rem; margin-top: 1rem; padding: .65rem 1rem; border: 0; border-radius: 6px; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 650; cursor: pointer; }
+.book-read-btn:hover { background: var(--accent-hover); }
 .book-read-btn-arrow { font-size: 1.15em; line-height: 1; }
 
 /* Focused reader chrome: intentionally mirrors the established dark reader
@@ -5099,7 +5147,7 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 
 /* Buttons */
 .btn-primary {
-    background: var(--primary-color);
+    background: var(--accent);
     color: white;
     padding: 0.75rem 1.5rem;
     border: none;
@@ -5119,10 +5167,10 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 }
 
 .btn-secondary {
-    background: var(--background-color);
-    color: var(--primary-color);
+    background: transparent;
+    color: var(--ink);
     padding: 0.75rem 1.5rem;
-    border: none;
+    border: 1px solid var(--ink);
     border-radius: 6px;
     font-size: 1rem;
     font-weight: 500;
@@ -5131,7 +5179,7 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 }
 
 .btn-secondary:hover {
-    background: var(--border-color);
+    background: var(--paper-deep);
 }
 
 /* Modal footer */
