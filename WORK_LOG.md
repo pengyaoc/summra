@@ -4,6 +4,87 @@
 
 ---
 
+## 2026-10-12: Chapter destinations open the reader on the right page — DONE (not deployed)
+
+### Bug
+
+Legacy `/books/<slug>/chapters/<n>` links, `/read?chapter=<id>` and table-of-contents jumps loaded the segment containing the chapter but showed that segment's first page — e.g. chapter 20 of *A Journey to the Centre of the Earth* opened on "The Wrong Road!", two chapters early. Same on prod (pre-existing). Also, a signed-in reader's saved place silently overrode an explicit chapter destination.
+
+### Fix (`frontend/static/js/reader.js`)
+
+- `renderContinuousSegments(segments, restoreMarker, chapterId)`: with no restore marker, opens on `findContinuousPageForChapter(chapterId)` — the first page containing that chapter's content (its heading). `loadContinuousReaderAt()` passes the chapter through, which covers all three entry points.
+- `showContinuousReader()`: an explicit chapter destination drops the saved marker unless the marker is already inside that chapter.
+
+Note: chapters flow continuously across pages, so the opened page can begin with the last lines of the previous chapter; the chapter heading is on that page.
+
+### Tests
+
+`tests/e2e/reader_opens_at_chapter.mjs` — legacy link and `?chapter=` at 1280px and 390px, TOC jump, saved place resumed by plain `/read`, explicit chapter overriding the saved place. Failed before the fix, passes after. pytest 549 passed; all 13 e2e scenarios pass.
+
+---
+
+## 2026-10-12: Site-wide load-time pass (6 follow-ups to the carousel/book-page fix) — DONE (not deployed)
+
+### Why
+
+Audit after the home/book SSR change found the same "wait on something unnecessary" pattern across the site. User asked for all six fixes.
+
+### What changed
+
+1. **Gzip HTML/JSON in Flask** (`app_base.gzip_response`). Prod's Apache gzips static files but passed gunicorn responses through raw: home HTML 45 KB → ~10 KB, `/api/books` 56 KB → ~8 KB, `/api/discover/carousels` 101 KB → ~9 KB. ETags computed over gzipped bytes (`mtime=0` keeps them stable); 304s still work.
+2. **`get_all_books()` single query** — was 1 query + 1 new SQLite connection per book (91 per call). Local: 40 → 16 ms median, 264 → 20 ms max. Output verified identical on the real DB. Also speeds up the sitemap, `/books` SSR and `/api/discover/carousels`.
+3. **Summary / reader / legacy chapter routes** render from `__INITIAL_DATA__.book` via new `resolveBookBySlug()`; all four `/books/<slug>/…` routes now embed the same book shape (`_initial_book()` in `pages.py`).
+4. **Reader**: manifest segment descriptors gain `chapter_ids`, so opening at a chapter fetches its segment directly instead of scanning segments one by one; current + next segments fetched in parallel. Old cached manifests fall back to the scan.
+5. **One catalog fetch**: `loadBooks()` shares one in-flight promise; HeroSearch loads the catalog on first focus/keystroke instead of every page load. Home and book pages now make 0 `/api/books` requests.
+6. **Author / category pages** no longer wait for the catalog; `/categories` fetches catalog + category list in parallel. `/api/categories/<id>/books` now includes `slug` + `cefr_level` so its cards open the right book page.
+
+### Found, not fixed
+
+- ~~Legacy `/books/<slug>/chapters/<n>` opens the reader at the start of the segment containing chapter N~~ — fixed, see next entry.
+- Prod serves HTTP/1.1 and runs 1 gunicorn worker × 4 threads — server config, not changed.
+
+### Tests
+
+New: `tests/test_get_all_books.py`, `tests/test_response_compression.py`, `tests/test_reader_manifest_chapter_ids.py`, category-books fields test in `test_api_routes_characterization.py`, `_initial_book` cases in `test_book_page_ssr.py`; e2e `catalog_fetch_once.mjs`, `book_routes_without_catalog.mjs`, `listing_pages_catalog.mjs`, `reader_segments_fast_open.mjs` (each failed before its fix). pytest 549 passed; all 12 e2e scenarios pass.
+
+---
+
+## 2026-10-12: Faster home "Where Most Readers Start" carousel + book page first paint — DONE (not deployed)
+
+### Why
+
+User report: the home carousel always loads slowly; book pages sometimes take a few seconds for content to appear. Both waited on a serial waterfall: HTML → `app.min.js` → `/api/books` (full ~57 KB catalog, uncompressed, fetched twice — by `SummraApp` and `HeroSearch`) → per-book APIs → covers.
+
+### What changed
+
+- Home: top-10 cards server-rendered from `TOP_10_GUTENBERG_IDS` (`backend/routes/pages.py`) via new `Database.get_books_by_gutenberg_ids()`. Cards are now real `<a>` links. `renderTop10Carousel()` keeps SSR cards, builds client-side only after SPA navigation, and wires listeners once (fixes stacked duplicate nav-arrow handlers on repeat home visits). Home no longer awaits `/api/books` on full loads.
+- Book page: header (title, author, cover) server-rendered; `__INITIAL_DATA__.book` gains `cover_image_url`; router renders the book from it on first load instead of awaiting the catalog.
+- Details in `docs/ERD.md` → "First-Paint Server Rendering".
+
+### Measurements (Chromium, 390×844, 150 ms RTT / 1.6 Mbps; prod static assets + local HTML/JS/API through a gzip proxy, old vs new code)
+
+| | Old | New |
+|---|---|---|
+| Home: first 3 covers visible | 4.4–4.6 s | 2.9–3.0 s |
+| Home: DOMContentLoaded | 2.0–2.3 s | 2.9–3.0 s |
+| Book: cover visible | ~2.3 s | ~1.5 s |
+| Book: summary + chapters + cover | 2.32 s | 2.02 s |
+| Book: content with `/api/books` stalled 8 s | waits 8 s+ | 80–110 ms |
+
+Trade-off: home DCL is ~0.8 s later on slow links because covers now share bandwidth with scripts (prod serves HTTP/1.1, so no stream prioritization). Tried eager/`fetchpriority=high` covers: covers 3.35 s but DCL 3.3–3.5 s — worse; all-lazy was best.
+
+### Not done / follow-ups
+
+- Prod serves HTTP/1.1 and `/api/books` isn't gzipped (static assets are) — server config changes (HTTP/2, gzip for JSON) would help every page.
+- `HeroSearch.fetchBooks()` still downloads the full catalog on every page load (now off the critical path).
+- Top-10 ID list is duplicated in `app.js` (3 places) and `pages.py`.
+
+### Tests
+
+`tests/test_home_top10_ssr.py`, `tests/test_book_page_ssr.py` (pytest: 534 passed), `tests/e2e/top10_ssr.mjs`, `tests/e2e/book_page_fast_path.mjs` (both fail against old code, pass on new), plus smoke, hero_home_navigation, breadcrumb_navigate, breadcrumb_no_flash passing.
+
+---
+
 ## 2026-09-07: Removed single-device local progress tracking (IndexedDB mutation queue) — DONE
 
 ### Why

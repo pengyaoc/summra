@@ -1023,6 +1023,39 @@ Chapter: "Full Text of Chapter 1 - Pride and Prejudice | Summra"
 - Emphasizes comprehensive content (summaries + full text)
 - Brand consistency (all titles end with "| Summra")
 
+### First-Paint Server Rendering (Added 2026-10-12)
+
+**Location:** `backend/routes/pages.py`, `frontend/templates/index.html`, `frontend/static/js/app.js`
+
+Two above-the-fold areas are server-rendered so they paint with the HTML instead of after `app.min.js` → `/api/books` (the full ~57 KB catalog) → per-book fetches → covers:
+
+- **Home "Where Most Readers Start" carousel.** `TOP_10_GUTENBERG_IDS` in `pages.py` is the ranked list; `Database.get_books_by_gutenberg_ids()` fetches just those rows (no per-book category N+1). The template renders `<a class="top-10-book-card">` links with webp/jpg `<picture>` covers (`loading="lazy"` — measured best on a throttled mobile profile; eager covers starved the render-blocking scripts on prod's HTTP/1.1). `renderTop10Carousel()` keeps server-rendered cards and only builds them from `allBooks` when home is reached by SPA navigation; it wires the click/nav listeners once (`top10CarouselWired`). The ID list is mirrored in `app.js` for that SPA path.
+- **Book detail header.** `/books/<slug>` renders title, author link and cover into `#book-title` / `#book-author` / `<picture id="book-info-cover">`.
+
+Shared helper `_cover_base()` produces the extension-less static path both renderings use, matching `getImageHtml()` in `app.js`.
+
+### Catalog-Free Routing (Added 2026-10-12)
+
+`/api/books` (the whole library) is only fetched by pages that genuinely list every book (`/books`, `/categories`, search). Everything else renders without it:
+
+| Route | Source of data on a full page load |
+|---|---|
+| `/` | Server-rendered top-10 carousel |
+| `/books/<slug>`, `/summary`, `/read`, `/chapters/<n>` | `__INITIAL_DATA__.book` via `resolveBookBySlug()`; every route builds it with `_initial_book()` in `pages.py` (`/api/books` field names + `cover_image_url` shape) |
+| `/authors/<slug>` | `/api/authors/<slug>` + `/books` (never needed the catalog) |
+| `/categories/<id>` | Catalog if already loaded, else `/api/categories/<id>/books` (now returns `slug` + `cefr_level`) |
+| `/categories` | Catalog and `/api/categories` fetched in parallel |
+
+`resolveBookBySlug(slug)` prefers the loaded catalog, then the embedded book, then loads the catalog. `loadBooks()` keeps one in-flight promise, so concurrent callers share a single request; `HeroSearch` loads the catalog through it on first focus/keystroke instead of on every page load.
+
+### Server-Side Response Performance (Added 2026-10-12)
+
+- **Gzip** (`gzip_response` in `app_base.py`): HTML/JSON responses ≥ 1 KB are gzipped when the client accepts it. Prod's Apache compresses static files itself but passed gunicorn responses through uncompressed. Registered after `add_cache_headers` so it runs first (Flask runs after_request hooks in reverse) — ETags are computed over the gzipped bytes, and `mtime=0` keeps them stable so `If-None-Match` → 304 still works. Streams, non-200s and static files are skipped.
+- **`get_all_books()`**: categories now come from one JOIN query on the same connection (was one query + one new SQLite connection per book).
+- **Reader manifest**: each segment descriptor carries `chapter_ids` (chapters it contains, reading order), so `findContinuousSegmentForChapter()` picks the segment directly; manifests cached before the field existed fall back to the sequential scan. `loadContinuousReaderAt()` fetches the current and next segments in parallel. Chapter destinations (legacy `/chapters/<n>`, `/read?chapter=`, TOC) then open on `findContinuousPageForChapter()` — the first page containing the chapter — and an explicit destination overrides a saved place outside that chapter.
+
+Tests: `tests/test_home_top10_ssr.py`, `tests/test_book_page_ssr.py`, `tests/test_get_all_books.py`, `tests/test_response_compression.py`, `tests/test_reader_manifest_chapter_ids.py`; e2e `top10_ssr.mjs`, `book_page_fast_path.mjs`, `book_routes_without_catalog.mjs`, `catalog_fetch_once.mjs`, `listing_pages_catalog.mjs`, `reader_segments_fast_open.mjs`.
+
 ---
 
 ## Related Books System

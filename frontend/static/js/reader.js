@@ -825,6 +825,11 @@ export const readerMixin = {
             }
         }
         const chapterId = this.resolveReaderChapter(manifest, options.chapter, options.legacyChapterNumber);
+        // An explicit chapter destination wins over the saved place, unless
+        // the saved place is already inside that chapter.
+        if (chapterId && restoredMarker && Number(restoredMarker.chapter_id) !== Number(chapterId)) {
+            restoredMarker = null;
+        }
         this.continuousReader = {
             active: true, restoring: true, manifest, mode, state, modeState,
             currentMarker: restoredMarker,
@@ -904,16 +909,24 @@ export const readerMixin = {
         }
         descriptor ||= descriptors[0];
         if (!descriptor) return;
-        const loaded = await this.fetchContinuousSegment(descriptor.id);
-        if (!loaded) return;
+        // Fetch the current and next segments in parallel, not back to back.
         const nextDescriptor = descriptors.find(item => item.ordinal === descriptor.ordinal + 1);
-        const next = nextDescriptor ? await this.fetchContinuousSegment(nextDescriptor.id, true) : null;
+        const [loaded, next] = await Promise.all([
+            this.fetchContinuousSegment(descriptor.id),
+            nextDescriptor ? this.fetchContinuousSegment(nextDescriptor.id, true) : null,
+        ]);
+        if (!loaded) return;
         reader.currentSegmentId = descriptor.id;
         reader.segmentIds = [loaded.id, next?.id].filter(Boolean);
-        this.renderContinuousSegments([loaded, next].filter(Boolean), marker);
+        this.renderContinuousSegments([loaded, next].filter(Boolean), marker, chapterId);
     },
 
     async findContinuousSegmentForChapter(descriptors, chapterId) {
+        // Manifests list each segment's chapters; a manifest cached before
+        // that field existed falls back to scanning segments in order.
+        if (descriptors.every(descriptor => Array.isArray(descriptor.chapter_ids))) {
+            return descriptors.find(descriptor => descriptor.chapter_ids.some(id => Number(id) === Number(chapterId))) || null;
+        }
         for (const descriptor of descriptors) {
             const segment = await this.fetchContinuousSegment(descriptor.id, true);
             if (segment?.units?.some(unit => Number(unit.chapter_id) === Number(chapterId))) return descriptor;
@@ -950,7 +963,7 @@ export const readerMixin = {
         return request;
     },
 
-    renderContinuousSegments(segments, restoreMarker = null) {
+    renderContinuousSegments(segments, restoreMarker = null, chapterId = null) {
         const reader = this.continuousReader;
         const container = document.getElementById('continuous-reader-content');
         if (!reader?.active || !container) return;
@@ -984,17 +997,28 @@ export const readerMixin = {
             : html.join('');
         this.pagination.originalContent = {};
         this.initializePagination(container, reader.mode === 'side_by_side' ? 'side-by-side' : reader.mode);
-        if (restoreMarker?.paragraph_id) {
-            const page = this.findContinuousPageForMarker(restoreMarker);
-            if (page >= 0) {
-                this.pagination.currentPage = page;
-                this.displayCurrentPage();
-            }
+        const page = restoreMarker?.paragraph_id
+            ? this.findContinuousPageForMarker(restoreMarker)
+            : (chapterId ? this.findContinuousPageForChapter(chapterId) : -1);
+        if (page >= 0) {
+            this.pagination.currentPage = page;
+            this.displayCurrentPage();
         }
         reader.restoring = false;
         // Opening/restoring never writes progress, but the chrome still needs
         // the marker that is visibly on screen for the next deliberate turn.
         this.settleContinuousReaderMarker();
+    },
+
+    // First page holding any of the chapter's content (its heading, when the
+    // chapter starts inside the rendered segments).
+    findContinuousPageForChapter(chapterId) {
+        const selector = `[data-reader-chapter="${Number(chapterId)}"]`;
+        return this.pagination.pages.findIndex(html => {
+            const page = document.createElement('div');
+            page.innerHTML = html;
+            return !!page.querySelector(selector);
+        });
     },
 
     findContinuousPageForMarker(marker) {

@@ -211,6 +211,24 @@
                                 </svg>
                             </button>
                             <div class="carousel-scroll" id="top-10-scroll">
+                                {% if top_10_books %}
+                                {# Server-rendered so covers start downloading during HTML parse, without waiting for app.min.js + /api/books. #}
+                                {% for book in top_10_books %}
+                                <a class="top-10-book-card" href="{{ base_path }}/books/{{ book.slug }}">
+                                    <div class="top-10-book-card-inner">
+                                        {% if book.cover_base %}
+                                        <picture>
+                                            <source srcset="{{ url_for('static', filename=book.cover_base ~ '.webp') }}" type="image/webp">
+                                            <img src="{{ url_for('static', filename=book.cover_base ~ '.jpg') }}" alt="{{ book.title }} cover" width="300" height="450" decoding="async" loading="lazy">
+                                        </picture>
+                                        {% endif %}
+                                        <div class="top-10-rank-overlay">
+                                            <div class="top-10-rank-number">{{ book.rank }}</div>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                                {% else %}
                                 <!-- Loading skeleton cards (will be replaced when books load) -->
                                 <div class="skeleton-book-card"></div>
                                 <div class="skeleton-book-card"></div>
@@ -222,6 +240,7 @@
                                 <div class="skeleton-book-card"></div>
                                 <div class="skeleton-book-card"></div>
                                 <div class="skeleton-book-card"></div>
+                                {% endif %}
                             </div>
                             <button class="carousel-nav-btn right" id="top-10-nav-right">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -313,10 +332,19 @@
                 </nav>
 
                 <div class="book-detail-header">
+                    {# Header is server-rendered on /books/<slug> so it paints before app.min.js runs; selectBook() updates it in place on SPA navigation. #}
+                    {% set ssr_book = initial_data.book if initial_data and initial_data.type == 'book' else none %}
+                    {% if ssr_book and cover_base %}
+                    <picture id="book-info-cover">
+                        <source srcset="{{ url_for('static', filename=cover_base ~ '.webp') }}" type="image/webp">
+                        <img src="{{ url_for('static', filename=cover_base ~ '.jpg') }}" alt="{{ ssr_book.title }} cover" class="book-detail-cover">
+                    </picture>
+                    {% else %}
                     <img id="book-info-cover" class="book-detail-cover hidden" alt="Book cover" loading="lazy" decoding="async">
+                    {% endif %}
                     <div class="book-detail-info">
-                        <h2 id="book-title"></h2>
-                        <p class="book-author" id="book-author"></p>
+                        <h2 id="book-title">{% if ssr_book %}{{ ssr_book.title }}{% endif %}</h2>
+                        <p class="book-author" id="book-author">{% if ssr_book %}by <a href="{{ base_path }}/authors/{{ author_slug }}" class="author-link">{{ ssr_book.author }}</a>{% endif %}</p>
                         <button class="book-read-btn" id="book-read-btn" type="button">
                             <span aria-hidden="true">Read book</span>
                             <span class="book-read-btn-arrow" aria-hidden="true">→</span>

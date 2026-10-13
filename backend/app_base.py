@@ -12,6 +12,7 @@ from flask_cors import CORS
 from pathlib import Path
 import os
 import logging
+import gzip
 import zlib
 
 # Handle both direct execution (`python backend/app.py`, dev) and package
@@ -228,6 +229,31 @@ def add_cache_headers(response):
         response.cache_control.no_store = True
         response.cache_control.must_revalidate = True
 
+    return response
+
+
+# Registered after add_cache_headers so it runs before it (Flask runs
+# after_request hooks in reverse): the ETag is then computed over the gzipped
+# bytes, and mtime=0 keeps those bytes — and so the ETag — stable.
+@app.after_request
+def gzip_response(response):
+    """Gzip HTML/JSON. Prod's Apache front end compresses the static files it
+    serves itself but passes gunicorn's responses through uncompressed."""
+    if (
+        response.status_code != 200
+        or response.direct_passthrough
+        or response.is_streamed
+        or 'Content-Encoding' in response.headers
+        or response.mimetype not in ('text/html', 'application/json')
+        or 'gzip' not in request.headers.get('Accept-Encoding', '').lower()
+    ):
+        return response
+    data = response.get_data()
+    if len(data) < 1024:
+        return response
+    response.set_data(gzip.compress(data, compresslevel=6, mtime=0))
+    response.headers['Content-Encoding'] = 'gzip'
+    response.vary.add('Accept-Encoding')
     return response
 
 
