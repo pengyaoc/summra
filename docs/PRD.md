@@ -1540,6 +1540,14 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 - No misleading information
 - Transparent about AI generation
 
+### 6. Visual identity: "Quiet library + study cues" (Redesign started 2026-10-12)
+Full design spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`.
+- **Look:** warm paper background, serif headings that match the reader, a single oxblood accent. No gradients, no web fonts.
+- **Lead with the product:** the home page shows an original sentence next to its plain-English rewrite before anything else.
+- **Study cues:** every book card and book page shows a difficulty level (Easy / Moderate / Challenging, from CEFR) and a reading time; chapter lists show per-chapter minutes, a one-line summary and read state.
+- **Pages:** home (sentence pair hero, "Start here" shelf, choose by level, how it works), Discover (one filterable grid by level and length), shared book card on Books / Categories / Author / Library, book page (cover + meta + primary CTA, then about, chapters table of contents, guides, author), reader (same layout, tidier header, paper theme).
+- **Acceptance:** before/after screenshots for every page at desktop and mobile widths (`docs/redesign/`); no regressions in the e2e suite or first-paint performance.
+
 ## Open Questions
 
 ### Content Quality

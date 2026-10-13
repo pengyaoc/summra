@@ -6,7 +6,7 @@
 
 ## 2026-10-12: Site redesign ("Quiet library + study cues") — IN PROGRESS
 
-Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by user: mix of A (warm paper, serif, oxblood accent, home leads with an original → plain-English sentence pair) and C (difficulty level, reading time, progress cues on Discover and book pages). Audience: general. Plan: `docs/superpowers/specs/2026-10-12-site-redesign-design.md` (to be added in phase 0).
+Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by user: mix of A (warm paper, serif, oxblood accent, home leads with an original → plain-English sentence pair) and C (difficulty level, reading time, progress cues on Discover and book pages). Audience: general. Spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`. PRD Design Principles §6 and ERD Frontend Module Map updated.
 
 ### Baseline captured (before any UI change)
 
