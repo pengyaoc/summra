@@ -5,6 +5,15 @@ Snapshot: `main` at `43f3798` on 2026-09-11
 Context: a personal application for family and friends, with low traffic and minimal operational or scaling requirements  
 Scope: repository evidence plus the cohosted production topology documented in `deploy/`; live host configuration was not inspected
 
+> **Updates since this snapshot (2026-10-12).** The assessment below is unchanged; these items have moved:
+>
+> - **Gap 6 — partly done.** `get_all_books()` now loads categories with one JOIN query instead of one query and connection per book. The other three examples (per-chapter audio probes, per-row side-by-side member queries, per-book manifest loads for library percentages) remain.
+> - **Production topology confirmed.** The live VM was inspected: Apache (not nginx) terminates TLS, runs OIDC, serves `/summrabook/static/` directly, and proxies to Gunicorn on loopback. Gunicorn runs as a systemd *user* service of the service user. Apache does not compress proxied responses, so Flask now gzips HTML/JSON itself. The site is served over HTTP/1.1.
+> - **Gap 7 — deploy docs.** The `CLAUDE.md` deploy runbook now matches the live host. `README.md` and `deploy/DEPLOY.md` drift is still open.
+> - **Read path.** Pages no longer wait on the full `/api/books` catalog when they don't need it, and the reader manifest lists each segment's chapters. Details: `docs/ERD.md` → "First-Paint Server Rendering", "Catalog-Free Routing", "Server-Side Response Performance".
+>
+> Everything else here, including the P0 backup gap, is still current.
+
 ## Executive assessment
 
 Summra should remain a **single-host modular monolith**.
