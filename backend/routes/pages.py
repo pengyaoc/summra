@@ -9,7 +9,7 @@ import time
 from flask import Blueprint, render_template, request
 
 from backend.routes import common
-from backend.study_cues import first_sentence, level_label
+from backend.study_cues import level_label, split_sentences
 
 bp = Blueprint('pages', __name__)
 
@@ -59,20 +59,52 @@ def _top_10_books():
 # Home hero examples: (book slug, chapter number). Each shows the chapter's
 # opening sentence next to its plain-English rewrite; picked because the
 # first sentences line up one-to-one. Missing books/rewrites are skipped.
+# Famous openings that students actually get stuck on: the original is long
+# or hard, and the plain-English rewrite is clearly easier. First is shown first.
 HERO_EXAMPLES = [
     ('pride-and-prejudice', 1),
-    ('jane-eyre', 1),
-    ('frankenstein', 1),
+    ('the-strange-case-of-dr-jekyll-and-mr-hyde', 1),
     ('great-expectations', 1),
+    ('adventures-of-huckleberry-finn', 1),
+    ('the-time-machine', 1),
+    ('the-scarlet-letter', 1),
 ]
 
 
 def _opening(text, title):
-    """First sentence of the first paragraph that isn't the chapter title."""
+    """First paragraph that isn't the chapter title."""
     for paragraph in (text or '').split('\n\n'):
         if paragraph.strip() and paragraph.strip().lower() != (title or '').strip().lower():
-            return first_sentence(paragraph)
+            return paragraph
     return None
+
+
+def _content_words(sentence):
+    return {w for w in re.findall(r"[a-z’']+", sentence.lower()) if len(w) > 3}
+
+
+def _hero_pair(original_paragraph, plain_paragraph):
+    """The original's first sentence and *all* of its plain-English rewrite.
+
+    Paragraphs line up one-to-one, but a rewrite often splits one long
+    sentence into two ("…a wooden building. The door was … covered with iron
+    spikes."). Keep adding plain sentences while they share more words with
+    the original's first sentence than with its second; a one-sentence
+    original keeps the whole plain paragraph."""
+    original = split_sentences(original_paragraph)
+    plain = split_sentences(plain_paragraph)
+    if not original or not plain:
+        return None
+    if len(original) == 1:
+        return original[0], ' '.join(plain)
+    first, second = _content_words(original[0]), _content_words(original[1])
+    kept = [plain[0]]
+    for sentence in plain[1:]:
+        words = _content_words(sentence)
+        if len(words & first) <= len(words & second):
+            break
+        kept.append(sentence)
+    return original[0], ' '.join(kept)
 
 
 def _hero_examples():
@@ -83,10 +115,10 @@ def _hero_examples():
         chapter = book and db.get_chapter(book['id'], chapter_number)
         if not chapter:
             continue
-        original = _opening(chapter.get('chapter_text'), chapter.get('chapter_title'))
-        plain = _opening(chapter.get('modern_english_text'), chapter.get('chapter_title'))
-        if original and plain:
-            examples.append({'original': original, 'plain': plain, 'title': book['title'],
+        pair = _hero_pair(_opening(chapter.get('chapter_text'), chapter.get('chapter_title')),
+                          _opening(chapter.get('modern_english_text'), chapter.get('chapter_title')))
+        if pair:
+            examples.append({'original': pair[0], 'plain': pair[1], 'title': book['title'],
                              'author': book['author'], 'slug': slug})
     return examples
 

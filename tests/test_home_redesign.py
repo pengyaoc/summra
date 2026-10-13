@@ -6,25 +6,51 @@ it: "Start here" (the ranked top-10 shelf, now with level and reading time),
 "Choose by level" (three links into a filtered Discover) and "How it works".
 """
 import re
+from pathlib import Path
 
 import pytest
 
-from backend.study_cues import first_sentence
+from backend.study_cues import split_sentences
 
 
-# --- first_sentence ----------------------------------------------------------
+# --- split_sentences ---------------------------------------------------------
 
-def test_first_sentence_keeps_whole_sentence_without_truncating():
+def test_split_sentences_keeps_whole_sentences_without_truncating():
     long = 'Word ' * 60 + 'end. Next.'
-    assert first_sentence(long) == ' '.join(long.split()[:-1])
+    assert split_sentences(long) == [' '.join(long.split()[:-1]), 'Next.']
 
 
-def test_first_sentence_strips_markdown_and_respects_abbreviations():
-    assert first_sentence('**Mr. Utterson** the lawyer was a man. He smiled.') == 'Mr. Utterson the lawyer was a man.'
+def test_split_sentences_strips_markdown_and_respects_abbreviations():
+    assert split_sentences('**Mr. Utterson** the lawyer was a man. He smiled.') == \
+        ['Mr. Utterson the lawyer was a man.', 'He smiled.']
 
 
-def test_first_sentence_none_for_empty():
-    assert first_sentence('') is None and first_sentence(None) is None
+def test_split_sentences_empty():
+    assert split_sentences('') == [] and split_sentences(None) == []
+
+
+# --- matching the plain-English rewrite to the original sentence ------------
+
+from backend.routes.pages import _hero_pair
+
+
+def test_pair_keeps_every_plain_sentence_a_split_long_sentence_became():
+    original = 'A crowd stood before a wooden edifice, the door of which was studded with iron spikes.'
+    plain = 'A crowd stood in front of a wooden building. The door was covered with iron spikes.'
+    assert _hero_pair(original, plain) == (original, plain)
+
+
+def test_pair_stops_where_the_original_second_sentence_starts():
+    original = 'My name being Pirrip, my infant tongue made it Pip. So I called myself Pip, and came to be called Pip.'
+    plain = 'My name was Pirrip, but as a baby I could only say Pip. So I called myself Pip, and everyone called me Pip.'
+    assert _hero_pair(original, plain) == ('My name being Pirrip, my infant tongue made it Pip.',
+                                           'My name was Pirrip, but as a baby I could only say Pip.')
+
+
+def test_pair_handles_a_one_sentence_rewrite_and_missing_text():
+    assert _hero_pair('It is a truth universally acknowledged.', 'Everyone knows.') == \
+        ('It is a truth universally acknowledged.', 'Everyone knows.')
+    assert _hero_pair('', 'Plain.') is None and _hero_pair('Original.', None) is None
 
 
 # --- home page ---------------------------------------------------------------
@@ -105,3 +131,29 @@ def test_home_content_is_in_every_page_for_in_app_navigation(client):
     body = client.get('/books').get_data(as_text=True)
     assert 'Everyone knows that a single man with a lot of money needs a wife.' in body
     assert re.search(r'level-card--easy" href="/discover\?level=easy"[^>]*>.*?1 book', body, re.S)
+
+
+# --- the curated hero examples (real content database) ------------------------
+
+REAL_DB = Path(__file__).resolve().parent.parent / 'data' / 'database.db'
+
+
+@pytest.mark.skipif(not REAL_DB.exists(), reason='needs the content database')
+def test_hero_examples_are_famous_hard_sentences(monkeypatch):
+    """Every configured example resolves, and each is the kind of sentence a
+    student actually gets stuck on: long and hard in the original, clearly
+    shorter or simpler in plain English."""
+    from backend.models import Database
+    from backend.routes import common, pages
+    monkeypatch.setattr(common, 'db', Database(str(REAL_DB)))
+    examples = pages._hero_examples()
+    assert len(examples) == len(pages.HERO_EXAMPLES) >= 5, [e['slug'] for e in examples]
+    for ex in examples:
+        words = len(ex['original'].split())
+        assert words >= 15, (ex['slug'], ex['original'])
+        assert ex['plain'] != ex['original'], ex['slug']
+    slugs = {e['slug'] for e in examples}
+    assert {'pride-and-prejudice', 'great-expectations'} <= slugs
+    assert not slugs & {'jane-eyre', 'frankenstein'}, 'openings too easy to show off a rewrite'
+    scarlet = next(e for e in examples if e['slug'] == 'the-scarlet-letter')
+    assert 'spikes' in scarlet['plain'], 'the rewrite split the sentence; both halves must be shown'

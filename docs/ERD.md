@@ -146,6 +146,10 @@ already took); cards, chapter rows and the side-by-side link have no click handl
 `resolveBookBySlug()` decodes the path segment (accented slugs). Home content (`hero_examples`,
 `level_counts`) is injected into every page by `pages.home_content` (context processor, 5-minute
 cache per DB path) because `#hero-section` is always rendered, hidden off home.
+Hero examples come from `pages.HERO_EXAMPLES` (slug, chapter): the first non-title paragraph of
+`chapter_text` and of `modern_english_text` (paragraphs align one-to-one) go through `_hero_pair`,
+which takes the original's first sentence (`study_cues.split_sentences`) and every plain sentence
+that rewrites it — a rewrite may split one long sentence into several.
 
 **Listen + player** (2026-10-13): `audio.js` keeps `listenAudioIds` (`"<bookId>:<type>"` → audio id) and
 `listenLoading`. `onListenClick(type, content)` toggles the audio element when that summary is the
