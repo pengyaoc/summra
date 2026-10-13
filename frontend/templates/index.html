@@ -592,6 +592,7 @@
                 <div class="reader-status hidden" id="reader-status" role="status"></div>
                 <div class="continuous-reader-content" id="continuous-reader-content" tabindex="-1"></div>
                 <div class="continuous-reader-footer" role="status" aria-label="Reading progress">
+                    <div class="reader-progress-track" aria-hidden="true"><span id="reader-progress-fill" style="width: 0%"></span></div>
                     <span id="continuous-reader-progress">0%</span>
                 </div>
             </section>
@@ -599,7 +600,7 @@
             <!-- Reading Settings Panel (shared between chapter and medium pages) -->
             <div class="reading-settings-panel hidden" id="reading-settings-panel">
                 <div class="reading-settings-header">
-                    <h3>Reading Settings</h3>
+                    <h3>Reading settings</h3>
                     <button class="reading-settings-close" id="reading-settings-close">✕</button>
                 </div>
 
@@ -615,7 +616,7 @@
                 </div>
 
                 <div class="reading-settings-section">
-                    <h4>Font Family</h4>
+                    <h4>Font</h4>
                     <div class="font-choices">
                         <button class="font-choice active" data-font="georgia">Aa</button>
                         <button class="font-choice" data-font="system">Aa</button>
@@ -629,7 +630,7 @@
                 </div>
 
                 <div class="reading-settings-section">
-                    <h4>Text Size</h4>
+                    <h4>Text size</h4>
                     <div class="size-control">
                         <button class="size-btn" id="decrease-size">A-</button>
                         <div class="size-slider-container">

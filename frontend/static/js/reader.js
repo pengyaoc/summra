@@ -1294,6 +1294,8 @@ export const readerMixin = {
             : 0;
         const text = document.getElementById('continuous-reader-progress');
         if (text) text.textContent = `${percentage}%`;
+        const fill = document.getElementById('reader-progress-fill');
+        if (fill) fill.style.width = `${percentage}%`;
     },
 
     setContinuousReaderStatus(message) {
