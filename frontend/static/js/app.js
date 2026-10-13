@@ -1006,6 +1006,7 @@ class SummraApp {
         const slug = book.slug || this.slugify(book.title);
         const readLabel = document.getElementById('book-read-label');
         if (readLabel) readLabel.textContent = 'Start reading';
+        document.getElementById('book-progress')?.classList.add('hidden');
         const sxsLink = document.getElementById('book-sxs-link');
         if (sxsLink) sxsLink.href = withBasePath(`/books/${slug}/read?mode=side_by_side`);
 
@@ -1623,10 +1624,7 @@ class SummraApp {
         const title = chapter.chapter_title || `Chapter ${chapter.chapter_number}`;
         row.innerHTML = `
             <span class="chapter-box-num">${chapter.chapter_number > 0 ? chapter.chapter_number : ''}</span>
-            <span class="chapter-box-body">
-                <h4 class="chapter-box-title">${this.escapeHtml(title)}</h4>
-                ${chapter.summary_excerpt ? `<span class="chapter-box-excerpt">${this.escapeHtml(chapter.summary_excerpt)}</span>` : ''}
-            </span>
+            <h4 class="chapter-box-title">${this.escapeHtml(title)}</h4>
             ${chapter.reading_time ? `<span class="chapter-box-time">${this.escapeHtml(chapter.reading_time)}</span>` : ''}
             <span class="chapter-box-check" aria-label="Read">✓</span>
         `;
@@ -1649,27 +1647,35 @@ class SummraApp {
     }
 
     // Reading state comes from the continuous reader's v2 projection: the
-    // current place in the last-used mode labels the button, and chapters
-    // before the furthest place are checked (all of them once finished).
+    // current place in the last-used mode drives the button and the progress
+    // line under it, and chapters before the furthest place are checked (all
+    // of them once finished).
     async applyBookProgress(book) {
         await window.authModule?.initAuth?.();
         const state = await window.authModule?.getReaderState?.(book.id);
         if (!state?.book || this.currentBook?.id !== book.id) return;
         const rows = [...document.querySelectorAll('#chapters-list .chapter-box')];
+        const total = this.chapters.length;
         const finished = state.book.status === 'finished';
         const modeState = state.modes?.find(item => item.mode === state.book.last_mode);
         const index = id => this.chapters.findIndex(chapter => chapter.id === Number(id));
-        const furthest = finished ? rows.length : index(modeState?.furthest_marker?.chapter_id);
-        rows.forEach((row, i) => row.classList.toggle('completed', i < furthest));
+        const read = finished ? total : Math.max(0, index(modeState?.furthest_marker?.chapter_id));
+        rows.forEach((row, i) => row.classList.toggle('completed', i < read));
 
+        const currentIndex = index(modeState?.current_marker?.chapter_id);
+        const current = this.chapters[currentIndex];
         const label = document.getElementById('book-read-label');
-        const current = this.chapters[index(modeState?.current_marker?.chapter_id)];
-        if (!label) return;
-        if (finished) {
-            label.textContent = 'Read again';
-        } else if (current) {
-            label.textContent = `Continue · ${current.chapter_title || `Chapter ${current.chapter_number}`}`;
-        }
+        const progress = document.getElementById('book-progress');
+        if (!finished && !current) return;
+        if (label) label.textContent = finished ? 'Read again' : 'Continue reading';
+        if (!progress || !total) return;
+        // Bar: how far through the book the current place is.
+        const percent = finished ? 100 : Math.round(currentIndex * 100 / total);
+        document.getElementById('book-progress-fill').style.width = `${percent}%`;
+        document.getElementById('book-progress-text').innerHTML = finished
+            ? 'Finished'
+            : `Chapter ${currentIndex + 1} of ${total} · <span class="book-progress-where">${this.escapeHtml(current.chapter_title || `Chapter ${current.chapter_number}`)}</span>`;
+        progress.classList.remove('hidden');
     }
 
     // Adapts the chapters-section header and shows a "coming soon" banner

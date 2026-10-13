@@ -672,37 +672,82 @@ body.on-chapter-page .header {
 }
 
 /* Book Detail Header */
+/* Book header: framed cover beside title, meta, actions and progress,
+   closed off from the page by a hairline. */
 .book-detail-header {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 40px;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    align-items: center;
+    gap: 2.75rem;
+    margin-bottom: 2.75rem;
+    padding: 0.5rem 0 2.75rem;
+    border-bottom: 1px solid var(--rule);
+}
+
+#book-info-cover {
+    display: block;
 }
 
 .book-detail-cover {
-    width: 120px;
+    display: block;
+    width: 100%;
     height: auto;
+    aspect-ratio: 2 / 3;
     object-fit: cover;
-    border-radius: 4px;
-    flex-shrink: 0;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(43, 38, 34, 0.12), 0 14px 32px rgba(43, 38, 34, 0.18);
 }
 
-/* Responsive book cover sizing - larger on wider screens */
-@media (min-width: 480px) {
-    .book-detail-cover {
-        width: 150px;
+.book-detail-info {
+    min-width: 0;
+}
+
+/* Phones: cover beside title, author and meta; actions and progress run
+   full width underneath. */
+@media (max-width: 767px) {
+    .book-detail-header {
+        grid-template-columns: 104px minmax(0, 1fr);
+        align-items: start;
+        gap: 0.35rem 1.1rem;
+        padding-bottom: 2rem;
     }
-}
 
-@media (min-width: 768px) {
-    .book-detail-cover {
-        width: 200px;
+    .book-detail-info {
+        display: contents;
     }
-}
 
-@media (min-width: 1024px) {
-    .book-detail-cover {
-        width: 240px;
+    #book-info-cover {
+        grid-row: 1 / span 3;
+        grid-column: 1;
+    }
+
+    .book-detail-info h2,
+    .book-author,
+    .book-meta {
+        grid-column: 2;
+    }
+
+    .book-detail-info h2 {
+        font-size: 1.5rem;
+    }
+
+    .book-author {
+        font-size: 0.95rem;
+    }
+
+    .book-meta {
+        margin-top: 0.4rem;
+        font-size: 0.85rem;
+    }
+
+    .book-actions,
+    .book-progress,
+    .plain-english-coming-soon {
+        grid-column: 1 / -1;
+    }
+
+    .book-actions {
+        margin-top: 1.1rem;
     }
 }
 
@@ -721,16 +766,18 @@ body.on-chapter-page .header {
 }
 
 .book-detail-info h2 {
-    margin-bottom: 8px;
+    margin-bottom: 0.5rem;
     color: var(--ink);
     font-family: var(--font-serif);
-    font-size: clamp(1.8rem, 4vw, 2.6rem);
-    line-height: 1.15;
+    font-size: clamp(1.6rem, 3.4vw, 2.6rem);
+    line-height: 1.12;
+    text-wrap: balance;
+    overflow-wrap: break-word;
 }
 
 .book-author {
     color: var(--ink-muted);
-    font-size: 1.1rem;
+    font-size: 1.05rem;
 }
 
 /* Meta row: level · chapters · time · Plain English */
@@ -761,26 +808,86 @@ body.on-chapter-page .header {
 .book-actions {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: stretch;
     gap: 0.75rem;
-    margin-top: 1.4rem;
+    margin-top: 1.6rem;
 }
 
-.book-actions .book-read-btn {
-    margin-top: 0;
-}
-
-.book-sxs-link {
+/* Both actions: one height, one shape */
+.book-actions .book-read-btn,
+.book-actions .book-sxs-link {
     display: inline-flex;
     align-items: center;
-    padding: 0.62rem 1rem;
+    gap: 0.55rem;
+    min-height: 48px;
+    margin-top: 0;
+    padding: 0 1.3rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.book-actions .book-sxs-link {
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink);
     text-decoration: none;
+}
+
+.book-actions .book-sxs-link:hover {
+    border-color: var(--ink-muted);
+    background: var(--paper-deep);
+}
+
+.book-actions .book-sxs-link svg {
+    color: var(--ink-muted);
 }
 
 /* Side by side is a wide-screen reading mode (see view_mode.js). */
 @media (max-width: 1023px) {
-    .book-sxs-link {
+    .book-actions .book-sxs-link {
         display: none;
+    }
+}
+
+/* Reading progress under the actions (signed-in readers) */
+.book-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    color: var(--ink-muted);
+    font-size: 0.88rem;
+}
+
+.book-progress-track {
+    flex: 0 0 140px;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: var(--rule);
+}
+
+.book-progress-track span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+}
+
+.book-progress-where {
+    color: var(--ink);
+}
+
+@media (max-width: 767px) {
+    .book-actions .book-read-btn {
+        flex: 1 1 auto;
+        justify-content: center;
+        white-space: nowrap;
+    }
+
+    .book-progress {
+        flex-wrap: wrap;
     }
 }
 
@@ -1231,7 +1338,7 @@ body.on-chapter-page .header {
     border-top: 1px solid var(--rule);
 }
 
-/* Table-of-contents row: number · title + excerpt · time · read check */
+/* Table-of-contents row: number · title · time · read check */
 .chapter-box {
     display: grid;
     grid-template-columns: 2.25rem minmax(0, 1fr) auto 1.25rem;
@@ -1270,16 +1377,6 @@ body.on-chapter-page .header {
     font-family: var(--font-serif);
     font-size: 1.05rem;
     font-weight: 600;
-}
-
-.chapter-box-excerpt {
-    display: block;
-    overflow: hidden;
-    margin-top: 0.2rem;
-    color: var(--ink-muted);
-    font-size: 0.9rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .chapter-box-time {
@@ -1867,12 +1964,6 @@ body.on-chapter-page .header {
     .chapter-detail-section > * {
         padding-left: 16px;
         padding-right: 16px;
-    }
-
-    /* Reduce book detail header gap on mobile */
-    .book-detail-header {
-        gap: 16px;
-        margin-bottom: 24px;
     }
 
     /* Reduce margins between sections */
@@ -4415,6 +4506,12 @@ body.pagination-active {
 .continuous-reader-footer { position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: .75rem; box-sizing: border-box; padding: .42rem 1rem; border-top: 1px solid var(--rule); background: var(--card-background); color: var(--ink-muted); font-size: .82rem; text-align: center; }
 .reader-progress-track { width: min(240px, 40vw); height: 3px; overflow: hidden; border-radius: 99px; background: var(--rule); }
 .reader-progress-track span { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+/* Chapter illustration under its heading; fixed height so pagination can
+   measure the page before the image loads. */
+.reader-illustration { display: flex; justify-content: center; height: min(52vh, 480px); margin: 0 0 1.5rem; }
+.reader-illustration picture { display: contents; }
+.reader-illustration img { max-width: 100%; height: 100%; object-fit: contain; border-radius: 4px; cursor: zoom-in; }
+.chapter-side-by-side .reader-illustration { grid-column: 1 / -1; }
 /* Side by side: a hairline between aligned original / plain-English rows */
 .continuous-reader-section .side-by-side-row { padding: .9rem 0; border-bottom: 1px solid var(--rule); }
 .continuous-reader-section[data-theme="dark"] { background: var(--reading-theme-dark-bg); color: var(--reading-theme-dark-text); }

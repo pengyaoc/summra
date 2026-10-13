@@ -69,7 +69,7 @@ def test_meta_row_omits_missing_level_and_plain_english(client):
 
 def test_side_by_side_link_only_with_plain_english(client):
     body = client.get('/books/plain-book').get_data(as_text=True)
-    assert re.search(r'<a class="btn-secondary book-sxs-link" id="book-sxs-link" href="/books/plain-book/read\?mode=side_by_side">Read side by side</a>', body)
+    assert re.search(r'<a class="btn-secondary book-sxs-link" id="book-sxs-link" href="/books/plain-book/read\?mode=side_by_side">(<svg.*?</svg>)?Read side by side</a>', body, re.S)
     body = client.get('/books/old-book').get_data(as_text=True)
     assert re.search(r'<a class="btn-secondary book-sxs-link hidden" id="book-sxs-link"', body)
 

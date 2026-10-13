@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from backend.study_cues import first_sentence, summary_excerpt
+from backend.study_cues import first_sentence
 
 
 # --- first_sentence ----------------------------------------------------------
@@ -25,10 +25,6 @@ def test_first_sentence_strips_markdown_and_respects_abbreviations():
 
 def test_first_sentence_none_for_empty():
     assert first_sentence('') is None and first_sentence(None) is None
-
-
-def test_summary_excerpt_still_truncates():
-    assert summary_excerpt('word ' * 100, limit=40).endswith('…')
 
 
 # --- home page ---------------------------------------------------------------

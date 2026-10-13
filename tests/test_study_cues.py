@@ -1,6 +1,6 @@
 """Study cues shown on book cards, book pages and chapter lists (redesign
 phase 2): a plain difficulty level derived from books.cefr_level, a reading
-time, and a one-line chapter summary excerpt.
+time, and .
 
 Computed server-side once so every consumer (/api/books, /api/books/<id>,
 /api/books/<id>/chapters, Discover, Categories) shows the same values.
@@ -10,7 +10,7 @@ chapter's, so chapter reading time must come from chapter_text.
 """
 import pytest
 
-from backend.study_cues import format_reading_time, level_label, reading_minutes, summary_excerpt
+from backend.study_cues import format_reading_time, level_label, reading_minutes
 
 
 # --- level_label -----------------------------------------------------------
@@ -76,32 +76,6 @@ def test_format_reading_time_is_none_without_minutes(minutes):
     assert format_reading_time(minutes) is None
 
 
-# --- summary_excerpt -------------------------------------------------------
-
-def test_excerpt_is_first_sentence_without_markdown():
-    text = ('In **Letter 1**, Walton writes from St. Petersburgh. He is full of hope.\n\n'
-            'Second paragraph.')
-    assert summary_excerpt(text) == 'In Letter 1, Walton writes from St. Petersburgh.'
-
-
-def test_excerpt_truncates_long_sentence_at_word_boundary():
-    text = 'word ' * 100
-    excerpt = summary_excerpt(text, limit=40)
-    assert excerpt.endswith('…')
-    assert len(excerpt) <= 41
-    assert not excerpt[:-1].endswith(' ')
-    assert excerpt[:-1].split() == ['word'] * len(excerpt[:-1].split())
-
-
-def test_excerpt_strips_leading_heading_marks():
-    assert summary_excerpt('## Chapter 1\nVictor begins. More.') == 'Chapter 1 Victor begins.'
-
-
-@pytest.mark.parametrize('text', [None, '', '  \n '])
-def test_excerpt_is_none_for_empty_summary(text):
-    assert summary_excerpt(text) is None
-
-
 # --- wiring into the data layer and APIs ----------------------------------
 
 @pytest.fixture
@@ -148,16 +122,17 @@ def test_api_book_detail_includes_cues(client, db):
     assert (book['level'], book['reading_minutes']) == ('Moderate', 2)
 
 
-def test_api_chapters_include_reading_time_from_text_and_excerpt(client, db):
+def test_api_chapters_include_reading_time_from_text(client, db):
     data = client.get(f'/api/books/{db.book_id}/chapters').get_json()
     chapters = {c['chapter_number']: c for c in data['sections'][0]['chapters']}
     # ~500 words of chapter text → 3 min. (The summary is 7 words, so a
     # summary-based count would give 1.)
     assert chapters[1]['reading_minutes'] == 3
     assert chapters[1]['reading_time'] == '3 min'
-    assert chapters[1]['summary_excerpt'] == 'Victor begins his tale.'
     assert chapters[2]['reading_minutes'] is None
-    assert chapters[2]['summary_excerpt'] is None
+    # The chapter list shows no summary excerpt (removed 2026-10-13: cut-off
+    # snippets that mostly restated the chapter title).
+    assert 'summary_excerpt' not in chapters[1]
     # Internal helper columns must not leak into the API.
     assert not any(k.startswith('_') for k in chapters[1])
 

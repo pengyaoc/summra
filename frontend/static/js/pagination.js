@@ -258,13 +258,13 @@ export const paginationMixin = {
                 this.pagination.containerHeight -= headersEl.offsetHeight;
             }
             // For side-by-side view: rows are the atomic blocks
-            blocks = Array.from(containerElement.querySelectorAll('.side-by-side-row'));
+            blocks = Array.from(containerElement.querySelectorAll('.side-by-side-row, figure.reader-illustration'));
             console.log('[calculatePages] Side-by-side mode, found blocks:', blocks.length,
                         'headers pulled out:', !!sxsHeadersHTML,
                         'adjusted containerHeight:', this.pagination.containerHeight);
         } else {
             // For regular views: use paragraphs and headings as blocks
-            blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol'));
+            blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol, figure.reader-illustration'));
             console.log('[calculatePages] Regular mode, found blocks:', blocks.length);
         }
 

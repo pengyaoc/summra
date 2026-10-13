@@ -83,17 +83,6 @@ def first_sentence(text):
     return _first_sentence(' '.join(paragraph.split()))
 
 
-def summary_excerpt(text, limit=160):
-    """first_sentence(), cut at a word boundary to at most `limit`
-    characters (plus "…")."""
-    sentence = first_sentence(text)
-    if sentence is None:
-        return None
-    if len(sentence) <= limit:
-        return sentence
-    return sentence[:limit].rsplit(' ', 1)[0].rstrip(',;:') + '…'
-
-
 def add_book_cues(book):
     """Add `level`, `reading_minutes`, `reading_time` and `length` to a book dict
     (in place) and return it."""
@@ -105,10 +94,8 @@ def add_book_cues(book):
 
 
 def add_chapter_cues(chapter):
-    """Turn the metadata query's private `_text_words` / `_summary_head`
-    columns into `reading_minutes` / `reading_time` / `summary_excerpt`
-    (in place)."""
+    """Turn the metadata query's private `_text_words` column into
+    `reading_minutes` / `reading_time` (in place)."""
     chapter['reading_minutes'] = reading_minutes(chapter.pop('_text_words', None))
     chapter['reading_time'] = format_reading_time(chapter['reading_minutes'])
-    chapter['summary_excerpt'] = summary_excerpt(chapter.pop('_summary_head', None))
     return chapter

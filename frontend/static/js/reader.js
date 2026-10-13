@@ -335,25 +335,9 @@ export const readerMixin = {
         // Store illustration data as instance property so it's accessible everywhere
         this.currentIllustrationData = null;
         if (chapter.illustration_url && chapter.illustration_url.trim() !== '') {
-            let illustrationUrl = chapter.illustration_url;
-            // Convert local path to URL if needed
-            if (!illustrationUrl.startsWith('http')) {
-                if (!illustrationUrl.startsWith('/static/')) {
-                    illustrationUrl = `/static/${illustrationUrl}`;
-                }
-                illustrationUrl = withBasePath(illustrationUrl);
-            }
-
-            // Generate optimized image URLs (WebP and JPG)
-            const baseUrl = illustrationUrl.replace(/\.(png|jpg|jpeg)$/i, '');
-            const webpUrl = `${baseUrl}.webp`;
-            const jpgUrl = `${baseUrl}.jpg`;
-
             // Store illustration data to be used in pagination
             this.currentIllustrationData = {
-                baseUrl,
-                webpUrl,
-                jpgUrl,
+                ...this.illustrationSources(chapter.illustration_url),
                 alt: `Illustration for ${chapterTitle}`
             };
         }
@@ -919,6 +903,37 @@ export const readerMixin = {
         return request;
     },
 
+    // WebP + JPG URLs for a stored chapter illustration path
+    // ("illustrations/1/2.jpg" or "/static/illustrations/1/2.png").
+    illustrationSources(url) {
+        let illustrationUrl = url;
+        if (!illustrationUrl.startsWith('http')) {
+            if (!illustrationUrl.startsWith('/static/')) {
+                illustrationUrl = `/static/${illustrationUrl}`;
+            }
+            illustrationUrl = withBasePath(illustrationUrl);
+        }
+        const baseUrl = illustrationUrl.replace(/\.(png|jpg|jpeg)$/i, '');
+        return { baseUrl, webpUrl: `${baseUrl}.webp`, jpgUrl: `${baseUrl}.jpg` };
+    },
+
+    // Chapter illustration shown under the chapter heading. A fixed-height
+    // figure (see .reader-illustration) so pagination can measure it before
+    // the image loads.
+    continuousIllustrationHtml(chapterId, title) {
+        const entry = this.continuousReader.manifest?.structure?.find(item =>
+            Number(item.chapter_id) === Number(chapterId) && item.illustration_url);
+        if (!entry) return '';
+        const { baseUrl, webpUrl, jpgUrl } = this.illustrationSources(entry.illustration_url);
+        const alt = this.escapeHtml(`Illustration for ${title}`);
+        return `<figure class="reader-illustration" data-reader-chapter="${Number(chapterId)}">
+            <picture>
+                <source srcset="${this.escapeHtml(webpUrl)}" type="image/webp">
+                <img src="${this.escapeHtml(jpgUrl)}" alt="${alt}" onclick="window.summraApp?.openLightbox?.('${this.escapeHtml(baseUrl)}', '${alt}')">
+            </picture>
+        </figure>`;
+    },
+
     renderContinuousSegments(segments, restoreMarker = null, chapterId = null) {
         const reader = this.continuousReader;
         const container = document.getElementById('continuous-reader-content');
@@ -931,7 +946,11 @@ export const readerMixin = {
                 reader.unitsById.set(unit.id, unit);
                 if (unit.chapter_id !== activeChapter) {
                     activeChapter = unit.chapter_id;
-                    html.push(`<h2 class="reader-chapter-heading" data-reader-chapter="${unit.chapter_id}">${this.escapeHtml(unit.chapter_title || `Chapter ${unit.chapter_number || ''}`)}</h2>`);
+                    const title = unit.chapter_title || `Chapter ${unit.chapter_number || ''}`;
+                    // Illustration first, as a frontispiece: the chapter's
+                    // opening page (findContinuousPageForChapter) then shows it.
+                    html.push(this.continuousIllustrationHtml(unit.chapter_id, title));
+                    html.push(`<h2 class="reader-chapter-heading" data-reader-chapter="${unit.chapter_id}">${this.escapeHtml(title)}</h2>`);
                 }
                 if (reader.mode === 'side_by_side') {
                     const original = unit.members.original;

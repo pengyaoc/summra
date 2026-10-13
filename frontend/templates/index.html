@@ -365,7 +365,12 @@
                                 <span id="book-read-label">Start reading</span>
                                 <span class="book-read-btn-arrow" aria-hidden="true">→</span>
                             </button>
-                            <a class="btn-secondary book-sxs-link{% if not (bm and bm.has_plain_english) %} hidden{% endif %}" id="book-sxs-link" href="{{ base_path }}/books/{{ ssr_book.slug if ssr_book else '' }}/read?mode=side_by_side">Read side by side</a>
+                            <a class="btn-secondary book-sxs-link{% if not (bm and bm.has_plain_english) %} hidden{% endif %}" id="book-sxs-link" href="{{ base_path }}/books/{{ ssr_book.slug if ssr_book else '' }}/read?mode=side_by_side"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M12 4.5v15M6.5 9h3M6.5 12h3M14.5 9h3M14.5 12h3"></path></svg>Read side by side</a>
+                        </div>
+                        {# Signed-in reading progress; filled by applyBookProgress() in app.js. #}
+                        <div class="book-progress hidden" id="book-progress">
+                            <span class="book-progress-track" aria-hidden="true"><span id="book-progress-fill" style="width: 0%"></span></span>
+                            <span class="book-progress-text" id="book-progress-text"></span>
                         </div>
                         <!-- Coming-soon banner shown when the book has no modern English translation yet. -->
                         <div class="plain-english-coming-soon hidden" id="plain-english-coming-soon" role="status">
