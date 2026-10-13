@@ -1,5 +1,6 @@
 """Study cues for book cards, book pages and chapter lists: a plain
-difficulty level, a reading time, and a one-line chapter summary excerpt.
+difficulty level and a reading time (plus the sentence splitter the home
+hero uses).
 
 Computed server-side in one place so the API, server-rendered pages and
 Discover all agree (see docs/superpowers/specs/2026-10-12-site-redesign-design.md).
@@ -62,25 +63,24 @@ def format_reading_time(minutes):
     return f'{label} hr' if halves == 2 else f'{label} hrs'
 
 
-def _first_sentence(text):
+def split_sentences(paragraph):
+    """A paragraph's sentences, without markdown, on one line each."""
+    if not paragraph or not paragraph.strip():
+        return []
+    text = re.sub(r'^\s*#+\s*', '', paragraph.strip(), flags=re.M)
+    text = ' '.join(re.sub(r'(\*\*|__|\*|_)(.+?)\1', r'\2', text).split())
+    sentences, start = [], 0
     for match in re.finditer(r'[.!?]["”’)]?(?=\s|$)', text):
         before = text[:match.start()].split()
         last_word = before[-1].lower().strip('("“‘') if before else ''
         is_initial = len(last_word) == 1 and last_word.isalpha()
         if match.group().startswith('.') and (last_word in _ABBREVIATIONS or is_initial):
             continue
-        return text[:match.end()]
-    return text
-
-
-def first_sentence(text):
-    """First sentence of the first paragraph, without markdown, untruncated."""
-    if not text or not text.strip():
-        return None
-    paragraph = text.strip().split('\n\n', 1)[0]
-    paragraph = re.sub(r'^\s*#+\s*', '', paragraph, flags=re.M)
-    paragraph = re.sub(r'(\*\*|__|\*|_)(.+?)\1', r'\2', paragraph)
-    return _first_sentence(' '.join(paragraph.split()))
+        sentences.append(text[start:match.end()].strip())
+        start = match.end()
+    if text[start:].strip():
+        sentences.append(text[start:].strip())
+    return sentences
 
 
 def add_book_cues(book):

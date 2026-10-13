@@ -4688,8 +4688,9 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     line-height: 1.45;
 }
 
-/* The reply pops in, like a message arriving. */
-.hero-sentence:not([hidden]) .hero-bubble--plain {
+/* The reply pops in, like a message arriving — only when the reader asks
+   for another example (app.js marks that example .is-new), not on load. */
+.hero-sentence.is-new .hero-bubble--plain {
     animation: hero-reply-in 0.35s ease-out 0.2s both;
 }
 
@@ -4698,7 +4699,7 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .hero-sentence:not([hidden]) .hero-bubble--plain {
+    .hero-sentence.is-new .hero-bubble--plain {
         animation: none;
     }
 }
@@ -4998,7 +4999,21 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     }
 
     .hero-bubble {
-        max-width: 88%;
+        max-width: 92%;
+        padding: 0.7rem 0.95rem;
+    }
+
+    .hero-bubble--original {
+        font-size: 0.95rem;
+        line-height: 1.45;
+    }
+
+    .hero-bubble--plain {
+        margin-top: 0.75rem;
+    }
+
+    .hero-sentence-plain {
+        font-size: 1.02rem;
     }
 
     .level-cards,

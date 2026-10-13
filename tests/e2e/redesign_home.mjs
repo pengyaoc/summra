@@ -74,6 +74,11 @@ expect("hero: the message is from the author; the reply is labelled Plain Englis
   /Austen|Dickens|Shelley|Carroll|Brontë|Doyle|Twain|Wilde|Stevenson|·/.test(desk.sender || "") && desk.replyLabel === "Plain English", JSON.stringify(desk));
 const copy = await page.evaluate(() => document.querySelector(".hero-main").textContent);
 expect("hero: friendly copy (no 'summarised' / 'prose')", !/summari[sz]ed|prose/i.test(copy), copy.replace(/\s+/g, " ").slice(0, 160));
+const replyAnim = () => page.evaluate(() => getComputedStyle([...document.querySelectorAll(".hero-sentence")]
+  .find((x) => !x.hidden).querySelector(".hero-bubble--plain")).animationName);
+expect("hero: no reply animation on first load", (await replyAnim()) === "none", await replyAnim());
+await page.click("#hero-sentence-next");
+expect("hero: the reply animates in after Show me another", (await replyAnim()) === "hero-reply-in", await replyAnim());
 const heights = [];
 const exampleCount = await page.locator(".hero-sentence").count();
 for (let i = 0; i <= exampleCount; i += 1) {

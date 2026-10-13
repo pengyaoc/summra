@@ -1871,7 +1871,10 @@ class SummraApp {
         next.addEventListener('click', () => {
             const pairs = [...document.querySelectorAll('#hero-examples .hero-sentence')];
             const current = pairs.findIndex(pair => !pair.hidden);
-            pairs.forEach((pair, i) => { pair.hidden = i !== (current + 1) % pairs.length; });
+            pairs.forEach((pair, i) => {
+                pair.hidden = i !== (current + 1) % pairs.length;
+                pair.classList.toggle('is-new', !pair.hidden);
+            });
         });
     }
 
