@@ -33,9 +33,9 @@ try {
   // Search still works on home: catalog loads on demand.
   catalogFetches = 0;
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
-  await page.click('#hero-search-input');
+  await page.click('#header-search-input');
   await page.keyboard.type('frank');
-  await page.waitForSelector('#hero-search-results .hero-search-result-item', { timeout: 5000 })
+  await page.waitForSelector('#header-search-results .hero-search-result-item', { timeout: 5000 })
     .catch(() => fail('search returned no results after typing'));
   console.log(`search: ${catalogFetches} catalog fetch(es); results shown`);
   if (catalogFetches !== 1) fail(`search fetched /api/books ${catalogFetches}x; expected exactly 1`);

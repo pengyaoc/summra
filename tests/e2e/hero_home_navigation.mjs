@@ -37,7 +37,7 @@ async function run() {
     return {
       exists: !!el,
       hidden: el ? el.classList.contains('hidden') : null,
-      hasSearchInput: !!document.getElementById('hero-search-input'),
+      hasSearchInput: !!document.getElementById('header-search-input'),
       childCount: el ? el.children.length : 0,
     };
   });
@@ -47,7 +47,7 @@ async function run() {
     process.exit(1);
   }
   if (!subpageHero.hasSearchInput) {
-    console.error('FAIL: hero-search-input must exist on page load (for HeroSearch() to wire up at bootstrap)');
+    console.error('FAIL: header-search-input must exist on page load (the search HeroSearch wires up at bootstrap)');
     process.exit(1);
   }
 
@@ -64,7 +64,7 @@ async function run() {
     return {
       hidden: el.classList.contains('hidden'),
       titleText: title ? title.textContent.trim() : null,
-      hasSearchInput: !!document.getElementById('hero-search-input'),
+      hasSearchInput: !!document.getElementById('header-search-input'),
     };
   });
   console.log('Post-navigation home hero state:', homeHero);
@@ -78,7 +78,7 @@ async function run() {
     process.exit(1);
   }
   if (!homeHero.hasSearchInput) {
-    console.error('FAIL: hero-search-input missing after navigating home (would mean HeroSearch lost its element reference)');
+    console.error('FAIL: header-search-input missing after navigating home (would mean HeroSearch lost its element reference)');
     process.exit(1);
   }
 

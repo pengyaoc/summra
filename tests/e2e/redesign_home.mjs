@@ -39,6 +39,34 @@ const layout = await page.evaluate(() => ({ overflow: document.documentElement.s
 expect("desktop: no horizontal scroll", layout.overflow <= 0, `${layout.overflow}px`);
 expect("desktop: home content lines up with the header", Math.abs(layout.titleLeft - layout.logoLeft) < 60, JSON.stringify(layout));
 expect("hero: serif title", /serif/.test(hero.titleFont) && !/sans-serif$/.test(hero.titleFont), hero.titleFont);
+// Option B "open book": a dark, full-width band with the sentence pair as a book spread.
+const lum = (rgb) => { const [r, g, b] = rgb.match(/\d+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const band = await page.evaluate(() => {
+  const h = document.querySelector(".hero-main"), r = h.getBoundingClientRect();
+  const sub = document.querySelector(".hero-banner-subtitle");
+  return { bg: getComputedStyle(h).backgroundColor, title: getComputedStyle(document.querySelector(".hero-banner-title")).color,
+    width: Math.round(r.width), vw: document.documentElement.clientWidth, subFont: getComputedStyle(sub).fontFamily,
+    heroSearch: !!document.getElementById("hero-search-input"),
+    searchFields: [...document.querySelectorAll('input[id$="search-input"]')].filter((i) => i.offsetParent).length };
+});
+const ratio = (lum(band.title) + 0.05) / (lum(band.bg) + 0.05);
+expect("hero: dark band with high-contrast title", lum(band.bg) < 0.05 && ratio >= 7, `${band.bg} / ${band.title} → ${ratio.toFixed(1)}:1`);
+expect("hero: band spans the full window width", Math.abs(band.width - band.vw) <= 1, JSON.stringify(band));
+expect("hero: tagline in the serif", /serif/.test(band.subFont) && !/sans-serif$/.test(band.subFont), band.subFont);
+expect("hero: one search field on screen (header only)", !band.heroSearch && band.searchFields === 1, JSON.stringify(band));
+const spread = await page.evaluate(() => {
+  const f = [...document.querySelectorAll(".hero-sentence")].find((x) => !x.hidden);
+  const o = f.querySelector(".hero-page--original").getBoundingClientRect(), p = f.querySelector(".hero-page--plain").getBoundingClientRect();
+  return { oRight: Math.round(o.right), pLeft: Math.round(p.left), oTop: Math.round(o.top), pTop: Math.round(p.top) };
+});
+expect("hero: original and plain English face each other as two pages", spread.oRight <= spread.pLeft + 1 && Math.abs(spread.oTop - spread.pTop) < 4, JSON.stringify(spread));
+const heights = [];
+const exampleCount = await page.locator(".hero-sentence").count();
+for (let i = 0; i <= exampleCount; i += 1) {
+  heights.push(await page.evaluate(() => Math.round(document.querySelector(".hero-main").getBoundingClientRect().height)));
+  await page.click("#hero-sentence-next");
+}
+expect("hero: height stays put while turning through examples", new Set(heights).size === 1, JSON.stringify(heights));
 const visiblePair = () => page.evaluate(() => {
   const f = [...document.querySelectorAll(".hero-sentence")].find((x) => !x.hidden);
   return f && { original: f.querySelector(".hero-sentence-original").textContent.trim(),
@@ -117,6 +145,12 @@ await mobile.route(/\/auth\/check$/, (r) => r.fulfill({ json: { authenticated: f
 const mp = await mobile.newPage();
 await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
 expect("mobile: no horizontal scroll", (await mp.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);
+const mSpread = await mp.evaluate(() => {
+  const f = [...document.querySelectorAll(".hero-sentence")].find((x) => !x.hidden);
+  return { oBottom: Math.round(f.querySelector(".hero-page--original").getBoundingClientRect().bottom),
+    pTop: Math.round(f.querySelector(".hero-page--plain").getBoundingClientRect().top) };
+});
+expect("mobile: book pages stack (original above plain English)", mSpread.pTop >= mSpread.oBottom, JSON.stringify(mSpread));
 await mobile.close();
 
 // Signed-in reader with a book in progress sees Continue reading
