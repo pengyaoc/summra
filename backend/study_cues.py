@@ -73,16 +73,22 @@ def _first_sentence(text):
     return text
 
 
-def summary_excerpt(text, limit=160):
-    """First sentence of the summary's first paragraph, without markdown,
-    cut at a word boundary to at most `limit` characters (plus "…")."""
+def first_sentence(text):
+    """First sentence of the first paragraph, without markdown, untruncated."""
     if not text or not text.strip():
         return None
     paragraph = text.strip().split('\n\n', 1)[0]
     paragraph = re.sub(r'^\s*#+\s*', '', paragraph, flags=re.M)
     paragraph = re.sub(r'(\*\*|__|\*|_)(.+?)\1', r'\2', paragraph)
-    paragraph = ' '.join(paragraph.split())
-    sentence = _first_sentence(paragraph)
+    return _first_sentence(' '.join(paragraph.split()))
+
+
+def summary_excerpt(text, limit=160):
+    """first_sentence(), cut at a word boundary to at most `limit`
+    characters (plus "…")."""
+    sentence = first_sentence(text)
+    if sentence is None:
+        return None
     if len(sentence) <= limit:
         return sentence
     return sentence[:limit].rsplit(' ', 1)[0].rstrip(',;:') + '…'

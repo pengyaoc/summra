@@ -646,21 +646,10 @@ export const readerMixin = {
         }
     },
 
-    async showLibrary() {
-        this.continuousReader = { active: false };
-        this.clearPagination();
-        this.showOnlySections('library-section');
-        // On a direct Library load, routing can begin before the async auth
-        // probe has completed. Wait for the shared readiness promise before
-        // choosing between the authenticated projection and device cache.
-        await window.authModule?.initAuth?.();
-        document.getElementById('library-nav-btn')?.classList.toggle('hidden', !window.authModule?.currentUser?.());
-        const cards = await window.authModule?.getLibrary?.();
-        const continueEl = document.getElementById('continue-reading-cards');
-        const finishedEl = document.getElementById('finished-cards');
-        const emptyEl = document.getElementById('library-empty');
-        if (!cards || !continueEl || !finishedEl) return;
-        const render = (book, action) => {
+    // Library progress cards (Library page and the home "Continue reading"
+    // row). Listeners are scoped to `container` so two renders don't stack.
+    renderLibraryCards(container, books, action) {
+        container.innerHTML = books.map(book => {
             const cover = this.bookCoverHtml(book);
             const chapter = book.current_chapter?.chapter_title || (book.current_chapter ? `Chapter ${book.current_chapter.chapter_number}` : 'Beginning');
             const percentage = Math.max(0, Math.min(100, Number(book.furthest_percentage) || 0));
@@ -679,19 +668,18 @@ export const readerMixin = {
                     <p class="library-card-mode">${this.escapeHtml(mode)}</p>
                 </div>
             </article>`;
+        }).join('');
+        const findBook = async id => {
+            await this.ensureBooksLoaded();
+            return this.allBooks.find(item => item.id === Number(id));
         };
-        continueEl.innerHTML = cards.continue_reading.map(book => render(book, 'Continue')).join('');
-        finishedEl.innerHTML = cards.finished.map(book => render(book, 'Read again')).join('');
-        emptyEl?.classList.toggle('hidden', cards.continue_reading.length + cards.finished.length > 0);
-        document.getElementById('continue-reading-shelf')?.classList.toggle('hidden', !cards.continue_reading.length);
-        document.getElementById('finished-shelf')?.classList.toggle('hidden', !cards.finished.length);
-        document.querySelectorAll('[data-reader-book]').forEach(card => card.addEventListener('click', () => {
-            const book = this.allBooks.find(item => item.id === Number(card.dataset.readerBook));
+        container.querySelectorAll('[data-reader-book]').forEach(card => card.addEventListener('click', async () => {
+            const book = await findBook(card.dataset.readerBook);
             if (book) this.selectBook(book);
         }));
-        document.querySelectorAll('[data-library-read]').forEach(button => button.addEventListener('click', async event => {
+        container.querySelectorAll('[data-library-read]').forEach(button => button.addEventListener('click', async event => {
             event.stopPropagation();
-            const book = this.allBooks.find(item => item.id === Number(button.dataset.libraryRead));
+            const book = await findBook(button.dataset.libraryRead);
             if (!book) return;
             const readerPath = withBasePath(`/books/${book.slug || this.slugify(book.title)}/read`);
             if (window.location.pathname !== readerPath) {
@@ -699,11 +687,32 @@ export const readerMixin = {
             }
             await this.showContinuousReader(book);
         }));
-        document.querySelectorAll('[data-reader-unfinish]').forEach(button => button.addEventListener('click', async event => {
+        container.querySelectorAll('[data-reader-unfinish]').forEach(button => button.addEventListener('click', async event => {
             event.stopPropagation();
             await this.markReaderBookUnfinished(Number(button.dataset.readerUnfinish));
             await this.showLibrary();
         }));
+    },
+
+    async showLibrary() {
+        this.continuousReader = { active: false };
+        this.clearPagination();
+        this.showOnlySections('library-section');
+        // On a direct Library load, routing can begin before the async auth
+        // probe has completed. Wait for the shared readiness promise before
+        // choosing between the authenticated projection and device cache.
+        await window.authModule?.initAuth?.();
+        document.getElementById('library-nav-btn')?.classList.toggle('hidden', !window.authModule?.currentUser?.());
+        const cards = await window.authModule?.getLibrary?.();
+        const continueEl = document.getElementById('continue-reading-cards');
+        const finishedEl = document.getElementById('finished-cards');
+        const emptyEl = document.getElementById('library-empty');
+        if (!cards || !continueEl || !finishedEl) return;
+        this.renderLibraryCards(continueEl, cards.continue_reading, 'Continue');
+        this.renderLibraryCards(finishedEl, cards.finished, 'Read again');
+        emptyEl?.classList.toggle('hidden', cards.continue_reading.length + cards.finished.length > 0);
+        document.getElementById('continue-reading-shelf')?.classList.toggle('hidden', !cards.continue_reading.length);
+        document.getElementById('finished-shelf')?.classList.toggle('hidden', !cards.finished.length);
         this.updatePageTitle('Your Library | Summra');
     },
 

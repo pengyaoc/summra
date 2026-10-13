@@ -67,6 +67,24 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Tests: `tests/test_book_page_redesign.py` (8) and `tests/e2e/redesign_book_page.mjs` (17, mocks `/auth/check` and `/progress/v2/books/30` for the signed-in case), both red first; the e2e also passes on the prod bundle. pytest 619 passed; e2e suite green (6 pre-existing failures excluded). The e2e caught one real bug (author section hidden by a stale inline style) and one test bug of mine (hidden sections measured at y=0).
 - After screenshots: `docs/redesign/after/phase5/`.
 
+### Phase 6 — home page + header search (DONE)
+
+- Hero (paper, no cover wall): serif "Read the classics in plain English.", search, "Find your next classic", and a real original → plain-English sentence pair from `HERO_EXAMPLES` in `backend/routes/pages.py` (Pride and Prejudice, Jane Eyre, Frankenstein, Great Expectations ch. 1 — first sentences that line up 1:1; books without a rewrite are skipped). "Another example →" cycles them (`wireHeroExamples`). New `study_cues.first_sentence()`; `summary_excerpt()` now builds on it.
+- Sections: Continue reading (signed in, first 3 of `/library` continue_reading via the shared `renderLibraryCards`, extracted from `showLibrary` and now container-scoped), Start here (top-10 shelf now uses the `book_card` macro / `createBookCard` with `className: 'top-10-book-card'` + small "No. N" badge; keeps `.top-10-rank-number`), Choose by level (three cards → `/discover?level=…`, counts from new `Database.count_books_by_cefr()`), How it works (three steps + a side-by-side snippet).
+- Home content (`hero_examples`, `level_counts`) comes from an `app_context_processor` with a 5-minute per-DB cache, because `#hero-section` is rendered (hidden) on every page for in-app navigation. Hero is now also hidden on server-rendered `/discover` (type was missing from the list).
+- Header search: magnifier in the header opens a search box on every page; `HeroSearch` takes element ids and runs twice (hero + header). Fixed in passing: result covers used a nonexistent `book.cover_image` field (every cover was broken/hidden), and the typed query was inserted unescaped (no-results message and highlight) — now escaped, regex-safe.
+- **Routing fixes found by the new tests:**
+  - The delegated `a[href^="/"]` handler ignored modifier/middle clicks and `defaultPrevented`, so Cmd-click on any card navigated the current tab, and cards that also had their own click handler loaded twice. It now skips those; cards, chapter rows and the side-by-side link have no click handlers of their own anymore — one routing path for every real link. `[data-route]` handler removed (only my new links used it, and it double-routed).
+  - `resolveBookBySlug` compared the percent-encoded path segment to the decoded slug, so `/books/louise-de-la-vallière` never hydrated (no summary/chapters) — also broken on main. Now decodes.
+  - Top-10 arrows could stay disabled after returning home (scroll event while hidden); `updateTop10Buttons()` re-runs each time home is shown. `top10_ssr.mjs` was intermittently failing on this; 6/6 after.
+  - `#hero-section` kept a `width: 100vw` full-bleed rule → 20px horizontal scroll on desktop and content flush left. Removed.
+  - Discover's client fill re-checks after its `await` so two quick navigations can't double-fill (was 180 cards / 90 unique).
+- CSS: a rule-aware pruner removed 105 old home rules (hero banners, cover wall, learn-* clipart grid, big rank numerals, gradient band); new `.home-*`, `.hero-sentence*`, `.level-card*`, `.how-*`, `.header-search*` rules; search box restyled on tokens. Phone header hides the wordmark and Categories (footer has it) so Library/Discover/Books fit.
+- Test edited (flagged): `tests/test_response_compression.py::test_html_is_gzipped` used the old heading text "Where Most Readers" as its marker; switched to the structural `id="hero-section"` — the gzip behaviour it checks is unchanged.
+- Left in place: `frontend/static/images/{infographic,chapter_view,summary,library_view}.{jpg,webp}` (~940 KB) are now unreferenced; `renderTop10CarouselInContainer` in app.js was already unused before the redesign.
+- Tests: `tests/test_home_redesign.py` (10) and `tests/e2e/redesign_home.mjs` (20), red first; `redesign_cards.mjs` +1 (accented direct load). pytest 629 passed; e2e suite green (same 6 pre-existing failures excluded); redesign tests + top10_ssr also pass on the prod bundle.
+- After screenshots: `docs/redesign/after/phase6/`.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE

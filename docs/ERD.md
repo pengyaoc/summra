@@ -141,6 +141,13 @@ box with the title in serif behind a lazy `<picture>` — which Library cards in
 Cover URL normalisation lives in `coverSources(url)`, shared with `getImageHtml`. Each card reads
 `level` and `reading_time` from the API (`format_reading_time` in `backend/study_cues.py`).
 
+**Routing** (redesign phase 6): every in-app link is a real `<a href>` handled only by the delegated
+click handler in `setupRouting()` (which skips modified/middle clicks and clicks another handler
+already took); cards, chapter rows and the side-by-side link have no click handlers of their own.
+`resolveBookBySlug()` decodes the path segment (accented slugs). Home content (`hero_examples`,
+`level_counts`) is injected into every page by `pages.home_content` (context processor, 5-minute
+cache per DB path) because `#hero-section` is always rendered, hidden off home.
+
 ---
 
 ## Database Schema & ERD

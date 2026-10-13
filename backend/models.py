@@ -557,11 +557,11 @@ class Database:
         cursor = conn.cursor()
         placeholders = ','.join('?' * len(gutenberg_ids))
         cursor.execute(
-            f'SELECT id, title, gutenberg_id, cover_image_url, slug FROM books '
+            f'SELECT id, title, author, gutenberg_id, cover_image_url, slug, word_count, cefr_level FROM books '
             f'WHERE gutenberg_id IN ({placeholders})',
             list(gutenberg_ids),
         )
-        books = [dict(row) for row in cursor.fetchall()]
+        books = [add_book_cues(dict(row)) for row in cursor.fetchall()]
         conn.close()
         return books
 
@@ -723,6 +723,15 @@ class Database:
         conn.close()
 
         return [add_chapter_cues(dict(row)) for row in rows]
+
+    def count_books_by_cefr(self) -> Dict:
+        """{cefr_level: number of books} for books with a slug (NULL level included)."""
+        conn = self.get_connection()
+        rows = conn.execute(
+            'SELECT cefr_level, COUNT(*) FROM books WHERE slug IS NOT NULL GROUP BY cefr_level'
+        ).fetchall()
+        conn.close()
+        return {row[0]: row[1] for row in rows}
 
     def count_chapters(self, book_id: int) -> int:
         """Number of chapters in a book (for the book page's meta row)."""
