@@ -39,7 +39,7 @@ Tokens on `:root` in `style.css` (replace the current ad-hoc set; alias old name
 3. **Discover** — one filterable grid instead of carousel rows: level chips (All/Easy/Moderate/Challenging) + length chips (Short/Medium/Long by word_count) + sort. Server-render the first grid to kill the blank state; fix the 404.
 4. **Books / Categories / Author / Library** — share one book-card component (cover, title, author, level tag, reading time) in a uniform grid; Categories keeps shelves but uses the same card.
 5. **Book page** — two-column header: cover | title, author, meta row (level · N chapters · ~X hrs · "Plain English" badge when modern text exists), primary "Start reading" / "Continue ch. N", secondary "Read side by side". Below: About this book (short summary, expand) → Chapters as a table of contents (number, title, one-line summary excerpt, minutes, read checkmark from progress) → guides (characters/timeline/themes) as cards → About the author (moved down from above the summary).
-6. **Reader** — keep layout; restyle header to: back · book title / chapter · segmented control (Plain English / Original / Side by side; Summary moves into the chapter menu) · settings. Paper theme uses new tokens; oxblood thin progress bar; side-by-side rows get a hairline between aligned paragraphs.
+6. **Reader** — based on the continuous reader on `main` (not prod's older chapter view). Keep its structure: header = back · chapter / book title · contents · reading settings, and the reading mode (Summary / Original / Plain English / Side-by-Side) stays inside the reading settings panel — no mode toggle in the header (user decision, 2026-10-12). Restyle only: header and panels on the new tokens, paper theme, oxblood progress, side-by-side rows get a hairline between aligned paragraphs.
 
 ## Implementation phases (each = own PR-sized commit, worktree per CLAUDE.md)
 
@@ -52,7 +52,7 @@ Tokens on `:root` in `style.css` (replace the current ad-hoc set; alias old name
 4. **Discover** filter grid (SSR first page, client filtering on catalog already fetched once — see `tests/e2e/catalog_fetch_once.mjs`).
 5. **Book page** header + TOC.
 6. **Home** hero/sentence pair + shelves; remove cover-wall CSS/assets references.
-7. **Reader** header + theme token pass.
+7. **Reader** restyle (header, contents and settings panels, paper theme) — modes stay in reading settings.
 8. **Build + deploy** — `npm run build`, `npm run build:check`; deploy per CLAUDE.md (templates/static need no restart; backend helper change does → restart).
 
 ## Tests (TDD, failing first)
