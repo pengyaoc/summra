@@ -86,9 +86,8 @@ expect("modifier-click: opens a new tab", !!popup);
 expect("modifier-click: current page stays put", page.url() === before, page.url());
 if (popup) await popup.close();
 
-// Header search from a non-home page
+// Header search from a non-home page (an always-visible field on desktop)
 await page.goto(`${BASE}/books`, { waitUntil: "networkidle" });
-await page.click("#header-search-toggle");
 await page.fill("#header-search-input", "franken");
 await page.waitForSelector("#header-search-results .hero-search-result-item");
 const result = await page.evaluate(() => {
@@ -107,7 +106,6 @@ expect("header search: Enter opens the book", true);
 
 // Search escapes what you type
 await page.goto(`${BASE}/books`, { waitUntil: "networkidle" });
-await page.click("#header-search-toggle");
 await page.fill("#header-search-input", "<img src=x onerror=window.__xss=1>zz");
 await page.waitForSelector("#header-search-results .hero-search-no-results");
 expect("search: query is escaped", (await page.evaluate(() => window.__xss)) === undefined

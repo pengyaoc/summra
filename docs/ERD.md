@@ -147,6 +147,16 @@ already took); cards, chapter rows and the side-by-side link have no click handl
 `level_counts`) is injected into every page by `pages.home_content` (context processor, 5-minute
 cache per DB path) because `#hero-section` is always rendered, hidden off home.
 
+**Listen + player** (2026-10-13): `audio.js` keeps `listenAudioIds` (`"<bookId>:<type>"` → audio id) and
+`listenLoading`. `onListenClick(type, content)` toggles the audio element when that summary is the
+one loaded (`isListenLoaded`), else calls `generateTTS`. `renderListenButton()` draws every Listen
+button — the book page's `#active-summary-tts-button` (type follows the active summary tab) and any
+`[data-listen-type]` button — as Listen / Preparing… / Pause / Resume; the audio element's
+play/pause/emptied/ended events re-render it and the player's play/pause icon
+(`renderPlayerPlayPause`), so state stays right whichever control was used. `playNextChunk`
+ignores `AbortError` from `play()` (a pause before playback starts). Header search and account
+styles live with the header search block in `style.css`; `--radius-control` is the shared button radius.
+
 ---
 
 ## Database Schema & ERD

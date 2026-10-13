@@ -1544,8 +1544,10 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 Full design spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`.
 - **Look:** warm paper background, serif headings that match the reader, a single oxblood accent. No gradients, no web fonts.
 - **Lead with the product:** the home page shows an original sentence next to its plain-English rewrite before anything else.
-- **Study cues:** every book card and book page shows a difficulty level (Easy / Moderate / Challenging, from CEFR) and a reading time; chapter lists show per-chapter minutes, a one-line summary and read state.
+- **Study cues:** every book card and book page shows a difficulty level (Easy / Moderate / Challenging, from CEFR) and a reading time; chapter lists show per-chapter minutes and read state.
 - **Pages:** home (sentence pair hero, "Start here" shelf, choose by level, how it works), Discover (one filterable grid by level and length), shared book card on Books / Categories / Author / Library, book page (cover + meta + primary CTA, then about, chapters table of contents, guides, author), reader (same layout, tidier header, paper theme).
+- **Header:** search is a visible field on wide screens and a magnifier that opens a full-width bar on phones; signed-in readers see a round account button with their initial, opening an account card (email, books in progress/finished, link to Library).
+- **Summary on the book page:** a Short/Full switch showing each summary's reading time; Short expands in place (Read more / Show less), Full links to the full-summary page. One Listen button per summary shows Listen, Preparing…, Pause or Resume and pauses/resumes rather than restarting; a slim player bar at the bottom has play/pause, stop and a progress bar.
 - **Acceptance:** before/after screenshots for every page at desktop and mobile widths (`docs/redesign/`); no regressions in the e2e suite or first-paint performance.
 
 ## Open Questions

@@ -174,6 +174,8 @@ function setupAuthEventListeners() {
     document.getElementById('user-account-btn')?.addEventListener('click', showUserModal);
     document.getElementById('user-modal-close')?.addEventListener('click', hideUserModal);
     document.getElementById('user-modal-overlay')?.addEventListener('click', hideUserModal);
+    // The router opens the library; the modal just needs to get out of the way.
+    document.getElementById('account-library-link')?.addEventListener('click', hideUserModal);
 }
 
 async function showUserModal() {
@@ -212,7 +214,13 @@ function updateAuthUI() {
     const account = document.getElementById('user-account-btn');
     const name = document.getElementById('header-user-name');
     if (account && name) {
-        name.textContent = currentUser?.email || 'Account';
+        const email = currentUser?.email || '';
+        name.textContent = email || 'Account';
+        account.setAttribute('aria-label', email ? `Account (${email})` : 'Account');
+        account.title = email || 'Account';
+        // Avatar: the email's first letter; the person icon stays otherwise.
+        const avatar = document.getElementById('account-avatar');
+        if (avatar && email) avatar.textContent = email[0].toUpperCase();
         account.classList.toggle('hidden', !currentUser);
     }
     const signin = document.getElementById('footer-signin-link');

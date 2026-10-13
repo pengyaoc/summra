@@ -16,14 +16,21 @@ export const audioMixin = {
         playPauseBtn.addEventListener('click', () => {
             if (persistentAudio.paused) {
                 persistentAudio.play();
-                playPauseBtn.textContent = '⏸';
                 this.currentPlayback.isPlaying = true;
             } else {
                 persistentAudio.pause();
-                playPauseBtn.textContent = '▶';
                 this.currentPlayback.isPlaying = false;
             }
         });
+
+        // The player's play/pause icon and the summary's Listen button both
+        // follow the audio element, wherever playback was started or paused.
+        const syncControls = () => {
+            this.renderPlayerPlayPause(!persistentAudio.paused);
+            this.renderListenButton();
+        };
+        ['play', 'pause', 'emptied', 'ended'].forEach(event => persistentAudio.addEventListener(event, syncControls));
+        this.renderPlayerPlayPause(false);
 
         stopBtn.addEventListener('click', () => {
             this.stopPlayback();
@@ -53,6 +60,16 @@ export const audioMixin = {
         });
     },
 
+    renderPlayerPlayPause(playing) {
+        const button = document.getElementById('player-play-pause');
+        if (!button) return;
+        button.innerHTML = playing
+            ? '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>';
+        button.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+        button.title = playing ? 'Pause' : 'Play';
+    },
+
     formatTime(seconds) {
         if (isNaN(seconds)) return '0:00';
         const mins = Math.floor(seconds / 60);
@@ -63,7 +80,6 @@ export const audioMixin = {
     async stopPlayback() {
         const persistentAudio = document.getElementById('persistent-audio-element');
         const persistentPlayer = document.getElementById('persistent-player');
-        const playPauseBtn = document.getElementById('player-play-pause');
 
         persistentAudio.pause();
         persistentAudio.currentTime = 0;
@@ -81,7 +97,8 @@ export const audioMixin = {
         };
 
         persistentPlayer.classList.add('hidden');
-        playPauseBtn.textContent = '▶';
+        this.renderPlayerPlayPause(false);
+        this.renderListenButton();
 
         try {
             await fetch(`${this.apiBase}/tts/stop`, {
@@ -99,8 +116,6 @@ export const audioMixin = {
         if (this.currentPlayback.currentChunk < this.currentPlayback.audioUrls.length) {
             await this.playNextChunk();
         } else {
-            const playPauseBtn = document.getElementById('player-play-pause');
-            playPauseBtn.textContent = '▶';
             this.currentPlayback.isPlaying = false;
 
             const audioIdToCleanup = this.currentPlayback.audioId;
@@ -139,10 +154,11 @@ export const audioMixin = {
 
         try {
             await persistentAudio.play();
-            const playPauseBtn = document.getElementById('player-play-pause');
-            playPauseBtn.textContent = '⏸';
             this.currentPlayback.isPlaying = true;
         } catch (error) {
+            // A pause (or a new source) before playback starts rejects
+            // play() with AbortError; that's the reader's choice, not a failure.
+            if (error.name === 'AbortError') return;
             console.error('Error playing chunk:', error);
             alert('Failed to play audio chunk.');
             await this.stopPlayback();
@@ -173,32 +189,69 @@ export const audioMixin = {
         const tabName = activeTab.dataset.tab;
 
         // Update button based on active tab
-        if (tabName === '500-word') {
-            if (this.conciseSummaryHasAudio) {
-                ttsBtn.classList.remove('hidden');
-                ttsBtn.onclick = () => this.generateTTS(this.conciseSummaryContent, 'concise', ttsBtn);
-            } else {
-                ttsBtn.classList.add('hidden');
-            }
-        } else if (tabName === '2000-word') {
-            if (this.mediumSummaryHasAudio) {
-                ttsBtn.classList.remove('hidden');
-                ttsBtn.onclick = () => this.generateTTS(this.mediumSummaryContent, 'medium', ttsBtn);
-            } else {
-                ttsBtn.classList.add('hidden');
-            }
-        }
+        const type = tabName === '2000-word' ? 'medium' : 'concise';
+        const hasAudio = type === 'medium' ? this.mediumSummaryHasAudio : this.conciseSummaryHasAudio;
+        const content = type === 'medium' ? this.mediumSummaryContent : this.conciseSummaryContent;
+        ttsBtn.classList.toggle('hidden', !hasAudio);
+        ttsBtn.onclick = () => this.onListenClick(type, content);
+        this.renderListenButton();
     },
 
-    async generateTTS(text, type, buttonElement) {
+    // Listen toggles the summary's audio if it's already loaded in the
+    // player; otherwise it starts it.
+    onListenClick(type, content) {
+        const audio = document.getElementById('persistent-audio-element');
+        if (this.isListenLoaded(type)) {
+            if (audio.paused) audio.play(); else audio.pause();
+            return;
+        }
+        this.generateTTS(content, type);
+    },
+
+    isListenLoaded(type) {
+        const id = this.listenAudioIds?.[`${this.currentBook?.id}:${type}`];
+        return !!id && this.currentPlayback?.audioId === id;
+    },
+
+    // Listen → Preparing… → Pause / Resume. The book page's button follows
+    // the summary tab on screen; others carry data-listen-type.
+    renderListenButton() {
+        const summaryButton = document.getElementById('active-summary-tts-button');
+        const summaryType = document.querySelector('.summary-tab.active')?.dataset.tab === '2000-word' ? 'medium' : 'concise';
+        if (summaryButton) this.renderListenButtonState(summaryButton, summaryType);
+        document.querySelectorAll('[data-listen-type]').forEach(button => {
+            this.renderListenButtonState(button, button.dataset.listenType);
+        });
+    },
+
+    renderListenButtonState(button, type) {
+        const audio = document.getElementById('persistent-audio-element');
+        const icons = {
+            play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>',
+            pause: '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/>',
+        };
+        let state = 'idle';
+        if (this.listenLoading === type) state = 'loading';
+        else if (this.isListenLoaded(type)) state = audio && !audio.paused ? 'playing' : 'paused';
+        const label = { idle: 'Listen', loading: 'Preparing…', playing: 'Pause', paused: 'Resume' }[state];
+        const icon = state === 'loading'
+            ? '<span class="listen-spinner" aria-hidden="true"></span>'
+            : `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">${state === 'playing' ? icons.pause : icons.play}</svg>`;
+        button.innerHTML = `${icon}<span>${label}</span>`;
+        button.disabled = state === 'loading';
+        button.classList.toggle('is-playing', state === 'playing');
+        button.setAttribute('aria-pressed', String(state === 'playing'));
+    },
+
+    async generateTTS(text, type) {
         if (!text) {
             alert('No text available');
             return;
         }
 
         const cleanedText = this.cleanTextForTTS(text);
-        buttonElement.disabled = true;
-        buttonElement.textContent = '🔄 Loading...';
+        this.listenLoading = type;
+        this.renderListenButton();
 
         try {
             const audioId = `book_${this.currentBook.id}_${type}`;
@@ -217,6 +270,7 @@ export const audioMixin = {
             const data = await response.json();
 
             if (data.success) {
+                this.listenAudioIds = { ...this.listenAudioIds, [`${this.currentBook.id}:${type}`]: data.audio_id };
                 const audioUrls = data.streaming && data.audio_urls ? data.audio_urls : [data.audio_url];
                 // Use better labels for lock screen display: "Quick Summary" or "Full Summary"
                 const displayType = type === 'concise' ? 'Quick Summary' : 'Full Summary';
@@ -227,18 +281,15 @@ export const audioMixin = {
                     data.audio_id,
                     this.currentBook.author
                 );
-                buttonElement.disabled = false;
-                buttonElement.textContent = '🔊 Listen';
             } else {
                 alert(`Error generating audio: ${data.error}`);
-                buttonElement.textContent = '🔊 Listen';
-                buttonElement.disabled = false;
             }
         } catch (error) {
             console.error('Error generating TTS:', error);
             alert('Error generating audio. Please try again.');
-            buttonElement.textContent = '🔊 Listen';
-            buttonElement.disabled = false;
+        } finally {
+            this.listenLoading = null;
+            this.renderListenButton();
         }
     },
 
@@ -308,9 +359,9 @@ export const audioMixin = {
             const chapterTitle = this.currentPlayback.chapterTitle || 'Summary';
             const author = this.currentPlayback.author || 'Unknown Author';
 
-            // Get book cover URL if available
+            // Get book cover URL if available (covers are stored as .jpg/.webp)
             const coverUrl = this.currentBook && this.currentBook.cover_image_url
-                ? window.location.origin + this.currentBook.cover_image_url
+                ? window.location.origin + this.coverSources(this.currentBook.cover_image_url).jpg
                 : null;
 
             // Format: Title = "{book name} by {author name}", Artist = "Quick Summary" or "Full Summary" or "Chapter X"

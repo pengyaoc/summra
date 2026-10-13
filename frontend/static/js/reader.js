@@ -145,7 +145,8 @@ export const readerMixin = {
         const ttsBtn = document.getElementById('medium-detail-tts-button');
         if (hasAudio) {
             ttsBtn.classList.remove('hidden');
-            ttsBtn.onclick = () => this.generateTTS(this.mediumSummaryContent, 'medium', ttsBtn);
+            ttsBtn.onclick = () => this.onListenClick('medium', this.mediumSummaryContent);
+            this.renderListenButton();
         } else {
             ttsBtn.classList.add('hidden');
         }
