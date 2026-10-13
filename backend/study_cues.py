@@ -36,6 +36,18 @@ def reading_minutes(words):
     return math.ceil(words / WORDS_PER_MINUTE)
 
 
+def format_reading_time(minutes):
+    """"8 min" under an hour, else hours to the nearest half ("5½ hrs")."""
+    if not minutes:
+        return None
+    if minutes < 60:
+        return f'{minutes} min'
+    halves = math.floor(minutes / 30 + 0.5)
+    hours, half = divmod(halves, 2)
+    label = f"{hours}{'½' if half else ''}"
+    return f'{label} hr' if halves == 2 else f'{label} hrs'
+
+
 def _first_sentence(text):
     for match in re.finditer(r'[.!?]["”’)]?(?=\s|$)', text):
         before = text[:match.start()].split()
@@ -63,15 +75,19 @@ def summary_excerpt(text, limit=160):
 
 
 def add_book_cues(book):
-    """Add `level` and `reading_minutes` to a book dict (in place) and return it."""
+    """Add `level`, `reading_minutes` and `reading_time` to a book dict
+    (in place) and return it."""
     book['level'] = level_label(book.get('cefr_level'))
     book['reading_minutes'] = reading_minutes(book.get('word_count'))
+    book['reading_time'] = format_reading_time(book['reading_minutes'])
     return book
 
 
 def add_chapter_cues(chapter):
     """Turn the metadata query's private `_text_words` / `_summary_head`
-    columns into `reading_minutes` / `summary_excerpt` (in place)."""
+    columns into `reading_minutes` / `reading_time` / `summary_excerpt`
+    (in place)."""
     chapter['reading_minutes'] = reading_minutes(chapter.pop('_text_words', None))
+    chapter['reading_time'] = format_reading_time(chapter['reading_minutes'])
     chapter['summary_excerpt'] = summary_excerpt(chapter.pop('_summary_head', None))
     return chapter

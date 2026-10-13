@@ -10,7 +10,7 @@ chapter's, so chapter reading time must come from chapter_text.
 """
 import pytest
 
-from backend.study_cues import level_label, reading_minutes, summary_excerpt
+from backend.study_cues import format_reading_time, level_label, reading_minutes, summary_excerpt
 
 
 # --- level_label -----------------------------------------------------------
@@ -53,6 +53,27 @@ def test_reading_minutes_rounds_up_at_230_wpm(words, expected):
 @pytest.mark.parametrize('words', [None, 0, -5])
 def test_reading_minutes_is_none_without_words(words):
     assert reading_minutes(words) is None
+
+
+# --- format_reading_time -------------------------------------------------
+
+@pytest.mark.parametrize('minutes, expected', [
+    (1, '1 min'),
+    (59, '59 min'),
+    (60, '1 hr'),
+    (74, '1 hr'),
+    (75, '1½ hrs'),
+    (105, '2 hrs'),
+    (327, '5½ hrs'),
+    (600, '10 hrs'),
+])
+def test_format_reading_time_uses_minutes_then_half_hours(minutes, expected):
+    assert format_reading_time(minutes) == expected
+
+
+@pytest.mark.parametrize('minutes', [None, 0])
+def test_format_reading_time_is_none_without_minutes(minutes):
+    assert format_reading_time(minutes) is None
 
 
 # --- summary_excerpt -------------------------------------------------------
@@ -114,6 +135,7 @@ def test_get_all_books_includes_cues(db):
     book = db.get_all_books()[0]
     assert book['level'] == 'Moderate'
     assert book['reading_minutes'] == 2
+    assert book['reading_time'] == '2 min'
 
 
 def test_api_books_includes_cues(client):
@@ -132,8 +154,28 @@ def test_api_chapters_include_reading_time_from_text_and_excerpt(client, db):
     # ~500 words of chapter text → 3 min. (The summary is 7 words, so a
     # summary-based count would give 1.)
     assert chapters[1]['reading_minutes'] == 3
+    assert chapters[1]['reading_time'] == '3 min'
     assert chapters[1]['summary_excerpt'] == 'Victor begins his tale.'
     assert chapters[2]['reading_minutes'] is None
     assert chapters[2]['summary_excerpt'] is None
     # Internal helper columns must not leak into the API.
     assert not any(k.startswith('_') for k in chapters[1])
+
+
+def test_author_and_related_book_lists_include_cues(db):
+    """Author pages and "You may also like" render the shared book card,
+    which shows the level and reading time."""
+    from backend import models
+    conn = db.get_connection()
+    conn.execute("INSERT INTO authors (name) VALUES ('A')")
+    author_id = conn.execute("SELECT id FROM authors WHERE name = 'A'").fetchone()[0]
+    conn.execute('UPDATE books SET author_id = ?', (author_id,))
+    conn.commit()
+    conn.close()
+    other = db.add_book(title='Other', author='A', filename='o.txt', full_text='x', author_id=author_id)
+
+    for books in (db.get_books_by_author_id(author_id),
+                  db.get_books_by_author_name('A'),
+                  db.get_related_books(other)['by_author']):
+        cue = {b['title']: (b['level'], b['reading_time']) for b in books}
+        assert cue['Cue Book'] == ('Moderate', '2 min'), books

@@ -36,6 +36,16 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - Deferred: SSR `__INITIAL_DATA__.book` doesn't carry the cues yet (`tests/test_book_page_ssr.py` pins its exact shape); phase 5 renders the meta row in the template instead. Discover's existing "Easy to Read" carousel still matches any level containing A2/B1 (so B1-B2 lands there) — replaced in phase 4. `get_books_by_gutenberg_ids` (home top-10) and the author getters don't select `cefr_level`/`word_count` yet — phases 3/6.
 - Tests: `tests/test_study_cues.py` (34; red against a stub first). pytest 583 passed. e2e smoke, redesign_chrome, book_page_fast_path, listing_pages_catalog, catalog_fetch_once, top10_ssr, reader_opens_at_chapter all green.
 
+### Phase 3 — shared book card (DONE)
+
+- `app.js`: `createBookCard(book)` is now the only book card — an `<a href="/books/<slug>">` (plain click → `selectBook`, modifier/middle click opens a tab) with a 2:3 cover box, serif title, author, level tag and reading time. Category/discover carousels (`createCarousel`) and "You may also like" now call it; their bespoke `.carousel-book-card` / `.related-book-card` markup and CSS are gone. New `bookCoverHtml(book)` (cover box whose serif title shows until the image loads or if it fails) and `coverSources(url)` (WebP/JPG URL logic pulled out of `getImageHtml`). Removed `formatNumber` (its only caller was the old card).
+- Library (`reader.js`) keeps its progress card but uses `bookCoverHtml`; restyled on tokens (oxblood Continue button and progress fill, serif headings). Category shelf titles are serif.
+- Server: `study_cues.format_reading_time()` ("8 min", "1 hr", "5½ hrs") → `reading_time` on books and chapters, so JS and later Jinja share one formatter. Author and related-book queries (`get_books_by_author_id/_name`, `get_books_in_same_categories`, `get_books_by_author_country`) now select `cefr_level` and add cues.
+- CSS: 58 legacy card rules (+11 emptied media queries) removed; new `.book-card*`, `.level-tag--{easy,moderate,challenging}` rules; titles reserve two lines so rows align.
+- `app.min.js` rebuilt (`check-build-fresh` OK) and the card test also passes against the prod-mode bundle (app_prod on :5003).
+- Tests: pytest `test_study_cues.py` +11 (format, author/related cues). New `tests/e2e/redesign_cards.mjs` (19 checks: links, 2:3 covers, Frankenstein = Challenging / 5½ hrs, uniform row heights, serif placeholder with covers blocked, shared card on categories/discover/author/related, in-app click incl. the accented `louise-de-la-vallière` slug). pytest 594 passed; e2e suite green (same 6 pre-existing failures excluded). One unexplained `redesign_cards` timeout inside a full-suite run; not reproducible in 7 further runs, including the same ordering.
+- After screenshots: `docs/redesign/after/phase3/`.
+
 ---
 
 ## 2026-10-12: Deployed b4359b9; corrected CLAUDE.md deploy section — DONE
