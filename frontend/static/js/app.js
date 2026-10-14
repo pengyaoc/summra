@@ -43,7 +43,7 @@ class SummraApp {
         this.booksLoaded = false;
         this.chapters = [];
         this.currentChapter = null;
-        this.currentView = 'home'; // Track current view: 'home', 'book', 'category', 'all-categories', 'all-books'
+        this.currentView = 'home'; // Track current view: 'home', 'book', 'category', 'all-categories', 'discover'
         this.currentPlayback = {
             isPlaying: false,
             currentChunk: 0,
@@ -260,7 +260,9 @@ class SummraApp {
         } else if (categoriesMatch) {
             await this.showAllCategories(true);
         } else if (allBooksMatch) {
-            await this.showAllBooksGrid(true);
+            // /books was folded into Discover (the server redirects too).
+            window.history.replaceState({ type: 'discover' }, '', withBasePath('/discover'));
+            await this.showDiscoverPage(true);
         }
     }
 
@@ -462,7 +464,7 @@ class SummraApp {
 
     /**
      * Shared tail for page-controller methods (showCategoryDetail,
-     * showAllCategories, showAllBooksGrid, showBlogIndex, showBlogPost):
+     * showAllCategories, showBlogIndex, showBlogPost):
      * update breadcrumbs, restore scroll (or jump to top), then set the page
      * title. The three steps are independent (verified: none reads state the
      * others set), so this fixed order is safe regardless of a given page's
@@ -673,8 +675,8 @@ class SummraApp {
         const header = document.createElement('div');
         header.className = 'category-header';
 
-        // View All goes to the category page, or to /books for the "All Books" shelf
-        const viewAllHref = category.id === 'all' ? '/books' : `/categories/${category.id}`;
+        // View All goes to the category page, or to Discover for the "All Books" shelf
+        const viewAllHref = category.id === 'all' ? '/discover' : `/categories/${category.id}`;
         const viewAllLink = `<a href="${withBasePath(viewAllHref)}" class="view-all-link">View All →</a>`;
 
         header.innerHTML = `
@@ -980,8 +982,8 @@ class SummraApp {
                 slug: this.slugify(this.currentAuthor.name)
             };
         }
-        // If navigating from All Books or home, clear origin
-        else if (this.currentView === 'all-books' || this.currentView === 'home') {
+        // If navigating from home, clear origin
+        else if (this.currentView === 'home') {
             this.originCategory = null;
             this.originDiscover = false;
             this.originAuthor = null;
@@ -2045,48 +2047,6 @@ class SummraApp {
         validCategories.forEach(category => {
             this.renderCategoryCarousel(category, category.books, 'all-categories-container');
         });
-    }
-
-    async showAllBooksGrid(restoreScroll = false) {
-        this.saveScrollPosition();
-        this.currentView = 'all-books';
-        this.setCurrentPage('all-books');
-
-        // Clear category and discover state since we're not viewing those
-        this.currentCategory = null;
-        this.originDiscover = false;
-        this.originAuthor = null;
-
-        // Load books only when needed
-        await this.ensureBooksLoaded();
-
-        // Show only category detail section (reused for all books grid)
-        this.showOnlySections('category-detail-section');
-
-        // Hide the title for All Books page
-        const titleElement = document.getElementById('category-detail-title');
-        if (titleElement) titleElement.style.display = 'none';
-
-        document.getElementById('category-detail-subtitle').textContent =
-            `${this.allBooks.length} book${this.allBooks.length !== 1 ? 's' : ''}`;
-
-        // Render books alphabetically by title
-        const sortedBooks = [...this.allBooks].sort((a, b) => a.title.localeCompare(b.title));
-
-        // Render sorted books in grid
-        const grid = document.getElementById('category-books-grid');
-        grid.innerHTML = '';
-        sortedBooks.forEach(book => {
-            const bookCard = this.createBookCard(book);
-            grid.appendChild(bookCard);
-        });
-
-        this.finishPageTransition(
-            'category',
-            'all-books',
-            restoreScroll,
-            'Browse Classic Books - Free Summaries | Summra'
-        );
     }
 
     async showAuthorDetail(authorName, restoreScroll = false) {

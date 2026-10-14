@@ -128,7 +128,7 @@ def test_home_content_is_in_every_page_for_in_app_navigation(client):
     """#hero-section is rendered (hidden) on every page so client-side
     navigation home can just reveal it — its examples and counts must be
     there too, not only on /."""
-    body = client.get('/books').get_data(as_text=True)
+    body = client.get('/categories').get_data(as_text=True)
     assert 'Everyone knows that a single man with a lot of money needs a wife.' in body
     assert re.search(r'level-card--easy" href="/discover\?level=easy"[^>]*>.*?1 book', body, re.S)
 

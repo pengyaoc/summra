@@ -134,7 +134,7 @@ def test_discover_sorts_easiest_first_with_untagged_last(client):
 
 
 def test_other_pages_do_not_render_the_discover_grid(client):
-    body = client.get('/books').get_data(as_text=True)
+    body = client.get('/categories').get_data(as_text=True)
     assert 'class="books-grid discover-grid"' in body  # shell present for SPA navigation…
     assert re.search(r'<section class="discover-section hidden" id="discover-section"', body)
     _, grid = _grid(body)

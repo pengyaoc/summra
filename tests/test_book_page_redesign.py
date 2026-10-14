@@ -94,3 +94,11 @@ def test_chapters_api_book_carries_level_and_reading_time(client, db):
     data = client.get(f"/api/books/{db.ids['with_modern']}/chapters").get_json()
     assert data['book']['level'] == 'Challenging'
     assert data['book']['reading_time'] == '5½ hrs'
+
+
+def test_breadcrumb_structured_data_points_at_discover(client):
+    """Books folded into Discover; the old crumb pointed at /all-books,
+    which never existed."""
+    body = client.get('/books/plain-book').get_data(as_text=True)
+    assert '/all-books' not in body
+    assert re.search(r'"name":\s*"Discover"', body), 'Discover crumb missing'

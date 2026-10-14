@@ -23,7 +23,7 @@ export const breadcrumbsMixin = {
         // parseAppRoute — see route_utils.js)
         const {
             bookMatch, mediumMatch: summaryMatch, chapterMatch, categoryMatch,
-            categoriesMatch, allBooksMatch, discoverMatch, blogMatch,
+            categoriesMatch, discoverMatch, blogMatch,
             blogPostMatch, authorMatch
         } = parseAppRoute(path);
 
@@ -46,8 +46,6 @@ export const breadcrumbsMixin = {
             const categoryId = parseInt(categoryMatch[1]);
             const categoryName = this.currentCategory?.name || `Category ${categoryId}`; // Fallback to ID if name not available
             breadcrumbs.push({ name: categoryName, url: `/categories/${categoryId}`, position: 3 });
-        } else if (allBooksMatch) {
-            breadcrumbs.push({ name: 'All Books', url: '/books', position: 2 });
         } else if (this.currentBook) {
             // Use origin category if user came from a category page
             if (this.originCategory) {
@@ -81,9 +79,9 @@ export const breadcrumbsMixin = {
                     position: 3
                 });
             }
-            // Otherwise use All Books
+            // Otherwise use Discover
             else {
-                breadcrumbs.push({ name: 'All Books', url: '/books', position: 2 });
+                breadcrumbs.push({ name: 'Discover', url: '/discover', position: 2 });
                 breadcrumbs.push({
                     name: this.currentBook.title,
                     url: `/books/${this.slugify(this.currentBook.title)}`,

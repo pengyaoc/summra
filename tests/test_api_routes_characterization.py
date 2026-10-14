@@ -133,8 +133,13 @@ def test_all_categories_page(client):
     assert client.get('/categories').status_code == 200
 
 
-def test_all_books_page(client):
-    assert client.get('/books').status_code == 200
+def test_all_books_page_redirects_to_discover(client):
+    # "Books" overlapped Discover, so the listing was folded into it; old
+    # links keep working through a permanent redirect.
+    resp = client.get('/books')
+    assert resp.status_code == 301 and resp.headers['Location'].endswith('/discover')
+    body = client.get('/discover').get_data(as_text=True)
+    assert 'id="books-nav-btn"' not in body and '>Books</a>' not in body
 
 
 def test_author_detail_page(client):
