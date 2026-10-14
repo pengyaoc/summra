@@ -155,5 +155,3 @@ def test_hero_examples_are_famous_hard_sentences(monkeypatch):
     slugs = {e['slug'] for e in examples}
     assert {'pride-and-prejudice', 'great-expectations'} <= slugs
     assert not slugs & {'jane-eyre', 'frankenstein'}, 'openings too easy to show off a rewrite'
-    scarlet = next(e for e in examples if e['slug'] == 'the-scarlet-letter')
-    assert 'spikes' in scarlet['plain'], 'the rewrite split the sentence; both halves must be shown'

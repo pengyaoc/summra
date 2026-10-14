@@ -57,17 +57,17 @@ def _top_10_books():
 
 
 # Home hero examples: (book slug, chapter number). Each shows the chapter's
-# opening sentence next to its plain-English rewrite; picked because the
-# first sentences line up one-to-one. Missing books/rewrites are skipped.
-# Famous openings that students actually get stuck on: the original is long
-# or hard, and the plain-English rewrite is clearly easier. First is shown first.
+# opening sentence next to its plain-English rewrite (see _hero_pair); missing
+# books/rewrites are skipped. Famous openings students actually get stuck on,
+# where the rewrite is clearly easier, kept to similar lengths so the
+# fixed-height hero has little spare space on phones. First is shown first.
 HERO_EXAMPLES = [
     ('pride-and-prejudice', 1),
-    ('the-strange-case-of-dr-jekyll-and-mr-hyde', 1),
+    ('the-hound-of-the-baskervilles', 1),
     ('great-expectations', 1),
     ('adventures-of-huckleberry-finn', 1),
     ('the-time-machine', 1),
-    ('the-scarlet-letter', 1),
+    ('the-great-gatsby', 1),
 ]
 
 

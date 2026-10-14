@@ -164,6 +164,9 @@ await mobile.route(/\/auth\/check$/, (r) => r.fulfill({ json: { authenticated: f
 const mp = await mobile.newPage();
 await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
 expect("mobile: no horizontal scroll", (await mp.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);
+const mHeights = await mp.evaluate(() => [...document.querySelectorAll(".hero-sentence")]
+  .map((f) => Math.round([...f.children].reduce((h, c) => h + c.getBoundingClientRect().height, 0))));
+expect("mobile: examples are similar in length (≤100px of spare space)", Math.max(...mHeights) - Math.min(...mHeights) <= 100, JSON.stringify(mHeights));
 const mThread = await thread(mp);
 expect("mobile: same thread layout on a phone", isThread(mThread), JSON.stringify(mThread));
 await mobile.close();
