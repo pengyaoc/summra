@@ -48,3 +48,22 @@ def test_chapter_lookup_needs_only_the_manifest(book):
     assert first['ordinal'] > 0  # not in the first segment: a scan would need >1 fetch
     units = db.get_reader_segment(book_id, first['id'], 'original')['units']
     assert any(u['chapter_id'] == chapter_3 for u in units)
+
+
+def test_section_title_change_rebuilds_reader_structure(book):
+    db, book_id = book
+    conn = db.get_connection()
+    with conn:
+        conn.execute(
+            "INSERT INTO book_sections (book_id, section_type, section_number, section_title) "
+            "VALUES (?, 'PART', 1, 'Part One')", (book_id,)
+        )
+        section_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        conn.execute('UPDATE chapters SET section_id = ? WHERE book_id = ?', (section_id, book_id))
+    first = db.get_reader_manifest(book_id)
+    with conn:
+        conn.execute('UPDATE book_sections SET section_title = ? WHERE id = ?', ('Part I', section_id))
+    conn.close()
+    second = db.get_reader_manifest(book_id)
+    assert second['content_version'] > first['content_version']
+    assert any(entry['title'] == 'Part I' for entry in second['structure'])
