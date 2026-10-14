@@ -4,7 +4,7 @@
 
 ---
 
-## 2026-10-12: Site redesign ("Quiet library + study cues") — IN PROGRESS
+## 2026-10-12: Site redesign ("Quiet library + study cues") — DONE, deployed 2026-10-13
 
 Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by user: mix of A (warm paper, serif, oxblood accent, home leads with an original → plain-English sentence pair) and C (difficulty level, reading time, progress cues on Discover and book pages). Audience: general. Spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`. PRD Design Principles §6 and ERD Frontend Module Map updated.
 
@@ -112,12 +112,12 @@ Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by u
 - **Hero examples: harder sentences, complete rewrites, calmer first load** (user). Examples are now famous openings students get stuck on: Pride and Prejudice, Jekyll and Hyde, Great Expectations, Huckleberry Finn, The Time Machine, The Scarlet Letter — the last two later swapped, see below (Jane Eyre and Frankenstein dropped as too easy). The plain side used to be only the first sentence of the rewrite, which lost content when the rewrite split one long sentence in two (Scarlet Letter dropped "…studded with iron spikes"). `pages._hero_pair` now keeps every plain sentence that belongs to the original's first sentence (whole plain paragraph for a one-sentence original; otherwise add sentences while they share more content words with original sentence 1 than 2). All six pairs reviewed by hand. `study_cues.first_sentence` replaced by `split_sentences` (its only caller). The reply bubble animates only after "Show me another" (app.js marks the shown example `.is-new`), not on page load. Phones: smaller bubble type so the fixed-height thread wastes less space (examples 201–384px tall at 375px). Tests: `test_home_redesign.py` (pair matching incl. the split-sentence case, real-DB check that every example resolves, is ≥15 words, and Scarlet's plain text has "spikes"), `redesign_home.mjs` (no animation on load, animation after click).
 - **Hero examples swapped for similar lengths** (user chose option 3). Jekyll and Hyde and The Scarlet Letter made the fixed-height thread ~180px taller than the shortest example on phones; replaced with The Hound of the Baskervilles ("save upon those not infrequent occasions") and The Great Gatsby. Phone heights now 201–270px. Test: `redesign_home.mjs` "≤100px of spare space" at 375px. The Scarlet-specific real-DB assertion was removed with the example; split-sentence matching stays covered by the `_hero_pair` unit test.
 
-### Phase 8 — build, compare, deploy (PARTIAL — deploy pending approval)
+### Phase 8 — build, compare, deploy (DONE)
 
 - `app.min.js` rebuilt and fresh (`check-build-fresh`); every redesign e2e test also passes against the prod-mode bundle (app_prod on :5003).
 - Comparison page: `docs/redesign/compare.html` (before = local main @ 051244c, after = phase 7; desktop/mobile toggle; 17 screen pairs).
 - Local perf (perf.mjs, 3 runs, FCP / total bytes): home 284·84·68 → 272·72·72 ms, 1676 → 1461 KB; book page 56·52·52 → 60·56·56 ms, 1635 → 1655 KB; /discover 48·52·48 → 72·100·80 ms (server-renders 90 cards; main's earlier paint is an empty shell that then waits for two API calls), 4144 → 3562 KB.
-- **Not done:** fast-forwarding `main` to `redesign` (11 commits, clean FF from origin/main 051244c) and pushing were blocked by the session's permission classifier, so the VM deploy (CLAUDE.md steps 1–3; backend changed → restart needed; no DB copy needed) has not run. Prod still serves the pre-redesign build.
+- **Deployed 2026-10-13** (user approved): `main` fast-forwarded to `redesign` (051244c → d367683, 21 commits) and pushed; VM pulled (24 commits behind, clean FF), `summra.service` restarted (active, local 200, no errors in journal). No DB copy needed. Public `/`, `/books`, `/api/books`, `/discover`, a book page all 200 in <0.4 s; `redesign_home` (34), `redesign_book_page` (24) and `redesign_discover` (19) checks pass against production.
 
 ---
 
