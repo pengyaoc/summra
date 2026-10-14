@@ -1139,15 +1139,11 @@ class SummraApp {
 
     updateAboutSection(book) {
         // Get section and elements
-        const aboutSection = document.getElementById('about-section');
-        const aboutText = document.getElementById('about-text');
-        const relevanceText = document.getElementById('relevance-text');
         const authorBioText = document.getElementById('author-bio-text');
         const bookAuthor = document.getElementById('book-author');
         const authorLearnMoreBtn = document.getElementById('author-learn-more-btn');
 
         // Check if we have any data to display (backward compatibility)
-        const hasAbout = book.about_text && book.about_text.trim();
         const hasCountry = book.author_country && book.author_country.trim();
         const hasBio = book.author_bio && book.author_bio.trim();
         const hasCharacterGuide = book.character_guide_url && book.character_guide_url.trim();
@@ -1156,7 +1152,7 @@ class SummraApp {
 
         // Debug logging
         console.log('updateAboutSection called for:', book.title);
-        console.log('Has metadata:', { hasAbout, hasCountry, hasBio, hasCharacterGuide, hasTimeline, hasThemes });
+        console.log('Has metadata:', { hasCountry, hasBio, hasCharacterGuide, hasTimeline, hasThemes });
 
         // Update book author with country information
         const authorName = book.author || '';
@@ -1176,17 +1172,11 @@ class SummraApp {
         // Always call updateReadingGuide to remove loading spinners
         this.updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes);
 
-        // "About this book" and "About the author" are separate sections
-        // (the author one sits lower on the page, after the chapters).
-        if (aboutSection) aboutSection.classList.toggle('hidden', !hasAbout);
-        if (aboutText) aboutText.innerHTML = hasAbout ? this.renderMarkdown(book.about_text) : '';
-
+        // "About the author" sits after the chapters and only appears with a
+        // bio. There's no "About this book": the summary already covers it.
         const authorSection = document.getElementById('about-author-section');
-        if (authorSection) authorSection.classList.toggle('hidden', !hasBio && !authorName);
-        if (authorBioText) {
-            authorBioText.innerHTML = hasBio ? this.renderMarkdown(book.author_bio) : '';
-            authorBioText.classList.toggle('hidden', !hasBio);
-        }
+        if (authorSection) authorSection.classList.toggle('hidden', !hasBio);
+        if (authorBioText) authorBioText.innerHTML = hasBio ? this.renderMarkdown(book.author_bio) : '';
     }
 
     updateReadingGuide(book, hasCharacterGuide, hasTimeline, hasThemes) {
@@ -1318,22 +1308,13 @@ class SummraApp {
 
     async loadBookMetadata(bookId) {
         // Get elements
-        const aboutSection = document.getElementById('about-section');
-        const aboutText = document.getElementById('about-text');
         const authorBioText = document.getElementById('author-bio-text');
         const readingGuideSection = document.getElementById('reading-guide-section');
 
-        // Only show loading spinner if content is empty
-        const shouldShowLoading = aboutText && !aboutText.textContent.trim();
+        // Only show loading state if this book's metadata isn't on the page yet
+        const shouldShowLoading = this.loadedMetadataBookId !== bookId;
 
-        if (shouldShowLoading && aboutSection && aboutText && authorBioText) {
-            aboutSection.classList.remove('hidden');
-            aboutText.innerHTML = `
-                <div class="loading-container">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">Loading book information...</div>
-                </div>
-            `;
+        if (shouldShowLoading && authorBioText) {
             authorBioText.innerHTML = '';
             document.getElementById('about-author-section')?.classList.add('hidden');
         }
@@ -1369,13 +1350,13 @@ class SummraApp {
             const data = await response.json();
 
             if (data.success && data.book) {
-                // Update the about section with the full book data
+                // Update the author section with the full book data
                 this.updateAboutSection(data.book);
+                this.loadedMetadataBookId = bookId;
             }
         } catch (error) {
+            // Silently fail - the author section stays hidden
             console.error('Error loading book metadata:', error);
-            // Silently fail - section will remain hidden
-            if (aboutSection) aboutSection.classList.add('hidden');
         }
     }
 

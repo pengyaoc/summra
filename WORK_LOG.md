@@ -609,6 +609,24 @@ Ulysses episode titles remain blank because the source does not give official ep
 
 ---
 
+## 2026-10-14: Feedback round 2 — checklist — IN PROGRESS
+
+1. [x] Book page: hide "About the author" when it has no content.
+2. [x] Book page: remove "About this book" for all books (duplicates the Summary).
+3. [ ] Nav: drop "Books" (overlaps Discover) from header and footer; `/books` redirects to `/discover`.
+4. [ ] Fonts: nav, footer and stray links ("Learn more →" rendered as a purple visited link) match the design system.
+5. [ ] Hero copy: replace "Stuck on a sentence? …" with the side-by-side message.
+6. [ ] Hero on mobile: redesign (desktop is good).
+7. [ ] Home sections: stronger separation/contrast between Continue reading, Start here, etc.
+8. [ ] Continue reading: no late pop-in (server-render it for signed-in readers / reserve its place), faster.
+9. [ ] Replace "How it works" with a reading-level section explaining the research behind grade levels.
+10. [ ] Reader perf: an arbitrary chapter (e.g. /books/paradise-lost/chapters/7) took ~10 s; load progressively instead of the whole book.
+11. [ ] Metadata audit (Sonnet subagents): genres from BISAC, origin from Library of Congress Class, audience, school lists; fix wrong tags; no one-off categories.
+12. [ ] Reading-grade tags (Flesch–Kincaid or equivalent) for original and plain English; filter on Discover.
+13. [ ] Report further tagging ideas for young readers and parents.
+
+---
+
 ## 2026-10-12: Site redesign ("Quiet library + study cues") — DONE, deployed 2026-10-13
 
 Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by user: mix of A (warm paper, serif, oxblood accent, home leads with an original → plain-English sentence pair) and C (difficulty level, reading time, progress cues on Discover and book pages). Audience: general. Spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`. PRD Design Principles §6 and ERD Frontend Module Map updated.
