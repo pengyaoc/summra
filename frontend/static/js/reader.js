@@ -935,6 +935,44 @@ export const readerMixin = {
         </figure>`;
     },
 
+    formatContinuousReaderText(text) {
+        // The reader uses escaped text for safety, but source chapters use
+        // Markdown emphasis. Parse inline Markdown only after escaping source
+        // HTML so emphasis renders without allowing stored tags through.
+        const escaped = this.escapeHtml((text || '').trim());
+        if (typeof marked !== 'undefined' && typeof marked.parseInline === 'function') {
+            return marked.parseInline(escaped);
+        }
+        return escaped
+            .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g, '<em>$1</em>')
+            .replace(/\b_([^_\n]+?)_\b/g, '<em>$1</em>');
+    },
+
+    continuousReaderBlock(text) {
+        const value = (text || '').trim();
+        const heading = value.length <= 100 && (
+            /^(?:Original Transcriber’s Notes|Original Transcriber's Notes)\s*:?$/i.test(value)
+            || /^[A-Z][A-Z0-9\s’'.,:;!?()—–-]*$/.test(value)
+        );
+        if (heading) {
+            return { tag: 'h3', className: 'reader-section-heading', content: this.formatContinuousReaderText(value) };
+        }
+
+        const numberedListItem = /^\s*\d+[.)]\s+/.test(value);
+        const asteriskDivider = /^(?:\s*\*\s*){3,}$/.test(value);
+        const bulletMatch = asteriskDivider ? null : value.match(/^\s*[*+-]\s{1,}/);
+        const listItem = numberedListItem || !!bulletMatch;
+        const content = bulletMatch
+            ? `• ${value.slice(bulletMatch[0].length)}`
+            : value;
+        return {
+            tag: 'p',
+            className: listItem ? 'reader-list-item' : '',
+            content: this.formatContinuousReaderText(content),
+        };
+    },
+
     renderContinuousSegments(segments, restoreMarker = null, chapterId = null) {
         const reader = this.continuousReader;
         const container = document.getElementById('continuous-reader-content');
@@ -956,14 +994,19 @@ export const readerMixin = {
                 if (reader.mode === 'side_by_side') {
                     const original = unit.members.original;
                     const plain = unit.members.plain;
-                    const cell = (member, label) => member?.available
-                        ? `<p>${this.escapeHtml(member.content || '')}</p>`
-                        : `<p class="reader-gap">${label} unavailable for this section.</p>`;
+                    const cell = (member, label) => {
+                        if (!member?.available) return `<p class="reader-gap">${label} unavailable for this section.</p>`;
+                        const block = this.continuousReaderBlock(member.content || '');
+                        const className = block.className ? ` class="${block.className}"` : '';
+                        return `<${block.tag}${className}>${block.content}</${block.tag}>`;
+                    };
                     html.push(`<div class="side-by-side-row reader-alignment-row" data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.canonical_word_count || 0}"><div class="side-by-side-cell original">${cell(original, 'Original')}</div><div class="side-by-side-cell modern">${cell(plain, 'Plain English')}</div></div>`);
                 } else if (unit.availability === 'gap') {
                     html.push(`<div class="reader-gap" data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="0">Plain English unavailable for this section.</div>`);
                 } else {
-                    html.push(`<p data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.word_count || 0}">${this.escapeHtml(unit.content || '')}</p>`);
+                    const block = this.continuousReaderBlock(unit.content || '');
+                    const className = block.className ? ` class="${block.className}"` : '';
+                    html.push(`<${block.tag}${className} data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.word_count || 0}">${block.content}</${block.tag}>`);
                 }
             }
         }

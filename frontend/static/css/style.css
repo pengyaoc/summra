@@ -4317,6 +4317,9 @@ body.pagination-active {
 .continuous-reader-content { max-width: 900px; margin: 0 auto; padding: 1rem 1.25rem 0; line-height: 1.75; color: var(--text-color); }
 .continuous-reader-content > p { margin: 0 0 1.25em; }
 .reader-chapter-heading { margin: 1rem 0 1.25rem; font-family: var(--font-serif); font-size: 1.6rem; }
+.continuous-reader-content .reader-section-heading { margin: 1.2em 0 .45em; font-family: var(--font-serif); font-size: 1.1em; font-weight: 700; line-height: 1.35; }
+.continuous-reader-content > p.reader-list-item,
+.continuous-reader-content .side-by-side-cell > p.reader-list-item { margin-bottom: .25em; padding-left: 1.5em; text-indent: -1.5em; }
 .reader-gap { color: var(--text-light); font-style: italic; }
 .continuous-reader-footer { position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: .75rem; box-sizing: border-box; padding: .42rem 1rem; border-top: 1px solid var(--rule); background: var(--card-background); color: var(--ink-muted); font-size: .82rem; text-align: center; }
 .reader-progress-track { width: min(240px, 40vw); height: 3px; overflow: hidden; border-radius: 99px; background: var(--rule); }

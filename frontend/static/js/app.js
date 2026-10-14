@@ -1214,14 +1214,16 @@ class SummraApp {
         if (hasCharacterGuide || hasTimeline || hasThemes) {
             readingGuideSection.classList.remove('hidden');
 
+            // Guide URLs are stored as /static/...; prefix them for /summrabook deployments.
             // Set up character guide image
             if (hasCharacterGuide && characterGuideImage) {
-                characterGuideImage.src = book.character_guide_url;
+                const guideUrl = withBasePath(book.character_guide_url);
+                characterGuideImage.src = guideUrl;
                 characterGuideImage.style.display = '';
                 characterGuideImage.onclick = () => {
                     if (this.openLightbox) {
                         // Remove extension from URL for lightbox
-                        const baseUrl = book.character_guide_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+                        const baseUrl = guideUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
                         this.openLightbox(baseUrl, 'Character Guide');
                     }
                 };
@@ -1229,12 +1231,13 @@ class SummraApp {
 
             // Set up timeline image
             if (hasTimeline && timelineGuideImage) {
-                timelineGuideImage.src = book.timeline_url;
+                const guideUrl = withBasePath(book.timeline_url);
+                timelineGuideImage.src = guideUrl;
                 timelineGuideImage.style.display = '';
                 timelineGuideImage.onclick = () => {
                     if (this.openLightbox) {
                         // Remove extension from URL for lightbox
-                        const baseUrl = book.timeline_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+                        const baseUrl = guideUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
                         this.openLightbox(baseUrl, 'Timeline');
                     }
                 };
@@ -1242,12 +1245,13 @@ class SummraApp {
 
             // Set up themes image
             if (hasThemes && themesGuideImage) {
-                themesGuideImage.src = book.themes_url;
+                const guideUrl = withBasePath(book.themes_url);
+                themesGuideImage.src = guideUrl;
                 themesGuideImage.style.display = '';
                 themesGuideImage.onclick = () => {
                     if (this.openLightbox) {
                         // Remove extension from URL for lightbox
-                        const baseUrl = book.themes_url.replace(/\.(png|jpg|jpeg|webp)$/i, '');
+                        const baseUrl = guideUrl.replace(/\.(png|jpg|jpeg|webp)$/i, '');
                         this.openLightbox(baseUrl, 'Themes');
                     }
                 };
