@@ -1,0 +1,2132 @@
+{
+ "categories": {
+  "Action & Adventure": {
+   "bisac": [
+    "FIC002000"
+   ],
+   "description": "Journeys, danger and daring escapes."
+  },
+  "Science Fiction": {
+   "bisac": [
+    "FIC028000"
+   ],
+   "description": "Inventions, other worlds and the future, imagined."
+  },
+  "Fantasy": {
+   "bisac": [
+    "FIC009000"
+   ],
+   "description": "Magic, impossible creatures and worlds that work by their own rules."
+  },
+  "Mystery & Detective": {
+   "bisac": [
+    "FIC022000"
+   ],
+   "description": "Crimes, clues and the detectives who solve them."
+  },
+  "Horror & Gothic": {
+   "bisac": [
+    "FIC015000"
+   ],
+   "description": "Ghosts, monsters, crumbling castles and dread."
+  },
+  "Romance": {
+   "bisac": [
+    "FIC027000"
+   ],
+   "description": "Love stories, courtship and marriage."
+  },
+  "Historical Fiction": {
+   "bisac": [
+    "FIC014000"
+   ],
+   "description": "Stories set in real periods of the past."
+  },
+  "Humor & Satire": {
+   "bisac": [
+    "FIC016000",
+    "FIC052000"
+   ],
+   "description": "Comedy, wit and stories that mock the powerful."
+  },
+  "War & Military": {
+   "bisac": [
+    "FIC032000"
+   ],
+   "description": "Soldiers, battles and what war does to people."
+  },
+  "Coming of Age": {
+   "bisac": [
+    "FIC043000"
+   ],
+   "description": "Growing up: young people finding out who they are."
+  },
+  "Literary Fiction": {
+   "bisac": [
+    "FIC019000"
+   ],
+   "description": "Character-driven novels read for their ideas and style."
+  },
+  "Short Stories": {
+   "bisac": [
+    "FIC029000"
+   ],
+   "description": "Collections of short fiction."
+  },
+  "Fairy Tales, Folklore & Mythology": {
+   "bisac": [
+    "FIC010000"
+   ],
+   "description": "Fairy tales, myths, legends and epics of gods and heroes."
+  },
+  "Poetry & Drama": {
+   "bisac": [
+    "POE000000",
+    "DRA000000"
+   ],
+   "description": "Epic poems and plays."
+  },
+  "Philosophy & Religion": {
+   "bisac": [
+    "PHI000000",
+    "REL000000"
+   ],
+   "description": "Big questions about how to live, belief and meaning."
+  },
+  "History & Biography": {
+   "bisac": [
+    "HIS000000",
+    "BIO000000"
+   ],
+   "description": "Real lives and real events."
+  },
+  "Economics, Politics & Science": {
+   "bisac": [
+    "BUS069000",
+    "POL000000",
+    "SCI000000"
+   ],
+   "description": "The treatises that shaped economics, politics and science."
+  }
+ },
+ "books": {
+  "a-christmas-carol-in-prose": {
+   "categories": [
+    "Fantasy",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/46",
+    "https://www.gutenberg.org/ebooks/46",
+    "https://en.wikipedia.org/wiki/A_Christmas_Carol"
+   ],
+   "loc_subjects": [
+    "Christmas stories",
+    "London (England) -- Fiction",
+    "Poor families -- Fiction",
+    "Ghost stories",
+    "Misers -- Fiction",
+    "Sick children -- Fiction",
+    "Scrooge, Ebenezer (Fictitious character) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "a-journey-to-the-centre-of-the-earth": {
+   "categories": [
+    "Science Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/18857",
+    "https://www.gutenberg.org/ebooks/18857",
+    "https://en.wikipedia.org/wiki/Journey_to_the_Centre_of_the_Earth"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Adventure stories",
+    "Earth (Planet) -- Core -- Fiction",
+    "Voyages, Imaginary -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "a-little-princess": {
+   "categories": [
+    "Literary Fiction",
+    "Coming of Age"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/146",
+    "https://www.gutenberg.org/ebooks/146",
+    "https://en.wikipedia.org/wiki/A_Little_Princess"
+   ],
+   "loc_subjects": [
+    "Orphans -- Juvenile fiction",
+    "Schools -- Juvenile fiction",
+    "Boarding schools -- Juvenile fiction",
+    "Girls -- Juvenile fiction",
+    "London (England) -- Juvenile fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "a-room-with-a-view": {
+   "categories": [
+    "Romance",
+    "Humor & Satire",
+    "Coming of Age"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2641",
+    "https://www.gutenberg.org/ebooks/2641",
+    "https://en.wikipedia.org/wiki/A_Room_with_a_View"
+   ],
+   "loc_subjects": [
+    "Humorous stories",
+    "England -- Fiction",
+    "Young women -- Fiction",
+    "British -- Italy -- Fiction",
+    "Florence (Italy) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "a-study-in-scarlet": {
+   "categories": [
+    "Mystery & Detective"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/244",
+    "https://www.gutenberg.org/ebooks/244",
+    "https://en.wikipedia.org/wiki/A_Study_in_Scarlet"
+   ],
+   "loc_subjects": [
+    "Holmes, Sherlock (Fictitious character) -- Fiction",
+    "Private investigators -- England -- Fiction",
+    "Detective and mystery stories",
+    "England -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "a-tale-of-two-cities": {
+   "categories": [
+    "Historical Fiction",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/98",
+    "https://www.gutenberg.org/ebooks/98",
+    "https://en.wikipedia.org/wiki/A_Tale_of_Two_Cities"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "France -- History -- Revolution, 1789-1799 -- Fiction",
+    "London (England) -- History -- 18th century -- Fiction",
+    "War stories",
+    "Executions and executioners -- Fiction",
+    "French -- England -- London -- Fiction",
+    "Lookalikes -- Fiction",
+    "British -- France -- Paris -- Fiction",
+    "Paris (France) -- History -- 1789-1799 -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "adventures-of-huckleberry-finn": {
+   "categories": [
+    "Action & Adventure",
+    "Coming of Age",
+    "Humor & Satire"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/76",
+    "https://www.gutenberg.org/ebooks/76",
+    "https://en.wikipedia.org/wiki/Adventures_of_Huckleberry_Finn"
+   ],
+   "loc_subjects": [
+    "Humorous stories",
+    "Bildungsromans",
+    "Boys -- Fiction",
+    "Male friendship -- Fiction",
+    "Adventure stories",
+    "Missouri -- Fiction",
+    "Race relations -- Fiction",
+    "Runaway children -- Fiction",
+    "Finn, Huckleberry (Fictitious character) -- Fiction",
+    "Fugitive slaves -- Fiction",
+    "Mississippi River -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "alices-adventures-in-wonderland": {
+   "categories": [
+    "Fantasy",
+    "Humor & Satire"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/11",
+    "https://www.gutenberg.org/ebooks/11",
+    "https://en.wikipedia.org/wiki/Alice's_Adventures_in_Wonderland"
+   ],
+   "loc_subjects": [
+    "Fantasy fiction",
+    "Children's stories",
+    "Imaginary places -- Juvenile fiction",
+    "Alice (Fictitious character from Carroll) -- Juvenile fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "4–5",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "all-quiet-on-the-western-front": {
+   "categories": [
+    "War & Military",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/75011",
+    "https://www.gutenberg.org/ebooks/75011",
+    "https://en.wikipedia.org/wiki/All_Quiet_on_the_Western_Front"
+   ],
+   "loc_subjects": [
+    "World War, 1914-1918 -- Fiction",
+    "War stories"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "an-inquiry-into-the-nature-and-causes-of-the-wealth-of-nations": {
+   "categories": [
+    "Economics, Politics & Science"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/3300",
+    "https://www.gutenberg.org/ebooks/3300",
+    "https://en.wikipedia.org/wiki/The_Wealth_of_Nations"
+   ],
+   "loc_subjects": [
+    "Economics"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "anna-karenina": {
+   "categories": [
+    "Literary Fiction",
+    "Romance"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1399",
+    "https://www.gutenberg.org/ebooks/1399",
+    "https://en.wikipedia.org/wiki/Anna_Karenina"
+   ],
+   "loc_subjects": [
+    "Adultery -- Fiction",
+    "Didactic fiction",
+    "Love stories",
+    "Married women -- Fiction",
+    "Russia -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "anne-of-green-gables": {
+   "categories": [
+    "Coming of Age",
+    "Literary Fiction"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/45",
+    "https://www.gutenberg.org/ebooks/45",
+    "https://en.wikipedia.org/wiki/Anne_of_Green_Gables"
+   ],
+   "loc_subjects": [
+    "Orphans -- Fiction",
+    "Islands -- Fiction",
+    "Friendship -- Fiction",
+    "Bildungsromans",
+    "Girls -- Fiction",
+    "Country life -- Prince Edward Island -- Fiction",
+    "Prince Edward Island -- History -- 20th century -- Fiction",
+    "Canada -- History -- 1867-1914 -- Fiction",
+    "Shirley, Anne (Fictitious character) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "around-the-world-in-eighty-days": {
+   "categories": [
+    "Action & Adventure"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/103",
+    "https://www.gutenberg.org/ebooks/103",
+    "https://en.wikipedia.org/wiki/Around_the_World_in_Eighty_Days"
+   ],
+   "loc_subjects": [
+    "Adventure stories",
+    "Voyages around the world -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "beyond-good-and-evil": {
+   "categories": [
+    "Philosophy & Religion"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/4363",
+    "https://www.gutenberg.org/ebooks/4363",
+    "https://en.wikipedia.org/wiki/Beyond_Good_and_Evil"
+   ],
+   "loc_subjects": [
+    "Ethics",
+    "Philosophy, German"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "bleak-house": {
+   "categories": [
+    "Literary Fiction",
+    "Mystery & Detective"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1023",
+    "https://www.gutenberg.org/ebooks/1023",
+    "https://en.wikipedia.org/wiki/Bleak_House"
+   ],
+   "loc_subjects": [
+    "London (England) -- Fiction",
+    "Inheritance and succession -- Fiction",
+    "Young women -- Fiction",
+    "Domestic fiction",
+    "Bildungsromans",
+    "Guardian and ward -- Fiction",
+    "Illegitimate children -- Fiction",
+    "Legal stories"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "carmilla": {
+   "categories": [
+    "Horror & Gothic"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/10007",
+    "https://www.gutenberg.org/ebooks/10007",
+    "https://en.wikipedia.org/wiki/Carmilla"
+   ],
+   "loc_subjects": [
+    "Young women -- Fiction",
+    "Vampires -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "cranford": {
+   "categories": [
+    "Literary Fiction",
+    "Humor & Satire"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/394",
+    "https://www.gutenberg.org/ebooks/394",
+    "https://en.wikipedia.org/wiki/Cranford_(novel)"
+   ],
+   "loc_subjects": [
+    "England -- Fiction",
+    "Sisters -- Fiction",
+    "Pastoral fiction",
+    "Villages -- Fiction",
+    "Older women -- Fiction",
+    "Female friendship -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "crime-and-punishment": {
+   "categories": [
+    "Literary Fiction",
+    "Mystery & Detective"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2554",
+    "https://www.gutenberg.org/ebooks/2554",
+    "https://en.wikipedia.org/wiki/Crime_and_Punishment"
+   ],
+   "loc_subjects": [
+    "Detective and mystery stories",
+    "Psychological fiction",
+    "Saint Petersburg (Russia) -- Fiction",
+    "Murder -- Fiction",
+    "Crime -- Psychological aspects -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "don-quixote": {
+   "categories": [
+    "Humor & Satire",
+    "Action & Adventure",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/996",
+    "https://www.gutenberg.org/ebooks/996",
+    "https://en.wikipedia.org/wiki/Don_Quixote"
+   ],
+   "loc_subjects": [
+    "Spain -- Social life and customs -- 16th century -- Fiction",
+    "Knights and knighthood -- Spain -- Fiction",
+    "Picaresque literature",
+    "Romances"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "dracula": {
+   "categories": [
+    "Horror & Gothic"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/345",
+    "https://www.gutenberg.org/ebooks/345",
+    "https://en.wikipedia.org/wiki/Dracula"
+   ],
+   "loc_subjects": [
+    "Horror tales",
+    "Epistolary fiction",
+    "Gothic fiction",
+    "Vampires -- Fiction",
+    "Dracula, Count (Fictitious character) -- Fiction",
+    "Transylvania (Romania) -- Fiction",
+    "Whitby (England) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "fairy-tales-of-hans-christian-andersen": {
+   "categories": [
+    "Fairy Tales, Folklore & Mythology",
+    "Short Stories"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/27200",
+    "https://www.gutenberg.org/ebooks/27200",
+    "https://en.wikipedia.org/wiki/Fairy_Tales_Told_for_Children._First_Collection."
+   ],
+   "loc_subjects": [
+    "Short stories",
+    "Fairy tales",
+    "Fairy tales -- Denmark",
+    "Children's stories, Danish -- Translations into English"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "frankenstein": {
+   "categories": [
+    "Horror & Gothic",
+    "Science Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/84",
+    "https://www.gutenberg.org/ebooks/84",
+    "https://en.wikipedia.org/wiki/Frankenstein"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Horror tales",
+    "Gothic fiction",
+    "Scientists -- Fiction",
+    "Monsters -- Fiction",
+    "Frankenstein, Victor (Fictitious character) -- Fiction",
+    "Frankenstein's monster (Fictitious character) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "from-the-earth-to-the-moon": {
+   "categories": [
+    "Science Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/83",
+    "https://www.gutenberg.org/ebooks/83",
+    "https://en.wikipedia.org/wiki/From_the_Earth_to_the_Moon"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Space flight to the moon -- Fiction",
+    "Moon -- Fiction",
+    "Space ships -- Fiction",
+    "Manned space flight -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "great-expectations": {
+   "categories": [
+    "Coming of Age",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1400",
+    "https://www.gutenberg.org/ebooks/1400",
+    "https://en.wikipedia.org/wiki/Great_Expectations"
+   ],
+   "loc_subjects": [
+    "Orphans -- Fiction",
+    "England -- Fiction",
+    "Revenge -- Fiction",
+    "Bildungsromans",
+    "Young men -- Fiction",
+    "Man-woman relationships -- Fiction",
+    "Ex-convicts -- Fiction",
+    "Benefactors -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "grimms-fairy-tales": {
+   "categories": [
+    "Fairy Tales, Folklore & Mythology",
+    "Short Stories"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2591",
+    "https://www.gutenberg.org/ebooks/2591",
+    "https://en.wikipedia.org/wiki/Grimms'_Fairy_Tales"
+   ],
+   "loc_subjects": [
+    "Fairy tales -- Germany"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "gullivers-travels-into-several-remote-nations-of-the-world": {
+   "categories": [
+    "Humor & Satire",
+    "Fantasy",
+    "Science Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/829",
+    "https://www.gutenberg.org/ebooks/829",
+    "https://en.wikipedia.org/wiki/Gulliver%27s_Travels"
+   ],
+   "loc_subjects": [
+    "Fantasy fiction",
+    "Satire",
+    "Travelers -- Fiction",
+    "Gulliver, Lemuel (Fictitious character) -- Fiction",
+    "Voyages, Imaginary -- Early works to 1800"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "history-of-tom-jones-a-foundling": {
+   "categories": [
+    "Humor & Satire",
+    "Coming of Age",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/6593",
+    "https://www.gutenberg.org/ebooks/6593",
+    "https://en.wikipedia.org/wiki/The_History_of_Tom_Jones,_a_Foundling"
+   ],
+   "loc_subjects": [
+    "Humorous stories",
+    "England -- Fiction",
+    "Bildungsromans",
+    "Young men -- Fiction",
+    "Foundlings -- Fiction",
+    "Identity (Psychology) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "jane-eyre": {
+   "categories": [
+    "Romance",
+    "Coming of Age",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1260",
+    "https://www.gutenberg.org/ebooks/1260",
+    "https://en.wikipedia.org/wiki/Jane_Eyre"
+   ],
+   "loc_subjects": [
+    "Orphans -- Fiction",
+    "England -- Fiction",
+    "Young women -- Fiction",
+    "Love stories",
+    "Governesses -- Fiction",
+    "Fathers and daughters -- Fiction",
+    "Mentally ill women -- Fiction",
+    "Charity-schools -- Fiction",
+    "Married people -- Fiction",
+    "Country homes -- Fiction",
+    "Bildungsromans"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "life-on-the-mississippi": {
+   "categories": [
+    "History & Biography"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/245",
+    "https://en.wikipedia.org/wiki/Life_on_the_Mississippi",
+    "https://www.gutenberg.org/ebooks/245"
+   ],
+   "loc_subjects": [
+    "Mississippi River -- Description and travel",
+    "Mississippi River Valley -- Social life and customs -- 19th century",
+    "Authors, American -- 19th century -- Biography",
+    "Pilots and pilotage -- Mississippi River",
+    "Twain, Mark, 1835-1910 -- Travel -- Mississippi River"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "little-women-or-meg-jo-beth-and-amy": {
+   "categories": [
+    "Coming of Age",
+    "Literary Fiction"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/37106",
+    "https://www.gutenberg.org/ebooks/37106",
+    "https://en.wikipedia.org/wiki/Little_Women"
+   ],
+   "loc_subjects": [
+    "Autobiographical fiction",
+    "Young women -- Fiction",
+    "Sisters -- Fiction",
+    "Domestic fiction",
+    "Family life -- New England -- Fiction",
+    "New England -- Fiction",
+    "Bildungsromans",
+    "Mothers and daughters -- Fiction",
+    "March family (Fictitious characters) -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "6–8",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "louise-de-la-vallière": {
+   "categories": [
+    "Historical Fiction",
+    "Romance"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2710",
+    "https://www.gutenberg.org/ebooks/2710"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "France -- History -- Louis XIV, 1643-1715 -- Fiction",
+    "Adventure stories",
+    "La Vallière, Françoise-Louise de La Baume Le Blanc, duchesse de, 1644-1710 -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "metamorphosis": {
+   "categories": [
+    "Literary Fiction",
+    "Fantasy"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/5200",
+    "https://www.gutenberg.org/ebooks/5200",
+    "https://en.wikipedia.org/wiki/The_Metamorphosis"
+   ],
+   "loc_subjects": [
+    "Psychological fiction",
+    "Metamorphosis -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "9–10",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "middlemarch": {
+   "categories": [
+    "Literary Fiction",
+    "Romance"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/145",
+    "https://www.gutenberg.org/ebooks/145",
+    "https://en.wikipedia.org/wiki/Middlemarch"
+   ],
+   "loc_subjects": [
+    "Didactic fiction",
+    "City and town life -- Fiction",
+    "England -- Fiction",
+    "Young women -- Fiction",
+    "Love stories",
+    "Domestic fiction",
+    "Married people -- Fiction",
+    "Bildungsromans"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "moby-dick-or-the-whale": {
+   "categories": [
+    "Action & Adventure",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2701",
+    "https://www.gutenberg.org/ebooks/2701",
+    "https://en.wikipedia.org/wiki/Moby-Dick"
+   ],
+   "loc_subjects": [
+    "Whaling -- Fiction",
+    "Sea stories",
+    "Psychological fiction",
+    "Ship captains -- Fiction",
+    "Adventure stories",
+    "Mentally ill -- Fiction",
+    "Ahab, Captain (Fictitious character) -- Fiction",
+    "Whales -- Fiction",
+    "Whaling ships -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "narrative-of-the-life-of-frederick-douglass-an-american-slave": {
+   "categories": [
+    "History & Biography"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/23",
+    "https://www.gutenberg.org/ebooks/23",
+    "https://en.wikipedia.org/wiki/Narrative_of_the_Life_of_Frederick_Douglass"
+   ],
+   "loc_subjects": [
+    "Douglass, Frederick, 1818-1895",
+    "African American abolitionists -- Biography",
+    "Abolitionists -- United States -- Biography",
+    "Enslaved persons -- United States -- Biography"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "6–8",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "oliver-twist": {
+   "categories": [
+    "Coming of Age",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/730",
+    "https://www.gutenberg.org/ebooks/730",
+    "https://en.wikipedia.org/wiki/Oliver_Twist"
+   ],
+   "loc_subjects": [
+    "Orphans -- Fiction",
+    "London (England) -- Fiction",
+    "Bildungsromans",
+    "Boys -- Fiction",
+    "Criminals -- Fiction",
+    "Kidnapping victims -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "paradise-lost": {
+   "categories": [
+    "Poetry & Drama",
+    "Philosophy & Religion"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/26",
+    "https://www.gutenberg.org/ebooks/26",
+    "https://en.wikipedia.org/wiki/Paradise_Lost"
+   ],
+   "loc_subjects": [
+    "Fall of man -- Poetry",
+    "Adam (Biblical figure) -- Poetry",
+    "Eve (Biblical figure) -- Poetry",
+    "Bible. Genesis -- History of Biblical events -- Poetry"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "peter-pan": {
+   "categories": [
+    "Fantasy",
+    "Action & Adventure"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/16",
+    "https://www.gutenberg.org/ebooks/16",
+    "https://en.wikipedia.org/wiki/Peter_Pan_(play_and_novel)"
+   ],
+   "loc_subjects": [
+    "Fantasy literature",
+    "Peter Pan (Fictitious character) -- Fiction",
+    "Never-Never Land (Imaginary place) -- Fiction",
+    "Pirates -- Fiction",
+    "Fairies -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "pride-and-prejudice": {
+   "categories": [
+    "Romance",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1342",
+    "https://www.gutenberg.org/ebooks/1342",
+    "https://en.wikipedia.org/wiki/Pride_and_Prejudice"
+   ],
+   "loc_subjects": [
+    "England -- Fiction",
+    "Young women -- Fiction",
+    "Love stories",
+    "Sisters -- Fiction",
+    "Domestic fiction",
+    "Courtship -- Fiction",
+    "Social classes -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "principles-of-political-economy": {
+   "categories": [
+    "Economics, Politics & Science"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/30107",
+    "https://www.gutenberg.org/ebooks/30107",
+    "https://en.wikipedia.org/wiki/Principles_of_Political_Economy"
+   ],
+   "loc_subjects": [
+    "Economics"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "romeo-and-juliet": {
+   "categories": [
+    "Poetry & Drama",
+    "Romance"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1513",
+    "https://www.gutenberg.org/ebooks/1513",
+    "https://en.wikipedia.org/wiki/Romeo_and_Juliet"
+   ],
+   "loc_subjects": [
+    "Vendetta -- Drama",
+    "Youth -- Drama",
+    "Verona (Italy) -- Drama",
+    "Juliet (Fictitious character) -- Drama",
+    "Romeo (Fictitious character) -- Drama",
+    "Conflict of generations -- Drama",
+    "Tragedies (Drama)"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "round-the-moon": {
+   "categories": [
+    "Science Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/83",
+    "https://www.gutenberg.org/ebooks/83",
+    "https://en.wikipedia.org/wiki/Around_the_Moon"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Space flight to the moon -- Fiction",
+    "Moon -- Fiction",
+    "Space ships -- Fiction",
+    "Manned space flight -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "sense-and-sensibility": {
+   "categories": [
+    "Romance",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/161",
+    "https://www.gutenberg.org/ebooks/161",
+    "https://en.wikipedia.org/wiki/Sense_and_Sensibility"
+   ],
+   "loc_subjects": [
+    "England -- Social life and customs -- 19th century -- Fiction",
+    "Inheritance and succession -- Fiction",
+    "England -- Fiction",
+    "Young women -- Fiction",
+    "Love stories",
+    "Sisters -- Fiction",
+    "Domestic fiction",
+    "Mate selection -- Fiction",
+    "Social classes -- Fiction",
+    "Gentry -- England -- Fiction",
+    "Regency fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "ten-years-later": {
+   "categories": [
+    "Historical Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2681",
+    "https://www.gutenberg.org/ebooks/2681",
+    "https://en.wikipedia.org/wiki/Ten_Years_Later"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "France -- History -- Louis XIV, 1643-1715 -- Fiction",
+    "Adventure and adventurers -- Fiction",
+    "Swordsmen -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "tess-of-the-durbervilles": {
+   "categories": [
+    "Literary Fiction",
+    "Romance"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/110",
+    "https://www.gutenberg.org/ebooks/110",
+    "https://en.wikipedia.org/wiki/Tess_of_the_d'Urbervilles"
+   ],
+   "loc_subjects": [
+    "Didactic fiction",
+    "Poor families -- Fiction",
+    "Children of the rich -- Fiction",
+    "Triangles (Interpersonal relations) -- Fiction",
+    "Pastoral fiction",
+    "Children of clergy -- Fiction",
+    "Wessex (England) -- Fiction",
+    "Man-woman relationships -- Fiction",
+    "Women murderers -- Fiction",
+    "Rape victims -- Fiction",
+    "Women household employees -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-adventures-of-ferdinand-count-fathom": {
+   "categories": [
+    "Action & Adventure",
+    "Horror & Gothic"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/6761",
+    "https://www.gutenberg.org/ebooks/6761",
+    "https://en.wikipedia.org/wiki/The_Adventures_of_Ferdinand%2C_Count_Fathom"
+   ],
+   "loc_subjects": [
+    "Gothic fiction",
+    "Adventure stories"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-adventures-of-sherlock-holmes": {
+   "categories": [
+    "Mystery & Detective",
+    "Short Stories"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1661",
+    "https://www.gutenberg.org/ebooks/1661",
+    "https://en.wikipedia.org/wiki/The_Adventures_of_Sherlock_Holmes"
+   ],
+   "loc_subjects": [
+    "Holmes, Sherlock (Fictitious character) -- Fiction",
+    "Private investigators -- England -- Fiction",
+    "Detective and mystery stories, English"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-adventures-of-tom-sawyer": {
+   "categories": [
+    "Coming of Age",
+    "Action & Adventure",
+    "Humor & Satire"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/74",
+    "https://www.gutenberg.org/ebooks/74",
+    "https://en.wikipedia.org/wiki/The_Adventures_of_Tom_Sawyer"
+   ],
+   "loc_subjects": [
+    "Humorous stories",
+    "Bildungsromans",
+    "Boys -- Fiction",
+    "Male friendship -- Fiction",
+    "Adventure stories",
+    "Missouri -- Fiction",
+    "Sawyer, Tom (Fictitious character) -- Fiction",
+    "Child witnesses -- Fiction",
+    "Runaway children -- Fiction",
+    "Mississippi River Valley -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "6–8",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "the-blue-castle-a-novel": {
+   "categories": [
+    "Romance",
+    "Literary Fiction"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/67979",
+    "https://www.gutenberg.org/ebooks/67979",
+    "https://en.wikipedia.org/wiki/The_Blue_Castle"
+   ],
+   "loc_subjects": [
+    "Self-actualization (Psychology) -- Fiction",
+    "Single women -- Fiction",
+    "Canada -- History -- 1914-1945 -- Fiction",
+    "Romance fiction",
+    "Love -- Fiction",
+    "Young adult fiction",
+    "Choice (Psychology) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-brothers-karamazov": {
+   "categories": [
+    "Literary Fiction",
+    "Philosophy & Religion"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/28054",
+    "https://www.gutenberg.org/ebooks/28054",
+    "https://en.wikipedia.org/wiki/The_Brothers_Karamazov"
+   ],
+   "loc_subjects": [
+    "Didactic fiction",
+    "Fathers and sons -- Fiction",
+    "Russia -- Social life and customs -- 1533-1917 -- Fiction",
+    "Brothers -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-call-of-the-wild": {
+   "categories": [
+    "Action & Adventure",
+    "Coming of Age"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/215",
+    "https://www.gutenberg.org/ebooks/215",
+    "https://en.wikipedia.org/wiki/The_Call_of_the_Wild"
+   ],
+   "loc_subjects": [
+    "Dogs -- Fiction",
+    "Adventure stories",
+    "Nature stories",
+    "Klondike River Valley (Yukon) -- Fiction",
+    "Sled dogs -- Fiction",
+    "Pet theft -- Fiction",
+    "Feral dogs -- Fiction",
+    "Animal welfare -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-confessions-of-st-augustine": {
+   "categories": [
+    "Philosophy & Religion",
+    "History & Biography"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/3296",
+    "https://www.gutenberg.org/ebooks/3296",
+    "https://en.wikipedia.org/wiki/Confessions_(Augustine)"
+   ],
+   "loc_subjects": [
+    "Augustine, of Hippo, Saint, 354-430",
+    "Christian saints -- Algeria -- Hippo (Extinct city) -- Biography",
+    "Catholic Church -- Bishops -- Biography",
+    "Bishops -- Algeria -- Hippo (Extinct city) -- Biography"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-count-of-monte-cristo": {
+   "categories": [
+    "Action & Adventure",
+    "Historical Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1184",
+    "https://www.gutenberg.org/ebooks/1184",
+    "https://en.wikipedia.org/wiki/The_Count_of_Monte_Cristo"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "Revenge -- Fiction",
+    "Adventure stories",
+    "Prisoners -- Fiction",
+    "France -- History -- 19th century -- Fiction",
+    "Pirates -- Fiction",
+    "Dantès, Edmond (Fictitious character) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-enchanted-april": {
+   "categories": [
+    "Romance",
+    "Humor & Satire"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/16389",
+    "https://www.gutenberg.org/ebooks/16389",
+    "https://en.wikipedia.org/wiki/The_Enchanted_April"
+   ],
+   "loc_subjects": [
+    "Love stories",
+    "Domestic fiction",
+    "Italy -- Fiction",
+    "Female friendship -- Fiction",
+    "British -- Italy -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-eternal-moment-and-other-stories": {
+   "categories": [
+    "Short Stories",
+    "Fantasy",
+    "Science Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/72890",
+    "https://www.gutenberg.org/ebooks/72890",
+    "https://en.wikipedia.org/wiki/The_Eternal_Moment"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Fantasy fiction",
+    "Short stories, English",
+    "Great Britain -- Social life and customs -- 20th century -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-great-gatsby": {
+   "categories": [
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/64317",
+    "https://www.gutenberg.org/ebooks/64317",
+    "https://en.wikipedia.org/wiki/The_Great_Gatsby"
+   ],
+   "loc_subjects": [
+    "Psychological fiction",
+    "First loves -- Fiction",
+    "Married women -- Fiction",
+    "Rich people -- Fiction",
+    "Long Island (N.Y.) -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "the-happy-prince-and-other-tales": {
+   "categories": [
+    "Fairy Tales, Folklore & Mythology",
+    "Short Stories"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/902",
+    "https://www.gutenberg.org/ebooks/902",
+    "https://en.wikipedia.org/wiki/The_Happy_Prince_and_Other_Tales"
+   ],
+   "loc_subjects": [
+    "Fairy tales",
+    "Children's stories, English",
+    "Short stories, English"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-history-of-the-decline-and-fall-of-the-roman-empire": {
+   "categories": [
+    "History & Biography"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/25717",
+    "https://www.gutenberg.org/ebooks/25717",
+    "https://en.wikipedia.org/wiki/The_History_of_the_Decline_and_Fall_of_the_Roman_Empire"
+   ],
+   "loc_subjects": [
+    "Rome -- History -- Empire, 30 B.C.-476 A.D.",
+    "Byzantine Empire -- History -- To 527",
+    "Indexes"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-hound-of-the-baskervilles": {
+   "categories": [
+    "Mystery & Detective",
+    "Horror & Gothic"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2852",
+    "https://www.gutenberg.org/ebooks/2852",
+    "https://en.wikipedia.org/wiki/The_Hound_of_the_Baskervilles"
+   ],
+   "loc_subjects": [
+    "Holmes, Sherlock (Fictitious character) -- Fiction",
+    "Private investigators -- England -- Fiction",
+    "Dogs -- Fiction",
+    "Detective and mystery stories",
+    "Blessing and cursing -- Fiction",
+    "Dartmoor (England) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-house-of-the-seven-gables": {
+   "categories": [
+    "Horror & Gothic",
+    "Historical Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/77",
+    "https://www.gutenberg.org/ebooks/77",
+    "https://en.wikipedia.org/wiki/The_House_of_the_Seven_Gables"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "Domestic fiction",
+    "Paranormal fiction",
+    "Haunted houses -- Fiction",
+    "Salem (Mass.) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-iliad": {
+   "categories": [
+    "Poetry & Drama",
+    "Fairy Tales, Folklore & Mythology",
+    "War & Military"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/6130",
+    "https://www.gutenberg.org/ebooks/6130",
+    "https://en.wikipedia.org/wiki/Iliad"
+   ],
+   "loc_subjects": [
+    "Classical literature",
+    "Epic poetry, Greek -- Translations into English",
+    "Achilles (Mythological character) -- Poetry",
+    "Trojan War -- Poetry"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-importance-of-being-earnest": {
+   "categories": [
+    "Poetry & Drama",
+    "Humor & Satire"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/844",
+    "https://www.gutenberg.org/ebooks/844",
+    "https://en.wikipedia.org/wiki/The_Importance_of_Being_Earnest"
+   ],
+   "loc_subjects": [
+    "Comedy plays",
+    "England -- Drama",
+    "Identity (Psychology) -- Drama",
+    "Foundlings -- Drama"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "the-invisible-man-a-grotesque-romance": {
+   "categories": [
+    "Science Fiction",
+    "Horror & Gothic"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/5230",
+    "https://www.gutenberg.org/ebooks/5230",
+    "https://en.wikipedia.org/wiki/The_Invisible_Man"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Psychological fiction",
+    "Scientists -- Fiction",
+    "Mentally ill -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-jungle-book": {
+   "categories": [
+    "Short Stories",
+    "Action & Adventure",
+    "Fairy Tales, Folklore & Mythology"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/236",
+    "https://www.gutenberg.org/ebooks/236",
+    "https://en.wikipedia.org/wiki/The_Jungle_Book"
+   ],
+   "loc_subjects": [
+    "Short stories",
+    "Animals -- Fiction",
+    "Jungles -- Fiction",
+    "India -- Fiction",
+    "Jungle animals -- Fiction",
+    "Mowgli (Fictitious character) -- Fiction",
+    "Adventure stories, English",
+    "Feral children -- Fiction",
+    "India -- History -- 19th century -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-king-in-yellow": {
+   "categories": [
+    "Horror & Gothic",
+    "Short Stories"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/8492",
+    "https://www.gutenberg.org/ebooks/8492",
+    "https://en.wikipedia.org/wiki/The_King_in_Yellow"
+   ],
+   "loc_subjects": [
+    "Short stories, American",
+    "Horror tales, American",
+    "United States -- Social life and customs -- 19th century -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-man-in-the-iron-mask": {
+   "categories": [
+    "Historical Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2759",
+    "https://www.gutenberg.org/ebooks/2759",
+    "https://en.wikipedia.org/wiki/The_Vicomte_of_Bragelonne%3A_Ten_Years_Later"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "France -- History -- Louis XIV, 1643-1715 -- Fiction",
+    "Adventure and adventurers -- Fiction",
+    "Swordsmen -- Fiction",
+    "Romances",
+    "Man in the Iron Mask -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-man-who-was-thursday": {
+   "categories": [
+    "Mystery & Detective",
+    "Fantasy",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1695",
+    "https://www.gutenberg.org/ebooks/1695",
+    "https://en.wikipedia.org/wiki/The_Man_Who_Was_Thursday"
+   ],
+   "loc_subjects": [
+    "Fantasy fiction",
+    "Detective and mystery stories",
+    "London (England) -- Fiction",
+    "Anarchists -- Fiction",
+    "Allegories",
+    "Police -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-mysteries-of-udolpho": {
+   "categories": [
+    "Horror & Gothic",
+    "Romance"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/3268",
+    "https://www.gutenberg.org/ebooks/3268",
+    "https://en.wikipedia.org/wiki/The_Mysteries_of_Udolpho"
+   ],
+   "loc_subjects": [
+    "Orphans -- Fiction",
+    "Horror tales",
+    "Inheritance and succession -- Fiction",
+    "Young women -- Fiction",
+    "Gothic fiction",
+    "Guardian and ward -- Fiction",
+    "Castles -- Fiction",
+    "Italy -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-odyssey": {
+   "categories": [
+    "Fairy Tales, Folklore & Mythology",
+    "Action & Adventure",
+    "Poetry & Drama"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1727",
+    "https://www.gutenberg.org/ebooks/1727",
+    "https://en.wikipedia.org/wiki/Odyssey"
+   ],
+   "loc_subjects": [
+    "Homer -- Translations into English",
+    "Epic poetry, Greek -- Translations into English",
+    "Odysseus, King of Ithaca (Mythological character)"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "9–10",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "the-origin-of-species": {
+   "categories": [
+    "Economics, Politics & Science"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1228",
+    "https://www.gutenberg.org/ebooks/1228",
+    "https://en.wikipedia.org/wiki/On_the_Origin_of_Species"
+   ],
+   "loc_subjects": [
+    "Evolution (Biology)",
+    "Natural selection"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-picture-of-dorian-gray": {
+   "categories": [
+    "Horror & Gothic",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/174",
+    "https://www.gutenberg.org/ebooks/174",
+    "https://en.wikipedia.org/wiki/The_Picture_of_Dorian_Gray"
+   ],
+   "loc_subjects": [
+    "Didactic fiction",
+    "Supernatural -- Fiction",
+    "Conduct of life -- Fiction",
+    "Portraits -- Fiction",
+    "Great Britain -- History -- Victoria, 1837-1901 -- Fiction",
+    "London (England) -- History -- 1800-1950 -- Fiction",
+    "Appearance (Philosophy) -- Fiction",
+    "Paranormal fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-scarlet-letter": {
+   "categories": [
+    "Historical Fiction",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/25344",
+    "https://www.gutenberg.org/ebooks/25344",
+    "https://en.wikipedia.org/wiki/The_Scarlet_Letter"
+   ],
+   "loc_subjects": [
+    "Adultery -- Fiction",
+    "Historical fiction",
+    "Revenge -- Fiction",
+    "Psychological fiction",
+    "Married women -- Fiction",
+    "Clergy -- Fiction",
+    "Triangles (Interpersonal relations) -- Fiction",
+    "Illegitimate children -- Fiction",
+    "Women immigrants -- Fiction",
+    "Puritans -- Fiction",
+    "Boston (Mass.) -- History -- Colonial period, ca. 1600-1775 -- Fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "11–12",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "the-strange-case-of-dr-jekyll-and-mr-hyde": {
+   "categories": [
+    "Horror & Gothic",
+    "Science Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/43",
+    "https://www.gutenberg.org/ebooks/43",
+    "https://en.wikipedia.org/wiki/Strange_Case_of_Dr_Jekyll_and_Mr_Hyde"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Horror tales",
+    "London (England) -- Fiction",
+    "Physicians -- Fiction",
+    "Psychological fiction",
+    "Self-experimentation in medicine -- Fiction",
+    "Multiple personality -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-three-musketeers": {
+   "categories": [
+    "Historical Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1257",
+    "https://www.gutenberg.org/ebooks/1257",
+    "https://en.wikipedia.org/wiki/The_Three_Musketeers"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "France -- History -- Louis XIII, 1610-1643 -- Fiction",
+    "Adventure and adventurers -- Fiction",
+    "Swordsmen -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-time-machine": {
+   "categories": [
+    "Science Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/35",
+    "https://www.gutenberg.org/ebooks/35",
+    "https://en.wikipedia.org/wiki/The_Time_Machine"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Time travel -- Fiction",
+    "Dystopias -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-turn-of-the-screw": {
+   "categories": [
+    "Horror & Gothic"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/209",
+    "https://www.gutenberg.org/ebooks/209",
+    "https://en.wikipedia.org/wiki/The_Turn_of_the_Screw"
+   ],
+   "loc_subjects": [
+    "England -- Fiction",
+    "Psychological fiction",
+    "Governesses -- Fiction",
+    "Ghost stories",
+    "Children -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-vicomte-de-bragelonne": {
+   "categories": [
+    "Historical Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2609",
+    "https://www.gutenberg.org/ebooks/2609",
+    "https://en.wikipedia.org/wiki/The_Vicomte_of_Bragelonne%3A_Ten_Years_Later"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "France -- History -- Louis XIV, 1643-1715 -- Fiction",
+    "Adventure stories"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-war-of-the-worlds": {
+   "categories": [
+    "Science Fiction",
+    "War & Military"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/36",
+    "https://www.gutenberg.org/ebooks/36",
+    "https://en.wikipedia.org/wiki/The_War_of_the_Worlds"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "War stories",
+    "Martians -- Fiction",
+    "Mars (Planet) -- Fiction",
+    "Space warfare -- Fiction",
+    "Imaginary wars and battles -- Fiction",
+    "Life on other planets -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "the-wonderful-wizard-of-oz": {
+   "categories": [
+    "Fantasy",
+    "Action & Adventure"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/55",
+    "https://www.gutenberg.org/ebooks/55",
+    "https://en.wikipedia.org/wiki/The_Wonderful_Wizard_of_Oz"
+   ],
+   "loc_subjects": [
+    "Oz (Imaginary place) -- Juvenile fiction",
+    "Fantasy literature",
+    "Courage -- Juvenile fiction",
+    "Home -- Juvenile fiction",
+    "Good and evil -- Juvenile fiction",
+    "Dreams -- Juvenile fiction",
+    "Gale, Dorothy (Fictitious character) -- Juvenile fiction",
+    "Cowardly Lion (Fictitious character) -- Juvenile fiction",
+    "Cyclones -- Juvenile fiction",
+    "Scarecrow (Fictitious character from Baum) -- Juvenile fiction",
+    "Toto (Fictitious character) -- Juvenile fiction",
+    "Witches -- Juvenile fiction",
+    "Wizard of Oz (Fictitious character) -- Juvenile fiction",
+    "Tin Woodman (Fictitious character) -- Juvenile fiction"
+   ],
+   "school_lists": [
+    {
+     "list": "Common Core exemplar",
+     "grade_band": "K–1 (read-aloud)",
+     "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
+    }
+   ],
+   "reading_level": null
+  },
+  "through-the-looking-glass": {
+   "categories": [
+    "Fantasy",
+    "Humor & Satire"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/12",
+    "https://www.gutenberg.org/ebooks/12",
+    "https://en.wikipedia.org/wiki/Through_the_Looking-Glass"
+   ],
+   "loc_subjects": [
+    "Fantasy fiction",
+    "Children's stories",
+    "Imaginary places -- Juvenile fiction",
+    "Alice (Fictitious character from Carroll) -- Juvenile fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "thus-spake-zarathustra-a-book-for-all-and-none": {
+   "categories": [
+    "Philosophy & Religion"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1998",
+    "https://www.gutenberg.org/ebooks/1998",
+    "https://en.wikipedia.org/wiki/Thus_Spoke_Zarathustra"
+   ],
+   "loc_subjects": [
+    "Superman (Philosophical concept)",
+    "Philosophy, German"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "treasure-island": {
+   "categories": [
+    "Action & Adventure",
+    "Coming of Age"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/120",
+    "https://www.gutenberg.org/ebooks/120",
+    "https://en.wikipedia.org/wiki/Treasure_Island"
+   ],
+   "loc_subjects": [
+    "Sea stories",
+    "Pirates -- Fiction",
+    "Treasure troves -- Fiction",
+    "Treasure Island (Imaginary place) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "twenty-thousand-leagues-under-the-sea": {
+   "categories": [
+    "Science Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/164",
+    "https://www.gutenberg.org/ebooks/164",
+    "https://en.wikipedia.org/wiki/Twenty_Thousand_Leagues_Under_the_Seas"
+   ],
+   "loc_subjects": [
+    "Science fiction",
+    "Submarines (Ships) -- Fiction",
+    "Sea stories",
+    "Adventure stories",
+    "Underwater exploration -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "twenty-years-after": {
+   "categories": [
+    "Historical Fiction",
+    "Action & Adventure"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/1259",
+    "https://www.gutenberg.org/ebooks/1259",
+    "https://en.wikipedia.org/wiki/Twenty_Years_After"
+   ],
+   "loc_subjects": [
+    "France -- History -- Louis XIV, 1643-1715 -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "ulysses": {
+   "categories": [
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/4300",
+    "https://www.gutenberg.org/ebooks/4300",
+    "https://en.wikipedia.org/wiki/Ulysses_(novel)"
+   ],
+   "loc_subjects": [
+    "City and town life -- Fiction",
+    "Psychological fiction",
+    "Domestic fiction",
+    "Married people -- Fiction",
+    "Male friendship -- Fiction",
+    "Dublin (Ireland) -- Fiction",
+    "Epic literature",
+    "Artists -- Fiction",
+    "Jewish men -- Fiction",
+    "Alienation (Social psychology) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "uncle-toms-cabin": {
+   "categories": [
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/203",
+    "https://www.gutenberg.org/ebooks/203",
+    "https://en.wikipedia.org/wiki/Uncle_Tom's_Cabin"
+   ],
+   "loc_subjects": [
+    "Slavery -- Fiction",
+    "Didactic fiction",
+    "Political fiction",
+    "Master and servant -- Fiction",
+    "African Americans -- Fiction",
+    "Southern States -- Fiction",
+    "Fugitive slaves -- Fiction",
+    "Plantation life -- Fiction",
+    "Uncle Tom (Fictitious character) -- Fiction",
+    "Enslaved persons -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "war-and-peace": {
+   "categories": [
+    "Historical Fiction",
+    "War & Military",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/2600",
+    "https://www.gutenberg.org/ebooks/2600",
+    "https://en.wikipedia.org/wiki/War_and_Peace"
+   ],
+   "loc_subjects": [
+    "Historical fiction",
+    "War stories",
+    "Napoleonic Wars, 1800-1815 -- Campaigns -- Russia -- Fiction",
+    "Russia -- History -- Alexander I, 1801-1825 -- Fiction",
+    "Aristocracy (Social class) -- Russia -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "white-fang": {
+   "categories": [
+    "Action & Adventure",
+    "Literary Fiction"
+   ],
+   "audience": "Young Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/910",
+    "https://www.gutenberg.org/ebooks/910",
+    "https://en.wikipedia.org/wiki/White_Fang"
+   ],
+   "loc_subjects": [
+    "Wolfdogs -- Fiction",
+    "Adventure stories",
+    "Canada, Northern -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "winnie-the-pooh": {
+   "categories": [
+    "Fantasy",
+    "Short Stories"
+   ],
+   "audience": "Children",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/67098",
+    "https://www.gutenberg.org/ebooks/67098",
+    "https://en.wikipedia.org/wiki/Winnie-the-Pooh_(book)"
+   ],
+   "loc_subjects": [
+    "Animals -- Juvenile fiction",
+    "Toys -- Juvenile fiction",
+    "Teddy bears -- Juvenile fiction",
+    "Winnie-the-Pooh (Fictitious character) -- Juvenile fiction",
+    "Piglet (Fictitious character) -- Juvenile fiction",
+    "Eeyore (Fictitious character) -- Juvenile fiction",
+    "Christopher Robin (Fictitious character) -- Juvenile fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  },
+  "wuthering-heights": {
+   "categories": [
+    "Romance",
+    "Literary Fiction"
+   ],
+   "audience": "Adult",
+   "sources": [
+    "https://www.gutenberg.org/ebooks/768",
+    "https://www.gutenberg.org/ebooks/768",
+    "https://en.wikipedia.org/wiki/Wuthering_Heights"
+   ],
+   "loc_subjects": [
+    "Revenge -- Fiction",
+    "Psychological fiction",
+    "Rejection (Psychology) -- Fiction",
+    "Love stories",
+    "Domestic fiction",
+    "Yorkshire (England) -- Fiction",
+    "Foundlings -- Fiction",
+    "Rural families -- Fiction",
+    "Heathcliff (Fictitious character : Brontë) -- Fiction",
+    "Triangles (Interpersonal relations) -- Fiction"
+   ],
+   "school_lists": [],
+   "reading_level": null
+  }
+ }
+}
