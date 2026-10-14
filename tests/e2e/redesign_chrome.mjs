@@ -46,6 +46,31 @@ for (const path of ["/", "/discover", "/books/frankenstein"]) {
     JSON.stringify(s.footerLinks));
 }
 
+// One UI type system: nav and footer in the sans at a confident weight, no
+// serif lines in the footer, no repeated tagline, and every "… →" text link
+// styled alike (accent, semibold, no underline) — never a raw browser link.
+await page.goto(`${BASE}/books/alices-adventures-in-wonderland`, { waitUntil: "networkidle" });
+await page.waitForSelector("#about-author-section:not(.hidden)");
+const ui = await page.evaluate(() => {
+  const st = (el) => el && getComputedStyle(el);
+  const footer = document.querySelector("footer.footer");
+  const footerTexts = [...footer.querySelectorAll("p, a")].filter((e) => e.offsetParent);
+  return {
+    navWeight: +st(document.querySelector(".header-nav-btn")).fontWeight,
+    footerSerif: footerTexts.filter((e) => !/sans-serif$/.test(st(e).fontFamily)).map((e) => e.textContent.trim()),
+    footerPlainMentions: (footer.textContent.match(/plain English/gi) || []).length,
+    learnMore: ["color", "fontWeight", "textDecorationLine"].map((k) => st(document.getElementById("author-learn-more-btn"))[k]),
+  };
+});
+expect("nav links are medium weight or heavier", ui.navWeight >= 500, String(ui.navWeight));
+expect("footer is all sans (no stray serif line)", ui.footerSerif.length === 0, JSON.stringify(ui.footerSerif));
+expect("footer says 'plain English' once", ui.footerPlainMentions <= 1, String(ui.footerPlainMentions));
+expect("'Learn more →' is a styled accent link, not a raw browser link",
+  ui.learnMore[0] === "rgb(138, 46, 46)" && +ui.learnMore[1] >= 600 && ui.learnMore[2] === "none", JSON.stringify(ui.learnMore));
+await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+const sectionLink = await page.evaluate(() => { const c = getComputedStyle(document.querySelector(".home-section-link")); return [c.color, c.fontWeight, c.textDecorationLine]; });
+expect("home '… →' links match the same link style", sectionLink[0] === "rgb(138, 46, 46)" && +sectionLink[1] >= 600 && sectionLink[2] === "none", JSON.stringify(sectionLink));
+
 // Old /books links land on Discover.
 await page.goto(`${BASE}/books`, { waitUntil: "networkidle" });
 expect("/books redirects to /discover", new URL(page.url()).pathname.endsWith("/discover"), page.url());

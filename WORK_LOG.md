@@ -614,7 +614,7 @@ Ulysses episode titles remain blank because the source does not give official ep
 1. [x] Book page: hide "About the author" when it has no content.
 2. [x] Book page: remove "About this book" for all books (duplicates the Summary).
 3. [x] Nav: drop "Books" (overlaps Discover) from header and footer; `/books` redirects to `/discover`.
-4. [ ] Fonts: nav, footer and stray links ("Learn more →" rendered as a purple visited link) match the design system.
+4. [x] Fonts: nav, footer and stray links ("Learn more →" rendered as a purple visited link) match the design system.
 5. [ ] Hero copy: replace "Stuck on a sentence? …" with the side-by-side message.
 6. [ ] Hero on mobile: redesign (desktop is good).
 7. [ ] Home sections: stronger separation/contrast between Continue reading, Start here, etc.

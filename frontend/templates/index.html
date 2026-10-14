@@ -776,12 +776,13 @@
         <!-- Footer (hidden on chapter pages — focused reading view) -->
         {% if not initial_data or initial_data.type != 'chapter' %}
         <footer class="footer">
-            <p class="footer-tagline">Summra — the classics, rewritten into plain English.</p>
-            <nav class="footer-links" aria-label="Footer">
-                <a href="{{ base_path }}/discover">Discover</a>
-                <a href="{{ base_path }}/categories">Categories</a>
-            </nav>
-            <p class="small">© 2026 Summra. Plain English rewrites of classic literature.</p>
+            <div class="footer-row">
+                <p class="footer-note">© 2026 Summra · The classics in plain English</p>
+                <nav class="footer-links" aria-label="Footer">
+                    <a href="{{ base_path }}/discover">Discover</a>
+                    <a href="{{ base_path }}/categories">Categories</a>
+                </nav>
+            </div>
             {% if feature_auth %}
             <!-- Deliberately understated — small, muted, bottom of the
                  footer, no icon or "with Google" framing (matches
