@@ -1861,6 +1861,7 @@ class Database:
                 'original': chapter.get('chapter_text') or '',
                 'plain': chapter.get('modern_english_text') or '',
                 'section_id': chapter.get('section_id'),
+                'section_title': chapter.get('section_title') or '',
             }
             for chapter in chapters
         ]
@@ -1883,9 +1884,11 @@ class Database:
             if not book:
                 raise ValueError('Book not found')
             chapters = [dict(row) for row in conn.execute('''
-                SELECT id, book_id, chapter_number, chapter_title, chapter_text,
-                       modern_english_text, summary, section_id, illustration_url
-                FROM chapters WHERE book_id = ? ORDER BY chapter_number
+                SELECT c.id, c.book_id, c.chapter_number, c.chapter_title, c.chapter_text,
+                       c.modern_english_text, c.summary, c.section_id, c.illustration_url,
+                       s.section_title
+                FROM chapters c LEFT JOIN book_sections s ON s.id = c.section_id
+                WHERE c.book_id = ? ORDER BY c.chapter_number
             ''', (book_id,)).fetchall()]
             if not chapters:
                 raise ValueError('Book has no chapters')

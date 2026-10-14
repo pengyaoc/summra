@@ -1,5 +1,602 @@
 # Summra Work Log
 
+## 2026-10-13: Book metadata, chapter, and tag audit fixes (local database)
+
+Local backup before changes: `data/database.pre-audit-20261013.db` (SHA-256 `57694296e44ca7a3697d92a6e1dff26f40d10b6a5487ab41e4cfad84ad685389`). VM backup before changes: `/opt/summra/data/database.pre-audit-20261013.db` (SHA-256 `ba1c55c082ae42d608dd253647b8ec360563eddb57403867a7d97712c2e2ad65`). Restore either backup over its respective `database.db` while the app is stopped; this rolls back the database changes in this section.
+
+Primary text and metadata references: [Moby Dick #2701](https://www.gutenberg.org/ebooks/2701), [The Call of the Wild #215](https://www.gutenberg.org/ebooks/215), [The Vicomte de Bragelonne #2609](https://www.gutenberg.org/ebooks/2609), [Gulliver’s Travels #829](https://www.gutenberg.org/ebooks/829), [Count Fathom #6761](https://www.gutenberg.org/ebooks/6761), [The Wealth of Nations #3300](https://www.gutenberg.org/ebooks/3300), [Round the Moon (combined edition) #83](https://www.gutenberg.org/ebooks/83). [Council of Europe CEFR framework](https://www.coe.int/en/web/common-european-framework-reference-languages/introduction-and-context) defines learner proficiency, not an edition rating.
+
+Reader cache fix: before, changing only `book_sections.section_title` left the published reader structure unchanged because the title was absent from its source checksum; after, the joined section title enters the checksum and a new reader version is published. Verified on local books 84, 88, and 58 (published version 2), and with six passing targeted tests. The local database still contains 44 pre-existing orphan chapter/summary/audio foreign-key violations, outside the changed records.
+
+VM migration: applied the same 620 row/link operations after checking each original row value. Before: 90 books, 4,159 chapter rows, 53 dangling tag links, 17 books without a resolvable tag. After: 90 books, 4,161 chapter rows, zero dangling tag links, zero books without a resolvable tag. The production backup above precedes all writes. The VM checkout and service were still on the earlier code version at this checkpoint; code deployment and live reader verification are recorded below when complete.
+
+| Fix | Record | Before | After | Source |
+| --- | --- | --- | --- | --- |
+| books.title | 35 | 'Moby Dick' | 'Moby Dick; Or, The Whale' | Project Gutenberg #2701 |
+| books.gutenberg_id | 3 | None | 3300 | Project Gutenberg #3300 |
+| books.gutenberg_id | 92 | None | 83 | Project Gutenberg #83, combined From the Earth to the Moon and Round the Moon |
+| chapters.chapter_title | 768 | 'Preface' | 'Front Matter' | Project Gutenberg #2701 opening contains transcriber notes, Etymology, and Extracts |
+| chapters.chapter_number | 6499 | 0 | 1 | Project Gutenberg #215: Chapter I Into the Primitive |
+| chapters.chapter_title | 6499 | 'Preface' | 'Into the Primitive' | Project Gutenberg #215 |
+| chapter split | 84/39 → 84/39+40 | one row; text 19146 chars; summary 4481 chars | two rows; texts 9002 + 10111 chars; summaries 2107 + 2372 chars | Project Gutenberg #2609, chapters XL and L |
+| chapter split | 84/49 → 84/49+50 | one row; text 21531 chars; summary 2753 chars | two rows; texts 13408 + 8068 chars; summaries 1315 + 1436 chars | Project Gutenberg #2609, chapters XL and L |
+| chapters.chapter_title | 1795 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1796 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1797 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1798 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1799 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1800 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1801 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1802 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1803 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1804 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1805 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1806 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1807 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1808 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1809 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1810 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1811 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1812 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1813 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1814 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1815 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1816 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1817 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1818 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1819 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1820 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1821 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1822 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1823 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1824 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1825 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1826 | '' | 'Chapter 32' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1827 | '' | 'Chapter 33' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1828 | '' | 'Chapter 34' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1829 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1830 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1831 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1832 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1833 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1834 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1835 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1836 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1837 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1838 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1839 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1840 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1841 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1842 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1843 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1871 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1872 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1873 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1874 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1875 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1876 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1877 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1878 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1879 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1880 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1881 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1882 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1883 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1884 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1885 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1886 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1887 | '' | 'Chapter 32' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1888 | '' | 'Chapter 33' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1889 | '' | 'Chapter 34' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1890 | '' | 'Chapter 35' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1891 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1892 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1893 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1894 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1895 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1896 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1897 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1898 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1899 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1900 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1901 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1902 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1903 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1904 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1905 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1906 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1907 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1908 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1909 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1910 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1911 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1912 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1913 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1914 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1915 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1929 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1930 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1931 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1932 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1933 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1934 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1935 | '' | 'Chapter 32' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1936 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1937 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1938 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1939 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1940 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1941 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1942 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1943 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1944 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1945 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1946 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1947 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1948 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1949 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1950 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1951 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1952 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1953 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1954 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1955 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1956 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1957 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1958 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1959 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1960 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1961 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1962 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1963 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1964 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1965 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1966 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1967 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1968 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1969 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1970 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1971 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1972 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1973 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1974 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1975 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1976 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1977 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1978 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1979 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1980 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1981 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1982 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1983 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1984 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1985 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1986 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1987 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1988 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1989 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1990 | '' | 'Chapter 32' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1991 | '' | 'Chapter 33' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1992 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1993 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1994 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1995 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1996 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1997 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1998 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1999 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2000 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2001 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2002 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2003 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2004 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2005 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2006 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2007 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2008 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2009 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2010 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2011 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2012 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2013 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2014 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2015 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2016 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2017 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2018 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2019 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2020 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2021 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2022 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2023 | '' | 'Chapter 32' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2024 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2025 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2026 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2027 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2028 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2029 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2030 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2031 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2032 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2033 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2034 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2035 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2036 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2037 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2038 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2039 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2040 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2041 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2042 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2043 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2044 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2045 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2046 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2047 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2048 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2049 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2050 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2051 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2052 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2053 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2054 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2055 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2056 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2057 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2058 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2059 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2060 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2061 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2062 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2063 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2064 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2065 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2066 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2067 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2068 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2069 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2070 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2071 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2072 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2073 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| numbered chapter labels | 52 | 239 blank titles | 239 explicit Chapter N titles | Original part/book numbering |
+| chapters.chapter_title | 1845 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1846 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1847 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1848 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1849 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1850 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1851 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1852 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1853 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1854 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1855 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1856 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1857 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1858 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1859 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1860 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1861 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1862 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1863 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1864 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1865 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1866 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1867 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1868 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1869 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1870 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1916 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1917 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1918 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1919 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1920 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1921 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1922 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1923 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1924 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1925 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1926 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1927 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 1928 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| numbered chapter labels | 56 | 39 blank titles | 39 explicit Chapter N titles | Original part/book numbering |
+| chapters.chapter_title | 2075 | '' | 'Chapter 1' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2076 | '' | 'Chapter 2' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2077 | '' | 'Chapter 3' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2078 | '' | 'Chapter 4' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2079 | '' | 'Chapter 5' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2080 | '' | 'Chapter 6' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2081 | '' | 'Chapter 7' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2082 | '' | 'Chapter 8' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2083 | '' | 'Chapter 9' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2084 | '' | 'Chapter 10' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2085 | '' | 'Chapter 11' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2086 | '' | 'Chapter 12' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2087 | '' | 'Chapter 13' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2088 | '' | 'Chapter 14' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2089 | '' | 'Chapter 15' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2090 | '' | 'Chapter 16' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2091 | '' | 'Chapter 17' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2092 | '' | 'Chapter 18' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2093 | '' | 'Chapter 19' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2094 | '' | 'Chapter 20' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2095 | '' | 'Chapter 21' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2096 | '' | 'Chapter 22' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2097 | '' | 'Chapter 23' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2098 | '' | 'Chapter 24' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2099 | '' | 'Chapter 25' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2100 | '' | 'Chapter 26' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2101 | '' | 'Chapter 27' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2102 | '' | 'Chapter 28' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2103 | '' | 'Chapter 29' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2104 | '' | 'Chapter 30' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2105 | '' | 'Chapter 31' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2106 | '' | 'Chapter 32' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2107 | '' | 'Chapter 33' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2108 | '' | 'Chapter 34' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2109 | '' | 'Chapter 35' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2110 | '' | 'Chapter 36' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2111 | '' | 'Chapter 37' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2112 | '' | 'Chapter 38' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2113 | '' | 'Chapter 39' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2114 | '' | 'Chapter 40' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2115 | '' | 'Chapter 41' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2116 | '' | 'Chapter 42' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2117 | '' | 'Chapter 43' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2118 | '' | 'Chapter 44' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2119 | '' | 'Chapter 45' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2120 | '' | 'Chapter 46' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2121 | '' | 'Chapter 47' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2122 | '' | 'Chapter 48' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2123 | '' | 'Chapter 49' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2124 | '' | 'Chapter 50' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2125 | '' | 'Chapter 51' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2126 | '' | 'Chapter 52' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2127 | '' | 'Chapter 53' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2128 | '' | 'Chapter 54' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2129 | '' | 'Chapter 55' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2130 | '' | 'Chapter 56' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2131 | '' | 'Chapter 57' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2132 | '' | 'Chapter 58' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2133 | '' | 'Chapter 59' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2134 | '' | 'Chapter 60' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2135 | '' | 'Chapter 61' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2136 | '' | 'Chapter 62' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2137 | '' | 'Chapter 63' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2138 | '' | 'Chapter 64' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2139 | '' | 'Chapter 65' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2140 | '' | 'Chapter 66' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2141 | '' | 'Chapter 67' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2142 | '' | 'Chapter 68' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2143 | '' | 'Chapter 69' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2144 | '' | 'Chapter 70' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2145 | '' | 'Chapter 71' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2146 | '' | 'Chapter 72' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2147 | '' | 'Chapter 73' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2148 | '' | 'Chapter 74' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2149 | '' | 'Chapter 75' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2150 | '' | 'Chapter 76' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2151 | '' | 'Chapter 77' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2152 | '' | 'Chapter 78' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2153 | '' | 'Chapter 79' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2154 | '' | 'Chapter 80' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2155 | '' | 'Chapter 81' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2156 | '' | 'Chapter 82' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2157 | '' | 'Chapter 83' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2158 | '' | 'Chapter 84' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2159 | '' | 'Chapter 85' | Source chapter numbering within each part/book |
+| chapters.chapter_title | 2160 | '' | 'Chapter 86' | Source chapter numbering within each part/book |
+| numbered chapter labels | 57 | 86 blank titles | 86 explicit Chapter N titles | Original part/book numbering |
+| chapters.chapter_title | 2443 | '' | 'SOME SAGE OBSERVATIONS THAT NATURALLY INTRODUCE OUR IMPORTANT HISTORY.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2444 | '' | 'A SUPERFICIAL VIEW OF OUR HERO’S INFANCY.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2445 | '' | 'HE IS INITIATED IN A MILITARY LIFE, AND HAS THE GOOD FORTUNE TO ACQUIRE A GENEROUS PATRON.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2446 | '' | 'HIS MOTHER’S PROWESS AND DEATH; TOGETHER WITH SOME INSTANCES OF HIS OWN SAGACITY.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2447 | '' | 'A BRIEF DETAIL OF HIS EDUCATION.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2448 | '' | 'HE MEDITATES SCHEMES OF IMPORTANCE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2449 | '' | 'ENGAGES IN PARTNERSHIP WITH A FEMALE ASSOCIATE, IN ORDER TO PUT HIS TALENTS IN ACTION.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2450 | '' | 'THEIR FIRST ATTEMPT; WITH A DIGRESSION WHICH SOME READERS MAY THINK IMPERTINENT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2451 | '' | 'THE CONFEDERATES CHANGE THEIR BATTERY, AND ACHIEVE A REMARKABLE ADVENTURE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2452 | '' | 'THEY PROCEED TO LEVY CONTRIBUTIONS WITH GREAT SUCCESS, UNTIL OUR HERO SETS OUT WITH THE YOUNG COUNT FOR VIENNA, WHERE HE ENTERS INTO LEAGUE WITH ANOTHER ADVENTURER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2453 | '' | 'FATHOM MAKES VARIOUS EFFORTS IN THE WORLD OF GALLANTRY.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2454 | '' | 'HE EFFECTS A LODGMENT IN THE HOUSE OF A RICH JEWELLER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2455 | '' | 'HE IS EXPOSED TO A MOST PERILOUS INCIDENT IN THE COURSE OF HIS INTRIGUE WITH THE DAUGHTER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2456 | '' | 'HE IS REDUCED TO A DREADFUL DILEMMA, IN CONSEQUENCE OF AN ASSIGNATION WITH THE WIFE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2457 | '' | 'BUT AT LENGTH SUCCEEDS IN HIS ATTEMPT UPON BOTH.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2458 | '' | 'HIS SUCCESS BEGETS A BLIND SECURITY, BY WHICH HE IS ONCE AGAIN WELL-NIGH ENTRAPPED IN HIS DULCINEA’S APARTMENT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2459 | '' | 'THE STEP-DAME’S SUSPICIONS BEING AWAKENED, SHE LAYS A SNARE FOR OUR ADVENTURER, FROM WHICH HE IS DELIVERED BY THE INTERPOSITION OF HIS GOOD GENIUS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2460 | '' | 'OUR HERO DEPARTS FROM VIENNA, AND QUITS THE DOMAIN OF VENUS FOR THE ROUGH FIELD OF MARS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2461 | '' | 'HE PUTS HIMSELF UNDER THE GUIDANCE OF HIS ASSOCIATE, AND STUMBLES UPON THE FRENCH CAMP, WHERE HE FINISHES HIS MILITARY CAREER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2462 | '' | 'HE PREPARES A STRATAGEM BUT FINDS HIMSELF COUNTERMINED—PROCEEDS ON HIS JOURNEY, AND IS OVERTAKEN BY A TERRIBLE TEMPEST.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2463 | '' | 'HE FALLS UPON SCYLLA, SEEKING TO AVOID CHARYBDIS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2464 | '' | 'HE ARRIVES AT PARIS, AND IS PLEASED WITH HIS RECEPTION.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2465 | '' | 'ACQUITS HIMSELF WITH ADDRESS IN A NOCTURNAL RIOT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2466 | '' | 'HE OVERLOOKS THE ADVANCES OF HIS FRIENDS, AND SMARTS SEVERELY FOR HIS NEGLECT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2467 | '' | 'HE BEARS HIS FATE LIKE A PHILOSOPHER; AND CONTRACTS ACQUAINTANCE WITH A VERY REMARKABLE PERSONAGE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2468 | '' | 'THE HISTORY OF THE NOBLE CASTILIAN.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2469 | '' | 'A FLAGRANT INSTANCE OF FATHOM’S VIRTUE, IN THE MANNER OF HIS RETREAT TO ENGLAND.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2470 | '' | 'SOME ACCOUNT OF HIS FELLOW-TRAVELLERS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2471 | '' | 'ANOTHER PROVIDENTIAL DELIVERANCE FROM THE EFFECTS OF THE SMUGGLER’S INGENIOUS CONJECTURE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2472 | '' | 'THE SINGULAR MANNER OF FATHOM’S ATTACK AND TRIUMPH OVER THE VIRTUE OF THE FAIR ELENOR.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2473 | '' | 'HE BY ACCIDENT ENCOUNTERS HIS OLD FRIEND, WITH WHOM HE HOLDS A CONFERENCE, AND RENEWS A TREATY.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2474 | '' | 'HE APPEARS IN THE GREAT WORLD WITH UNIVERSAL APPLAUSE AND ADMIRATION.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2475 | '' | 'HE ATTRACTS THE ENVY AND ILL OFFICES OF THE MINOR KNIGHTS OF HIS OWN ORDER, OVER WHOM HE OBTAINS A COMPLETE VICTORY.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2476 | '' | 'HE PERFORMS ANOTHER EXPLOIT, THAT CONVEYS A TRUE IDEA OF HIS GRATITUDE AND HONOUR.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2477 | '' | 'HE REPAIRS TO BRISTOL SPRING, WHERE HE REIGNS PARAMOUNT DURING THE WHOLE SEASON.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2478 | '' | 'HE IS SMITTEN WITH THE CHARMS OF A FEMALE ADVENTURER, WHOSE ALLUREMENTS SUBJECT HIM TO A NEW VICISSITUDE OF FORTUNE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2479 | '' | 'FRESH CAUSE FOR EXERTING HIS EQUANIMITY AND FORTITUDE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2480 | '' | 'THE BITER IS BIT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2481 | '' | 'OUR ADVENTURER IS MADE ACQUAINTED WITH A NEW SCENE OF LIFE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2482 | '' | 'HE CONTEMPLATES MAJESTY AND ITS SATELLITES IN ECLIPSE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2483 | '' | 'ONE QUARREL IS COMPROMISED, AND ANOTHER DECIDED BY UNUSUAL ARMS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2512 | '' | 'AN UNEXPECTED RENCONTRE, AND A HAPPY REVOLUTION IN THE AFFAIRS OF OUR ADVENTURER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2513 | '' | 'FATHOM JUSTIFIES THE PROVERB, “WHAT’S BRED IN THE BONE WILL NEVER COME OUT OF THE FLESH.”' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2486 | '' | 'ANECDOTES OF POVERTY, AND EXPERIMENTS FOR THE BENEFIT OF THOSE WHOM IT MAY CONCERN.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2487 | '' | 'RENALDO’S DISTRESS DEEPENS, AND FATHOM’S PLOT THICKENS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2488 | '' | 'OUR ADVENTURER BECOMES ABSOLUTE IN HIS POWER OVER THE PASSIONS OF HIS FRIEND, AND EFFECTS ONE HALF OF HIS AIM.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2489 | '' | 'THE ART OF BORROWING FURTHER EXPLAINED, AND AN ACCOUNT OF A STRANGE PHENOMENON.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2490 | '' | 'COUNT FATHOM UNMASKS HIS BATTERY; IS REPULSED; AND VARIES HIS OPERATIONS WITHOUT EFFECT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2491 | '' | 'MONIMIA’S HONOUR IS PROTECTED BY THE INTERPOSITION OF HEAVEN.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2492 | '' | 'FATHOM SHIFTS THE SCENE, AND APPEARS IN A NEW CHARACTER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2493 | '' | 'TRIUMPHS OVER A MEDICAL RIVAL.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2494 | '' | 'REPAIRS TO THE METROPOLIS, AND ENROLS HIMSELF AMONG THE SONS OF PAEAN.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2495 | '' | 'ACQUIRES EMPLOYMENT IN CONSEQUENCE OF A LUCKY MISCARRIAGE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2510 | '' | 'HIS ECLIPSE, AND GRADUAL DECLINATION.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2511 | '' | 'AFTER DIVERS UNSUCCESSFUL EFFORTS, HE HAS RECOURSE TO THE MATRIMONIAL NOOSE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2498 | '' | 'IN WHICH HIS FORTUNE IS EFFECTUALLY STRANGLED.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2499 | '' | 'FATHOM BEING SAFELY HOUSED, THE READER IS ENTERTAINED WITH A RETROSPECT.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2500 | '' | 'RENALDO ABRIDGES THE PROCEEDINGS AT LAW, AND APPROVES HIMSELF THE SON OF HIS FATHER.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2501 | '' | 'HE IS THE MESSENGER OF HAPPINESS TO HIS SISTER, WHO REMOVES THE FILM WHICH HAD LONG OBSTRUCTED HIS PENETRATION, WITH REGARD TO COUNT FATHOM.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2502 | '' | 'HE RECOMPENSES THE ATTACHMENT OF HIS FRIEND; AND RECEIVES A LETTER THAT REDUCES HIM TO THE VERGE OF DEATH AND DISTRACTION.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2503 | '' | 'RENALDO MEETS WITH A LIVING MONUMENT OF JUSTICE, AND ENCOUNTERS A PERSONAGE OF SOME NOTE IN THESE MEMOIRS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2504 | '' | 'HIS RETURN TO ENGLAND, AND MIDNIGHT PILGRIMAGE TO MONIMIA’S TOMB.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2505 | '' | 'HE RENEWS THE RITES OF SORROW, AND IS ENTRANCED.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2506 | '' | 'THE MYSTERY UNFOLDED—ANOTHER RECOGNITION, WHICH, IT IS TO BE HOPED, THE READER COULD NOT FORESEE.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2507 | '' | 'A RETROSPECTIVE LINK, NECESSARY FOR THE CONCATENATION OF THESE MEMOIRS.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2508 | '' | 'THE HISTORY DRAWS NEAR A PERIOD.' | Project Gutenberg #6761 chapter heading in stored source text |
+| chapters.chapter_title | 2509 | '' | 'THE LONGEST AND THE LAST.' | Project Gutenberg #6761 chapter heading in stored source text |
+| descriptive chapter labels | 63 | 67 blank titles | 67 source heading titles | Project Gutenberg #6761 |
+| chapters.chapter_title | 2689 | '' | length 223 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2690 | '' | length 314 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2691 | '' | length 205 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2692 | '' | length 238 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2693 | '' | length 284 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2694 | '' | 'Of the inhabitants of Lilliput; their learning, laws, and customs; the manner of educating their children. The author’s way of living in that country. His vindication of a great lady.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2695 | '' | 'The author, being informed of a design to accuse him of high-treason, makes his escape to Blefuscu. His reception there.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2696 | '' | 'The author, by a lucky accident, finds means to leave Blefuscu; and, after some difficulties, returns safe to his native country.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2697 | '' | length 288 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2698 | '' | 'A description of the farmer’s daughter. The author carried to a market-town, and then to the metropolis. The particulars of his journey.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2699 | '' | length 320 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2700 | '' | 'The country described. A proposal for correcting modern maps. The king’s palace; and some account of the metropolis. The author’s way of travelling. The chief temple described.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2701 | '' | 'Several adventures that happened to the author. The execution of a criminal. The author shows his skill in navigation.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2702 | '' | length 204 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2703 | '' | length 259 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2704 | '' | 'The king and queen make a progress to the frontiers. The author attends them. The manner in which he leaves the country very particularly related. He returns to England.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2705 | '' | 'The author sets out on his third voyage. Is taken by pirates. The malice of a Dutchman. His arrival at an island. He is received into Laputa.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2706 | '' | length 218 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2707 | '' | 'A phenomenon solved by modern philosophy and astronomy. The Laputians’ great improvements in the latter. The king’s method of suppressing insurrections.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2708 | '' | length 220 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2709 | '' | 'The author permitted to see the grand academy of Lagado. The academy largely described. The arts wherein the professors employ themselves.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2710 | '' | 'A further account of the academy. The author proposes some improvements, which are honourably received.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2711 | '' | 'The author leaves Lagado: arrives at Maldonada. No ship ready. He takes a short voyage to Glubbdubdrib. His reception by the governor.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2712 | '' | 'A further account of Glubbdubdrib. Ancient and modern history corrected.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2713 | '' | 'The author returns to Maldonada. Sails to the kingdom of Luggnagg. The author confined. He is sent for to court. The manner of his admittance. The king’s great lenity to his subjects.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2714 | '' | 'The Luggnaggians commended. A particular description of the Struldbrugs, with many conversations between the author and some eminent persons upon that subject.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2715 | '' | 'The author leaves Luggnagg, and sails to Japan. From thence he returns in a Dutch ship to Amsterdam, and from Amsterdam to England.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2716 | '' | length 264 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2717 | '' | length 223 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2718 | '' | length 239 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2719 | '' | 'The Houyhnhnms’ notion of truth and falsehood. The author’s discourse disapproved by his master. The author gives a more particular account of himself, and the accidents of his voyage.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2720 | '' | 'The author at his master’s command, informs him of the state of England. The causes of war among the princes of Europe. The author begins to explain the English constitution.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2721 | '' | 'A continuation of the state of England under Queen Anne. The character of a first minister of state in European courts.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2722 | '' | length 235 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2723 | '' | 'The author relates several particulars of the _Yahoos_. The great virtues of the _Houyhnhnms_. The education and exercise of their youth. Their general assembly.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2724 | '' | 'A grand debate at the general assembly of the _Houyhnhnms_, and how it was determined. The learning of the _Houyhnhnms_. Their buildings. Their manner of burials. The defectiveness of their language.' | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2725 | '' | length 364 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2726 | '' | length 252 | Project Gutenberg #829 chapter synopsis |
+| chapters.chapter_title | 2727 | '' | length 506 | Project Gutenberg #829 chapter synopsis |
+| descriptive chapter labels | 70 | 39 blank titles | 39 source synopsis titles | Project Gutenberg #829 |
+| book_sections.section_title | 28 | '' | 'Part 1' | Source part numbering |
+| book_sections.section_title | 29 | '' | 'Part 2' | Source part numbering |
+| book_sections.section_title | 30 | '' | 'Part 3' | Source part numbering |
+| book_sections.section_title | 31 | '' | 'Part 4' | Source part numbering |
+| book_sections.section_title | 32 | '' | 'Part 5' | Source part numbering |
+| book_sections.section_title | 33 | '' | 'Part 6' | Source part numbering |
+| book_sections.section_title | 34 | '' | 'Part 7' | Source part numbering |
+| book_sections.section_title | 35 | '' | 'Part 8' | Source part numbering |
+| section labels | 52 | 8 blank titles | 8 explicit Part N titles | Original part numbering |
+| book_sections.section_title | 36 | '' | 'Part 1' | Source part numbering |
+| book_sections.section_title | 37 | '' | 'Part 2' | Source part numbering |
+| book_sections.section_title | 38 | '' | 'Part 3' | Source part numbering |
+| book_sections.section_title | 39 | '' | 'Part 4' | Source part numbering |
+| book_sections.section_title | 40 | '' | 'Part 5' | Source part numbering |
+| book_sections.section_title | 41 | '' | 'Part 6' | Source part numbering |
+| section labels | 56 | 6 blank titles | 6 explicit Part N titles | Original part numbering |
+| book_sections.section_title | 50 | '' | 'Part 1' | Source part numbering |
+| book_sections.section_title | 51 | '' | 'Part 2' | Source part numbering |
+| book_sections.section_title | 52 | '' | 'Part 3' | Source part numbering |
+| section labels | 58 | 3 blank titles | 3 explicit Part N titles | Original part numbering |
+| book_sections.section_title | 57 | '' | 'Part 1' | Source part numbering |
+| book_sections.section_title | 58 | '' | 'Part 2' | Source part numbering |
+| section labels | 63 | 2 blank titles | 2 explicit Part N titles | Original part numbering |
+| broken tag link | 239 | book 38 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 249 | book 41 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 254 | book 29 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 261 | book 3 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 262 | book 3 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 268 | book 52 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 269 | book 61 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 272 | book 61 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 273 | book 61 → category 81 | deleted dangling link | Database referential integrity |
+| broken tag link | 277 | book 49 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 283 | book 56 → category 81 | deleted dangling link | Database referential integrity |
+| broken tag link | 293 | book 30 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 297 | book 44 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 305 | book 39 → category 80 | deleted dangling link | Database referential integrity |
+| broken tag link | 309 | book 36 → category 84 | deleted dangling link | Database referential integrity |
+| broken tag link | 310 | book 36 → category 80 | deleted dangling link | Database referential integrity |
+| broken tag link | 314 | book 57 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 315 | book 57 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 320 | book 35 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 324 | book 60 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 335 | book 5 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 337 | book 7 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 339 | book 7 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 344 | book 10 → category 33 | deleted dangling link | Database referential integrity |
+| broken tag link | 349 | book 48 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 354 | book 63 → category 33 | deleted dangling link | Database referential integrity |
+| broken tag link | 366 | book 50 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 370 | book 51 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 376 | book 42 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 379 | book 8 → category 67 | deleted dangling link | Database referential integrity |
+| broken tag link | 396 | book 64 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 405 | book 28 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 410 | book 9 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 425 | book 58 → category 33 | deleted dangling link | Database referential integrity |
+| broken tag link | 433 | book 4 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 437 | book 45 → category 72 | deleted dangling link | Database referential integrity |
+| broken tag link | 438 | book 45 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 453 | book 55 → category 33 | deleted dangling link | Database referential integrity |
+| broken tag link | 458 | book 68 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 462 | book 69 → category 59 | deleted dangling link | Database referential integrity |
+| broken tag link | 468 | book 71 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 473 | book 72 → category 103 | deleted dangling link | Database referential integrity |
+| broken tag link | 479 | book 73 → category 80 | deleted dangling link | Database referential integrity |
+| broken tag link | 483 | book 74 → category 84 | deleted dangling link | Database referential integrity |
+| broken tag link | 489 | book 75 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 493 | book 77 → category 96 | deleted dangling link | Database referential integrity |
+| broken tag link | 494 | book 77 → category 76 | deleted dangling link | Database referential integrity |
+| broken tag link | 498 | book 78 → category 95 | deleted dangling link | Database referential integrity |
+| broken tag link | 587 | book 101 → category 44 | deleted dangling link | Database referential integrity |
+| broken tag link | 588 | book 101 → category 36 | deleted dangling link | Database referential integrity |
+| broken tag link | 589 | book 101 → category 40 | deleted dangling link | Database referential integrity |
+| broken tag link | 590 | book 101 → category 94 | deleted dangling link | Database referential integrity |
+| broken tag link | 591 | book 101 → category 49 | deleted dangling link | Database referential integrity |
+| book tags | 76 | [] | [34, 36, 40, 51] | Existing category taxonomy; book genre/subject |
+| book tags | 80 | [] | [34, 37, 40, 42] | Existing category taxonomy; book genre/subject |
+| book tags | 83 | [] | [34, 37, 40, 42] | Existing category taxonomy; book genre/subject |
+| book tags | 84 | [] | [34, 37, 40, 42] | Existing category taxonomy; book genre/subject |
+| book tags | 85 | [] | [34, 37, 40, 42] | Existing category taxonomy; book genre/subject |
+| book tags | 86 | [] | [37, 40, 42, 46] | Existing category taxonomy; book genre/subject |
+| book tags | 87 | [] | [34, 37, 40, 42] | Existing category taxonomy; book genre/subject |
+| book tags | 88 | [] | [34, 35, 40, 102] | Existing category taxonomy; book genre/subject |
+| book tags | 89 | [] | [35, 40, 42, 113] | Existing category taxonomy; book genre/subject |
+| book tags | 99 | [] | [38, 40, 42] | Existing category taxonomy; book genre/subject |
+| book tags | 107 | [] | [36, 40, 42, 48] | Existing category taxonomy; book genre/subject |
+| book tags | 108 | [] | [35, 40, 41, 63] | Existing category taxonomy; book genre/subject |
+| book tags | 109 | [] | [36, 40, 42, 48] | Existing category taxonomy; book genre/subject |
+| book tags | 110 | [] | [40, 41, 94] | Existing category taxonomy; book genre/subject |
+| book tags | 111 | [] | [36, 40, 42, 46] | Existing category taxonomy; book genre/subject |
+| book tags | 112 | [] | [35, 40, 101] | Existing category taxonomy; book genre/subject |
+| book tags | 114 | [] | [36, 40, 42, 113] | Existing category taxonomy; book genre/subject |
+| book tags | 70 | [112] | [36, 40, 42, 112, 113] | Existing category taxonomy; book genre/subject |
+
+CEFR: unchanged pending an official, edition-specific source. The existing values were estimates; Council of Europe CEFR rates learner proficiency, and Project Gutenberg does not assign these originals CEFR levels.
+
+Ulysses episode titles remain blank because the source does not give official episode names; reader fallback numbering remains. The 59 blank book descriptions and present-day relevance fields require editorial writing and were not invented in a formatting/data-integrity pass.
+
+---
+
+
 [Previous content preserved...]
 
 ---
