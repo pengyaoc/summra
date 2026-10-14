@@ -80,10 +80,11 @@ def test_start_reading_label(client):
 
 
 def test_page_section_order(client):
-    """About this book → summaries → chapters → reading guides → about the
-    author → you may also like."""
+    """Summaries → chapters → reading guides → about the author → you may
+    also like. There is no "About this book": it repeated the summary."""
     body = client.get('/books/plain-book').get_data(as_text=True)
-    ids = ['about-section', 'summary-tabs-section', 'chapters-section', 'reading-guide-section',
+    assert 'id="about-section"' not in body and 'About this book' not in body
+    ids = ['summary-tabs-section', 'chapters-section', 'reading-guide-section',
            'about-author-section', 'related-books-section']
     positions = [body.index(f'id="{i}"') for i in ids]
     assert positions == sorted(positions), dict(zip(ids, positions))

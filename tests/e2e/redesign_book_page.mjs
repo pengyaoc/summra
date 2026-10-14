@@ -61,16 +61,26 @@ expect("toc: rows show reading time", rows.every((r) => /^\d+(½)? (min|hrs?)$/.
 expect("toc: nothing marked read when anonymous", rows.every((r) => !r.completed));
 
 // Section order on the rendered page.
-const order = await page.evaluate(() => ["about-section", "summary-tabs-section", "chapters-section",
+const order = await page.evaluate(() => ["summary-tabs-section", "chapters-section",
   "reading-guide-section", "about-author-section", "related-books-section"]
   .map((id) => document.getElementById(id))
   .map((el) => el && { follows: (prev) => !!(prev.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING),
     el, top: el.offsetParent ? el.getBoundingClientRect().top : null })
   .map((x, i, all) => x && (i === 0 || x.follows(all[i - 1].el)) && x.top));
-// DOM order for all six; hidden sections (no content for this book) report null.
+// DOM order for all five; hidden sections (no content for this book) report null.
 expect("sections in order", order.every((t) => t !== false), JSON.stringify(order));
 const shown = order.filter((t) => t !== null);
 expect("visible sections in on-screen order", shown.every((t, i) => i === 0 || shown[i - 1] <= t), JSON.stringify(order));
+
+expect("no About this book section (the summary covers it)", await page.evaluate(() => !document.getElementById("about-section")));
+await page.waitForFunction(() => document.getElementById("author-bio-text")?.textContent.trim());
+expect("about the author shown when there's a bio", await page.isVisible("#about-author-section"));
+{
+  const p2 = await anon.newPage();
+  await p2.goto(`${BASE}/books/the-turn-of-the-screw`, { waitUntil: "networkidle" });
+  expect("about the author hidden when the author has no bio", !(await p2.isVisible("#about-author-section")));
+  await p2.close();
+}
 
 // Clicking a chapter opens the continuous reader at that chapter.
 await page.locator("#chapters-list .chapter-box").nth(3).click();

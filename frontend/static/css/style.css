@@ -901,8 +901,7 @@ body.on-chapter-page .header {
 
 /* Book Content Sections */
 
-/* About This Book Section */
-.about-section,
+/* About the author */
 .about-author-section {
     max-width: 760px;
     margin-bottom: 48px;
@@ -933,40 +932,6 @@ body.on-chapter-page .header {
 
 .about-heading-row .about-heading {
     margin-bottom: 0;
-}
-
-.about-text {
-    font-size: 0.95rem;
-    line-height: 1.7;
-    color: var(--text-dark);
-    margin: 0;
-}
-
-.about-text p {
-    margin: 0 0 1em 0;
-}
-
-.about-text p:last-child {
-    margin-bottom: 0;
-}
-
-.about-text strong {
-    font-weight: 600;
-    color: var(--primary-color);
-}
-
-.about-text em {
-    font-style: italic;
-}
-
-.about-text a {
-    color: var(--primary-color);
-    text-decoration: none;
-    border-bottom: 1px solid var(--primary-color);
-}
-
-.about-text a:hover {
-    opacity: 0.8;
 }
 
 /* Author Info */
@@ -1043,10 +1008,6 @@ body.on-chapter-page .header {
 
 /* Responsive design for about section */
 @media (max-width: 768px) {
-    .about-section {
-        padding: 20px;
-    }
-
     .author-books-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         gap: 12px;
