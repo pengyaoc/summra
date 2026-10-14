@@ -82,13 +82,10 @@ def build_breadcrumbs(page_type, **kwargs):
                 'position': 3
             })
 
-    elif page_type == 'all_books':
-        breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
-
     elif page_type == 'book':
         book = kwargs.get('book')
         if book:
-            breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+            breadcrumbs.append({'name': 'Discover', 'url': '/discover', 'position': 2})
             breadcrumbs.append({
                 'name': book['title'],
                 'url': f"/books/{book['slug']}",
@@ -98,7 +95,7 @@ def build_breadcrumbs(page_type, **kwargs):
     elif page_type == 'book_summary':
         book = kwargs.get('book')
         if book:
-            breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+            breadcrumbs.append({'name': 'Discover', 'url': '/discover', 'position': 2})
             breadcrumbs.append({
                 'name': book['title'],
                 'url': f"/books/{book['slug']}",
@@ -114,7 +111,7 @@ def build_breadcrumbs(page_type, **kwargs):
         book = kwargs.get('book')
         chapter = kwargs.get('chapter')
         if book:
-            breadcrumbs.append({'name': 'All Books', 'url': '/all-books', 'position': 2})
+            breadcrumbs.append({'name': 'Discover', 'url': '/discover', 'position': 2})
             breadcrumbs.append({
                 'name': book['title'],
                 'url': f"/books/{book['slug']}",

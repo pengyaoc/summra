@@ -17,7 +17,7 @@ try {
   let catalogFetches = 0;
   page.on('request', (r) => { if (/\/api\/books(\?.*)?$/.test(new URL(r.url()).pathname + new URL(r.url()).search)) catalogFetches++; });
 
-  for (const path of ['/', '/books/a-journey-to-the-centre-of-the-earth']) {
+  for (const path of ['/', '/discover', '/books/a-journey-to-the-centre-of-the-earth']) {
     catalogFetches = 0;
     await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
     console.log(`${path}: ${catalogFetches} catalog fetch(es) on load`);
@@ -26,9 +26,9 @@ try {
 
   // A page that does need the catalog fetches it exactly once.
   catalogFetches = 0;
-  await page.goto(`${BASE}/books`, { waitUntil: 'networkidle' });
-  console.log(`/books: ${catalogFetches} catalog fetch(es) on load`);
-  if (catalogFetches !== 1) fail(`/books fetched /api/books ${catalogFetches}x; expected exactly 1`);
+  await page.goto(`${BASE}/categories`, { waitUntil: 'networkidle' });
+  console.log(`/categories: ${catalogFetches} catalog fetch(es) on load`);
+  if (catalogFetches !== 1) fail(`/categories fetched /api/books ${catalogFetches}x; expected exactly 1`);
 
   // Search still works on home: catalog loads on demand.
   catalogFetches = 0;

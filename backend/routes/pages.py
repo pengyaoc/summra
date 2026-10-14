@@ -6,7 +6,7 @@ Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 import re
 import time
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, redirect, render_template, request
 
 from backend.routes import common
 from backend.study_cues import level_label, split_sentences
@@ -512,29 +512,6 @@ def categories_list():
 
 @bp.route('/books')
 def all_books():
-    """Server-side rendering for all books page (SEO)"""
-    db = common.db
-    site_origin = common.site_origin
-
-    books = db.get_all_books()
-    book_count = len(books)
-
-    # Prepare meta tags
-    meta_title = f"Browse {book_count} Classic Books - Free Summaries | Summra"
-    meta_description = f"Browse our complete collection of {book_count} classic books with free summaries. From Shakespeare to Tolstoy, explore timeless literature with concise and comprehensive analyses."
-    canonical_url = f"{site_origin()}/books"
-
-    # Pass initial data
-    initial_data = {
-        'type': 'all-books'
-    }
-
-    return render_template(
-        'index.html',
-        meta_title=meta_title,
-        meta_description=meta_description,
-        meta_keywords="classic books, literature, free summaries, book collection, timeless literature",
-        canonical_url=canonical_url,
-        og_type='website',
-        initial_data=initial_data
-    )
+    """The full listing was folded into Discover (same books, plus filters);
+    keep old links and search results working."""
+    return redirect(f'{request.script_root}/discover', code=301)

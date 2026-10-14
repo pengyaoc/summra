@@ -42,7 +42,7 @@ def test_prefixed_deployment_injects_base_path(client):
     body = resp.get_data(as_text=True)
     assert 'window.APP_BASE_PATH = "/summrabook";' in body
     assert 'href="/summrabook/discover"' in body
-    assert 'href="/summrabook/books"' in body
+    assert 'href="/summrabook/categories"' in body
     assert 'href="/summrabook/categories"' in body
 
 

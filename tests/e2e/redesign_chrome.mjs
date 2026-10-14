@@ -21,7 +21,7 @@ const expect = (label, cond, detail = "") => {
 const consoleErrors = [];
 page.on("console", (msg) => { if (msg.type() === "error") consoleErrors.push(`${page.url()}: ${msg.text()}`); });
 
-for (const path of ["/", "/books", "/books/frankenstein"]) {
+for (const path of ["/", "/discover", "/books/frankenstein"]) {
   await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
   const s = await page.evaluate(() => {
     const cs = (sel, prop) => {
@@ -31,7 +31,8 @@ for (const path of ["/", "/books", "/books/frankenstein"]) {
     return {
       bodyBg: cs("body", "backgroundColor"),
       headerBg: cs("header.header", "backgroundColor"),
-      navColor: cs("#books-nav-btn", "color"),
+      navColor: cs("#discover-nav-btn", "color"),
+      booksNav: !!document.getElementById("books-nav-btn"),
       logoFont: cs(".logo", "fontFamily"),
       footerLinks: [...document.querySelectorAll("footer.footer a")].map((a) => a.getAttribute("href")),
     };
@@ -40,10 +41,14 @@ for (const path of ["/", "/books", "/books/frankenstein"]) {
   expect(`${path}: header background is paper`, s.headerBg === PAPER, s.headerBg);
   expect(`${path}: nav links are ink`, s.navColor === INK, s.navColor);
   expect(`${path}: wordmark is serif`, /serif/i.test(s.logoFont || "") && !/sans-serif$/i.test(s.logoFont || ""), s.logoFont);
-  expect(`${path}: footer links to Discover and Books`,
-    s.footerLinks.some((h) => h && h.endsWith("/discover")) && s.footerLinks.some((h) => h && h.endsWith("/books")),
+  expect(`${path}: Discover only — no separate Books link (header or footer)`,
+    !s.booksNav && s.footerLinks.some((h) => h && h.endsWith("/discover")) && !s.footerLinks.some((h) => h && h.endsWith("/books")),
     JSON.stringify(s.footerLinks));
 }
+
+// Old /books links land on Discover.
+await page.goto(`${BASE}/books`, { waitUntil: "networkidle" });
+expect("/books redirects to /discover", new URL(page.url()).pathname.endsWith("/discover"), page.url());
 
 // Primary call to action on the book page uses the accent colour.
 await page.goto(`${BASE}/books/frankenstein`, { waitUntil: "networkidle" });
