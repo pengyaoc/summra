@@ -1167,7 +1167,7 @@ class SummraApp {
 
         // Update author "Learn more" button
         if (authorLearnMoreBtn && authorName) {
-            authorLearnMoreBtn.href = `/authors/${authorSlug}`;
+            authorLearnMoreBtn.href = withBasePath(`/authors/${authorSlug}`);
             authorLearnMoreBtn.classList.remove('hidden');
         }
 
