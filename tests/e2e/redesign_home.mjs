@@ -73,6 +73,15 @@ expect("hero: original arrives left, plain English replies right, below it", isT
 expect("hero: the message is from the author; the reply is labelled Plain English",
   /Austen|Dickens|Shelley|Carroll|Brontë|Doyle|Twain|Wilde|Stevenson|·/.test(desk.sender || "") && desk.replyLabel === "Plain English", JSON.stringify(desk));
 const copy = await page.evaluate(() => document.querySelector(".hero-main").textContent);
+expect("hero: tagline points to side by side for the original", /side by side/i.test(copy) && !/Stuck on a sentence/.test(copy), copy.replace(/\s+/g, " ").slice(0, 200));
+// Sections read as distinct bands: each spans the window, and no two
+// neighbouring sections share a background.
+const bands = await page.evaluate(() => [...document.querySelectorAll("#hero-section > section")]
+  .filter((el) => el.offsetParent)
+  .map((el) => ({ id: el.id || el.className.split(" ").slice(-1)[0], bg: getComputedStyle(el).backgroundColor,
+    full: Math.abs(el.getBoundingClientRect().width - document.documentElement.clientWidth) <= 1 })));
+expect("home: every section is a full-width band", bands.length >= 3 && bands.every((b) => b.full), JSON.stringify(bands));
+expect("home: neighbouring sections differ in background", bands.every((b, i) => i === 0 || b.bg !== bands[i - 1].bg), JSON.stringify(bands));
 expect("hero: friendly copy (no 'summarised' / 'prose')", !/summari[sz]ed|prose/i.test(copy), copy.replace(/\s+/g, " ").slice(0, 160));
 const replyAnim = () => page.evaluate(() => getComputedStyle([...document.querySelectorAll(".hero-sentence")]
   .find((x) => !x.hidden).querySelector(".hero-bubble--plain")).animationName);
@@ -168,8 +177,30 @@ const mHeights = await mp.evaluate(() => [...document.querySelectorAll(".hero-se
   .map((f) => Math.round([...f.children].reduce((h, c) => h + c.getBoundingClientRect().height, 0))));
 expect("mobile: examples are similar in length (≤100px of spare space)", Math.max(...mHeights) - Math.min(...mHeights) <= 100, JSON.stringify(mHeights));
 const mThread = await thread(mp);
+const mOrder = await mp.evaluate(() => {
+  const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+  const thread = r("#hero-examples"), cta = r(".hero-main .hero-cta-primary"), band = r(".hero-main");
+  return { threadBottom: Math.round(thread.bottom), ctaTop: Math.round(cta.top), ctaW: Math.round(cta.width), bandW: Math.round(band.width) };
+});
+expect("mobile: the example comes before the button, which runs full width", mOrder.ctaTop >= mOrder.threadBottom && mOrder.ctaW >= mOrder.bandW - 48, JSON.stringify(mOrder));
 expect("mobile: same thread layout on a phone", isThread(mThread), JSON.stringify(mThread));
 await mobile.close();
+
+// No pop-in: whatever Continue reading shows is in the first HTML, so the
+// sections below don't jump once scripts and /api/library finish.
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p2 = await ctx2.newPage();
+  await p2.goto(`${BASE}/`, { waitUntil: "commit" });
+  await p2.waitForSelector(".hero-discover");
+  const top = () => p2.evaluate(() => Math.round(document.querySelector(".hero-discover").getBoundingClientRect().top + scrollY));
+  const early = await top();
+  await p2.waitForLoadState("networkidle");
+  await p2.waitForTimeout(500);
+  const late = await top();
+  expect("home: Start here doesn't move after load (no Continue reading pop-in)", early === late, `${early} → ${late}`);
+  await ctx2.close();
+}
 
 // Signed-in reader with a book in progress sees Continue reading
 const signed = await browser.newContext({ viewport: { width: 1280, height: 900 } });

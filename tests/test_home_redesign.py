@@ -155,3 +155,45 @@ def test_hero_examples_are_famous_hard_sentences(monkeypatch):
     slugs = {e['slug'] for e in examples}
     assert {'pride-and-prejudice', 'great-expectations'} <= slugs
     assert not slugs & {'jane-eyre', 'frankenstein'}, 'openings too easy to show off a rewrite'
+
+
+# --- Continue reading is server-rendered (no late pop-in) ---------------------
+
+class _StubUserDb:
+    """The user database boundary: just the reading-state lookup."""
+    def __init__(self, states):
+        self.states = states
+
+    def get_library_projection(self, user_id):
+        return self.states
+
+
+def _continue_section(body):
+    return re.search(r'<section class="([^"]*)" id="home-continue"[^>]*>(.*?)</section>', body, re.S)
+
+
+def test_continue_reading_is_in_the_first_html_for_a_reader_with_progress(client, monkeypatch):
+    from backend import app_base
+    from backend.routes import pages
+    from backend.routes.pages import progress_routes  # the module pages.py uses (another test reloads it)
+    monkeypatch.setattr(pages, '_signed_in_user_id', lambda: 7)  # auth boundary: a signed-in reader
+    book_id = app_base.db.get_book_by_slug('pride-and-prejudice')['id']
+    monkeypatch.setattr(progress_routes, 'content_db', app_base.db)
+    monkeypatch.setattr(progress_routes, 'user_db', _StubUserDb([{
+        'book_id': book_id, 'status': 'in_progress', 'last_mode': 'plain', 'last_mode_state': None,
+        'last_meaningful_read_at': '2026-10-13', 'finished_at': None}]))
+    resp = client.get('/')
+    classes, inner = _continue_section(resp.get_data(as_text=True)).groups()
+    assert 'hidden' not in classes.split()
+    assert 'class="library-card"' in inner and 'Pride and Prejudice' in inner
+    assert 'covers/5.webp' in inner, 'cover rendered server-side too'
+    assert 'private' in resp.headers['Cache-Control'], 'personal HTML must not enter shared caches'
+
+
+def test_continue_reading_absent_without_progress(client, monkeypatch):
+    from backend import app_base
+    from backend.routes.pages import progress_routes
+    monkeypatch.setattr(progress_routes, 'content_db', app_base.db)
+    monkeypatch.setattr(progress_routes, 'user_db', _StubUserDb([]))
+    classes, inner = _continue_section(client.get('/').get_data(as_text=True)).groups()
+    assert 'hidden' in classes.split() and 'class="library-card"' not in inner

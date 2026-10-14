@@ -6,8 +6,9 @@ Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 import re
 import time
 
-from flask import Blueprint, redirect, render_template, request
+from flask import Blueprint, g, redirect, render_template, request
 
+from backend import progress_routes
 from backend.routes import common
 from backend.study_cues import level_label, split_sentences
 
@@ -149,12 +150,26 @@ def home_content():
     return cached[1]
 
 
+def _signed_in_user_id():
+    """Set per request by pchauth (Apache's trusted header in prod)."""
+    return g.get('user_id')
+
+
+def _home_continue():
+    """The signed-in reader's books in progress (up to 3), for Continue
+    reading. Rendered server-side so the section is there at first paint
+    instead of popping in after the auth check and /api/library fetch."""
+    books = progress_routes.library_cards(_signed_in_user_id())['continue_reading'][:3]
+    return [{**book, 'cover_base': _cover_base(book.get('cover_image_url'))} for book in books]
+
+
 @bp.route('/')
 def index():
     """Serve the main page"""
     return render_template('index.html',
                          meta_title='Summra — Read the Classics in Plain English',
-                         top_10_books=_top_10_books())
+                         top_10_books=_top_10_books(),
+                         home_continue=_home_continue())
 
 
 DISCOVER_LEVELS = ('easy', 'moderate', 'challenging')

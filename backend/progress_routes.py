@@ -79,9 +79,16 @@ def get_progress_v2(book_id):
 @login_required
 def get_library():
     """Return denormalized cards without per-book client requests."""
-    states = user_db.get_library_projection(g.user_id)
+    return jsonify({'success': True, **library_cards(g.user_id)})
+
+
+def library_cards(user_id):
+    """A reader's Library cards, {'continue_reading': [...], 'finished': [...]}.
+    Shared by /api/library and the home page, which renders Continue reading
+    into the first HTML so it doesn't pop in after the page loads."""
+    states = user_db.get_library_projection(user_id) if user_db and user_id is not None else []
     if not states:
-        return jsonify({'success': True, 'continue_reading': [], 'finished': []})
+        return {'continue_reading': [], 'finished': []}
 
     ids = [state['book_id'] for state in states]
     placeholders = ', '.join('?' for _ in ids)
@@ -138,7 +145,7 @@ def get_library():
             'finished_at': state['finished_at'],
         }
         cards['finished' if state['status'] == 'finished' else 'continue_reading'].append(card)
-    return jsonify({'success': True, **cards})
+    return cards
 
 
 # Retained only as a harmless auth-route probe used by existing integration

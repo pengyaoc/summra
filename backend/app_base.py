@@ -227,6 +227,7 @@ def add_cache_headers(response):
         response.cache_control.no_cache = True
         response.cache_control.no_store = True
         response.cache_control.must_revalidate = True
+        response.cache_control.private = True  # home carries the reader's Continue reading
 
     return response
 
