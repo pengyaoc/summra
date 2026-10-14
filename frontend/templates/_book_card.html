@@ -3,8 +3,7 @@
    (tests/test_discover_page.py pins this structure). Import with context so
    base_path is available. `cls` and `rank` serve the home "Start here"
    shelf (class top-10-book-card, small "No. N" badge on the cover). #}
-{% macro book_card(book, cls='book-card', rank=none) -%}
-<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-level="{{ (book.level or 'none')|lower }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}">
+{% macro book_cover(book, rank=none) -%}
     <div class="book-card-cover">
         <span class="book-card-cover-title" aria-hidden="true">{{ book.title }}</span>{% if book.cover_base %}
         <picture>
@@ -13,8 +12,33 @@
         </picture>{% endif %}{% if rank %}
         <span class="book-card-rank">No. <span class="top-10-rank-number">{{ rank }}</span></span>{% endif %}
     </div>
+{%- endmacro %}
+
+{% macro book_card(book, cls='book-card', rank=none) -%}
+<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-level="{{ (book.level or 'none')|lower }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}">
+    {{ book_cover(book, rank) }}
     <h3 class="book-card-title">{{ book.title }}</h3>
     <p class="book-card-author">{{ book.author }}</p>
     {% if book.level or book.reading_time %}<p class="book-card-meta">{% if book.level %}<span class="level-tag level-tag--{{ book.level|lower }}">{{ book.level }}</span>{% endif %}{% if book.reading_time %}<span class="book-card-time">{{ book.reading_time }}</span>{% endif %}</p>{% endif %}
 </a>
+{%- endmacro %}
+
+
+{# Server-rendered Continue reading card. Keep in step with
+   renderLibraryCards() in reader.js, which re-renders the same markup (and
+   wires its clicks) once app.js starts. #}
+{% macro library_card(book) -%}
+{% set pct = [[book.furthest_percentage or 0, 0]|max, 100]|min %}
+<article class="library-card" data-reader-book="{{ book.id }}">
+    <div class="library-card-cover-frame">{{ book_cover(book) }}</div>
+    <div class="library-card-body">
+        <div class="library-card-meta"><span>Continue reading</span><span>{{ pct }}%</span></div>
+        <h3>{{ book.title }}</h3>
+        <p class="library-card-author">{{ book.author }}</p>
+        <p class="library-card-location">{{ book.current_chapter.chapter_title if book.current_chapter and book.current_chapter.chapter_title else ('Chapter ' ~ book.current_chapter.chapter_number if book.current_chapter else 'Beginning') }}</p>
+        <div class="library-card-progress" aria-label="{{ pct }}% read"><span style="width: {{ pct }}%"></span></div>
+        <div class="library-card-actions"><button class="library-read-action" type="button" data-library-read="{{ book.id }}">Continue<span aria-hidden="true">→</span></button></div>
+        <p class="library-card-mode">{{ (book.last_mode or 'plain')|replace('_', ' ') }}</p>
+    </div>
+</article>
 {%- endmacro %}

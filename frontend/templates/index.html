@@ -177,7 +177,7 @@
                 </div>
             </section>
 
-            {% from '_book_card.html' import book_card with context %}
+            {% from '_book_card.html' import book_card, library_card with context %}
             {# Home — always rendered (only `hidden` toggles) so app.js's
                showHomeSection() never rebuilds this markup from a template
                literal. Redesign (2026-10-12): paper hero with a real
@@ -187,7 +187,7 @@
                 <section class="home-hero hero-main">
                     <div class="home-hero-copy">
                         <h1 class="hero-banner-title">Classics, minus the confusion.</h1>
-                        <p class="hero-banner-subtitle">Read the real book, with every line rewritten in today's English. Stuck on a sentence? The original is right there next to it.</p>
+                        <p class="hero-banner-subtitle">Read the real book, with every line rewritten in today's English. Want the original too? Read it side by side.</p>
                         <div class="hero-banner-ctas">
                             <a href="{{ base_path }}/discover" class="hero-cta-primary">Find your book <span aria-hidden="true">→</span></a>
                         </div>
@@ -219,16 +219,16 @@
                 </section>
 
                 <!-- Continue reading (signed-in readers with progress; filled by app.js) -->
-                <section class="home-section hidden" id="home-continue">
+                <section class="home-section home-band--deep{% if not home_continue %} hidden{% endif %}" id="home-continue">
                     <div class="home-section-head">
                         <h2>Continue reading</h2>
                         <a href="{{ base_path }}/library" class="home-section-link">Your library →</a>
                     </div>
-                    <div class="library-cards" id="home-continue-cards"></div>
+                    <div class="library-cards" id="home-continue-cards">{% for book in home_continue or [] %}{{ library_card(book) }}{% endfor %}</div>
                 </section>
 
                 <!-- Start here: the ranked top-10 shelf -->
-                <section class="home-section hero-discover">
+                <section class="home-section home-band--paper hero-discover">
                     <div class="home-section-head">
                         <div>
                             <h2 class="hero-banner-heading">Start here</h2>
@@ -266,7 +266,7 @@
 
                 <!-- Choose by level: links into a filtered Discover -->
                 {% set lc = level_counts or {} %}
-                <section class="home-section">
+                <section class="home-section home-band--deep home-levels">
                     <div class="home-section-head">
                         <h2>Choose by level</h2>
                     </div>
@@ -286,7 +286,7 @@
                 </section>
 
                 <!-- How it works -->
-                <section class="home-section home-how">
+                <section class="home-section home-band--paper home-how">
                     <div class="home-section-head">
                         <h2>How it works</h2>
                     </div>
@@ -777,7 +777,7 @@
         {% if not initial_data or initial_data.type != 'chapter' %}
         <footer class="footer">
             <div class="footer-row">
-                <p class="footer-note">© 2026 Summra · The classics in plain English</p>
+                <p class="footer-note">© 2026 Summra · The classics in Plain English</p>
                 <nav class="footer-links" aria-label="Footer">
                     <a href="{{ base_path }}/discover">Discover</a>
                     <a href="{{ base_path }}/categories">Categories</a>

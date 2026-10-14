@@ -94,7 +94,7 @@ for (const path of ["/", "/books/frankenstein", "/library"]) {
       const cs = getComputedStyle(el);
       if (r.width < 900 || r.height < 300) return false;
       if (cs.backgroundImage.includes("url(")) return false; // image heroes
-      if (el.classList.contains("hero-main")) return false; // the home hero is a deliberate ink band (2026-10-13)
+      if (el.classList.contains("hero-main") || el.classList.contains("home-section")) return false; // home hero + alternating home bands are deliberate (2026-10-13/14)
       return cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== paper
         || /gradient/.test(cs.backgroundImage) && /255, 255, 255/.test(cs.backgroundImage);
     })

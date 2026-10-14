@@ -615,10 +615,10 @@ Ulysses episode titles remain blank because the source does not give official ep
 2. [x] Book page: remove "About this book" for all books (duplicates the Summary).
 3. [x] Nav: drop "Books" (overlaps Discover) from header and footer; `/books` redirects to `/discover`.
 4. [x] Fonts: nav, footer and stray links ("Learn more →" rendered as a purple visited link) match the design system.
-5. [ ] Hero copy: replace "Stuck on a sentence? …" with the side-by-side message.
-6. [ ] Hero on mobile: redesign (desktop is good).
-7. [ ] Home sections: stronger separation/contrast between Continue reading, Start here, etc.
-8. [ ] Continue reading: no late pop-in (server-render it for signed-in readers / reserve its place), faster.
+5. [x] Hero copy: replace "Stuck on a sentence? …" with the side-by-side message.
+6. [x] Hero on mobile: redesign (desktop is good).
+7. [x] Home sections: stronger separation/contrast between Continue reading, Start here, etc.
+8. [x] Continue reading: no late pop-in (server-render it for signed-in readers / reserve its place), faster.
 9. [ ] Replace "How it works" with a reading-level section explaining the research behind grade levels.
 10. [ ] Reader perf: an arbitrary chapter (e.g. /books/paradise-lost/chapters/7) took ~10 s; load progressively instead of the whole book.
 11. [ ] Metadata audit (Sonnet subagents): genres from BISAC, origin from Library of Congress Class, audience, school lists; fix wrong tags; no one-off categories.
