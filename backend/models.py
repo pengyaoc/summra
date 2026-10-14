@@ -380,6 +380,16 @@ class Database:
             # Index already exists
             pass
 
+        # Covering index for book listings (catalog, Discover, top 10, level
+        # counts). Each books row stores the whole book (full_text) before
+        # these columns, so reading them from the table walks the text's
+        # overflow pages — seconds per listing on the small prod VM once the
+        # file is out of the page cache. With every listed column in the index,
+        # SQLite never touches the rows. Rename it when its columns change so
+        # existing databases rebuild it (tests/test_book_listing_index.py).
+        cursor.execute(f"CREATE INDEX IF NOT EXISTS {self._LISTING_INDEX} ON books({', '.join(self._LISTING_COLUMNS)})")
+        conn.commit()
+
         conn.commit()
         conn.close()
 
@@ -388,6 +398,10 @@ class Database:
     # COLUMN only requires the target table to already exist (all of them do,
     # created above), not any table a REFERENCES clause points at — but is
     # kept close to the original commit order for readability.
+    _LISTING_INDEX = 'idx_books_listing_v1'
+    _LISTING_COLUMNS = ('title', 'id', 'author', 'filename', 'word_count', 'gutenberg_id',
+                        'cover_image_url', 'created_at', 'slug', 'cefr_level')
+
     _COLUMN_MIGRATIONS = [
         ("chapters", "chapter_text TEXT"),
         ("books", "cover_image_url TEXT"),
