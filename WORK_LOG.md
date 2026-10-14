@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-10-13: Reading guide paths and Alice paragraph data (local)
+
+- Reading guide images used database URLs such as `/static/guides/39_themes.webp` without the `/summrabook` deployment prefix. `app.js` now applies `withBasePath()` to the displayed images and lightbox URLs; rebuilt `app.min.js`. The guide files are present locally.
+- Alice's Adventures in Wonderland, chapter 1 had `Alice was starti\n\nng to get` in `modern_english_text`. Corrected the local `data/database.db` row to `Alice was starting to get`; the database is ignored by Git and production needs the same data correction. Recompiled local reader content to version 2 and confirmed its first Plain English paragraph starts with the full word.
+- Verification: JavaScript route tests (18 passed), URL prefix tests (7 passed), and `npm run build:check` passed. No production deployment or live database change was made.
+
+---
+
 ## 2026-10-12: Site redesign ("Quiet library + study cues") — DONE, deployed 2026-10-13
 
 Branch `redesign` (worktree `.claude/worktrees/redesign`). Direction chosen by user: mix of A (warm paper, serif, oxblood accent, home leads with an original → plain-English sentence pair) and C (difficulty level, reading time, progress cues on Discover and book pages). Audience: general. Spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`. PRD Design Principles §6 and ERD Frontend Module Map updated.
