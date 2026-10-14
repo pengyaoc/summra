@@ -620,7 +620,7 @@ Ulysses episode titles remain blank because the source does not give official ep
 7. [x] Home sections: stronger separation/contrast between Continue reading, Start here, etc.
 8. [x] Continue reading: no late pop-in (server-render it for signed-in readers / reserve its place), faster.
 9. [ ] Replace "How it works" with a reading-level section explaining the research behind grade levels.
-10. [ ] Reader perf: an arbitrary chapter (e.g. /books/paradise-lost/chapters/7) took ~10 s; load progressively instead of the whole book.
+10. [x] Reader perf: an arbitrary chapter (e.g. /books/paradise-lost/chapters/7) took ~10 s; load progressively instead of the whole book.
 11. [ ] Metadata audit (Sonnet subagents): genres from BISAC, origin from Library of Congress Class, audience, school lists; fix wrong tags; no one-off categories.
 12. [ ] Reading-grade tags (Flesch–Kincaid or equivalent) for original and plain English; filter on Discover.
 13. [ ] Report further tagging ideas for young readers and parents.
