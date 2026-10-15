@@ -10,7 +10,7 @@ from flask import Blueprint, g, redirect, render_template, request
 
 from backend import progress_routes
 from backend.routes import common
-from backend.study_cues import level_label, split_sentences
+from backend.study_cues import split_sentences
 
 bp = Blueprint('pages', __name__)
 
@@ -124,12 +124,12 @@ def _hero_examples():
     return examples
 
 
-def _level_counts():
-    counts = {level: 0 for level in ('Easy', 'Moderate', 'Challenging')}
-    for cefr, n in common.db.count_books_by_cefr().items():
-        label = level_label(cefr)
-        if label:
-            counts[label] += n
+def _grade_counts():
+    """Books per Discover grade band ('3-5', '6-8', '9-10', '11-12')."""
+    counts = {band: 0 for band in DISCOVER_FILTERS['grade']}
+    for book in common.db.get_all_books():
+        if book.get('slug') and book['grade_band']:
+            counts[book['grade_band']] += 1
     return counts
 
 
@@ -145,7 +145,7 @@ def home_content():
     key = getattr(common.db, 'db_path', None)
     cached = _home_content_cache.get(key)
     if not cached or time.monotonic() - cached[0] > _HOME_CONTENT_TTL:
-        cached = (time.monotonic(), {'hero_examples': _hero_examples(), 'level_counts': _level_counts()})
+        cached = (time.monotonic(), {'hero_examples': _hero_examples(), 'grade_counts': _grade_counts()})
         _home_content_cache[key] = cached
     return cached[1]
 
@@ -172,15 +172,30 @@ def index():
                          home_continue=_home_continue())
 
 
-DISCOVER_LEVELS = ('easy', 'moderate', 'challenging')
-DISCOVER_LENGTHS = ('short', 'medium', 'long')
-_LEVEL_RANK = {level: rank for rank, level in enumerate(DISCOVER_LEVELS)}
+# Discover filters: query name → allowed values. Each card carries the
+# matching data-<name> (see _book_card.html) and CSS hides non-matches.
+DISCOVER_FILTERS = {
+    'grade': ('3-5', '6-8', '9-10', '11-12'),         # ATOS reading level band
+    'ages': ('lg', 'mg', 'mg-plus', 'ug'),            # AR interest level
+    'school': ('yes',),                               # Common Core exemplar
+    'length': ('short', 'medium', 'long'),
+}
 # Sort keys; app.js applySortToDiscoverGrid() orders the cards the same way.
 DISCOVER_SORTS = {
     'title': lambda b: b['title'].lower(),
     'shortest': lambda b: (b['reading_minutes'] is None, b['reading_minutes'] or 0, b['title'].lower()),
-    'easiest': lambda b: (_LEVEL_RANK.get((b['level'] or '').lower(), len(DISCOVER_LEVELS)), b['title'].lower()),
+    'easiest': lambda b: (b['grade'] is None, b['grade'] or 0, b['title'].lower()),
 }
+
+
+def discover_facets(book):
+    """The card's value for each Discover filter ('none'/'no' when unknown)."""
+    return {
+        'grade': book.get('grade_band') or 'none',
+        'ages': book.get('ages') or 'none',
+        'school': 'yes' if book.get('on_school_list') else 'no',
+        'length': (book.get('length') or 'none').lower(),
+    }
 
 
 def _query_choice(name, allowed):
@@ -190,29 +205,27 @@ def _query_choice(name, allowed):
 
 @bp.route('/discover')
 def discover():
-    """One grid of every book, filterable by level and length (?level=,
-    ?length=) and sortable (?sort=). Filtering is done by CSS on the grid's
-    data-filter-* attributes, so the server only sets them."""
+    """One grid of every book, filterable by reading grade, ages, school lists
+    and length (?grade=, ?ages=, ?school=, ?length=) and sortable (?sort=).
+    Filtering is done by CSS on the grid's data-filter-* attributes, so the
+    server only sets them."""
     books = [b for b in common.db.get_all_books() if b.get('slug')]
     for book in books:
         book['cover_base'] = _cover_base(book.get('cover_image_url'))
-    level = _query_choice('level', DISCOVER_LEVELS)
-    length = _query_choice('length', DISCOVER_LENGTHS)
+    chosen = {name: _query_choice(name, allowed) for name, allowed in DISCOVER_FILTERS.items()}
     sort = _query_choice('sort', DISCOVER_SORTS) or 'title'
     books.sort(key=DISCOVER_SORTS[sort])
     match_count = sum(
         1 for b in books
-        if (not level or (b['level'] or '').lower() == level)
-        and (not length or (b['length'] or '').lower() == length)
+        if all(not value or discover_facets(b)[name] == value for name, value in chosen.items())
     )
     return render_template(
         'index.html',
-        meta_title='Discover Classic Books by Level and Length | Summra',
+        meta_title='Discover Classic Books by Reading Level, Age and Length | Summra',
         initial_data={'type': 'discover'},
         discover={
             'books': books,
-            'level': level or 'all',
-            'length': length or 'all',
+            'filters': {name: value or 'all' for name, value in chosen.items()},
             'sort': sort,
             'count': match_count,
         },
@@ -301,6 +314,10 @@ def book_detail(slug):
         cover_base=_cover_base(book.get('cover_image_url')),
         book_meta={
             'level': book['level'],
+            'grade_label': book['grade_label'],
+            'grade_band': book['grade_band'],
+            'ages_label': book['ages_label'],
+            'school_lists': book['school_lists'],
             'reading_time': book['reading_time'],
             'chapter_count': db.count_chapters(book['id']),
             'has_plain_english': db.book_has_modern_english(book['id']),
@@ -469,6 +486,10 @@ def category_detail(category_id):
     category = db.get_category(category_id)
 
     if not category:
+        new_id = db.get_category_redirect(category_id)
+        if new_id:  # categories were regrouped (scripts/content/apply_book_metadata.py)
+            target = 'categories' if new_id == 'all' else f'categories/{new_id}'
+            return redirect(f'{request.script_root}/{target}', code=301)
         return render_template('index.html'), 404
 
     books = db.get_books_by_category(category_id)

@@ -15,11 +15,12 @@
 {%- endmacro %}
 
 {% macro book_card(book, cls='book-card', rank=none) -%}
-<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-level="{{ (book.level or 'none')|lower }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}">
+{# data-* values match pages.discover_facets(): Discover's filters hide cards by them. #}
+<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-grade="{{ book.grade_band or 'none' }}" data-ages="{{ book.ages or 'none' }}" data-school="{{ 'yes' if book.on_school_list else 'no' }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}" data-grade-value="{{ book.grade if book.grade is not none else '' }}">
     {{ book_cover(book, rank) }}
     <h3 class="book-card-title">{{ book.title }}</h3>
     <p class="book-card-author">{{ book.author }}</p>
-    {% if book.level or book.reading_time %}<p class="book-card-meta">{% if book.level %}<span class="level-tag level-tag--{{ book.level|lower }}">{{ book.level }}</span>{% endif %}{% if book.reading_time %}<span class="book-card-time">{{ book.reading_time }}</span>{% endif %}</p>{% endif %}
+    {% if book.grade_label or book.level or book.reading_time %}<p class="book-card-meta">{% if book.grade_label %}<span class="grade-tag grade-tag--{{ book.grade_band }}">{{ book.grade_label }}</span>{% elif book.level %}<span class="level-tag level-tag--{{ book.level|lower }}">{{ book.level }}</span>{% endif %}{% if book.reading_time %}<span class="book-card-time">{{ book.reading_time }}</span>{% endif %}</p>{% endif %}
 </a>
 {%- endmacro %}
 

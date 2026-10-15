@@ -619,11 +619,19 @@ Ulysses episode titles remain blank because the source does not give official ep
 6. [x] Hero on mobile: redesign (desktop is good).
 7. [x] Home sections: stronger separation/contrast between Continue reading, Start here, etc.
 8. [x] Continue reading: no late pop-in (server-render it for signed-in readers / reserve its place), faster.
-9. [ ] Replace "How it works" with a reading-level section explaining the research behind grade levels.
+9. [x] Replace "How it works" with a reading-level section explaining the research behind grade levels.
 10. [x] Reader perf: an arbitrary chapter (e.g. /books/paradise-lost/chapters/7) took ~10 s; load progressively instead of the whole book.
-11. [ ] Metadata audit (Sonnet subagents): genres from BISAC, origin from Library of Congress Class, audience, school lists; fix wrong tags; no one-off categories.
-12. [ ] Reading-grade tags (Flesch–Kincaid or equivalent) for original and plain English; filter on Discover.
-13. [ ] Report further tagging ideas for young readers and parents.
+11. [x] Metadata audit (Sonnet subagents): genres from BISAC, origin from Library of Congress Class, audience, school lists; fix wrong tags; no one-off categories.
+12. [x] Reading-grade tags (Flesch–Kincaid or equivalent) for original and plain English; filter on Discover.
+13. [x] Report further tagging ideas for young readers and parents.
+
+### Notes (round 2)
+- **Perf (10):** the reader already loads progressively (manifest + ~12 KB segments). The slowness was server-side: books rows store `full_text` before gutenberg_id/slug/cefr_level, so listing queries walked every book's text; on the 1 GB prod VM `/` took 6–10 s (measured on the VM: top-10 3.6 s cold) and the per-worker home counts stalled other pages. Fixed with a covering index (`idx_books_listing_v2`).
+- **Metadata (11):** three Sonnet agents audited all 90 books (Gutenberg LoC subjects + a second source). Categories are BISAC subject headings, siblings grouped so each has ≥3 books (17 categories). Two corrections (Gatsby, Uncle Tom's Cabin aren't historical fiction). Common Core Appendix B exemplars verified by searching the archived PDF's full text (14 books; the agents had missed six). Old categories redirect (301) via a reviewed map (`category_redirects` table) — ids differ per database.
+- **Grade levels (12):** Flesch–Kincaid was computed for every book and rejected: it rates dialogue-heavy classics far too low (Romeo and Juliet 3.0, Crime and Punishment 5.6, Ulysses 5.4) and barely separates plain English from the original. Used published ATOS book levels + AR Interest Levels from Renaissance's AR BookFinder instead (65/90 books; unabridged editions only — the rest are treatises/obscure works AR doesn't carry). One agent hit a rate limit; its 30 books were looked up directly with the same script.
+- **UI (9, 12):** Discover filters are Reading level (grade bands), Ages (interest level), Length and a Common Core toggle; cards and the book page show "Grade N" (falls back to the old level label), the book page adds ages and a Common Core badge. Home "Choose by level" + "How it works" became "Find a book at the right level" (grade cards + where the levels come from).
+- **Apply on prod:** `PYTHONPATH=. venv/bin/python scripts/content/apply_book_metadata.py --dry-run` then without `--dry-run` (idempotent; rehearsed on a copy of the main DB: 637 rows, second run 0).
+- **More tagging ideas (13):** content advisories (violence, mature themes) from Common Sense Media-style sources; award/curriculum lists beyond Common Core (AP Literature open-question titles, state reading lists); series/companion links (e.g. Alice → Looking-Glass); historical period and setting (useful for history classes); "read-aloud friendly" for younger kids; audio availability; translation/original language.
 
 ---
 

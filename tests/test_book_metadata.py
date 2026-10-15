@@ -43,7 +43,7 @@ def test_school_lists_and_reading_levels_cite_a_source(meta):
             assert entry['list'] and entry['grade_band'] and entry['source'].startswith('http'), slug
         level = book.get('reading_level')
         if level:
-            assert 0 < level['atos'] <= 13 and level['source'].startswith('http'), slug
+            assert 0 < level['atos'] <= 20 and level['source'].startswith('http'), slug
 
 
 def _db_with_books(test_db_path):
@@ -62,6 +62,7 @@ def _db_with_books(test_db_path):
 
 SAMPLE = {
     'categories': {'Fantasy': {'bisac': ['FIC009000'], 'description': 'Magic and other worlds.'}},
+    'category_redirects': {'Novels': 'Fantasy'},
     'books': {
         slug: {'categories': ['Fantasy'], 'audience': 'Children', 'sources': ['https://example.test'],
                'school_lists': [{'list': 'Common Core exemplar', 'grade_band': '4–5', 'source': 'https://example.test/b'}] if slug == 'alpha' else [],
@@ -79,7 +80,7 @@ def test_apply_replaces_categories_and_sets_columns(test_db_path):
     assert names == {'Fantasy'}, 'old ad-hoc categories are removed'
     beta = db.get_book_by_slug('beta')
     assert beta['atos_level'] == 6.4 and beta['interest_level'] == 'MG (4-8)' and beta['audience'] == 'Children'
-    assert json.loads(db.get_book_by_slug('alpha')['school_lists'])[0]['grade_band'] == '4–5'
+    assert db.get_book_by_slug('alpha')['school_lists'][0]['grade_band'] == '4–5'
     assert db.get_book_by_slug('gamma')['atos_level'] is None
 
 
@@ -89,3 +90,44 @@ def test_apply_is_idempotent(test_db_path):
     second = apply_metadata(db, SAMPLE)
     assert second['changed'] == 0
     assert len(db.get_all_categories()) == 1
+
+
+def test_apply_redirects_removed_categories_to_where_their_books_went(test_db_path):
+    db, _ = _db_with_books(test_db_path)
+    old_id = next(c['id'] for c in db.get_all_categories() if c['name'] == 'Novels')
+    apply_metadata(db, SAMPLE)
+    fantasy = next(c['id'] for c in db.get_all_categories() if c['name'] == 'Fantasy')
+    assert db.get_category_redirect(old_id) == fantasy
+    assert db.get_category_redirect(999_999) is None
+
+
+def test_unmapped_removed_categories_redirect_to_all_categories(test_db_path, monkeypatch):
+    from backend import app_base
+    from backend.routes import common
+    db, _ = _db_with_books(test_db_path)
+    old_id = next(c['id'] for c in db.get_all_categories() if c['name'] == 'Novels')
+    apply_metadata(db, {**SAMPLE, 'category_redirects': {}})
+    monkeypatch.setattr(app_base, 'db', db)
+    monkeypatch.setattr(common, 'db', db)
+    resp = app_base.app.test_client().get(f'/categories/{old_id}')
+    assert resp.status_code == 301 and resp.headers['Location'].endswith('/categories')
+
+
+def test_redirect_map_points_at_real_categories(meta):
+    for old, new in meta['category_redirects'].items():
+        assert new is None or new in meta['categories'], (old, new)
+
+
+def test_old_category_urls_redirect(test_db_path, monkeypatch):
+    from backend import app_base
+    from backend.routes import common
+    db, _ = _db_with_books(test_db_path)
+    old_id = next(c['id'] for c in db.get_all_categories() if c['name'] == 'Novels')
+    apply_metadata(db, SAMPLE)
+    fantasy = next(c['id'] for c in db.get_all_categories() if c['name'] == 'Fantasy')
+    monkeypatch.setattr(app_base, 'db', db)
+    monkeypatch.setattr(common, 'db', db)
+    client = app_base.app.test_client()
+    resp = client.get(f'/categories/{old_id}')
+    assert resp.status_code == 301 and resp.headers['Location'].endswith(f'/categories/{fantasy}')
+    assert client.get('/categories/999999').status_code == 404

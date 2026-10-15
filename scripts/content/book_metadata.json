@@ -109,6 +109,39 @@
    "description": "The treatises that shaped economics, politics and science."
   }
  },
+ "category_redirects": {
+  "Adventure": "Action & Adventure",
+  "Biographies": "History & Biography",
+  "Poetry": "Poetry & Drama",
+  "Play & Drama": "Poetry & Drama",
+  "Crime, Thrillers & Mystery": "Mystery & Detective",
+  "Law & Criminology": "Mystery & Detective",
+  "Mythology, Legends & Folklore": "Fairy Tales, Folklore & Mythology",
+  "Humour": "Humor & Satire",
+  "Science & Technology": "Science Fiction",
+  "Biology": "Economics, Politics & Science",
+  "Economics": "Economics, Politics & Science",
+  "Politics": "Economics, Politics & Science",
+  "History": "History & Biography",
+  "Ancient History": "History & Biography",
+  "Modern History": "History & Biography",
+  "American History": "Historical Fiction",
+  "European History": "Historical Fiction",
+  "History - Early Modern (c. 1450-1750)": "Historical Fiction",
+  "Essays, Letters & Speeches": "Philosophy & Religion",
+  "Religion & Philosophy": "Philosophy & Religion",
+  "American Literature": null,
+  "British Literature": null,
+  "French Literature": null,
+  "German Literature": null,
+  "Russian Literature": null,
+  "Classic Literature": null,
+  "Novels": null,
+  "Children's Literature": null,
+  "Arts & Culture": null,
+  "Travel Writing": null,
+  "Nature Writing": null
+ },
  "books": {
   "a-christmas-carol-in-prose": {
    "categories": [
@@ -131,7 +164,11 @@
     "Scrooge, Ebenezer (Fictitious character) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 6.7,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=44702&l=EN"
+   }
   },
   "a-journey-to-the-centre-of-the-earth": {
    "categories": [
@@ -151,7 +188,11 @@
     "Voyages, Imaginary -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.9,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=535&l=EN"
+   }
   },
   "a-little-princess": {
    "categories": [
@@ -172,7 +213,11 @@
     "London (England) -- Juvenile fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 6.0,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=124&l=EN"
+   }
   },
   "a-room-with-a-view": {
    "categories": [
@@ -213,7 +258,11 @@
     "England -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=76088&l=EN"
+   }
   },
   "a-tale-of-two-cities": {
    "categories": [
@@ -238,7 +287,11 @@
     "Paris (France) -- History -- 1789-1799 -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.7,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=719&l=EN"
+   }
   },
   "adventures-of-huckleberry-finn": {
    "categories": [
@@ -266,7 +319,11 @@
     "Mississippi River -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 6.6,
+    "interest": "MG+ (6 and up)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=501&l=EN"
+   }
   },
   "alices-adventures-in-wonderland": {
    "categories": [
@@ -292,7 +349,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.4,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=52290&l=EN"
+   }
   },
   "all-quiet-on-the-western-front": {
    "categories": [
@@ -310,7 +371,11 @@
     "War stories"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 6.0,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=701&l=EN"
+   }
   },
   "an-inquiry-into-the-nature-and-causes-of-the-wealth-of-nations": {
    "categories": [
@@ -347,7 +412,11 @@
     "Russia -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.6,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=702&l=EN"
+   }
   },
   "anne-of-green-gables": {
    "categories": [
@@ -372,7 +441,11 @@
     "Shirley, Anne (Fictitious character) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.3,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=203&l=EN"
+   }
   },
   "around-the-world-in-eighty-days": {
    "categories": [
@@ -389,7 +462,11 @@
     "Voyages around the world -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.6,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=504&l=EN"
+   }
   },
   "beyond-good-and-evil": {
    "categories": [
@@ -430,7 +507,11 @@
     "Legal stories"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.8,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=60407&l=EN"
+   }
   },
   "carmilla": {
    "categories": [
@@ -496,7 +577,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.7,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=703&l=EN"
+   }
   },
   "don-quixote": {
    "categories": [
@@ -523,7 +608,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 13.2,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=12781&l=EN"
+   }
   },
   "dracula": {
    "categories": [
@@ -545,7 +634,11 @@
     "Whitby (England) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 6.6,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=10029&l=EN"
+   }
   },
   "fairy-tales-of-hans-christian-andersen": {
    "categories": [
@@ -565,7 +658,11 @@
     "Children's stories, Danish -- Translations into English"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.1,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=52292&l=EN"
+   }
   },
   "frankenstein": {
    "categories": [
@@ -588,7 +685,11 @@
     "Frankenstein's monster (Fictitious character) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 12.4,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=533&l=EN"
+   }
   },
   "from-the-earth-to-the-moon": {
    "categories": [
@@ -633,7 +734,11 @@
     "Benefactors -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.2,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=707&l=EN"
+   }
   },
   "grimms-fairy-tales": {
    "categories": [
@@ -650,7 +755,11 @@
     "Fairy tales -- Germany"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.9,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=52291&l=EN"
+   }
   },
   "gullivers-travels-into-several-remote-nations-of-the-world": {
    "categories": [
@@ -672,7 +781,11 @@
     "Voyages, Imaginary -- Early works to 1800"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 13.5,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=507&l=EN"
+   }
   },
   "history-of-tom-jones-a-foundling": {
    "categories": [
@@ -695,7 +808,11 @@
     "Identity (Psychology) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 13.8,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=60668&l=EN"
+   }
   },
   "jane-eyre": {
    "categories": [
@@ -729,7 +846,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.9,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=709&l=EN"
+   }
   },
   "life-on-the-mississippi": {
    "categories": [
@@ -749,7 +870,11 @@
     "Twain, Mark, 1835-1910 -- Travel -- Mississippi River"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.1,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=10039&l=EN"
+   }
   },
   "little-women-or-meg-jo-beth-and-amy": {
    "categories": [
@@ -780,7 +905,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.9,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=513&l=EN"
+   }
   },
   "louise-de-la-vallière": {
    "categories": [
@@ -823,7 +952,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.5,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=58068&l=EN"
+   }
   },
   "middlemarch": {
    "categories": [
@@ -847,7 +980,11 @@
     "Bildungsromans"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.4,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=52114&l=EN"
+   }
   },
   "moby-dick-or-the-whale": {
    "categories": [
@@ -872,7 +1009,11 @@
     "Whaling ships -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=711&l=EN"
+   }
   },
   "narrative-of-the-life-of-frederick-douglass-an-american-slave": {
    "categories": [
@@ -897,7 +1038,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.9,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=76092&l=EN"
+   }
   },
   "oliver-twist": {
    "categories": [
@@ -919,7 +1064,11 @@
     "Kidnapping victims -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 11.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=7116&l=EN"
+   }
   },
   "paradise-lost": {
    "categories": [
@@ -960,7 +1109,11 @@
     "Fairies -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.2,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=517&l=EN"
+   }
   },
   "pride-and-prejudice": {
    "categories": [
@@ -989,7 +1142,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 12.0,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=714&l=EN"
+   }
   },
   "principles-of-political-economy": {
    "categories": [
@@ -1028,7 +1185,11 @@
     "Tragedies (Drama)"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.6,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=53875&l=EN"
+   }
   },
   "round-the-moon": {
    "categories": [
@@ -1076,7 +1237,11 @@
     "Regency fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.4,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=12795&l=EN"
+   }
   },
   "ten-years-later": {
    "categories": [
@@ -1123,7 +1288,11 @@
     "Women household employees -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.5,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=5998&l=EN"
+   }
   },
   "the-adventures-of-ferdinand-count-fathom": {
    "categories": [
@@ -1160,7 +1329,11 @@
     "Detective and mystery stories, English"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.0,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=109408&l=EN"
+   }
   },
   "the-adventures-of-tom-sawyer": {
    "categories": [
@@ -1193,7 +1366,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.1,
+    "interest": "MG+ (6 and up)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=502&l=EN"
+   }
   },
   "the-blue-castle-a-novel": {
    "categories": [
@@ -1216,7 +1393,11 @@
     "Choice (Psychology) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 5.6,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=8102&l=EN"
+   }
   },
   "the-brothers-karamazov": {
    "categories": [
@@ -1236,7 +1417,11 @@
     "Brothers -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.4,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=60045&l=EN"
+   }
   },
   "the-call-of-the-wild": {
    "categories": [
@@ -1260,7 +1445,11 @@
     "Animal welfare -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.0,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=107&l=EN"
+   }
   },
   "the-confessions-of-st-augustine": {
    "categories": [
@@ -1371,7 +1560,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=708&l=EN"
+   }
   },
   "the-happy-prince-and-other-tales": {
    "categories": [
@@ -1430,7 +1623,11 @@
     "Dartmoor (England) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=5984&l=EN"
+   }
   },
   "the-house-of-the-seven-gables": {
    "categories": [
@@ -1451,7 +1648,11 @@
     "Salem (Mass.) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 11.0,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=12786&l=EN"
+   }
   },
   "the-iliad": {
    "categories": [
@@ -1472,7 +1673,11 @@
     "Trojan War -- Poetry"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 11.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=12787&l=EN"
+   }
   },
   "the-importance-of-being-earnest": {
    "categories": [
@@ -1498,7 +1703,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 4.5,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=143056&l=EN"
+   }
   },
   "the-invisible-man-a-grotesque-romance": {
    "categories": [
@@ -1518,7 +1727,11 @@
     "Mentally ill -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.7,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=10037&l=EN"
+   }
   },
   "the-jungle-book": {
    "categories": [
@@ -1544,7 +1757,11 @@
     "India -- History -- 19th century -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.4,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=20237&l=EN"
+   }
   },
   "the-king-in-yellow": {
    "categories": [
@@ -1585,7 +1802,11 @@
     "Man in the Iron Mask -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.2,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=52123&l=EN"
+   }
   },
   "the-man-who-was-thursday": {
    "categories": [
@@ -1658,7 +1879,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=5993&l=EN"
+   }
   },
   "the-origin-of-species": {
    "categories": [
@@ -1699,7 +1924,11 @@
     "Paranormal fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.7,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=8668&l=EN"
+   }
   },
   "the-scarlet-letter": {
    "categories": [
@@ -1732,7 +1961,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 11.7,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=716&l=EN"
+   }
   },
   "the-strange-case-of-dr-jekyll-and-mr-hyde": {
    "categories": [
@@ -1755,7 +1988,11 @@
     "Multiple personality -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.5,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=531&l=EN"
+   }
   },
   "the-three-musketeers": {
    "categories": [
@@ -1775,7 +2012,11 @@
     "Swordsmen -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 11.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=547&l=EN"
+   }
   },
   "the-time-machine": {
    "categories": [
@@ -1793,7 +2034,11 @@
     "Dystopias -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.4,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=12799&l=EN"
+   }
   },
   "the-turn-of-the-screw": {
    "categories": [
@@ -1813,7 +2058,11 @@
     "Children -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=5999&l=EN"
+   }
   },
   "the-vicomte-de-bragelonne": {
    "categories": [
@@ -1855,7 +2104,11 @@
     "Life on other planets -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.1,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=550&l=EN"
+   }
   },
   "the-wonderful-wizard-of-oz": {
    "categories": [
@@ -1891,7 +2144,11 @@
      "source": "https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf"
     }
    ],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.0,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=525&l=EN"
+   }
   },
   "through-the-looking-glass": {
    "categories": [
@@ -1911,7 +2168,11 @@
     "Alice (Fictitious character from Carroll) -- Juvenile fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.6,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=66733&l=EN"
+   }
   },
   "thus-spake-zarathustra-a-book-for-all-and-none": {
    "categories": [
@@ -1948,7 +2209,11 @@
     "Treasure Island (Imaginary place) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 8.3,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=522&l=EN"
+   }
   },
   "twenty-thousand-leagues-under-the-sea": {
    "categories": [
@@ -1969,7 +2234,11 @@
     "Underwater exploration -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.0,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=523&l=EN"
+   }
   },
   "twenty-years-after": {
    "categories": [
@@ -2011,7 +2280,11 @@
     "Alienation (Social psychology) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.5,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=60669&l=EN"
+   }
   },
   "uncle-toms-cabin": {
    "categories": [
@@ -2036,7 +2309,11 @@
     "Enslaved persons -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 9.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=16725&l=EN"
+   }
   },
   "war-and-peace": {
    "categories": [
@@ -2058,7 +2335,11 @@
     "Aristocracy (Social class) -- Russia -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 10.1,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=10048&l=EN"
+   }
   },
   "white-fang": {
    "categories": [
@@ -2077,7 +2358,11 @@
     "Canada, Northern -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 7.4,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=72204&l=EN"
+   }
   },
   "winnie-the-pooh": {
    "categories": [
@@ -2100,7 +2385,11 @@
     "Christopher Robin (Fictitious character) -- Juvenile fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 4.6,
+    "interest": "MG (4-8)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=148&l=EN"
+   }
   },
   "wuthering-heights": {
    "categories": [
@@ -2126,7 +2415,11 @@
     "Triangles (Interpersonal relations) -- Fiction"
    ],
    "school_lists": [],
-   "reading_level": null
+   "reading_level": {
+    "atos": 11.3,
+    "interest": "UG (9-12)",
+    "source": "https://www.arbookfind.com/bookdetail.aspx?q=724&l=EN"
+   }
   }
  }
 }

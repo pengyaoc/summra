@@ -15,6 +15,7 @@ build refuses categories with fewer than MIN_BOOKS books, so the Categories
 page never shows a one-book shelf.
 """
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -54,6 +55,25 @@ GENRE_TO_CATEGORY = {**{name: name for name in CATEGORIES},
                      'Economics': 'Economics, Politics & Science', 'Political Science': 'Economics, Politics & Science',
                      'Science & Nature': 'Economics, Politics & Science', 'Travel': None}
 
+# Old category (before this regrouping) → the category its page now redirects
+# to; None sends it to the Categories page (origin and catch-all labels such
+# as "British Literature" or "Novels" have no single honest replacement).
+OLD_CATEGORY_REDIRECTS = {
+    'Adventure': 'Action & Adventure', 'Biographies': 'History & Biography',
+    'Poetry': 'Poetry & Drama', 'Play & Drama': 'Poetry & Drama',
+    'Crime, Thrillers & Mystery': 'Mystery & Detective', 'Law & Criminology': 'Mystery & Detective',
+    'Mythology, Legends & Folklore': 'Fairy Tales, Folklore & Mythology', 'Humour': 'Humor & Satire',
+    'Science & Technology': 'Science Fiction', 'Biology': 'Economics, Politics & Science',
+    'Economics': 'Economics, Politics & Science', 'Politics': 'Economics, Politics & Science',
+    'History': 'History & Biography', 'Ancient History': 'History & Biography', 'Modern History': 'History & Biography',
+    'American History': 'Historical Fiction', 'European History': 'Historical Fiction',
+    'History - Early Modern (c. 1450-1750)': 'Historical Fiction',
+    'Essays, Letters & Speeches': 'Philosophy & Religion', 'Religion & Philosophy': 'Philosophy & Religion',
+    'American Literature': None, 'British Literature': None, 'French Literature': None, 'German Literature': None,
+    'Russian Literature': None, 'Classic Literature': None, 'Novels': None, "Children's Literature": None,
+    'Arts & Culture': None, 'Travel Writing': None, 'Nature Writing': None,
+}
+
 # Reviewed corrections to the audit: (slug, category to drop, why).
 REMOVE = [
     ('the-great-gatsby', 'Historical Fiction', 'written in 1925 about 1922 — contemporary, not historical'),
@@ -80,6 +100,15 @@ COMMON_CORE = {
     'don-quixote': '11–12',
     'the-importance-of-being-earnest': '11–12',
 }
+
+
+_INTEREST = {'LG': 'LG (K-3)', 'MG': 'MG (4-8)', 'MG+': 'MG+ (6 and up)', 'UG': 'UG (9-12)'}
+
+
+def _interest(text):
+    """AR interest level in one form ('UG (9-12)'), however the lookup wrote it."""
+    match = re.search(r'\b(MG\+|MG|UG|LG)', text or '')
+    return _INTEREST[match.group(1)] if match else None
 
 
 def _load(prefix):
@@ -110,7 +139,7 @@ def build():
             'loc_subjects': audit.get('gutenberg_subjects', []),
             'school_lists': [{'list': 'Common Core exemplar', 'grade_band': COMMON_CORE[slug], 'source': APPENDIX_B}]
                             if slug in COMMON_CORE else [],
-            'reading_level': {'atos': level['atos_book_level'], 'interest': level.get('interest_level'),
+            'reading_level': {'atos': level['atos_book_level'], 'interest': _interest(level.get('interest_level')),
                               'source': level['source_url']}
                              if level.get('found') and level.get('atos_book_level') else None,
         }
@@ -120,7 +149,7 @@ def build():
     if thin:
         raise SystemExit(f'Categories with fewer than {MIN_BOOKS} books: {thin}')
     used = {name: {'bisac': CATEGORIES[name][0], 'description': CATEGORIES[name][1]} for name in CATEGORIES if name in counts}
-    return {'categories': used, 'books': books}
+    return {'categories': used, 'category_redirects': OLD_CATEGORY_REDIRECTS, 'books': books}
 
 
 if __name__ == '__main__':

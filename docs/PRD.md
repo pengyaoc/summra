@@ -1548,6 +1548,9 @@ Full design spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`.
 - **Pages:** home (sentence pair hero, "Start here" shelf, choose by level, how it works), Discover (one filterable grid by level and length), shared book card on Books / Categories / Author / Library, book page (cover + meta + primary CTA, then about, chapters table of contents, guides, author), reader (same layout, tidier header, paper theme).
 - **Header:** search is a visible field on wide screens and a magnifier that opens a full-width bar on phones; signed-in readers see a round account button with their initial, opening an account card (email, books in progress/finished, link to Library).
 - **Summary on the book page:** a Short/Full switch showing each summary's reading time; Short expands in place (Read more / Show less), Full links to the full-summary page. One Listen button per summary shows Listen, Preparing…, Pause or Resume and pauses/resumes rather than restarting; a slim player bar at the bottom has play/pause, stop and a progress bar.
+- **Reading levels (2026-10-14):** each book shows its published ATOS reading grade ("Grade 7"), the age range its content suits (AR Interest Level) and, where it applies, a Common Core exemplar badge linking to the source. Discover filters by reading level (grades 3–5, 6–8, 9–10, 11–12+), ages, length and "Common Core texts". The home page's "Find a book at the right level" section links each grade band into Discover and explains where the levels come from (and why simple formulas like Flesch–Kincaid aren't used).
+- **Categories (2026-10-14):** BISAC-based genres only, every category has at least 3 books; old category links redirect.
+- **Navigation:** Discover replaces the separate Books listing (`/books` redirects).
 - **Acceptance:** before/after screenshots for every page at desktop and mobile widths (`docs/redesign/`); no regressions in the e2e suite or first-paint performance.
 
 ## Open Questions

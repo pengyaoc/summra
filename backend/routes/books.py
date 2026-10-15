@@ -314,6 +314,10 @@ def get_chapters(book_id):
             'author': book['author'],
             'level': book['level'],
             'reading_time': book['reading_time'],
+            'grade_label': book['grade_label'],
+            'grade_band': book['grade_band'],
+            'ages_label': book['ages_label'],
+            'school_lists': book['school_lists'],
         }
 
         # Add cover image if available

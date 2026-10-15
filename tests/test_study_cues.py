@@ -154,3 +154,39 @@ def test_author_and_related_book_lists_include_cues(db):
                   db.get_related_books(other)['by_author']):
         cue = {b['title']: (b['level'], b['reading_time']) for b in books}
         assert cue['Cue Book'] == ('Moderate', '2 min'), books
+
+
+# --- reading grade (ATOS), ages (AR interest level), school lists ------------
+
+from backend.study_cues import add_book_cues, ages_for, grade_band, grade_label
+
+
+@pytest.mark.parametrize('atos, band, label', [
+    (None, None, None), (4.5, '3-5', 'Grade 4'), (5.9, '3-5', 'Grade 5'), (6.0, '6-8', 'Grade 6'),
+    (8.9, '6-8', 'Grade 8'), (9.1, '9-10', 'Grade 9'), (10.9, '9-10', 'Grade 10'),
+    (11.0, '11-12', 'Grade 11'), (12.4, '11-12', 'Grade 12'), (13.8, '11-12', 'College'),
+])
+def test_grade_band_and_label(atos, band, label):
+    assert grade_band(atos) == band and grade_label(atos) == label
+
+
+@pytest.mark.parametrize('interest, key, label', [
+    (None, None, None), ('LG (K-3)', 'lg', 'Ages 5–9'), ('MG (4-8)', 'mg', 'Ages 9–14'),
+    ('MG+ (6 and up)', 'mg-plus', 'Ages 11+'), ('UG (9-12)', 'ug', 'Ages 14+'), ('??', None, None),
+])
+def test_ages_from_interest_level(interest, key, label):
+    assert ages_for(interest) == (key, label)
+
+
+def test_add_book_cues_adds_grade_ages_and_school_lists():
+    book = add_book_cues({'cefr_level': 'B2', 'word_count': 50_000, 'atos_level': 7.3, 'interest_level': 'UG (9-12)',
+                          'school_lists': '[{"list": "Common Core exemplar", "grade_band": "11–12", "source": "https://x"}]'})
+    assert (book['grade'], book['grade_label'], book['grade_band']) == (7.3, 'Grade 7', '6-8')
+    assert (book['ages'], book['ages_label']) == ('ug', 'Ages 14+')
+    assert book['school_lists'][0]['grade_band'] == '11–12' and book['on_school_list'] is True
+
+
+def test_add_book_cues_without_new_metadata():
+    book = add_book_cues({'cefr_level': None, 'word_count': None})
+    assert book['grade'] is None and book['grade_band'] is None and book['ages'] is None
+    assert book['school_lists'] == [] and book['on_school_list'] is False

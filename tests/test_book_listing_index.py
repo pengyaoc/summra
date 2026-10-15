@@ -40,7 +40,7 @@ def _plans_for(db, call):
 def test_listing_queries_are_answered_from_a_covering_index(test_db_path, monkeypatch):
     db = models.Database(db_path=test_db_path)
     monkeypatch.setattr(common, 'db', db)
-    for call in (db.get_all_books, db.count_books_by_cefr, pages._top_10_books):
+    for call in (db.get_all_books, pages._top_10_books):
         plans = _plans_for(db, call)
         assert plans, f'{call.__name__} ran no books query?'
         for sql, plan in plans.items():

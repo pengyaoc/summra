@@ -33,6 +33,15 @@ import { breadcrumbsMixin } from './breadcrumbs.js';
 import { audioMixin } from './audio.js';
 import { readerMixin } from './reader.js';
 
+// Discover filters and their allowed values; same as DISCOVER_FILTERS in
+// backend/routes/pages.py.
+const DISCOVER_FILTERS = {
+    grade: ['3-5', '6-8', '9-10', '11-12'],
+    ages: ['lg', 'mg', 'mg-plus', 'ug'],
+    school: ['yes'],
+    length: ['short', 'medium', 'long'],
+};
+
 class SummraApp {
     constructor() {
         this.apiBase = withBasePath('/api');
@@ -1645,10 +1654,13 @@ class SummraApp {
         const meta = document.getElementById('book-meta');
         if (meta) {
             meta.innerHTML = [
-                book?.level ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>` : '',
+                this.difficultyTagHtml(book),
+                book?.ages_label ? `<span class="book-meta-item">${this.escapeHtml(book.ages_label)}</span>` : '',
                 `<span class="book-meta-item">${chapterCount} chapter${chapterCount === 1 ? '' : 's'}</span>`,
                 book?.reading_time ? `<span class="book-meta-item">${this.escapeHtml(book.reading_time)}</span>` : '',
                 hasPlainEnglish ? '<span class="plain-english-badge">Plain English</span>' : '',
+                ...(book?.school_lists || []).map(entry =>
+                    `<a class="school-list-badge" href="${this.escapeHtml(entry.source)}" target="_blank" rel="noopener">Common Core · grades ${this.escapeHtml(entry.grade_band)}</a>`),
             ].join('');
         }
         document.getElementById('book-sxs-link')?.classList.toggle('hidden', !hasPlainEnglish);
@@ -2122,11 +2134,9 @@ class SummraApp {
         this.wireDiscoverControls();
 
         const query = new URLSearchParams(window.location.search);
-        this.setDiscoverFilters({
-            level: query.get('level'),
-            length: query.get('length'),
-            sort: query.get('sort'),
-        }, false);
+        this.setDiscoverFilters(Object.fromEntries(
+            [...Object.keys(DISCOVER_FILTERS), 'sort'].map(name => [name, query.get(name)])
+        ), false);
 
         this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Summra');
     }
@@ -2138,7 +2148,10 @@ class SummraApp {
         const section = document.getElementById('discover-section');
         section.querySelectorAll('.filter-chip').forEach(chip => {
             chip.addEventListener('click', () => {
-                this.setDiscoverFilters({ ...this.discoverState, [chip.dataset.filter]: chip.dataset.value });
+                const { filter, value } = chip.dataset;
+                // A toggle chip (Common Core texts) switches its filter off again.
+                const next = chip.classList.contains('filter-chip--toggle') && this.discoverState[filter] === value ? 'all' : value;
+                this.setDiscoverFilters({ ...this.discoverState, [filter]: next });
             });
         });
         document.getElementById('discover-sort').addEventListener('change', (e) => {
@@ -2149,21 +2162,17 @@ class SummraApp {
         });
     }
 
-    // Filtering is CSS: the grid's data-filter-level / data-filter-length
-    // hide non-matching cards (same mechanism the server-rendered page uses).
-    setDiscoverFilters({ level, length, sort }, updateUrl = true) {
+    // Filtering is CSS: the grid's data-filter-<name> attributes hide cards
+    // whose data-<name> differs (same mechanism the server-rendered page uses).
+    setDiscoverFilters(values, updateUrl = true) {
         const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
-        const state = {
-            level: pick(level, ['easy', 'moderate', 'challenging'], 'all'),
-            length: pick(length, ['short', 'medium', 'long'], 'all'),
-            sort: pick(sort, ['title', 'shortest', 'easiest'], 'title'),
-        };
+        const state = Object.fromEntries(Object.entries(DISCOVER_FILTERS).map(([name, allowed]) => [name, pick(values[name], allowed, 'all')]));
+        state.sort = pick(values.sort, ['title', 'shortest', 'easiest'], 'title');
         this.discoverState = state;
 
         const section = document.getElementById('discover-section');
         const grid = document.getElementById('discover-grid');
-        grid.dataset.filterLevel = state.level;
-        grid.dataset.filterLength = state.length;
+        Object.keys(DISCOVER_FILTERS).forEach(name => { grid.dataset[`filter${name[0].toUpperCase()}${name.slice(1)}`] = state[name]; });
         section.querySelectorAll('.filter-chip').forEach(chip => {
             chip.setAttribute('aria-pressed', String(chip.dataset.value === state[chip.dataset.filter]));
         });
@@ -2171,16 +2180,14 @@ class SummraApp {
         this.applySortToDiscoverGrid(grid, state.sort);
 
         const count = [...grid.children].filter(card =>
-            (state.level === 'all' || card.dataset.level === state.level) &&
-            (state.length === 'all' || card.dataset.length === state.length)
+            Object.keys(DISCOVER_FILTERS).every(name => state[name] === 'all' || card.dataset[name] === state[name])
         ).length;
         document.getElementById('discover-count').textContent = `${count} book${count === 1 ? '' : 's'}`;
         section.querySelector('.discover-empty').classList.toggle('hidden', count > 0);
 
         if (updateUrl) {
             const params = new URLSearchParams();
-            if (state.level !== 'all') params.set('level', state.level);
-            if (state.length !== 'all') params.set('length', state.length);
+            Object.keys(DISCOVER_FILTERS).forEach(name => { if (state[name] !== 'all') params.set(name, state[name]); });
             if (state.sort !== 'title') params.set('sort', state.sort);
             const qs = params.toString();
             window.history.replaceState(window.history.state, '', withBasePath(`/discover${qs ? `?${qs}` : ''}`));
@@ -2189,15 +2196,14 @@ class SummraApp {
 
     // Same ordering as DISCOVER_SORTS in backend/routes/pages.py.
     applySortToDiscoverGrid(grid, sort) {
-        const levelRank = { easy: 0, moderate: 1, challenging: 2 };
         const title = card => card.querySelector('.book-card-title').textContent.toLowerCase();
         const byTitle = (a, b) => (title(a) < title(b) ? -1 : title(a) > title(b) ? 1 : 0);
         const minutes = card => (card.dataset.minutes ? Number(card.dataset.minutes) : Infinity);
-        const rank = card => levelRank[card.dataset.level] ?? 3;
+        const grade = card => (card.dataset.gradeValue ? Number(card.dataset.gradeValue) : Infinity);
         const compare = {
             title: byTitle,
             shortest: (a, b) => minutes(a) - minutes(b) || byTitle(a, b),
-            easiest: (a, b) => rank(a) - rank(b) || byTitle(a, b),
+            easiest: (a, b) => grade(a) - grade(b) || byTitle(a, b),
         }[sort];
         [...grid.children].sort(compare).forEach(card => grid.appendChild(card));
     }
@@ -2289,13 +2295,14 @@ class SummraApp {
         bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
         // Read by Discover's CSS filters and sort (same attributes as the
         // server-rendered card in _book_card.html).
-        bookCard.dataset.level = (book.level || 'none').toLowerCase();
+        bookCard.dataset.grade = book.grade_band || 'none';
+        bookCard.dataset.ages = book.ages || 'none';
+        bookCard.dataset.school = book.on_school_list ? 'yes' : 'no';
         bookCard.dataset.length = (book.length || 'none').toLowerCase();
         bookCard.dataset.minutes = book.reading_minutes || '';
+        bookCard.dataset.gradeValue = book.grade ?? '';
 
-        const levelHtml = book.level
-            ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>`
-            : '';
+        const levelHtml = this.difficultyTagHtml(book);
         const timeHtml = book.reading_time
             ? `<span class="book-card-time">${this.escapeHtml(book.reading_time)}</span>`
             : '';
@@ -2307,6 +2314,17 @@ class SummraApp {
             ${levelHtml || timeHtml ? `<p class="book-card-meta">${levelHtml}${timeHtml}</p>` : ''}
         `;
         return bookCard;
+    }
+
+    // "Grade 7" (published ATOS level) when known, else the older
+    // Easy / Moderate / Challenging label from the book's CEFR level.
+    difficultyTagHtml(book) {
+        if (book?.grade_label) {
+            return `<span class="grade-tag grade-tag--${this.escapeHtml(book.grade_band)}">${this.escapeHtml(book.grade_label)}</span>`;
+        }
+        return book?.level
+            ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>`
+            : '';
     }
 
     // 2:3 cover box. The title is set in serif underneath the image, so a
