@@ -48,10 +48,10 @@ expect("/books: every card has title and author", cards.every((c) => c.title && 
 expect("/books: every cover box is 2:3", cards.every((c) => c.ratio && Math.abs(c.ratio - 1.5) < 0.02),
   JSON.stringify(cards.find((c) => !c.ratio || Math.abs(c.ratio - 1.5) >= 0.02)));
 const frank = cards.find((c) => c.title === "Frankenstein");
-expect("/books: Frankenstein shows its reading grade and reading time",
-  frank && frank.level === "Grade 12" && frank.time === "5½ hrs", JSON.stringify(frank));
+expect("/books: Frankenstein shows its original's reading grade and reading time",
+  frank && frank.level === "Original: Grade 12" && frank.time === "5½ hrs", JSON.stringify(frank));
 expect("/books: difficulty tags are a grade (or the older level label), never empty",
-  cards.every((c) => c.level === null || /^(Grade \d+|College|Easy|Moderate|Challenging)$/.test(c.level)));
+  cards.every((c) => c.level === null || /^Original: (Grade \d+|College|Easy|Moderate|Challenging)$/.test(c.level)));
 const rows = {};
 for (const c of cards) (rows[c.top] ||= []).push(c.height);
 const ragged = Object.entries(rows).filter(([, hs]) => new Set(hs).size > 1);

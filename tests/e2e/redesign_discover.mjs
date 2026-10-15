@@ -16,7 +16,7 @@ const expect = (label, cond, detail = "") => {
 
 const visible = (page) => page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")]
   .filter((c) => c.offsetParent !== null)
-  .map((c) => ({ grade: c.dataset.grade, ages: c.dataset.ages, school: c.dataset.school, length: c.dataset.length,
+  .map((c) => ({ grade: c.dataset.grade, ages: c.dataset.ages, school: c.dataset.school, plain: c.dataset.plain, length: c.dataset.length,
     gradeValue: c.dataset.gradeValue === "" ? null : Number(c.dataset.gradeValue), minutes: Number(c.dataset.minutes) || null,
     title: c.querySelector(".book-card-title").textContent.trim() })));
 const countText = (page) => page.textContent("#discover-count").then((t) => t.trim());
@@ -64,6 +64,18 @@ await page.click('[data-filter="school"][data-value="yes"]');
 expect("Common Core toggle: second press turns it off", (await visible(page)).length === all.length
   && (await page.getAttribute('[data-filter="school"][data-value="yes"]', "aria-pressed")) === "false");
 
+// Plain English toggle: only books with a rewrite; others say "Original only".
+await page.click('[data-filter="plain"][data-value="yes"]');
+v = await visible(page);
+expect("Plain English toggle: only books with Plain English", v.length > 0 && v.length < all.length && v.every((c) => c.plain === "yes"), `${v.length}`);
+expect("Plain English toggle: URL updated", new URL(page.url()).searchParams.get("plain") === "yes", page.url());
+await page.click('[data-filter="plain"][data-value="yes"]');
+const tags = await page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")].map((c) => ({
+  plain: c.dataset.plain, originalOnly: !!c.querySelector(".original-only-tag"),
+  grade: c.querySelector(".grade-tag")?.textContent.trim() })));
+expect("cards: 'Original only' exactly on books without Plain English", tags.every((t) => t.originalOnly === (t.plain === "no")));
+expect("cards: grade tag names the original", tags.filter((t) => t.grade).every((t) => t.grade.startsWith("Original: ")), tags.find((t) => t.grade)?.grade);
+
 // 3. Empty result shows a clear-filters message, which resets.
 await page.click('[data-filter="grade"][data-value="11-12"]');
 await page.click('[data-filter="length"][data-value="short"]');
@@ -109,6 +121,10 @@ await page.waitForFunction(() => document.querySelectorAll("#discover-grid .book
 await page.click('[data-filter="grade"][data-value="9-10"]');
 v = await visible(page);
 expect("SPA: chips work after in-app navigation", v.length > 0 && v.every((c) => c.grade === "9-10"));
+expect("SPA: client-built cards label the original and mark Original only", await page.evaluate(() =>
+  [...document.querySelectorAll("#discover-grid .book-card")].every((c) =>
+    (!c.querySelector(".grade-tag") || c.querySelector(".grade-tag").textContent.startsWith("Original: "))
+    && !!c.querySelector(".original-only-tag") === (c.dataset.plain === "no"))));
 await page.locator("#discover-grid .book-card").filter({ visible: true }).first().click();
 await page.waitForURL(/\/books\/[^/]+$/);
 expect("SPA: card opens a book page", /\/books\/[^/]+$/.test(page.url()), page.url());

@@ -39,6 +39,7 @@ const DISCOVER_FILTERS = {
     grade: ['3-5', '6-8', '9-10', '11-12'],
     ages: ['lg', 'mg', 'mg-plus', 'ug'],
     school: ['yes'],
+    plain: ['yes'],
     length: ['short', 'medium', 'long'],
 };
 
@@ -766,10 +767,10 @@ class SummraApp {
             const top10GutenbergIds = [84, 2701, 1342, 46, 1513, 43, 11, 2641, 98, 345];
 
             const top10Books = [];
-            top10GutenbergIds.forEach((gutenbergId, index) => {
+            top10GutenbergIds.forEach((gutenbergId) => {
                 const book = this.allBooks.find(b => b.gutenberg_id === gutenbergId);
                 if (book) {
-                    top10Books.push({ book, rank: index + 1 });
+                    top10Books.push(book);
                 }
             });
             if (top10Books.length === 0) return;
@@ -778,8 +779,8 @@ class SummraApp {
             scrollContainer.innerHTML = '';
 
             // Same card as the server-rendered shelf (book_card macro)
-            top10Books.forEach(({ book, rank }) => {
-                scrollContainer.appendChild(this.createBookCard(book, { className: 'top-10-book-card', rank }));
+            top10Books.forEach((book) => {
+                scrollContainer.appendChild(this.createBookCard(book, { className: 'top-10-book-card' }));
             });
         }
 
@@ -1658,7 +1659,7 @@ class SummraApp {
                 book?.ages_label ? `<span class="book-meta-item">${this.escapeHtml(book.ages_label)}</span>` : '',
                 `<span class="book-meta-item">${chapterCount} chapter${chapterCount === 1 ? '' : 's'}</span>`,
                 book?.reading_time ? `<span class="book-meta-item">${this.escapeHtml(book.reading_time)}</span>` : '',
-                hasPlainEnglish ? '<span class="plain-english-badge">Plain English</span>' : '',
+                hasPlainEnglish ? '<span class="plain-english-badge">Plain English · grade 8</span>' : '<span class="original-only-tag">Original only</span>',
                 ...(book?.school_lists || []).map(entry =>
                     `<a class="school-list-badge" href="${this.escapeHtml(entry.source)}" target="_blank" rel="noopener">Common Core · grades ${this.escapeHtml(entry.grade_band)}</a>`),
             ].join('');
@@ -2289,7 +2290,7 @@ class SummraApp {
     // Author, "You may also like", home "Start here"). A real link: the
     // delegated handler in setupRouting() opens it in-app, and modified
     // clicks open a new tab.
-    createBookCard(book, { className = 'book-card', rank = null } = {}) {
+    createBookCard(book, { className = 'book-card' } = {}) {
         const bookCard = document.createElement('a');
         bookCard.className = className;
         bookCard.href = withBasePath(`/books/${book.slug || this.slugify(book.title)}`);
@@ -2298,6 +2299,7 @@ class SummraApp {
         bookCard.dataset.grade = book.grade_band || 'none';
         bookCard.dataset.ages = book.ages || 'none';
         bookCard.dataset.school = book.on_school_list ? 'yes' : 'no';
+        bookCard.dataset.plain = book.has_plain_english ? 'yes' : 'no';
         bookCard.dataset.length = (book.length || 'none').toLowerCase();
         bookCard.dataset.minutes = book.reading_minutes || '';
         bookCard.dataset.gradeValue = book.grade ?? '';
@@ -2307,30 +2309,34 @@ class SummraApp {
             ? `<span class="book-card-time">${this.escapeHtml(book.reading_time)}</span>`
             : '';
 
+        const originalOnlyHtml = book.has_plain_english ? '' : '<span class="original-only-tag">Original only</span>';
+
         bookCard.innerHTML = `
-            ${this.bookCoverHtml(book, rank)}
+            ${this.bookCoverHtml(book)}
             <h3 class="book-card-title">${this.escapeHtml(book.title)}</h3>
             <p class="book-card-author">${this.escapeHtml(book.author)}</p>
-            ${levelHtml || timeHtml ? `<p class="book-card-meta">${levelHtml}${timeHtml}</p>` : ''}
+            <p class="book-card-meta">${levelHtml}${timeHtml}${originalOnlyHtml}</p>
         `;
         return bookCard;
     }
 
-    // "Grade 7" (published ATOS level) when known, else the older
-    // Easy / Moderate / Challenging label from the book's CEFR level.
+    // The original's level: "Original: Grade 7" (published ATOS level) when
+    // known, else the older Easy / Moderate / Challenging label from the
+    // book's CEFR level. Plain English has its own target (grade 8). Same as
+    // the difficulty_tag macro in _book_card.html.
     difficultyTagHtml(book) {
         if (book?.grade_label) {
-            return `<span class="grade-tag grade-tag--${this.escapeHtml(book.grade_band)}">${this.escapeHtml(book.grade_label)}</span>`;
+            return `<span class="grade-tag grade-tag--${this.escapeHtml(book.grade_band)}">Original: ${this.escapeHtml(book.grade_label)}</span>`;
         }
         return book?.level
-            ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">${this.escapeHtml(book.level)}</span>`
+            ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">Original: ${this.escapeHtml(book.level)}</span>`
             : '';
     }
 
     // 2:3 cover box. The title is set in serif underneath the image, so a
     // slow or missing cover reads as a deliberate plain cover rather than a
     // grey blob, and every card keeps the same shape while loading.
-    bookCoverHtml(book, rank = null) {
+    bookCoverHtml(book) {
         const sources = book.cover_image_url ? this.coverSources(book.cover_image_url) : null;
         const picture = sources ? `
                 <picture>
@@ -2338,10 +2344,9 @@ class SummraApp {
                     <img src="${this.escapeHtml(sources.jpg)}" alt="${this.escapeHtml(`${book.title} cover`)}"
                          loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">
                 </picture>` : '';
-        const rankHtml = rank ? `<span class="book-card-rank">No. <span class="top-10-rank-number">${rank}</span></span>` : '';
         return `
             <div class="book-card-cover">
-                <span class="book-card-cover-title" aria-hidden="true">${this.escapeHtml(book.title)}</span>${picture}${rankHtml}
+                <span class="book-card-cover-title" aria-hidden="true">${this.escapeHtml(book.title)}</span>${picture}
             </div>
         `;
     }

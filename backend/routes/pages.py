@@ -49,11 +49,11 @@ def _top_10_books():
     matching getImageHtml() in app.js."""
     found = {b['gutenberg_id']: b for b in common.db.get_books_by_gutenberg_ids(TOP_10_GUTENBERG_IDS)}
     ranked = []
-    for rank, gid in enumerate(TOP_10_GUTENBERG_IDS, start=1):
+    for gid in TOP_10_GUTENBERG_IDS:
         book = found.get(gid)
         if not book or not book.get('slug'):
             continue
-        ranked.append({**book, 'rank': rank, 'cover_base': _cover_base(book.get('cover_image_url'))})
+        ranked.append({**book, 'cover_base': _cover_base(book.get('cover_image_url'))})
     return ranked
 
 
@@ -124,13 +124,16 @@ def _hero_examples():
     return examples
 
 
-def _grade_counts():
-    """Books per Discover grade band ('3-5', '6-8', '9-10', '11-12')."""
+def _level_counts():
+    """Books per Discover grade band ('3-5', '6-8', '9-10', '11-12'), and how
+    many of all the books have Plain English."""
+    books = [b for b in common.db.get_all_books() if b.get('slug')]
     counts = {band: 0 for band in DISCOVER_FILTERS['grade']}
-    for book in common.db.get_all_books():
-        if book.get('slug') and book['grade_band']:
+    for book in books:
+        if book['grade_band']:
             counts[book['grade_band']] += 1
-    return counts
+    return {'grade_counts': counts,
+            'plain_counts': {'plain': sum(b['has_plain_english'] for b in books), 'total': len(books)}}
 
 
 # The home section is rendered (hidden) on every page so in-app navigation
@@ -145,7 +148,7 @@ def home_content():
     key = getattr(common.db, 'db_path', None)
     cached = _home_content_cache.get(key)
     if not cached or time.monotonic() - cached[0] > _HOME_CONTENT_TTL:
-        cached = (time.monotonic(), {'hero_examples': _hero_examples(), 'grade_counts': _grade_counts()})
+        cached = (time.monotonic(), {'hero_examples': _hero_examples(), **_level_counts()})
         _home_content_cache[key] = cached
     return cached[1]
 
@@ -175,9 +178,10 @@ def index():
 # Discover filters: query name → allowed values. Each card carries the
 # matching data-<name> (see _book_card.html) and CSS hides non-matches.
 DISCOVER_FILTERS = {
-    'grade': ('3-5', '6-8', '9-10', '11-12'),         # ATOS reading level band
+    'grade': ('3-5', '6-8', '9-10', '11-12'),         # ATOS band of the original text
     'ages': ('lg', 'mg', 'mg-plus', 'ug'),            # AR interest level
     'school': ('yes',),                               # Common Core exemplar
+    'plain': ('yes',),                                # has a Plain English version
     'length': ('short', 'medium', 'long'),
 }
 # Sort keys; app.js applySortToDiscoverGrid() orders the cards the same way.
@@ -194,6 +198,7 @@ def discover_facets(book):
         'grade': book.get('grade_band') or 'none',
         'ages': book.get('ages') or 'none',
         'school': 'yes' if book.get('on_school_list') else 'no',
+        'plain': 'yes' if book.get('has_plain_english') else 'no',
         'length': (book.get('length') or 'none').lower(),
     }
 

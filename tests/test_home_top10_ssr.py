@@ -59,8 +59,8 @@ def test_home_renders_ranked_cards_in_html(db, monkeypatch):
     assert 'not-ranked' not in carousel
     assert 'skeleton-book-card' not in carousel
 
-    # Ranks follow the curated list position (84 is #1, 1342 is #3).
-    assert re.findall(r'top-10-rank-number">(\d+)<', carousel) == ['1', '3']
+    # Cards follow the curated list order but carry no "No. N" badge (2026-10-14).
+    assert 'book-card-rank' not in carousel and 'top-10-rank-number' not in carousel
 
     # WebP source + JPG fallback, mirroring getImageHtml() in app.js.
     assert 'srcset="/static/covers/30.webp"' in carousel

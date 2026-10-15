@@ -112,11 +112,11 @@ const shelf = await page.evaluate(() => [...document.querySelectorAll("#top-10-s
   title: c.querySelector(".book-card-title")?.textContent.trim(),
   level: c.querySelector(".level-tag")?.textContent.trim(),
   time: c.querySelector(".book-card-time")?.textContent.trim(),
-  rankSize: parseFloat(getComputedStyle(c.querySelector(".top-10-rank-number")).fontSize),
+  rank: !!c.querySelector(".book-card-rank, .top-10-rank-number"),
 })));
 expect("start here: cards have titles and reading times", shelf.length >= 5 && shelf.every((c) => c.title && c.time),
   JSON.stringify(shelf[0]));
-expect("start here: rank is a small badge, not a big numeral", shelf.every((c) => c.rankSize <= 16), `${shelf[0]?.rankSize}px`);
+expect("start here: no 'No. N' rank badge on covers", shelf.every((c) => !c.rank));
 
 // Continue reading is hidden for anonymous visitors
 expect("continue reading hidden when signed out", !(await page.isVisible("#home-continue")));
