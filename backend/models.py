@@ -196,6 +196,15 @@ class Database:
             )
         ''')
 
+        # Where a removed category's page now lives (apply_book_metadata.py
+        # records it), so old /categories/<id> links keep working.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS category_redirects (
+                old_id INTEGER PRIMARY KEY,
+                new_id INTEGER  -- NULL: send to the Categories page
+            )
+        ''')
+
         # Blog posts table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS blog_posts (
@@ -577,7 +586,7 @@ class Database:
         cursor = conn.cursor()
         placeholders = ','.join('?' * len(gutenberg_ids))
         cursor.execute(
-            f'SELECT id, title, author, gutenberg_id, cover_image_url, slug, word_count, cefr_level FROM books '
+            f'SELECT id, title, author, gutenberg_id, cover_image_url, slug, word_count, cefr_level, atos_level, interest_level, school_lists FROM books '
             f'WHERE gutenberg_id IN ({placeholders})',
             list(gutenberg_ids),
         )
@@ -590,7 +599,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at, slug, cefr_level FROM books ORDER BY title')
+        cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at, slug, cefr_level, atos_level, interest_level, school_lists FROM books ORDER BY title')
         rows = cursor.fetchall()
 
         books = [add_book_cues(dict(row)) for row in rows]
@@ -743,15 +752,6 @@ class Database:
         conn.close()
 
         return [add_chapter_cues(dict(row)) for row in rows]
-
-    def count_books_by_cefr(self) -> Dict:
-        """{cefr_level: number of books} for books with a slug (NULL level included)."""
-        conn = self.get_connection()
-        rows = conn.execute(
-            'SELECT cefr_level, COUNT(*) FROM books WHERE slug IS NOT NULL GROUP BY cefr_level'
-        ).fetchall()
-        conn.close()
-        return {row[0]: row[1] for row in rows}
 
     def count_chapters(self, book_id: int) -> int:
         """Number of chapters in a book (for the book page's meta row)."""
@@ -1137,6 +1137,16 @@ class Database:
 
         return category_id
 
+    def get_category_redirect(self, old_id: int):
+        """For a removed category: the id that replaced it, 'all' when its
+        page should go to the Categories page, or None if it never existed."""
+        conn = self.get_connection()
+        row = conn.execute('SELECT new_id FROM category_redirects WHERE old_id = ?', (old_id,)).fetchone()
+        conn.close()
+        if not row:
+            return None
+        return row[0] if row[0] is not None else 'all'
+
     def get_category(self, category_id: int) -> Optional[Dict]:
         """Get category by ID"""
         conn = self.get_connection()
@@ -1227,7 +1237,7 @@ class Database:
 
         cursor.execute('''
             SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                   b.gutenberg_id, b.cover_image_url, b.created_at, b.slug, b.cefr_level
+                   b.gutenberg_id, b.cover_image_url, b.created_at, b.slug, b.cefr_level, b.atos_level, b.interest_level, b.school_lists
             FROM books b
             INNER JOIN book_categories bc ON b.id = bc.book_id
             WHERE bc.category_id = ?
@@ -1485,7 +1495,7 @@ class Database:
 
         if exclude_book_id:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level, atos_level, interest_level, school_lists
                 FROM books
                 WHERE author_id = ? AND id != ?
                 ORDER BY title
@@ -1493,7 +1503,7 @@ class Database:
             ''', (author_id, exclude_book_id, limit))
         else:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level, atos_level, interest_level, school_lists
                 FROM books
                 WHERE author_id = ?
                 ORDER BY title
@@ -1512,7 +1522,7 @@ class Database:
 
         if exclude_book_id:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level, atos_level, interest_level, school_lists
                 FROM books
                 WHERE LOWER(author) = LOWER(?) AND id != ?
                 ORDER BY title
@@ -1520,7 +1530,7 @@ class Database:
             ''', (author_name, exclude_book_id, limit))
         else:
             cursor.execute('''
-                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level
+                SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug, cefr_level, atos_level, interest_level, school_lists
                 FROM books
                 WHERE LOWER(author) = LOWER(?)
                 ORDER BY title
@@ -1562,7 +1572,7 @@ class Database:
             # Get books from this category that we haven't seen yet
             cursor.execute('''
                 SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level
+                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level, b.atos_level, b.interest_level, b.school_lists
                 FROM books b
                 INNER JOIN book_categories bc ON b.id = bc.book_id
                 WHERE bc.category_id = ? AND b.id NOT IN ({})
@@ -1593,7 +1603,7 @@ class Database:
         if exclude_book_id:
             cursor.execute('''
                 SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level
+                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level, b.atos_level, b.interest_level, b.school_lists
                 FROM books b
                 INNER JOIN authors a ON b.author_id = a.id
                 WHERE a.country = ? AND b.id != ?
@@ -1603,7 +1613,7 @@ class Database:
         else:
             cursor.execute('''
                 SELECT b.id, b.title, b.author, b.filename, b.word_count,
-                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level
+                       b.gutenberg_id, b.cover_image_url, b.slug, b.cefr_level, b.atos_level, b.interest_level, b.school_lists
                 FROM books b
                 INNER JOIN authors a ON b.author_id = a.id
                 WHERE a.country = ?

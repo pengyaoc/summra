@@ -3,7 +3,7 @@
 //    pair; "Show me another" cycles through the pairs
 //  - "Start here" shelf uses the book card (title, level, time) with a small
 //    rank badge instead of big numerals
-//  - "Choose by level" cards open a filtered Discover
+//  - "Find a book at the right level" grade cards open a filtered Discover
 //  - "Continue reading" row only for signed-in readers with progress
 //  - Header search: available on every page, shows covers, opens a book
 import { chromium } from "playwright";
@@ -121,15 +121,15 @@ expect("start here: rank is a small badge, not a big numeral", shelf.every((c) =
 // Continue reading is hidden for anonymous visitors
 expect("continue reading hidden when signed out", !(await page.isVisible("#home-continue")));
 
-// Choose by level
-await page.click(".level-card--easy");
-await page.waitForURL(/\/discover\?level=easy$/);
+// Find a book at the right level: grade cards open a filtered Discover
+await page.click(".grade-card--6-8");
+await page.waitForURL(/\/discover\?grade=6-8$/);
 await page.waitForFunction(() => document.querySelectorAll("#discover-grid .book-card").length > 0);
-const easy = await page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")]
-  .filter((c) => c.offsetParent !== null).map((c) => c.dataset.level));
-expect("level card: opens Discover filtered to Easy", easy.length > 0 && easy.every((l) => l === "easy"), `${easy.length}`);
+const bandCards = await page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")]
+  .filter((c) => c.offsetParent !== null).map((c) => c.dataset.grade));
+expect("grade card: opens Discover filtered to grades 6–8", bandCards.length > 0 && bandCards.every((g) => g === "6-8"), `${bandCards.length}`);
 const hrefs = await page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")].map((c) => c.getAttribute("href")));
-expect("level card: Discover grid has no duplicate cards", new Set(hrefs).size === hrefs.length, `${hrefs.length} cards, ${new Set(hrefs).size} unique`);
+expect("grade card: Discover grid has no duplicate cards", new Set(hrefs).size === hrefs.length, `${hrefs.length} cards, ${new Set(hrefs).size} unique`);
 
 // Cmd/Ctrl-click on a card opens a new tab and leaves this page alone.
 const before = page.url();

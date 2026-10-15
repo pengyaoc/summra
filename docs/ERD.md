@@ -151,6 +151,29 @@ Hero examples come from `pages.HERO_EXAMPLES` (slug, chapter): the first non-tit
 which takes the original's first sentence (`study_cues.split_sentences`) and every plain sentence
 that rewrites it — a rewrite may split one long sentence into several.
 
+**Book metadata** (2026-10-14): `scripts/content/build_book_metadata.py` turns the audit working files
+(`data/metadata_audit/`, gitignored) into the committed, sourced record `scripts/content/book_metadata.json`
+(categories with BISAC codes, per-book categories / audience / LoC subjects / Common Core exemplars / ATOS
+reading level + AR interest level with source URLs, and `category_redirects` for retired categories).
+`scripts/content/apply_book_metadata.py [--db PATH] [--dry-run]` writes it idempotently: replaces
+categories and `book_categories`, sets `books.audience`, `atos_level`, `interest_level`, `school_lists`
+(JSON), and records `category_redirects (old_id, new_id NULL = all categories)` so `/categories/<old id>`
+301-redirects. `study_cues.add_book_cues` derives `grade` / `grade_label` ("Grade 7", "College" ≥13) /
+`grade_band` ('3-5', '6-8', '9-10', '11-12'), `ages` / `ages_label` (LG/MG/MG+/UG → Ages 5–9 / 9–14 / 11+ /
+14+) and `school_lists` / `on_school_list`. Discover filters are `pages.DISCOVER_FILTERS` (grade, ages,
+school, length), mirrored in app.js `DISCOVER_FILTERS`; each card carries `data-<filter>` and CSS hides
+non-matches.
+
+**Listing index** (2026-10-14): `idx_books_listing_v2` covers every column the listings read (title, id,
+author, filename, word_count, gutenberg_id, cover_image_url, created_at, slug, cefr_level, audience,
+atos_level, interest_level, school_lists). books rows hold `full_text` before most of these columns, so
+without it SQLite walks each book's text to read them (seconds on the prod VM when cold). Rename the
+index when its columns change (tests/test_book_listing_index.py checks every listing plan).
+
+**Continue reading SSR** (2026-10-14): `progress_routes.library_cards(user_id)` builds the Library cards for
+both `/api/library` and the home page (`pages._home_continue`, up to 3), rendered with the
+`library_card` macro in `_book_card.html`; `/` is `Cache-Control: private, no-store`.
+
 **Listen + player** (2026-10-13): `audio.js` keeps `listenAudioIds` (`"<bookId>:<type>"` → audio id) and
 `listenLoading`. `onListenClick(type, content)` toggles the audio element when that summary is the
 one loaded (`isListenLoaded`), else calls `generateTTS`. `renderListenButton()` draws every Listen

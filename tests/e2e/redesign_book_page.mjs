@@ -30,8 +30,8 @@ page.on("console", (m) => { if (m.type() === "error") errors.push(`${page.url()}
 
 await page.goto(`${BASE}/books/${SLUG}`, { waitUntil: "networkidle" });
 const meta = (await page.textContent("#book-meta")).replace(/\s+/g, " ").trim();
-expect("meta row: level, chapters, time, Plain English",
-  /Challenging/.test(meta) && meta.includes(`${chapters.length} chapters`) && /5½ hrs/.test(meta) && /Plain English/.test(meta), meta);
+expect("meta row: reading grade, ages, chapters, time, Plain English",
+  /Grade 12/.test(meta) && /Ages 14\+/.test(meta) && meta.includes(`${chapters.length} chapters`) && /5½ hrs/.test(meta) && /Plain English/.test(meta), meta);
 expect("anonymous: button says Start reading", (await page.textContent("#book-read-label")).trim() === "Start reading");
 expect("anonymous: no progress line", !(await page.isVisible("#book-progress")));
 const header = await page.evaluate(() => {

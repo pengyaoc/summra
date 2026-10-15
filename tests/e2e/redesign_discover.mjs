@@ -1,6 +1,7 @@
 // Redesign phase 4: Discover is one filterable grid of book cards.
-// Level and length chips filter (combinable), the sort select reorders, the
-// URL keeps ?level=&length=&sort= for deep links, and the grid is
+// Reading level (ATOS grade band), ages, Common Core and length chips filter
+// (combinable), the sort select reorders, the URL keeps ?grade=&ages=&school=
+// &length=&sort= for deep links, and the grid is
 // server-rendered so it shows without JavaScript.
 import { chromium } from "playwright";
 
@@ -15,7 +16,8 @@ const expect = (label, cond, detail = "") => {
 
 const visible = (page) => page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")]
   .filter((c) => c.offsetParent !== null)
-  .map((c) => ({ level: c.dataset.level, length: c.dataset.length, minutes: Number(c.dataset.minutes) || null,
+  .map((c) => ({ grade: c.dataset.grade, ages: c.dataset.ages, school: c.dataset.school, length: c.dataset.length,
+    gradeValue: c.dataset.gradeValue === "" ? null : Number(c.dataset.gradeValue), minutes: Number(c.dataset.minutes) || null,
     title: c.querySelector(".book-card-title").textContent.trim() })));
 const countText = (page) => page.textContent("#discover-count").then((t) => t.trim());
 
@@ -25,9 +27,9 @@ const nj = await noJs.newPage();
 await nj.goto(`${BASE}/discover`);
 const ssrCount = await nj.locator("#discover-grid .book-card").count();
 expect("SSR: grid has cards without JS", ssrCount >= 80, `${ssrCount}`);
-await nj.goto(`${BASE}/discover?level=easy`);
+await nj.goto(`${BASE}/discover?grade=6-8`);
 const ssrEasy = await visible(nj);
-expect("SSR: ?level=easy filters without JS", ssrEasy.length > 0 && ssrEasy.every((c) => c.level === "easy"),
+expect("SSR: ?grade=6-8 filters without JS", ssrEasy.length > 0 && ssrEasy.every((c) => c.grade === "6-8"),
   `${ssrEasy.length}`);
 await noJs.close();
 
@@ -42,19 +44,28 @@ const all = await visible(page);
 expect("all: count matches visible cards", (await countText(page)) === `${all.length} books`, await countText(page));
 expect("no legacy carousels on Discover", (await page.locator("#discover-section .carousel-container").count()) === 0);
 
-await page.click('[data-filter="level"][data-value="easy"]');
+await page.click('[data-filter="grade"][data-value="6-8"]');
 let v = await visible(page);
-expect("Easy chip: only easy books", v.length > 0 && v.every((c) => c.level === "easy"), `${v.length}`);
-expect("Easy chip: pressed state", (await page.getAttribute('[data-filter="level"][data-value="easy"]', "aria-pressed")) === "true");
-expect("Easy chip: URL updated", new URL(page.url()).searchParams.get("level") === "easy", page.url());
-expect("Easy chip: count updated", (await countText(page)) === `${v.length} book${v.length === 1 ? "" : "s"}`, await countText(page));
+expect("Grades 6–8 chip: only those books", v.length > 0 && v.every((c) => c.grade === "6-8"), `${v.length}`);
+expect("Grades 6–8 chip: pressed state", (await page.getAttribute('[data-filter="grade"][data-value="6-8"]', "aria-pressed")) === "true");
+expect("Grades 6–8 chip: URL updated", new URL(page.url()).searchParams.get("grade") === "6-8", page.url());
+expect("Grades 6–8 chip: count updated", (await countText(page)) === `${v.length} book${v.length === 1 ? "" : "s"}`, await countText(page));
 
-await page.click('[data-filter="length"][data-value="short"]');
+await page.click('[data-filter="ages"][data-value="ug"]');
 v = await visible(page);
-expect("Easy + Short: both filters apply", v.every((c) => c.level === "easy" && c.length === "short"), `${v.length}`);
+expect("Grades 6–8 + Ages 14+: both filters apply", v.every((c) => c.grade === "6-8" && c.ages === "ug"), `${v.length}`);
+
+await page.click('[data-filter="grade"][data-value="all"]');
+await page.click('[data-filter="ages"][data-value="all"]');
+await page.click('[data-filter="school"][data-value="yes"]');
+v = await visible(page);
+expect("Common Core toggle: only school-list books", v.length > 0 && v.every((c) => c.school === "yes"), `${v.length}`);
+await page.click('[data-filter="school"][data-value="yes"]');
+expect("Common Core toggle: second press turns it off", (await visible(page)).length === all.length
+  && (await page.getAttribute('[data-filter="school"][data-value="yes"]', "aria-pressed")) === "false");
 
 // 3. Empty result shows a clear-filters message, which resets.
-await page.click('[data-filter="level"][data-value="challenging"]');
+await page.click('[data-filter="grade"][data-value="11-12"]');
 await page.click('[data-filter="length"][data-value="short"]');
 v = await visible(page);
 if (v.length === 0) {
@@ -62,7 +73,7 @@ if (v.length === 0) {
   await page.click(".discover-empty button");
   expect("empty: clear resets filters", (await visible(page)).length === all.length);
 } else {
-  expect("Challenging + Short: both filters apply", v.every((c) => c.level === "challenging" && c.length === "short"));
+  expect("Grades 11–12 + Short: both filters apply", v.every((c) => c.grade === "11-12" && c.length === "short"));
 }
 
 // 4. Sort.
@@ -75,23 +86,29 @@ expect("sort: URL updated", new URL(page.url()).searchParams.get("sort") === "sh
 await page.selectOption("#discover-sort", "title");
 v = await visible(page);
 const titles = v.map((c) => c.title);
+await page.selectOption("#discover-sort", "easiest");
+const grades = (await visible(page)).map((c) => c.gradeValue);
+const known = grades.filter((g) => g !== null);
+expect("sort easiest: reading grade ascending, ungraded last", known.every((g, i) => i === 0 || known[i - 1] <= g)
+  && grades.slice(known.length).every((g) => g === null), JSON.stringify(grades.slice(0, 8)));
+await page.selectOption("#discover-sort", "title");
 // Code-point order on lower-cased titles, matching the server's sort.
 const lc = titles.map((t) => t.toLowerCase());
 expect("sort A–Z: titles ascending", lc.every((t, i) => i === 0 || lc[i - 1] <= t));
 
 // 5. Deep link.
-await page.goto(`${BASE}/discover?level=challenging&length=long`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/discover?grade=9-10&length=long`, { waitUntil: "networkidle" });
 v = await visible(page);
-expect("deep link: filters applied on load", v.length > 0 && v.every((c) => c.level === "challenging" && c.length === "long"), `${v.length}`);
+expect("deep link: filters applied on load", v.length > 0 && v.every((c) => c.grade === "9-10" && c.length === "long"), `${v.length}`);
 
 // 6. In-app navigation to Discover renders the grid client-side, and cards open books.
-await page.goto(`${BASE}/books`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/categories`, { waitUntil: "networkidle" });
 await page.click("#discover-nav-btn");
 await page.waitForURL(/\/discover$/);
 await page.waitForFunction(() => document.querySelectorAll("#discover-grid .book-card").length > 50);
-await page.click('[data-filter="level"][data-value="moderate"]');
+await page.click('[data-filter="grade"][data-value="9-10"]');
 v = await visible(page);
-expect("SPA: chips work after in-app navigation", v.length > 0 && v.every((c) => c.level === "moderate"));
+expect("SPA: chips work after in-app navigation", v.length > 0 && v.every((c) => c.grade === "9-10"));
 await page.locator("#discover-grid .book-card").filter({ visible: true }).first().click();
 await page.waitForURL(/\/books\/[^/]+$/);
 expect("SPA: card opens a book page", /\/books\/[^/]+$/.test(page.url()), page.url());

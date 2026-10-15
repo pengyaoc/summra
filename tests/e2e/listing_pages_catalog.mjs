@@ -29,11 +29,15 @@ async function visit(path, stalls, ready, budgetMs) {
   await ctx.close();
 }
 
+// A real category id (ids differ per database; categories were regrouped).
+const CATEGORY = await fetch(`${BASE}/api/categories`).then((r) => r.json())
+  .then((d) => (d.categories || d).find((c) => (c.book_count ?? 1) > 0).id);
+
 try {
   const catalogStalled = [[/\/api\/books(\?.*)?$/, 8000]];
   await visit('/authors/jules-verne', catalogStalled,
     () => (document.getElementById('author-detail-container')?.innerText || '').length > 200, 6000);
-  await visit('/categories/34', catalogStalled,
+  await visit(`/categories/${CATEGORY}`, catalogStalled,
     () => document.querySelectorAll('#category-books-grid > *').length > 0, 6000);
 
   // All-categories genuinely needs the catalog; it must fetch it in parallel
@@ -45,7 +49,7 @@ try {
   // catalog) opens the right book page.
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/categories/34`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/categories/${CATEGORY}`, { waitUntil: 'networkidle' });
   await page.locator('#category-books-grid > *').first().click();
   await page.waitForFunction(() => /\/books\/[^/]+$/.test(location.pathname) && document.getElementById('book-title')?.textContent.trim());
   const landed = await page.evaluate(() => ({ path: location.pathname, title: document.getElementById('book-title').textContent.trim() }));

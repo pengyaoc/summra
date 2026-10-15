@@ -3,7 +3,8 @@
 The hero leads with Summra's differentiator: an opening sentence from a
 classic next to its plain-English rewrite, pulled from real chapters. Below
 it: "Start here" (the ranked top-10 shelf, now with level and reading time),
-"Choose by level" (three links into a filtered Discover) and "How it works".
+"Find a book at the right level" (grade-band links into a filtered Discover,
+plus where reading levels, age fit and school lists come from).
 """
 import re
 from pathlib import Path
@@ -67,8 +68,8 @@ def client(test_db_path, monkeypatch):
     db.update_book_slug(no_modern, 'jane-eyre')
     easy = db.add_book(title='Easy One', author='A', filename='e.txt', full_text='x')
     conn = db.get_connection()
-    conn.execute("UPDATE books SET cefr_level='B2', word_count=120000 WHERE id=?", (pp,))
-    conn.execute("UPDATE books SET cefr_level='A2', slug='easy-one' WHERE id=?", (easy,))
+    conn.execute("UPDATE books SET cefr_level='B2', word_count=120000, atos_level=12.0 WHERE id=?", (pp,))
+    conn.execute("UPDATE books SET cefr_level='A2', slug='easy-one', atos_level=4.6 WHERE id=?", (easy,))
     conn.commit()
     conn.close()
     db.add_chapter(pp, 1, 'Chapter 1', summary='S.',
@@ -101,12 +102,26 @@ def test_hero_has_no_cover_wall_or_clipart(client):
     assert 'images/infographic' not in body and 'images/chapter_view' not in body
 
 
-def test_choose_by_level_links_into_filtered_discover(client):
+def _grade_card(body, band):
+    m = re.search(rf'<a class="grade-card grade-card--{band}" href="/discover\?grade={band}"[^>]*>(.*?)</a>', body, re.S)
+    return m and m.group(1)
+
+
+def test_right_level_section_links_grade_bands_into_discover(client):
     body = client.get('/').get_data(as_text=True)
-    for level, count in [('easy', '1 book'), ('moderate', '1 book'), ('challenging', '0 books')]:
-        m = re.search(rf'<a class="level-card level-card--{level}" href="/discover\?level={level}"[^>]*>(.*?)</a>', body, re.S)
-        assert m, level
-        assert count in m.group(1)
+    for band, count in [('3-5', '1 book'), ('6-8', '0 books'), ('9-10', '0 books'), ('11-12', '1 book')]:
+        card = _grade_card(body, band)
+        assert card and count in card, (band, card)
+
+
+def test_right_level_section_explains_its_sources(client):
+    body = client.get('/').get_data(as_text=True)
+    section = re.search(r'<section [^>]*id="reading-levels"[^>]*>(.*?)</section>', body, re.S).group(1)
+    assert 'ATOS' in section and 'arbookfind.com' in section, 'reading level: published ATOS levels, linked'
+    assert 'Interest' in section, 'age fit: AR interest levels'
+    assert 'Common Core' in section and 'Appendix_B.pdf' in section, 'school lists, linked'
+    assert 'Flesch' in section, 'say why a simple formula is not used'
+    assert 'How it works' not in body and 'Choose by level' not in body
 
 
 def test_start_here_cards_keep_rank_and_add_cues(client):
@@ -115,7 +130,7 @@ def test_start_here_cards_keep_rank_and_add_cues(client):
     card = re.search(r'<a class="top-10-book-card" href="/books/pride-and-prejudice".*?</a>', carousel, re.S).group(0)
     assert 'top-10-rank-number">3<' in card
     assert '<h3 class="book-card-title">Pride and Prejudice</h3>' in card
-    assert '<span class="level-tag level-tag--moderate">Moderate</span>' in card
+    assert '<span class="grade-tag grade-tag--11-12">Grade 12</span>' in card
     assert '<span class="book-card-time">8½ hrs</span>' in card
 
 
@@ -130,7 +145,7 @@ def test_home_content_is_in_every_page_for_in_app_navigation(client):
     there too, not only on /."""
     body = client.get('/categories').get_data(as_text=True)
     assert 'Everyone knows that a single man with a lot of money needs a wife.' in body
-    assert re.search(r'level-card--easy" href="/discover\?level=easy"[^>]*>.*?1 book', body, re.S)
+    assert '1 book' in (_grade_card(body, '3-5') or '')
 
 
 # --- the curated hero examples (real content database) ------------------------

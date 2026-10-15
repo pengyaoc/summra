@@ -451,6 +451,33 @@ body.on-chapter-page .header {
     color: var(--level-challenging-fg);
 }
 
+/* Published reading grade (ATOS), coloured by band: greener is easier. */
+.grade-tag {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.grade-tag--3-5,
+.grade-tag--6-8 {
+    background: var(--level-easy-bg);
+    color: var(--level-easy-fg);
+}
+
+.grade-tag--9-10 {
+    background: var(--level-moderate-bg);
+    color: var(--level-moderate-fg);
+}
+
+.grade-tag--11-12 {
+    background: var(--level-challenging-bg);
+    color: var(--level-challenging-fg);
+}
+
 /* In horizontal shelves (category/discover carousels, "You may also like")
    the card takes a fixed width instead of a grid column. */
 .carousel-scroll .book-card,
@@ -796,6 +823,20 @@ body.on-chapter-page .header {
 
 .book-meta:empty {
     display: none;
+}
+
+.school-list-badge {
+    padding: 0.1rem 0.55rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.school-list-badge:hover {
+    border-color: var(--ink-muted);
 }
 
 .plain-english-badge {
@@ -3170,9 +3211,15 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 
 /* Filtering: the grid carries the active filters; non-matching cards hide.
    Works on the server-rendered page before any JS runs. */
-.discover-grid[data-filter-level="easy"] > .book-card:not([data-level="easy"]),
-.discover-grid[data-filter-level="moderate"] > .book-card:not([data-level="moderate"]),
-.discover-grid[data-filter-level="challenging"] > .book-card:not([data-level="challenging"]),
+.discover-grid[data-filter-grade="3-5"] > .book-card:not([data-grade="3-5"]),
+.discover-grid[data-filter-grade="6-8"] > .book-card:not([data-grade="6-8"]),
+.discover-grid[data-filter-grade="9-10"] > .book-card:not([data-grade="9-10"]),
+.discover-grid[data-filter-grade="11-12"] > .book-card:not([data-grade="11-12"]),
+.discover-grid[data-filter-ages="lg"] > .book-card:not([data-ages="lg"]),
+.discover-grid[data-filter-ages="mg"] > .book-card:not([data-ages="mg"]),
+.discover-grid[data-filter-ages="mg-plus"] > .book-card:not([data-ages="mg-plus"]),
+.discover-grid[data-filter-ages="ug"] > .book-card:not([data-ages="ug"]),
+.discover-grid[data-filter-school="yes"] > .book-card:not([data-school="yes"]),
 .discover-grid[data-filter-length="short"] > .book-card:not([data-length="short"]),
 .discover-grid[data-filter-length="medium"] > .book-card:not([data-length="medium"]),
 .discover-grid[data-filter-length="long"] > .book-card:not([data-length="long"]) {
@@ -4736,7 +4783,8 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 
 /* "… →" text links: one style everywhere. */
 .home-section-link,
-.learn-more-btn {
+.learn-more-btn,
+.discover-header a {
     color: var(--accent);
     font-size: 0.94rem;
     font-weight: 600;
@@ -4745,7 +4793,8 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 }
 
 .home-section-link:hover,
-.learn-more-btn:hover {
+.learn-more-btn:hover,
+.discover-header a:hover {
     color: var(--accent-hover);
     text-decoration: underline;
     text-underline-offset: 4px;
@@ -4776,90 +4825,94 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 }
 
 /* Choose by level */
-.level-cards {
+/* Find a book at the right level: an ink band like the hero. */
+.home-band--ink {
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.home-band--ink .home-section-head h2 {
+    color: var(--paper);
+}
+
+.home-band--ink .home-section-sub {
+    color: var(--rule-strong);
+}
+
+.grade-cards {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1rem;
 }
 
-.level-card {
+.grade-card {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.75rem;
-    padding: 1.4rem;
-    border: 1px solid var(--rule);
-    border-radius: 10px;
+    gap: 0.7rem;
+    padding: 1.25rem;
+    border-radius: 12px;
     background: var(--surface);
     color: var(--ink);
     text-decoration: none;
-    transition: border-color 0.15s ease, transform 0.15s ease;
+    transition: transform 0.15s ease;
 }
 
-.level-card:hover {
-    border-color: var(--ink-muted);
+.grade-card:hover {
     transform: translateY(-2px);
 }
 
-.level-card .level-tag {
-    font-size: 0.85rem;
+.grade-card .grade-tag {
+    font-size: 0.82rem;
 }
 
-.level-card-desc {
-    color: var(--ink);
+.grade-card-desc {
+    margin: 0;
     font-family: var(--font-serif);
-    font-size: 1.08rem;
+    font-size: 1.02rem;
     line-height: 1.45;
 }
 
-.level-card-count {
+.grade-card-count {
     margin-top: auto;
     color: var(--accent);
     font-size: 0.9rem;
+    font-weight: 600;
 }
 
-/* How it works */
-.how-grid {
+.level-notes {
     display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    align-items: start;
-    gap: 2.5rem;
-    margin-bottom: 1.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem 2rem;
+    margin-top: 2.25rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid rgba(246, 241, 231, 0.18);
 }
 
-.how-steps {
-    display: grid;
-    gap: 1.1rem;
+.level-note h3 {
+    margin: 0 0 0.4rem;
+    color: var(--paper);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.level-note p,
+.level-footnote {
     margin: 0;
-    padding-left: 1.4rem;
-    color: var(--ink-muted);
-    line-height: 1.55;
+    color: var(--rule-strong);
+    font-size: 0.92rem;
+    line-height: 1.6;
 }
 
-.how-steps strong {
-    color: var(--ink);
+.level-note a,
+.level-footnote a {
+    color: var(--paper);
+    font-weight: 600;
 }
 
-.how-sxs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    background: var(--surface);
-}
-
-.how-sxs-col {
-    padding: 1.25rem;
-    font-family: var(--font-serif);
-    line-height: 1.55;
-}
-
-.how-sxs-col + .how-sxs-col {
-    border-left: 1px solid var(--rule);
-}
-
-.how-sxs-col:first-child p {
-    color: var(--ink-muted);
+.level-footnote {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
 }
 
 /* Header search: an inline field on wide screens; below 900px a magnifier
@@ -5033,22 +5086,16 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
         font-size: 1.02rem;
     }
 
-    .level-cards,
-    .how-grid {
+    .grade-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .level-notes {
         grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 480px) {
-    .how-sxs {
-        grid-template-columns: 1fr;
-    }
-
-    .how-sxs-col + .how-sxs-col {
-        border-top: 1px solid var(--rule);
-        border-left: 0;
-    }
-
     .home-section-head h2 {
         font-size: 1.45rem;
     }

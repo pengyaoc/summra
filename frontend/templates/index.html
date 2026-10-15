@@ -264,53 +264,45 @@
                     </div>
                 </section>
 
-                <!-- Choose by level: links into a filtered Discover -->
-                {% set lc = level_counts or {} %}
-                <section class="home-section home-band--deep home-levels">
+                <!-- Find a book at the right level: grade bands into a filtered
+                     Discover, and where the levels come from. -->
+                {% set gc = grade_counts or {} %}
+                <section class="home-section home-band--ink home-levels" id="reading-levels">
                     <div class="home-section-head">
-                        <h2>Choose by level</h2>
+                        <div>
+                            <h2>Find a book at the right level</h2>
+                            <p class="home-section-sub">Levels come from published sources schools use, not guesswork.</p>
+                        </div>
                     </div>
-                    <div class="level-cards">
-                        {% for key, label, desc in [
-                            ('easy', 'Easy', 'Shorter sentences and familiar words. A gentle place to start.'),
-                            ('moderate', 'Moderate', 'Richer vocabulary — the classics most people meet in school.'),
-                            ('challenging', 'Challenging', 'Dense, older English, where the plain-English version helps most.')] %}
-                        {% set n = lc.get(label, 0) %}
-                        <a class="level-card level-card--{{ key }}" href="{{ base_path }}/discover?level={{ key }}">
-                            <span class="level-tag level-tag--{{ key }}">{{ label }}</span>
-                            <p class="level-card-desc">{{ desc }}</p>
-                            <span class="level-card-count">{{ n }} book{{ '' if n == 1 else 's' }} →</span>
+                    <div class="grade-cards">
+                        {% for band, label, desc in [
+                            ('3-5', 'Grades 3–5', 'Short sentences and everyday words.'),
+                            ('6-8', 'Grades 6–8', 'Middle-school reading: most of the famous classics start here.'),
+                            ('9-10', 'Grades 9–10', 'Longer sentences and older vocabulary.'),
+                            ('11-12', 'Grades 11–12+', 'Dense prose — where plain English helps most.')] %}
+                        {% set n = gc.get(band, 0) %}
+                        <a class="grade-card grade-card--{{ band }}" href="{{ base_path }}/discover?grade={{ band }}">
+                            <span class="grade-tag grade-tag--{{ band }}">{{ label }}</span>
+                            <p class="grade-card-desc">{{ desc }}</p>
+                            <span class="grade-card-count">{{ n }} book{{ '' if n == 1 else 's' }} →</span>
                         </a>
                         {% endfor %}
                     </div>
-                </section>
-
-                <!-- How it works -->
-                <section class="home-section home-band--paper home-how">
-                    <div class="home-section-head">
-                        <h2>How it works</h2>
-                    </div>
-                    <div class="how-grid">
-                        <ol class="how-steps">
-                            <li><strong>Pick a classic.</strong> Filter by level and length, or search by title or author.</li>
-                            <li><strong>Read it in plain English.</strong> Every sentence is rewritten, so nothing is cut or summarised.</li>
-                            <li><strong>Check the original any time.</strong> Switch to side by side; your place is saved as you go.</li>
-                        </ol>
-                        {% set sxs = hero_examples[1] if hero_examples and hero_examples|length > 1 else (hero_examples[0] if hero_examples else none) %}
-                        {% if sxs %}
-                        <div class="how-sxs" role="img" aria-label="Side-by-side example from {{ sxs.title }}">
-                            <div class="how-sxs-col">
-                                <span class="hero-sentence-label">Original</span>
-                                <p>{{ sxs.original }}</p>
-                            </div>
-                            <div class="how-sxs-col">
-                                <span class="hero-sentence-label">Plain English</span>
-                                <p>{{ sxs.plain }}</p>
-                            </div>
+                    <div class="level-notes">
+                        <div class="level-note">
+                            <h3>Reading level</h3>
+                            <p>The ATOS book level from Renaissance, the measure behind Accelerated Reader in US schools. It weighs sentence length, word length and how advanced the vocabulary is across the whole book: 7.4 means a typical 7th grader, four months into the year. <a href="https://www.arbookfind.com" target="_blank" rel="noopener">AR BookFinder</a></p>
                         </div>
-                        {% endif %}
+                        <div class="level-note">
+                            <h3>Age fit</h3>
+                            <p>How hard a book is to read isn't how mature it is. AR Interest Levels say who a book's themes suit — <em>Dracula</em> reads at grade 6.6 but is for ages 14+.</p>
+                        </div>
+                        <div class="level-note">
+                            <h3>Assigned in school</h3>
+                            <p>Books named as grade-level text exemplars in the Common Core State Standards, the texts many US classes are built around. <a href="https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf" target="_blank" rel="noopener">Appendix B</a></p>
+                        </div>
                     </div>
-                    <a href="{{ base_path }}/books/jane-eyre" class="home-section-link">See a full example: Jane Eyre →</a>
+                    <p class="level-footnote">Why not a simple formula like Flesch–Kincaid? It only counts sentence and syllable lengths, so dialogue-heavy classics come out far too easy — it rates <em>Romeo and Juliet</em> at grade 3.</p>
                 </section>
             </div>
 
@@ -349,7 +341,7 @@
                         <p class="book-author" id="book-author">{% if ssr_book %}by <a href="{{ base_path }}/authors/{{ author_slug }}" class="author-link">{{ ssr_book.author }}</a>{% endif %}</p>
                         {# Meta row: kept in step with renderBookMeta() in app.js. #}
                         {% set bm = book_meta if ssr_book else none %}
-                        <p class="book-meta" id="book-meta">{% if bm %}{% if bm.level %}<span class="level-tag level-tag--{{ bm.level|lower }}">{{ bm.level }}</span>{% endif %}<span class="book-meta-item">{{ bm.chapter_count }} chapter{{ '' if bm.chapter_count == 1 else 's' }}</span>{% if bm.reading_time %}<span class="book-meta-item">{{ bm.reading_time }}</span>{% endif %}{% if bm.has_plain_english %}<span class="plain-english-badge">Plain English</span>{% endif %}{% endif %}</p>
+                        <p class="book-meta" id="book-meta">{% if bm %}{% if bm.grade_label %}<span class="grade-tag grade-tag--{{ bm.grade_band }}">{{ bm.grade_label }}</span>{% elif bm.level %}<span class="level-tag level-tag--{{ bm.level|lower }}">{{ bm.level }}</span>{% endif %}{% if bm.ages_label %}<span class="book-meta-item">{{ bm.ages_label }}</span>{% endif %}<span class="book-meta-item">{{ bm.chapter_count }} chapter{{ '' if bm.chapter_count == 1 else 's' }}</span>{% if bm.reading_time %}<span class="book-meta-item">{{ bm.reading_time }}</span>{% endif %}{% if bm.has_plain_english %}<span class="plain-english-badge">Plain English</span>{% endif %}{% for entry in bm.school_lists %}<a class="school-list-badge" href="{{ entry.source }}" target="_blank" rel="noopener">Common Core · grades {{ entry.grade_band }}</a>{% endfor %}{% endif %}</p>
                         <div class="book-actions">
                             <button class="book-read-btn" id="book-read-btn" type="button">
                                 <span id="book-read-label">Start reading</span>
@@ -677,11 +669,11 @@
                 <div class="categories-container" id="all-categories-container"></div>
             </section>
 
-            <!-- Discover Section: one grid of every book, filtered by level and
-                 length. Server-rendered on /discover (see pages.discover);
+            <!-- Discover Section: one grid of every book, filtered by reading
+                 grade, ages, school lists and length. Server-rendered on /discover (see pages.discover);
                  on other pages the grid is empty and showDiscoverPage() fills
                  it from the catalog. Filtering is CSS on data-filter-*. -->
-            {% set d = discover or {'books': [], 'level': 'all', 'length': 'all', 'sort': 'title', 'count': 0} %}
+            {% set d = discover or {'books': [], 'filters': {'grade': 'all', 'ages': 'all', 'school': 'all', 'length': 'all'}, 'sort': 'title', 'count': 0} %}
             <section class="discover-section {% if not initial_data or initial_data.type != 'discover' %}hidden{% endif %}" id="discover-section">
                 <nav class="breadcrumb-nav" id="breadcrumb-nav-discover" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list" id="breadcrumb-list-discover">
@@ -691,21 +683,23 @@
 
                 <header class="discover-header">
                     <h2>Find your next classic</h2>
-                    <p>Every book is rewritten in plain English. Choose by how demanding the original is and how long it takes to read.</p>
+                    <p>Every book is rewritten in plain English. Pick by reading level, age and length — levels are the published ATOS levels schools use. <a href="{{ base_path }}/#reading-levels">How we level books</a></p>
                 </header>
 
                 <div class="discover-controls">
-                    <div class="discover-filter" role="group" aria-label="Level">
-                        <span class="discover-filter-label">Level</span>
-                        {% for value, label in [('all', 'All'), ('easy', 'Easy'), ('moderate', 'Moderate'), ('challenging', 'Challenging')] %}
-                        <button type="button" class="filter-chip" data-filter="level" data-value="{{ value }}" aria-pressed="{{ 'true' if d.level == value else 'false' }}">{{ label }}</button>
+                    {% for name, label, options in [
+                        ('grade', 'Reading level', [('all', 'All'), ('3-5', 'Grades 3–5'), ('6-8', '6–8'), ('9-10', '9–10'), ('11-12', '11–12+')]),
+                        ('ages', 'Ages', [('all', 'All'), ('mg', '9–14'), ('mg-plus', '11+'), ('ug', '14+')]),
+                        ('length', 'Length', [('all', 'All'), ('short', 'Short'), ('medium', 'Medium'), ('long', 'Long')])] %}
+                    <div class="discover-filter" role="group" aria-label="{{ label }}">
+                        <span class="discover-filter-label">{{ label }}</span>
+                        {% for value, text in options %}
+                        <button type="button" class="filter-chip" data-filter="{{ name }}" data-value="{{ value }}" aria-pressed="{{ 'true' if d.filters[name] == value else 'false' }}">{{ text }}</button>
                         {% endfor %}
                     </div>
-                    <div class="discover-filter" role="group" aria-label="Length">
-                        <span class="discover-filter-label">Length</span>
-                        {% for value, label in [('all', 'All'), ('short', 'Short'), ('medium', 'Medium'), ('long', 'Long')] %}
-                        <button type="button" class="filter-chip" data-filter="length" data-value="{{ value }}" aria-pressed="{{ 'true' if d.length == value else 'false' }}">{{ label }}</button>
-                        {% endfor %}
+                    {% endfor %}
+                    <div class="discover-filter" role="group" aria-label="School reading lists">
+                        <button type="button" class="filter-chip filter-chip--toggle" data-filter="school" data-value="yes" aria-pressed="{{ 'true' if d.filters.school == 'yes' else 'false' }}">Common Core texts</button>
                     </div>
                     <label class="discover-sort">
                         <span class="discover-filter-label">Sort</span>
@@ -718,7 +712,7 @@
                 </div>
 
                 <p class="discover-count" id="discover-count" aria-live="polite">{{ d.count }} book{{ '' if d.count == 1 else 's' }}</p>
-                <div class="books-grid discover-grid" id="discover-grid" data-filter-level="{{ d.level }}" data-filter-length="{{ d.length }}">{% for book in d.books %}
+                <div class="books-grid discover-grid" id="discover-grid"{% for name, value in d.filters.items() %} data-filter-{{ name }}="{{ value }}"{% endfor %}>{% for book in d.books %}
                     {{ book_card(book) }}{% endfor %}
                 </div>
                 <p class="discover-empty{% if d.count or not d.books %} hidden{% endif %}">No books match these filters. <button type="button" class="btn-secondary">Clear filters</button></p>

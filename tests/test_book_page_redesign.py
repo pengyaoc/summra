@@ -96,9 +96,34 @@ def test_chapters_api_book_carries_level_and_reading_time(client, db):
     assert data['book']['reading_time'] == '5½ hrs'
 
 
+def test_chapters_api_book_carries_grade_ages_and_school_lists(client, db):
+    """The client re-renders the meta row from this payload on in-app navigation."""
+    conn = db.get_connection()
+    conn.execute("UPDATE books SET atos_level=7.3, interest_level='MG (4-8)', school_lists=? WHERE id=?",
+                 ('[{"list": "Common Core exemplar", "grade_band": "6–8", "source": "https://x.test"}]', db.ids['with_modern']))
+    conn.commit()
+    conn.close()
+    book = client.get(f"/api/books/{db.ids['with_modern']}/chapters").get_json()['book']
+    assert (book['grade_label'], book['grade_band'], book['ages_label']) == ('Grade 7', '6-8', 'Ages 9–14')
+    assert book['school_lists'][0]['grade_band'] == '6–8'
+
+
 def test_breadcrumb_structured_data_points_at_discover(client):
     """Books folded into Discover; the old crumb pointed at /all-books,
     which never existed."""
     body = client.get('/books/plain-book').get_data(as_text=True)
     assert '/all-books' not in body
     assert re.search(r'"name":\s*"Discover"', body), 'Discover crumb missing'
+
+
+def test_meta_row_shows_reading_grade_ages_and_school_list(client, db):
+    conn = db.get_connection()
+    conn.execute("UPDATE books SET atos_level=11.7, interest_level='UG (9-12)', school_lists=? WHERE id=?",
+                 ('[{"list": "Common Core exemplar", "grade_band": "11–12", "source": "https://example.test/b"}]', db.ids['with_modern']))
+    conn.commit()
+    conn.close()
+    meta = _meta(client.get('/books/plain-book').get_data(as_text=True))
+    assert '<span class="grade-tag grade-tag--11-12">Grade 11</span>' in meta
+    assert 'level-tag' not in meta, 'one difficulty scale: the published grade replaces the CEFR label'
+    assert '<span class="book-meta-item">Ages 14+</span>' in meta
+    assert re.search(r'<a class="school-list-badge" href="https://example.test/b"[^>]*>Common Core · grades 11–12</a>', meta)

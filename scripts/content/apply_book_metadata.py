@@ -69,8 +69,15 @@ def apply_metadata(db, meta, dry_run=False):
                 conn.execute('INSERT INTO book_categories (book_id, category_id) VALUES (?, ?)', (book_id, category_id))
                 changed += 1
 
-        stale = [cid for name, cid in existing.items() if cid not in wanted_ids]
+        names = {cid: name for name, cid in existing.items()}
+        stale = [cid for cid in names if cid not in wanted_ids]
         for category_id in stale:
+            # The old page redirects to its reviewed replacement (or to all
+            # categories when there is none); earlier redirects follow it.
+            target_name = meta.get('category_redirects', {}).get(names[category_id])
+            target = existing.get(target_name) if target_name else None
+            conn.execute('INSERT OR REPLACE INTO category_redirects (old_id, new_id) VALUES (?, ?)', (category_id, target))
+            conn.execute('UPDATE category_redirects SET new_id = ? WHERE new_id = ?', (target, category_id))
             conn.execute('DELETE FROM book_categories WHERE category_id = ?', (category_id,))
             conn.execute('DELETE FROM categories WHERE id = ?', (category_id,))
             changed += 1

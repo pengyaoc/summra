@@ -29,7 +29,7 @@ const cardInfo = () => page.evaluate(() => [...document.querySelectorAll(".book-
       href: c.getAttribute("href"),
       title: c.querySelector(".book-card-title")?.textContent.trim(),
       author: c.querySelector(".book-card-author")?.textContent.trim(),
-      level: c.querySelector(".level-tag")?.textContent.trim() || null,
+      level: c.querySelector(".grade-tag, .level-tag")?.textContent.trim() || null,
       time: c.querySelector(".book-card-time")?.textContent.trim() || null,
       ratio: r && r.width ? r.height / r.width : null,
       top: Math.round(c.getBoundingClientRect().top),
@@ -48,10 +48,10 @@ expect("/books: every card has title and author", cards.every((c) => c.title && 
 expect("/books: every cover box is 2:3", cards.every((c) => c.ratio && Math.abs(c.ratio - 1.5) < 0.02),
   JSON.stringify(cards.find((c) => !c.ratio || Math.abs(c.ratio - 1.5) >= 0.02)));
 const frank = cards.find((c) => c.title === "Frankenstein");
-expect("/books: Frankenstein shows level and reading time",
-  frank && frank.level === "Challenging" && frank.time === "5½ hrs", JSON.stringify(frank));
-expect("/books: untagged books show no empty level tag",
-  cards.every((c) => c.level === null || ["Easy", "Moderate", "Challenging"].includes(c.level)));
+expect("/books: Frankenstein shows its reading grade and reading time",
+  frank && frank.level === "Grade 12" && frank.time === "5½ hrs", JSON.stringify(frank));
+expect("/books: difficulty tags are a grade (or the older level label), never empty",
+  cards.every((c) => c.level === null || /^(Grade \d+|College|Easy|Moderate|Challenging)$/.test(c.level)));
 const rows = {};
 for (const c of cards) (rows[c.top] ||= []).push(c.height);
 const ragged = Object.entries(rows).filter(([, hs]) => new Set(hs).size > 1);

@@ -5,6 +5,7 @@ hero uses).
 Computed server-side in one place so the API, server-rendered pages and
 Discover all agree (see docs/superpowers/specs/2026-10-12-site-redesign-design.md).
 """
+import json
 import math
 import re
 
@@ -83,13 +84,54 @@ def split_sentences(paragraph):
     return sentences
 
 
+def grade_band(atos):
+    """Discover grade filter bucket for an ATOS book level: '3-5', '6-8',
+    '9-10' or '11-12' (college-level books included), else None."""
+    if atos is None:
+        return None
+    grade = math.floor(atos)
+    if grade <= 5:
+        return '3-5'
+    if grade <= 8:
+        return '6-8'
+    return '9-10' if grade <= 10 else '11-12'
+
+
+def grade_label(atos):
+    """'Grade 7' for an ATOS level of 7.x — the US grade (and month) a typical
+    student can read it in; 13 and up is 'College'."""
+    if atos is None:
+        return None
+    grade = math.floor(atos)
+    return 'College' if grade >= 13 else f'Grade {grade}'
+
+
+# Renaissance's AR interest levels (content maturity, not difficulty) as ages:
+# LG = grades K–3, MG = 4–8, MG+ = 6 and up, UG = 9–12.
+_AGES = {'LG': ('lg', 'Ages 5–9'), 'MG': ('mg', 'Ages 9–14'), 'MG+': ('mg-plus', 'Ages 11+'), 'UG': ('ug', 'Ages 14+')}
+
+
+def ages_for(interest_level):
+    """(filter key, label) for an AR interest level like 'MG+ (6 and up)'."""
+    code = (interest_level or '').split(' ', 1)[0]
+    return _AGES.get(code, (None, None))
+
+
 def add_book_cues(book):
-    """Add `level`, `reading_minutes`, `reading_time` and `length` to a book dict
-    (in place) and return it."""
+    """Add `level`, `reading_minutes`, `reading_time`, `length`, reading grade
+    (`grade`, `grade_label`, `grade_band`), `ages`/`ages_label` and
+    `school_lists`/`on_school_list` to a book dict (in place) and return it."""
     book['level'] = level_label(book.get('cefr_level'))
     book['reading_minutes'] = reading_minutes(book.get('word_count'))
     book['reading_time'] = format_reading_time(book['reading_minutes'])
     book['length'] = length_label(book.get('word_count'))
+    book['grade'] = book.get('atos_level')
+    book['grade_label'] = grade_label(book['grade'])
+    book['grade_band'] = grade_band(book['grade'])
+    book['ages'], book['ages_label'] = ages_for(book.get('interest_level'))
+    lists = book.get('school_lists')
+    book['school_lists'] = json.loads(lists) if isinstance(lists, str) and lists else (lists or [])
+    book['on_school_list'] = bool(book['school_lists'])
     return book
 
 
