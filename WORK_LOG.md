@@ -609,7 +609,7 @@ Ulysses episode titles remain blank because the source does not give official ep
 
 ---
 
-## 2026-10-15: Reading levels: original vs Plain English — DONE (local, not deployed)
+## 2026-10-15: Reading levels: original vs Plain English — DONE, deployed 2026-10-15
 
 User: the level filters describe the original text, but the selling point is the simplified text; check past notes for the Plain English target and rethink Discover's filters and the home levels section. Chose "keep grade, relabel it" and "show books without Plain English, marked Original only".
 
@@ -617,10 +617,11 @@ User: the level filters describe the original text, but the selling point is the
 - **Measured (local, no API cost):** FK on all 62 books, original vs Plain English: median 6.5 → 5.7, words per sentence 16.4 → 15.3; only 11 books land in FK 7–9. FK can't see archaic vocabulary/syntax, which is what the rewrite changes, so it can't grade Plain English either. We state the target, not a measured grade. Script: scratchpad `fk_compare.py` (not committed).
 - **Changes:** listings carry `has_plain_english` (`Database.plain_english_book_ids`, cached 300 s); grade tags read "Original: Grade N"; Discover filter "Original’s level", new "Plain English" toggle (`?plain=yes`), sort "Easiest original first", intro no longer claims every book is rewritten; "Original only" tag on cards and book page; book page badge "Plain English · grade 8"; home levels section rewritten around the grade 8 target with a live "62 of 90" count, notes in a 2×2 grid, Flesch–Kincaid footnote updated with our measurement.
 - **Tests:** new `tests/test_plain_english_levels.py` (9, red first); label assertions updated in test_book_page_redesign, test_discover_page, test_home_redesign and e2e redesign_cards; e2e redesign_discover gains Plain English toggle + client-card checks. `test_get_all_books::test_uses_one_connection` caught a second connection, fixed by reusing the listing's. 674 pytest passed; e2e suite all green.
+- **Deployed 2026-10-15** as `4bb8321` (with the rank-badge removal): VM fast-forwarded, service restarted, no errors in the log. Public `/` 0.16–0.23 s, `/discover` 0.20–0.28 s, `/api/books` 0.16–0.24 s; 28 cards tagged Original only, home shows "62 of 90", no rank badges. The Plain English query takes 7 ms on the VM. One 4.4 s first request after the first restart did not repeat (0.10 s after a second restart).
 
 ---
 
-## 2026-10-14: Home "Start here" — drop the No. 1–10 badges — DONE (local, not deployed)
+## 2026-10-14: Home "Start here" — drop the No. 1–10 badges — DONE, deployed 2026-10-15
 
 Removed the "No. N" rank badge from the Start here covers (book_card/book_cover macros, createBookCard/bookCoverHtml in app.js, `.book-card-rank` CSS, the unused `rank` field in `pages._top10_books`). Shelf order is unchanged. Tests flipped first to assert no badge (test_home_top10_ssr, test_home_redesign, e2e redesign_home), then green: 665 pytest; e2e redesign_home, top10_ssr, redesign_cards, hero_home_navigation, catalog_fetch_once, smoke, redesign_discover pass.
 
