@@ -3,6 +3,7 @@ import json
 import wave
 import re
 import hashlib
+import time
 import uuid
 from collections import defaultdict
 from pathlib import Path
@@ -540,7 +541,7 @@ class Database:
         conn.close()
 
         if row:
-            return add_book_cues(dict(row))
+            return self._book_cues(row)
         return None
 
     def get_book(self, book_id: int) -> Optional[Dict]:
@@ -590,7 +591,7 @@ class Database:
             f'WHERE gutenberg_id IN ({placeholders})',
             list(gutenberg_ids),
         )
-        books = [add_book_cues(dict(row)) for row in cursor.fetchall()]
+        books = [self._book_cues(row) for row in cursor.fetchall()]
         conn.close()
         return books
 
@@ -602,7 +603,8 @@ class Database:
         cursor.execute('SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, created_at, slug, cefr_level, atos_level, interest_level, school_lists FROM books ORDER BY title')
         rows = cursor.fetchall()
 
-        books = [add_book_cues(dict(row)) for row in rows]
+        self.plain_english_book_ids(conn)  # warm the cache on this connection
+        books = [self._book_cues(row) for row in rows]
 
         # Add categories to each book — one query for all books (same rows and
         # order as get_book_categories), not one query + connection per book.
@@ -759,6 +761,36 @@ class Database:
         count = conn.execute('SELECT COUNT(*) FROM chapters WHERE book_id = ?', (book_id,)).fetchone()[0]
         conn.close()
         return count
+
+    # Which books have Plain English, for every listing's "Original only"
+    # tag and Discover's Plain English filter. One query stops at each book's
+    # first rewritten chapter; it only changes when rewrites are generated,
+    # so each process keeps it for a few minutes.
+    _PLAIN_ENGLISH_TTL = 300
+
+    def plain_english_book_ids(self, conn=None) -> set:
+        """Ids of books with Plain English. Pass `conn` to reuse an open connection."""
+        cached = getattr(self, '_plain_english_ids', None)
+        if cached and time.monotonic() - cached[0] < self._PLAIN_ENGLISH_TTL:
+            return cached[1]
+        own = conn is None
+        conn = conn or self.get_connection()
+        ids = {row[0] for row in conn.execute('''
+            SELECT b.id FROM books b WHERE EXISTS (
+                SELECT 1 FROM chapters c WHERE c.book_id = b.id
+                  AND c.modern_english_text IS NOT NULL
+                  AND LENGTH(TRIM(c.modern_english_text, char(32) || char(9) || char(10) || char(13))) > 0)
+        ''')}
+        if own:
+            conn.close()
+        self._plain_english_ids = (time.monotonic(), ids)
+        return ids
+
+    def _book_cues(self, row) -> Dict:
+        """A listing row as a book dict with study cues and `has_plain_english`."""
+        book = add_book_cues(dict(row))
+        book['has_plain_english'] = book.get('id') in self.plain_english_book_ids()
+        return book
 
     def book_has_modern_english(self, book_id: int) -> bool:
         """True iff at least one chapter for this book has non-empty modern_english_text.
@@ -1247,7 +1279,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [add_book_cues(dict(row)) for row in rows]
+        return [self._book_cues(row) for row in rows]
 
     def clear_book_categories(self, book_id: int):
         """Remove all categories from a book"""
@@ -1513,7 +1545,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [add_book_cues(dict(row)) for row in rows]
+        return [self._book_cues(row) for row in rows]
 
     def get_books_by_author_name(self, author_name: str, exclude_book_id: int = None, limit: int = 20) -> List[Dict]:
         """Get books by author name, optionally excluding a specific book"""
@@ -1540,7 +1572,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [add_book_cues(dict(row)) for row in rows]
+        return [self._book_cues(row) for row in rows]
 
     def get_books_in_same_categories(self, book_id: int, limit: int = 10) -> List[Dict]:
         """
@@ -1584,7 +1616,7 @@ class Database:
 
             for book in category_books:
                 if book['id'] not in seen_book_ids:
-                    related_books.append(add_book_cues(dict(book)))
+                    related_books.append(self._book_cues(book))
                     seen_book_ids.add(book['id'])
 
                     # Stop if we've reached the limit
@@ -1624,7 +1656,7 @@ class Database:
         rows = cursor.fetchall()
         conn.close()
 
-        return [add_book_cues(dict(row)) for row in rows]
+        return [self._book_cues(row) for row in rows]
 
     def get_related_books(self, book_id: int) -> Dict:
         """

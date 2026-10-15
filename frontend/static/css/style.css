@@ -427,6 +427,19 @@ body.on-chapter-page .header {
     font-size: 0.78rem;
 }
 
+/* No Plain English version yet: an outline tag, quieter than the level. */
+.original-only-tag {
+    display: inline-block;
+    padding: 0.05rem 0.5rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    color: var(--ink-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
 .level-tag {
     display: inline-block;
     padding: 0.1rem 0.5rem;
@@ -484,24 +497,6 @@ body.on-chapter-page .header {
 .carousel-scroll .top-10-book-card,
 .related-books-scroll .book-card {
     flex: 0 0 168px;
-}
-
-/* "No. 3" badge on the home "Start here" shelf */
-.book-card-rank {
-    position: absolute;
-    top: 0.4rem;
-    left: 0.4rem;
-    z-index: 1;
-    padding: 0.1rem 0.45rem;
-    border-radius: 3px;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--font-serif);
-    font-size: 0.75rem;
-}
-
-.book-card-rank .top-10-rank-number {
-    font-size: inherit;
 }
 
 @media (max-width: 480px) {
@@ -3220,6 +3215,7 @@ body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
 .discover-grid[data-filter-ages="mg-plus"] > .book-card:not([data-ages="mg-plus"]),
 .discover-grid[data-filter-ages="ug"] > .book-card:not([data-ages="ug"]),
 .discover-grid[data-filter-school="yes"] > .book-card:not([data-school="yes"]),
+.discover-grid[data-filter-plain="yes"] > .book-card:not([data-plain="yes"]),
 .discover-grid[data-filter-length="short"] > .book-card:not([data-length="short"]),
 .discover-grid[data-filter-length="medium"] > .book-card:not([data-length="medium"]),
 .discover-grid[data-filter-length="long"] > .book-card:not([data-length="long"]) {
@@ -4839,6 +4835,15 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     color: var(--rule-strong);
 }
 
+.grade-cards-label {
+    margin: 0 0 0.75rem;
+    color: var(--rule-strong);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .grade-cards {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4882,7 +4887,7 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 
 .level-notes {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.5rem 2rem;
     margin-top: 2.25rem;
     padding-top: 1.75rem;

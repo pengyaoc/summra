@@ -53,10 +53,10 @@ def _meta(body):
 
 def test_meta_row_is_server_rendered(client):
     meta = _meta(client.get('/books/plain-book').get_data(as_text=True))
-    assert '<span class="level-tag level-tag--challenging">Challenging</span>' in meta
+    assert '<span class="level-tag level-tag--challenging">Original: Challenging</span>' in meta
     assert '<span class="book-meta-item">3 chapters</span>' in meta
     assert '<span class="book-meta-item">5½ hrs</span>' in meta
-    assert '<span class="plain-english-badge">Plain English</span>' in meta
+    assert '<span class="plain-english-badge">Plain English · grade 8</span>' in meta
 
 
 def test_meta_row_omits_missing_level_and_plain_english(client):
@@ -123,7 +123,7 @@ def test_meta_row_shows_reading_grade_ages_and_school_list(client, db):
     conn.commit()
     conn.close()
     meta = _meta(client.get('/books/plain-book').get_data(as_text=True))
-    assert '<span class="grade-tag grade-tag--11-12">Grade 11</span>' in meta
+    assert '<span class="grade-tag grade-tag--11-12">Original: Grade 11</span>' in meta
     assert 'level-tag' not in meta, 'one difficulty scale: the published grade replaces the CEFR label'
     assert '<span class="book-meta-item">Ages 14+</span>' in meta
     assert re.search(r'<a class="school-list-badge" href="https://example.test/b"[^>]*>Common Core · grades 11–12</a>', meta)

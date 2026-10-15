@@ -609,6 +609,23 @@ Ulysses episode titles remain blank because the source does not give official ep
 
 ---
 
+## 2026-10-15: Reading levels: original vs Plain English — DONE (local, not deployed)
+
+User: the level filters describe the original text, but the selling point is the simplified text; check past notes for the Plain English target and rethink Discover's filters and the home levels section. Chose "keep grade, relabel it" and "show books without Plain English, marked Original only".
+
+- **Target found:** the 2026-05-31 prompt rewrite in `generate_modern_english.py` targets a U.S. 8th-grade reader (Flesch–Kincaid 7–9, Lexile 925L–1185L, 15–20 words per sentence). 62 of 90 books have Plain English; 28 have none.
+- **Measured (local, no API cost):** FK on all 62 books, original vs Plain English: median 6.5 → 5.7, words per sentence 16.4 → 15.3; only 11 books land in FK 7–9. FK can't see archaic vocabulary/syntax, which is what the rewrite changes, so it can't grade Plain English either. We state the target, not a measured grade. Script: scratchpad `fk_compare.py` (not committed).
+- **Changes:** listings carry `has_plain_english` (`Database.plain_english_book_ids`, cached 300 s); grade tags read "Original: Grade N"; Discover filter "Original’s level", new "Plain English" toggle (`?plain=yes`), sort "Easiest original first", intro no longer claims every book is rewritten; "Original only" tag on cards and book page; book page badge "Plain English · grade 8"; home levels section rewritten around the grade 8 target with a live "62 of 90" count, notes in a 2×2 grid, Flesch–Kincaid footnote updated with our measurement.
+- **Tests:** new `tests/test_plain_english_levels.py` (9, red first); label assertions updated in test_book_page_redesign, test_discover_page, test_home_redesign and e2e redesign_cards; e2e redesign_discover gains Plain English toggle + client-card checks. `test_get_all_books::test_uses_one_connection` caught a second connection, fixed by reusing the listing's. 674 pytest passed; e2e suite all green.
+
+---
+
+## 2026-10-14: Home "Start here" — drop the No. 1–10 badges — DONE (local, not deployed)
+
+Removed the "No. N" rank badge from the Start here covers (book_card/book_cover macros, createBookCard/bookCoverHtml in app.js, `.book-card-rank` CSS, the unused `rank` field in `pages._top10_books`). Shelf order is unchanged. Tests flipped first to assert no badge (test_home_top10_ssr, test_home_redesign, e2e redesign_home), then green: 665 pytest; e2e redesign_home, top10_ssr, redesign_cards, hero_home_navigation, catalog_fetch_once, smoke, redesign_discover pass.
+
+---
+
 ## 2026-10-14: Feedback round 2 — checklist — DONE, deployed 2026-10-14
 
 1. [x] Book page: hide "About the author" when it has no content.

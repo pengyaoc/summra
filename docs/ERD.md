@@ -160,8 +160,12 @@ categories and `book_categories`, sets `books.audience`, `atos_level`, `interest
 (JSON), and records `category_redirects (old_id, new_id NULL = all categories)` so `/categories/<old id>`
 301-redirects. `study_cues.add_book_cues` derives `grade` / `grade_label` ("Grade 7", "College" ≥13) /
 `grade_band` ('3-5', '6-8', '9-10', '11-12'), `ages` / `ages_label` (LG/MG/MG+/UG → Ages 5–9 / 9–14 / 11+ /
-14+) and `school_lists` / `on_school_list`. Discover filters are `pages.DISCOVER_FILTERS` (grade, ages,
-school, length), mirrored in app.js `DISCOVER_FILTERS`; each card carries `data-<filter>` and CSS hides
+14+) and `school_lists` / `on_school_list`. Every listing row goes through `Database._book_cues`, which
+also sets `has_plain_english` from `plain_english_book_ids()` (one EXISTS query per call that stops at each
+book's first non-blank `modern_english_text`, cached per process for 300 s; `get_all_books` runs it on its
+own connection). The ATOS grade is the original's; templates and `difficultyTagHtml()` prefix it
+"Original: " (shared `difficulty_tag` macro). Discover filters are `pages.DISCOVER_FILTERS` (grade, ages,
+school, plain, length), mirrored in app.js `DISCOVER_FILTERS`; each card carries `data-<filter>` and CSS hides
 non-matches.
 
 **Listing index** (2026-10-14): `idx_books_listing_v2` covers every column the listings read (title, id,

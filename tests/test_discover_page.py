@@ -112,7 +112,7 @@ def test_discover_card_matches_client_card_markup(client):
     assert re.search(r'<source srcset="/static/covers/\d+\.webp" type="image/webp">', card)
     assert re.search(r'<img src="/static/covers/\d+\.jpg" alt="Zeta Tale cover" loading="lazy"', card)
     assert '<p class="book-card-author">Anon</p>' in card
-    assert '<span class="grade-tag grade-tag--3-5">Grade 4</span>' in card
+    assert '<span class="grade-tag grade-tag--3-5">Original: Grade 4</span>' in card
     assert '<span class="book-card-time">1½ hrs</span>' in card
 
 

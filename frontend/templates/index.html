@@ -177,7 +177,7 @@
                 </div>
             </section>
 
-            {% from '_book_card.html' import book_card, library_card with context %}
+            {% from '_book_card.html' import book_card, library_card, difficulty_tag with context %}
             {# Home — always rendered (only `hidden` toggles) so app.js's
                showHomeSection() never rebuilds this markup from a template
                literal. Redesign (2026-10-12): paper hero with a real
@@ -248,7 +248,7 @@
                                 {% if top_10_books %}
                                 {# Server-rendered so covers start downloading during HTML parse, without waiting for app.min.js + /api/books. #}
                                 {% for book in top_10_books %}
-                                {{ book_card(book, 'top-10-book-card', book.rank) }}
+                                {{ book_card(book, 'top-10-book-card') }}
                                 {% endfor %}
                                 {% else %}
                                 <!-- Loading skeleton cards (will be replaced when books load) -->
@@ -271,15 +271,16 @@
                     <div class="home-section-head">
                         <div>
                             <h2>Find a book at the right level</h2>
-                            <p class="home-section-sub">Levels come from published sources schools use, not guesswork.</p>
+                            <p class="home-section-sub">Plain English is written for a grade 8 reader, whatever the book. The grade on each book is the original’s, so you can see how far Plain English brings it down.</p>
                         </div>
                     </div>
+                    <p class="grade-cards-label">Browse by the original’s reading level</p>
                     <div class="grade-cards">
                         {% for band, label, desc in [
-                            ('3-5', 'Grades 3–5', 'Short sentences and everyday words.'),
-                            ('6-8', 'Grades 6–8', 'Middle-school reading: most of the famous classics start here.'),
-                            ('9-10', 'Grades 9–10', 'Longer sentences and older vocabulary.'),
-                            ('11-12', 'Grades 11–12+', 'Dense prose — where plain English helps most.')] %}
+                            ('3-5', 'Grades 3–5', 'Easy originals. Good for reading the original on its own.'),
+                            ('6-8', 'Grades 6–8', 'Close to Plain English’s level. Old words are the main hurdle; side by side works well.'),
+                            ('9-10', 'Grades 9–10', 'Harder originals. Plain English brings them down to about grade 8.'),
+                            ('11-12', 'Grades 11–12+', 'The hardest originals: dense prose, where Plain English helps most.')] %}
                         {% set n = gc.get(band, 0) %}
                         <a class="grade-card grade-card--{{ band }}" href="{{ base_path }}/discover?grade={{ band }}">
                             <span class="grade-tag grade-tag--{{ band }}">{{ label }}</span>
@@ -290,19 +291,23 @@
                     </div>
                     <div class="level-notes">
                         <div class="level-note">
-                            <h3>Reading level</h3>
-                            <p>The ATOS book level from Renaissance, the measure behind Accelerated Reader in US schools. It weighs sentence length, word length and how advanced the vocabulary is across the whole book: 7.4 means a typical 7th grader, four months into the year. <a href="https://www.arbookfind.com" target="_blank" rel="noopener">AR BookFinder</a></p>
+                            <h3>Plain English: grade 8</h3>
+                            <p>Every rewrite aims at a grade 8 reader (about ages 13–14): sentences of 15–20 words, everyday words for old ones like <em>thou</em>, <em>ere</em> or <em>countenance</em>, and nothing left out. {{ plain_counts.plain }} of {{ plain_counts.total }} books have one so far; the rest are marked Original only.</p>
+                        </div>
+                        <div class="level-note">
+                            <h3>The original’s level</h3>
+                            <p>The ATOS book level of the original text, from Renaissance, the measure behind Accelerated Reader in US schools: 7.4 means a typical 7th grader, four months into the year. It’s what you face reading the original, or when a class assigns it. <a href="https://www.arbookfind.com" target="_blank" rel="noopener">AR BookFinder</a></p>
                         </div>
                         <div class="level-note">
                             <h3>Age fit</h3>
-                            <p>How hard a book is to read isn't how mature it is. AR Interest Levels say who a book's themes suit — <em>Dracula</em> reads at grade 6.6 but is for ages 14+.</p>
+                            <p>How hard a book is to read isn’t how mature it is. AR Interest Levels say who a book’s themes suit, and Plain English doesn’t change them: <em>Dracula</em> is for ages 14+.</p>
                         </div>
                         <div class="level-note">
                             <h3>Assigned in school</h3>
                             <p>Books named as grade-level text exemplars in the Common Core State Standards, the texts many US classes are built around. <a href="https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf" target="_blank" rel="noopener">Appendix B</a></p>
                         </div>
                     </div>
-                    <p class="level-footnote">Why not a simple formula like Flesch–Kincaid? It only counts sentence and syllable lengths, so dialogue-heavy classics come out far too easy — it rates <em>Romeo and Juliet</em> at grade 3.</p>
+                    <p class="level-footnote">Why not score Plain English with a formula like Flesch–Kincaid? We tried. It only counts sentence and syllable lengths, so it can’t see old words like <em>thou</em>: it barely tells a rewrite from its original, and rates <em>Romeo and Juliet</em> at grade 3. So we give the grade Plain English is written for, and the original’s published level.</p>
                 </section>
             </div>
 
@@ -341,7 +346,7 @@
                         <p class="book-author" id="book-author">{% if ssr_book %}by <a href="{{ base_path }}/authors/{{ author_slug }}" class="author-link">{{ ssr_book.author }}</a>{% endif %}</p>
                         {# Meta row: kept in step with renderBookMeta() in app.js. #}
                         {% set bm = book_meta if ssr_book else none %}
-                        <p class="book-meta" id="book-meta">{% if bm %}{% if bm.grade_label %}<span class="grade-tag grade-tag--{{ bm.grade_band }}">{{ bm.grade_label }}</span>{% elif bm.level %}<span class="level-tag level-tag--{{ bm.level|lower }}">{{ bm.level }}</span>{% endif %}{% if bm.ages_label %}<span class="book-meta-item">{{ bm.ages_label }}</span>{% endif %}<span class="book-meta-item">{{ bm.chapter_count }} chapter{{ '' if bm.chapter_count == 1 else 's' }}</span>{% if bm.reading_time %}<span class="book-meta-item">{{ bm.reading_time }}</span>{% endif %}{% if bm.has_plain_english %}<span class="plain-english-badge">Plain English</span>{% endif %}{% for entry in bm.school_lists %}<a class="school-list-badge" href="{{ entry.source }}" target="_blank" rel="noopener">Common Core · grades {{ entry.grade_band }}</a>{% endfor %}{% endif %}</p>
+                        <p class="book-meta" id="book-meta">{% if bm %}{{ difficulty_tag(bm) }}{% if bm.ages_label %}<span class="book-meta-item">{{ bm.ages_label }}</span>{% endif %}<span class="book-meta-item">{{ bm.chapter_count }} chapter{{ '' if bm.chapter_count == 1 else 's' }}</span>{% if bm.reading_time %}<span class="book-meta-item">{{ bm.reading_time }}</span>{% endif %}{% if bm.has_plain_english %}<span class="plain-english-badge">Plain English · grade 8</span>{% else %}<span class="original-only-tag">Original only</span>{% endif %}{% for entry in bm.school_lists %}<a class="school-list-badge" href="{{ entry.source }}" target="_blank" rel="noopener">Common Core · grades {{ entry.grade_band }}</a>{% endfor %}{% endif %}</p>
                         <div class="book-actions">
                             <button class="book-read-btn" id="book-read-btn" type="button">
                                 <span id="book-read-label">Start reading</span>
@@ -683,12 +688,12 @@
 
                 <header class="discover-header">
                     <h2>Find your next classic</h2>
-                    <p>Every book is rewritten in plain English. Pick by reading level, age and length — levels are the published ATOS levels schools use. <a href="{{ base_path }}/#reading-levels">How we level books</a></p>
+                    <p>Plain English versions are written for about a grade 8 reader. The reading level on each book is the original’s — the published ATOS level schools use — so you can see how big a step Plain English is. <a href="{{ base_path }}/#reading-levels">How we level books</a></p>
                 </header>
 
                 <div class="discover-controls">
                     {% for name, label, options in [
-                        ('grade', 'Reading level', [('all', 'All'), ('3-5', 'Grades 3–5'), ('6-8', '6–8'), ('9-10', '9–10'), ('11-12', '11–12+')]),
+                        ('grade', 'Original’s level', [('all', 'All'), ('3-5', 'Grades 3–5'), ('6-8', '6–8'), ('9-10', '9–10'), ('11-12', '11–12+')]),
                         ('ages', 'Ages', [('all', 'All'), ('mg', '9–14'), ('mg-plus', '11+'), ('ug', '14+')]),
                         ('length', 'Length', [('all', 'All'), ('short', 'Short'), ('medium', 'Medium'), ('long', 'Long')])] %}
                     <div class="discover-filter" role="group" aria-label="{{ label }}">
@@ -698,13 +703,14 @@
                         {% endfor %}
                     </div>
                     {% endfor %}
-                    <div class="discover-filter" role="group" aria-label="School reading lists">
+                    <div class="discover-filter" role="group" aria-label="Versions and school lists">
+                        <button type="button" class="filter-chip filter-chip--toggle" data-filter="plain" data-value="yes" aria-pressed="{{ 'true' if d.filters.plain == 'yes' else 'false' }}">Plain English</button>
                         <button type="button" class="filter-chip filter-chip--toggle" data-filter="school" data-value="yes" aria-pressed="{{ 'true' if d.filters.school == 'yes' else 'false' }}">Common Core texts</button>
                     </div>
                     <label class="discover-sort">
                         <span class="discover-filter-label">Sort</span>
                         <select id="discover-sort">
-                            {% for value, label in [('title', 'A–Z'), ('shortest', 'Shortest first'), ('easiest', 'Easiest first')] %}
+                            {% for value, label in [('title', 'A–Z'), ('shortest', 'Shortest first'), ('easiest', 'Easiest original first')] %}
                             <option value="{{ value }}"{% if d.sort == value %} selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>

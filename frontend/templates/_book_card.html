@@ -1,26 +1,32 @@
 {# Server-rendered book card. Keep in step with createBookCard() /
    bookCoverHtml() in app.js, which build the same markup client-side
    (tests/test_discover_page.py pins this structure). Import with context so
-   base_path is available. `cls` and `rank` serve the home "Start here"
-   shelf (class top-10-book-card, small "No. N" badge on the cover). #}
-{% macro book_cover(book, rank=none) -%}
+   base_path is available. `cls` serves the home "Start here" shelf
+   (class top-10-book-card). #}
+{% macro book_cover(book) -%}
     <div class="book-card-cover">
         <span class="book-card-cover-title" aria-hidden="true">{{ book.title }}</span>{% if book.cover_base %}
         <picture>
             <source srcset="{{ url_for('static', filename=book.cover_base ~ '.webp') }}" type="image/webp">
             <img src="{{ url_for('static', filename=book.cover_base ~ '.jpg') }}" alt="{{ book.title }} cover" loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">
-        </picture>{% endif %}{% if rank %}
-        <span class="book-card-rank">No. <span class="top-10-rank-number">{{ rank }}</span></span>{% endif %}
+        </picture>{% endif %}
     </div>
 {%- endmacro %}
 
-{% macro book_card(book, cls='book-card', rank=none) -%}
+{# The original's reading level (published ATOS grade, else the older
+   CEFR-based label). Plain English has its own target (grade 8), so the tag
+   always says it describes the original. Same as difficultyTagHtml() in app.js. #}
+{% macro difficulty_tag(book) -%}
+{% if book.grade_label %}<span class="grade-tag grade-tag--{{ book.grade_band }}">Original: {{ book.grade_label }}</span>{% elif book.level %}<span class="level-tag level-tag--{{ book.level|lower }}">Original: {{ book.level }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro book_card(book, cls='book-card') -%}
 {# data-* values match pages.discover_facets(): Discover's filters hide cards by them. #}
-<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-grade="{{ book.grade_band or 'none' }}" data-ages="{{ book.ages or 'none' }}" data-school="{{ 'yes' if book.on_school_list else 'no' }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}" data-grade-value="{{ book.grade if book.grade is not none else '' }}">
-    {{ book_cover(book, rank) }}
+<a class="{{ cls }}" href="{{ base_path }}/books/{{ book.slug }}" data-grade="{{ book.grade_band or 'none' }}" data-ages="{{ book.ages or 'none' }}" data-school="{{ 'yes' if book.on_school_list else 'no' }}" data-plain="{{ 'yes' if book.has_plain_english else 'no' }}" data-length="{{ (book.length or 'none')|lower }}" data-minutes="{{ book.reading_minutes or '' }}" data-grade-value="{{ book.grade if book.grade is not none else '' }}">
+    {{ book_cover(book) }}
     <h3 class="book-card-title">{{ book.title }}</h3>
     <p class="book-card-author">{{ book.author }}</p>
-    {% if book.grade_label or book.level or book.reading_time %}<p class="book-card-meta">{% if book.grade_label %}<span class="grade-tag grade-tag--{{ book.grade_band }}">{{ book.grade_label }}</span>{% elif book.level %}<span class="level-tag level-tag--{{ book.level|lower }}">{{ book.level }}</span>{% endif %}{% if book.reading_time %}<span class="book-card-time">{{ book.reading_time }}</span>{% endif %}</p>{% endif %}
+    <p class="book-card-meta">{{ difficulty_tag(book) }}{% if book.reading_time %}<span class="book-card-time">{{ book.reading_time }}</span>{% endif %}{% if not book.has_plain_english %}<span class="original-only-tag">Original only</span>{% endif %}</p>
 </a>
 {%- endmacro %}
 

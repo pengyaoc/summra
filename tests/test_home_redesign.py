@@ -124,13 +124,13 @@ def test_right_level_section_explains_its_sources(client):
     assert 'How it works' not in body and 'Choose by level' not in body
 
 
-def test_start_here_cards_keep_rank_and_add_cues(client):
+def test_start_here_cards_have_cues_and_no_rank_badge(client):
     body = client.get('/').get_data(as_text=True)
     carousel = re.search(r'id="top-10-scroll">(.*?)</div>\s*<button class="carousel-nav-btn right"', body, re.S).group(1)
     card = re.search(r'<a class="top-10-book-card" href="/books/pride-and-prejudice".*?</a>', carousel, re.S).group(0)
-    assert 'top-10-rank-number">3<' in card
+    assert 'book-card-rank' not in card, 'no "No. N" badge on the cover'
     assert '<h3 class="book-card-title">Pride and Prejudice</h3>' in card
-    assert '<span class="grade-tag grade-tag--11-12">Grade 12</span>' in card
+    assert '<span class="grade-tag grade-tag--11-12">Original: Grade 12</span>' in card
     assert '<span class="book-card-time">8½ hrs</span>' in card
 
 
