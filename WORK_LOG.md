@@ -609,7 +609,7 @@ Ulysses episode titles remain blank because the source does not give official ep
 
 ---
 
-## 2026-10-14: Feedback round 2 — checklist — IN PROGRESS
+## 2026-10-14: Feedback round 2 — checklist — DONE, deployed 2026-10-14
 
 1. [x] Book page: hide "About the author" when it has no content.
 2. [x] Book page: remove "About this book" for all books (duplicates the Summary).
@@ -632,6 +632,7 @@ Ulysses episode titles remain blank because the source does not give official ep
 - **UI (9, 12):** Discover filters are Reading level (grade bands), Ages (interest level), Length and a Common Core toggle; cards and the book page show "Grade N" (falls back to the old level label), the book page adds ages and a Common Core badge. Home "Choose by level" + "How it works" became "Find a book at the right level" (grade cards + where the levels come from).
 - **Apply on prod:** `PYTHONPATH=. venv/bin/python scripts/content/apply_book_metadata.py --dry-run` then without `--dry-run` (idempotent; rehearsed on a copy of the main DB: 637 rows, second run 0).
 - **More tagging ideas (13):** content advisories (violence, mature themes) from Common Sense Media-style sources; award/curriculum lists beyond Common Core (AP Literature open-question titles, state reading lists); series/companion links (e.g. Alice → Looking-Glass); historical period and setting (useful for history classes); "read-aloud friendly" for younger kids; audio availability; translation/original language.
+- **Deployed 2026-10-14:** rebased onto main (`de8e017`, the parallel metadata/chapter audit), main → `4c7eb5b`; 665 pytest passed, e2e all green. VM fast-forwarded to `4c7eb5b`. Prod DB backed up first to `/opt/summra/data/database.pre-redesign-20261015-055245.db` (SHA-256 `d12e5e32…910d`; restore over `database.db` with the service stopped to roll back). Restart ran the migrations (new columns, `idx_books_listing_v2`, `category_redirects`). `apply_book_metadata.py` on prod: dry run 637, applied 637, re-run 0. Same applied to the local main DB. Public timings after: `/` 0.29 s (was ~7 s), `/discover` 0.20 s, `/api/books` 0.25 s, `/books/paradise-lost/chapters/7` 0.24 s; `/books` → 301 `/discover`; no errors in the service log. The redesign worktree and branch were removed afterwards; the audit inputs moved to the main checkout's `data/metadata_audit/` (gitignored).
 
 ---
 
