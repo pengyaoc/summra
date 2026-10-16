@@ -1,5 +1,31 @@
 # Summra Work Log
 
+## 2026-10-15: Repeated poetry chapter headings fixed locally
+
+Confirmed Paradise Lost source has one chapter title per book and no embedded repeated Book I headers. `renderContinuousSegments` incorrectly inserted a chapter heading and illustration at the start of every loaded segment, even when its first unit was mid-chapter. Poetry makes this especially visible because each verse line consumes one reader unit. Now only chapter ordinal zero emits chapter-start content. Added a regression in the existing manifest test file covering ordinals 0, 80, and 160; confirmed failure before the fix and four passing tests afterward. Rebuilt app.min.js; all 31 JavaScript tests pass. This fixes repeated chapter starts, independently of the passage-alignment/content quality work above. Not deployed.
+
+## 2026-10-15: Reader loading skeleton (done, local only)
+
+Before: opening a book showed a bare "Opening book…" line under the reader header (cold manifest ~1.2s locally). After: `showContinuousReader()` in `frontend/static/js/reader.js` renders a pulsing skeleton of the reading column (title bar + three paragraphs of lines) if the open takes over 250ms; cached opens show nothing. The skeleton carries `role="status"` / `aria-label="Opening book…"`. The `#reader-status` line now appears only for errors and the recovery notice; failures that occur mid-load stay visible instead of being hidden when loading ends. Removed the now-unused `recoveryNotice` field. Test: `tests/e2e/reader_loading_state.mjs` (slow open shows skeleton, then text; fast open never flashes it). Reader e2e tests pass.
+
+## 2026-10-15: Smoke failure on the reader — stale-place recovery and paginator cutoff (done, local only)
+
+`smoke.mjs` failed on `/books/paradise-lost/read` with two bugs.
+1. Saved-place recovery 404. The `/api/progress/v2` projection stores markers per mode without a `mode` field. `recoverContinuousMarker()` sent them as-is, and `recover_reader_marker()` returns `None` without a mode. A place saved against an older content version (Paradise Lost v1 → v2) was therefore rejected and the reader fell back silently. Fix: the client sends `{ ...marker, mode }`, as `mapContinuousMarker()` already did.
+2. Paginator cutoff. `calculatePages()` capped its loop at 3× the initial block count. Split remainders are spliced into `blocks`, so a segment with a few very long paragraphs (Paradise Lost's summary-shaped Plain English) needed more pages than the cap, logged `INFINITE LOOP DETECTED`, and dropped the rest of the segment. Fix: the cap is re-read against the current `blocks.length`. Each split keeps at least one word on the page, so the loop still terminates.
+
+Test: `tests/e2e/reader_stale_marker_and_long_paragraphs.mjs` (stubs auth/progress, so it never writes local reading state). Each half failed before its fix. `smoke.mjs` now passes on `/`, `/books/paradise-lost/read`, and Journey to the Centre of the Earth `/read`. Reader e2e suite passes. 
+
+Follow-up: ported `tests/e2e/sxs_font_regression.mjs` to the continuous reader. It defaulted to port 5004 and waited for `#chapter-detail-section`, which `/chapters/N` no longer shows. It now opens `/books/a-christmas-carol-in-prose/read` on :5001 with auth stubbed anonymous (no progress writes), picks Side-by-Side from Reading settings, and switches font. The row-count regex now matches `side-by-side-row reader-alignment-row`. Two new assertions keep it from passing vacuously: `data-font` changed, and `pagination.pages` was rebuilt. Result: 28 pages before and after, 8/8 assertions pass. `sxs_font_other_views.mjs` has the same stale chapter-page setup and was not changed.
+
+## 2026-10-15: Poetry comparison investigation — Paradise Lost
+
+Investigated local `data/database.db`, book 102, all twelve books of the poem, and the continuous reader compiler/rendering. Current alignment in `backend/models.py` treats every nonempty source line as a paragraph, then zips original and plain paragraphs by ordinal. Thus a verse line is paired with a whole prose paragraph; the remaining verse receives false unavailable gaps. CSS cannot repair the semantic mismatch.
+
+Content audit: Book I has 798 verse lines / 5,945 words against three plain paragraphs / 277 words (5%); it is a condensed summary. Books II–V have only 29–53% of source word counts and require completeness review. Books VII, VIII, and XII each have a single plain paragraph despite roughly 100% word counts. Equal word counts alone do not establish faithful coverage.
+
+Proposed design (investigation complete; implementation pending): use explicitly mapped verse passages, each with source line start/end and matching prose. Preserve verse breaks and indentation, show line ranges, align the top of each passage pair, and let the taller cell determine row height. Bound passages at complete thoughts/stanzas, not arbitrary line or word counts. Page continuation must preserve the passage identity and avoid presenting independently split columns as new semantic matches. On mobile, stack each passage's original and prose with the same line-range label. Existing summaries must be labeled chapter summaries and shown as a companion outside the aligned comparison until a complete passage rewrite exists. Do not infer correspondence from relative text length. Requires a many-lines-to-passage mapping rather than the existing single-paragraph alignment member. No application code or source content changed during this investigation.
+
 ## 2026-10-13: Book metadata, chapter, and tag audit fixes (local database)
 
 Local backup before changes: `data/database.pre-audit-20261013.db` (SHA-256 `57694296e44ca7a3697d92a6e1dff26f40d10b6a5487ab41e4cfad84ad685389`). VM backup before changes: `/opt/summra/data/database.pre-audit-20261013.db` (SHA-256 `ba1c55c082ae42d608dd253647b8ec360563eddb57403867a7d97712c2e2ad65`). Restore either backup over its respective `database.db` while the app is stopped; this rolls back the database changes in this section.

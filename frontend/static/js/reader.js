@@ -723,9 +723,13 @@ export const readerMixin = {
         this.showOnlySections('continuous-reader-section');
         const status = document.getElementById('reader-status');
         const content = document.getElementById('continuous-reader-content');
-        status?.classList.remove('hidden');
-        if (status) status.textContent = 'Opening book…';
+        status?.classList.add('hidden');
         if (content) content.innerHTML = '';
+        // Show a skeleton of the reading column only if the open is slow, so
+        // cached opens don't flash it. Rendering the first segment replaces it.
+        const skeletonTimer = setTimeout(() => {
+            if (content && !content.childElementCount) content.innerHTML = this.readerSkeletonHtml();
+        }, 250);
         let manifest = null;
         try {
             const manifestResponse = await fetch(`${this.apiBase}/reader/books/${book.id}/manifest`);
@@ -737,7 +741,9 @@ export const readerMixin = {
         } catch (_) { /* use the durable segment cache below */ }
         manifest ||= await window.authModule?.getCachedReaderManifest?.(book.id);
         if (!manifest) {
-            if (status) status.textContent = 'Unable to open this book. Retry.';
+            clearTimeout(skeletonTimer);
+            if (content) content.innerHTML = '';
+            this.setContinuousReaderStatus('Unable to open this book. Retry.');
             return;
         }
         const state = await window.authModule?.getReaderState?.(book.id) || { book: null, modes: [] };
@@ -749,18 +755,18 @@ export const readerMixin = {
         const mode = available.includes(requestedMode) ? requestedMode :
             (available.includes(savedMode) ? savedMode : (available.includes('plain') ? 'plain' : available.includes('original') ? 'original' : available[0]));
         if (!mode) {
-            if (status) status.textContent = 'No readable content is available for this book.';
+            clearTimeout(skeletonTimer);
+            if (content) content.innerHTML = '';
+            this.setContinuousReaderStatus('No readable content is available for this book.');
             return;
         }
         const modeState = state.modes?.find(item => item.mode === mode);
         let restoredMarker = modeState?.current_marker || null;
-        let recoveryNotice = false;
         if (restoredMarker && restoredMarker.content_version !== manifest.content_version) {
-            const recovered = await this.recoverContinuousMarker(restoredMarker);
+            const recovered = await this.recoverContinuousMarker(restoredMarker, mode);
             if (recovered) {
                 restoredMarker = recovered;
                 if (recovered.recovery_level === 'chapter_opening' || recovered.recovery_level === 'book_opening') {
-                    recoveryNotice = true;
                     this.setContinuousReaderStatus('This book changed; your place was restored approximately.');
                 }
             }
@@ -774,7 +780,6 @@ export const readerMixin = {
         this.continuousReader = {
             active: true, restoring: true, manifest, mode, state, modeState,
             currentMarker: restoredMarker,
-            recoveryNotice,
             furthestMarker: modeState?.furthest_marker || null,
             segmentIds: [], currentSegmentId: null, chapterId,
             forwardTurn: false, pageTurnAt: Date.now(), terminalTimer: null,
@@ -782,7 +787,14 @@ export const readerMixin = {
         this.setupContinuousReaderChrome();
         this.setupContinuousReaderLifecycle();
         await this.loadContinuousReaderAt(this.continuousReader.currentMarker, chapterId);
-        if (!this.continuousReader.recoveryNotice) status?.classList.add('hidden');
+        clearTimeout(skeletonTimer);
+        content?.querySelector('.reader-skeleton')?.remove();
+    },
+
+    readerSkeletonHtml() {
+        const widths = [100, 96, 98, 72, 0, 100, 94, 97, 99, 60, 0, 100, 95, 88];
+        const lines = widths.map(w => w ? `<span class="reader-skeleton-line" style="width:${w}%"></span>` : '<span class="reader-skeleton-gap"></span>').join('');
+        return `<div class="reader-skeleton" role="status" aria-label="Opening book…"><span class="reader-skeleton-title"></span>${lines}</div>`;
     },
 
     resolveReaderChapter(manifest, rawChapter, legacyNumber = false) {
@@ -983,7 +995,9 @@ export const readerMixin = {
         for (const segment of segments) {
             for (const unit of segment.units) {
                 reader.unitsById.set(unit.id, unit);
-                if (unit.chapter_id !== activeChapter) {
+                // Segment boundaries can fall mid-chapter, especially in verse.
+                // Only the first logical unit owns the heading and illustration.
+                if (unit.chapter_id !== activeChapter && unit.chapter_ordinal === 0) {
                     activeChapter = unit.chapter_id;
                     const title = unit.chapter_title || `Chapter ${unit.chapter_number || ''}`;
                     // Illustration below the heading; pagination keeps the
@@ -1254,10 +1268,10 @@ export const readerMixin = {
         }
     },
 
-    async recoverContinuousMarker(marker) {
+    async recoverContinuousMarker(marker, mode) {
         try {
             const response = await fetch(`${this.apiBase}/reader/books/${this.currentBook.id}/recover`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marker }),
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marker: { ...marker, mode } }),
             });
             const data = await response.json();
             if (response.ok && data.success) {
