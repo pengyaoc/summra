@@ -18,6 +18,8 @@ Test: `tests/e2e/reader_stale_marker_and_long_paragraphs.mjs` (stubs auth/progre
 
 Follow-up: ported `tests/e2e/sxs_font_regression.mjs` to the continuous reader. It defaulted to port 5004 and waited for `#chapter-detail-section`, which `/chapters/N` no longer shows. It now opens `/books/a-christmas-carol-in-prose/read` on :5001 with auth stubbed anonymous (no progress writes), picks Side-by-Side from Reading settings, and switches font. The row-count regex now matches `side-by-side-row reader-alignment-row`. Two new assertions keep it from passing vacuously: `data-font` changed, and `pagination.pages` was rebuilt. Result: 28 pages before and after, 8/8 assertions pass. `sxs_font_other_views.mjs` has the same stale chapter-page setup and was not changed.
 
+Deployed 2026-10-15: commit `daf6ee5` (this section, the loading skeleton, and the verse-heading fix) pushed to GitHub `main` and fast-forwarded on the VM. Static-only change, no restart. Public `/`, `/books`, `/api/books`, `/books/paradise-lost/read` returned 200 in under 0.5s; the served page references `app.min.js?v=1596262923`, matching the local bundle's hash, and the served bundle contains the skeleton code.
+
 ## 2026-10-15: Poetry comparison investigation — Paradise Lost
 
 Investigated local `data/database.db`, book 102, all twelve books of the poem, and the continuous reader compiler/rendering. Current alignment in `backend/models.py` treats every nonempty source line as a paragraph, then zips original and plain paragraphs by ordinal. Thus a verse line is paired with a whole prose paragraph; the remaining verse receives false unavailable gaps. CSS cannot repair the semantic mismatch.
