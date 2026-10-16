@@ -9,6 +9,8 @@ Result: the eight `reader_*` tables became `reader_version` + `reader_unit` (no 
 
 Tests: new `tests/test_reader_storage.py` (10; each failed before). Existing route and database reader tests pass unchanged. One fixture change: `tests/e2e/reader_stale_marker_and_long_paragraphs.mjs` marker `content_version` 1 → 0. Its premise ("older than the published version") stopped holding once local versions restarted at 1; with 0 it again passes through server quote recovery with an old-format ID. 705 pytest, 31 JS, the reader e2e suite (11 scripts) and smoke all pass.
 
+Deployed 2026-10-16: commit `fd76c85`. On the VM I stopped the service, backed up to `/opt/summra/data/database.db.bak-pre-slim-20261016-194322` (1.2GB), fast-forwarded, and ran the migration once by hand rather than letting several gunicorn workers race on DROP COLUMN. I then compiled all 90 books (24s, none skipped), ran VACUUM with `SQLITE_TMPDIR` on the data disk, and started the service (active, no log errors). VM DB: 1,223MB → 160MB. Version numbering continued (Paradise Lost 3 → 4). Public `/`, `/books`, `/api/books`, Paradise Lost book and read pages, Tess read page and the manifest return 200 in under 0.5s. Segments take 0.14–0.22s. On production in side-by-side, Paradise Lost (26 pages) and Tess (30 pages) have no overflowing pages.
+
 Local caveat: the Flask dev server auto-reloaded on the `models.py` edit and ran the migration before I took a backup. So `data/database.pre-slim-20261016.db` (746MB) is already migrated, just not vacuumed; it is not a pre-migration copy and can be deleted. The real pre-change local copy is `data/database.pre-verse-20261015.db`. Local had no old versions left to seed, so local versions restart at 1.
 
 
