@@ -963,6 +963,14 @@ export const readerMixin = {
 
     continuousReaderBlock(text) {
         const value = (text || '').trim();
+        // Verse passages (poetry books) keep their line breaks.
+        if (value.includes('\n')) {
+            return {
+                tag: 'p',
+                className: 'reader-verse',
+                content: value.split('\n').map(line => this.formatContinuousReaderText(line)).join('<br>\n'),
+            };
+        }
         const heading = value.length <= 100 && (
             /^(?:Original Transcriber’s Notes|Original Transcriber's Notes)\s*:?$/i.test(value)
             || /^[A-Z][A-Z0-9\s’'.,:;!?()—–-]*$/.test(value)

@@ -1,5 +1,33 @@
 # Summra Work Log
 
+## 2026-10-16: Side-by-side page splitting fixed; Paradise Lost verse passages and new Plain English (done, local only)
+
+Local DB backup before changes: `data/database.pre-verse-20261015.db` (SHA-256 `9af13ce42d9d4d20aed688162848a75e972774755c701389a876e57569868cf1`).
+
+**Side-by-side text loss (all books).** Three causes in `frontend/static/js/pagination.js`:
+1. The row split searched one column while keeping the other whole, so a row taller than the page never found a fit, was force-placed, and was clipped by `overflow: hidden` (Tess preface).
+2. Measuring pages were appended to `<body>`, outside `.continuous-reader-section`, so its row padding and border (~30px per row) were missing. The header banner's height was also subtracted from a box that still displays the banner. Live pages ran 20–160px taller than measured on every Tess page.
+3. Rows split only at the top of a page, cut both columns at the same word count, and lost `<em>`.
+Fix: `textUnits()`/`sliceUnits()` cut at word starts (or line breaks for verse) with a DOM Range. The row split is proportional (the column with more units drives; each cut snaps to a nearby sentence end) and fills partly used pages (needs at least 3 lines). Measuring happens beside the live page, with the banner inside the box. Test `tests/e2e/sxs_row_split.mjs` (each case failed before): huge row with no overflow and every word once, drift 1.2%; a long row starts under a short one; verse splits between lines; first 8 live Tess pages fit.
+
+**Paradise Lost (book 102).** The source (pg26) has no verse-paragraph breaks, and the old Plain English was unusable (Book I a 5% summary; four Books a single paragraph). `scripts/content/segment_verse_passages.py` grouped the 10,566 lines into 518 passages (about 20 lines each, ending at sentence ends). The reader now splits `is_poetry` originals on blank lines and keeps line breaks (`_reader_split_paragraphs(text, verse)`; `.reader-verse` rendering). All old Plain English was discarded (user's call). Twelve Haiku subagents, one per Book, rewrote it one paragraph per passage; no Gemini calls. Gate `scripts/content/passage_rewrite.py check` (exact count, one line each, ends at a terminator, per-passage ratio 0.5–1.3, chapter 0.50–1.10, no summary language) passed on all 12. CLAUDE.md audit: all 12 Books show EXACT, ratios 104–109%. Spot-checked I.1, IX.57, XII.34 against the verse: complete and faithful. Haiku reports speeches crossing passage breaks use open-quote-per-paragraph; some books (II, IX, X, XI) note the quote marks at those boundaries are not fully consistent.
+
+Tests: `test_segment_verse_passages.py` (8), `test_reader_verse_passages.py` (4; I corrected one expected word count I had miscounted, 20 → 19), `test_passage_rewrite.py` (8; written with the script rather than failing first). 695 pytest passed; 31 JS unit tests pass; reader e2e suite (10 scripts) and smoke on `/`, Paradise Lost and Tess read pages pass. Not deployed; the prod DB needs the local DB copied (deploy step 4) for the new Paradise Lost text.
+
+Known cosmetic issue: a split row still shows its bottom rule at the page cut.
+
+## 2026-10-15: Published reading levels only; ATOS re-check (local, not committed)
+
+Problem: cards mixed "Original: Grade 8" (published ATOS) with "Original: Moderate" (a fallback from `books.cefr_level`). Those CEFR values are estimates from `scripts/migrations/add_cefr_levels.py`; no authority publishes CEFR levels for unabridged classics (only for graded-reader adaptations).
+
+ATOS re-check: searched Renaissance AR BookFinder (Parent view) for all 25 books without an ATOS level, by title and by author. Result: 0 new levels; the earlier pass (`data/metadata_audit/atos_part*.json`) was correct. Near-misses, all rejected as different texts: Monte Cristo (Abridged) 8.8; "The Happy Prince" single story 6.9; A Room with a View in Spanish only (7.1 SP); The Man in the Iron Mask (Unabridged) 10.2, a different part of the Bragelonne romance; Origin of Species only as adaptations. AR has no Chesterton, Nietzsche, Gaskell, Smollett, Le Fanu, Radcliffe, Gibbon, Milton, Adam Smith or J. S. Mill entries.
+
+Lexile (hub.lexile.com Find a Book): 5 free searches/month without an account. Sampled 2: neither Cranford nor The Man Who Was Thursday is listed. Lexile codes poetry/plays NP (non-prose), so Paradise Lost would get no number either.
+
+Change: a level tag only when a published ATOS grade exists. Removed the CEFR fallback from `difficulty_tag` (`_book_card.html`) and `difficultyTagHtml()` (`app.js`), and the now-unused `.level-tag` CSS (color tokens kept; `.grade-tag` uses them). The API still returns `level`. Tests: `test_no_level_tag_without_a_published_grade` (book page + Discover card); `tests/e2e/level_tag_published_only.mjs` (client card). Updated `test_meta_row_is_server_rendered`, which asserted the removed fallback ("Original: Challenging"). 675 pytest passed; card/Discover/home/book-page e2e and smoke pass. PRD/ERD noted.
+
+California: the CDE Recommended Literature List (cde.ca.gov/ci/cr/rl/) assigns recommended titles to grade spans; spreadsheets (through 2021, 2.2 MB; 2022–2025 updates, ~100 KB each) not yet downloaded — awaiting approval.
+
 ## 2026-10-15: Fix shared CI test dependencies
 
 Inspected Actions runs 38846708355, 38846646556, 38749488277, and

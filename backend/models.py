@@ -1900,10 +1900,18 @@ class Database:
         return re.sub(r'\s+', ' ', (text or '').strip().lower())[:180]
 
     @staticmethod
-    def _reader_split_paragraphs(text: str) -> List[str]:
+    def _reader_split_paragraphs(text: str, verse: bool = False) -> List[str]:
         """Match the current chapter renderer: every nonempty source line is
         a logical paragraph. Empty source is represented by no rows; callers
-        create an explicit Plain-English gap where needed."""
+        create an explicit Plain-English gap where needed.
+
+        Verse: a blank-line block is one passage and keeps its line breaks,
+        so a passage pairs with one Plain English paragraph."""
+        if verse:
+            return [
+                '\n'.join(line.rstrip() for line in block.splitlines() if line.strip())
+                for block in re.split(r'\n\s*\n', text or '') if block.strip()
+            ]
         return [p.strip() for p in (text or '').splitlines() if p.strip()]
 
     @staticmethod
@@ -1925,6 +1933,8 @@ class Database:
                 'plain': chapter.get('modern_english_text') or '',
                 'section_id': chapter.get('section_id'),
                 'section_title': chapter.get('section_title') or '',
+                # Only present for verse, so prose checksums are unchanged.
+                **({'verse': True} if chapter.get('verse') else {}),
             }
             for chapter in chapters
         ]
@@ -1943,7 +1953,7 @@ class Database:
         """
         conn = self.get_connection()
         try:
-            book = conn.execute('SELECT id FROM books WHERE id = ?', (book_id,)).fetchone()
+            book = conn.execute('SELECT id, is_poetry FROM books WHERE id = ?', (book_id,)).fetchone()
             if not book:
                 raise ValueError('Book not found')
             chapters = [dict(row) for row in conn.execute('''
@@ -1955,6 +1965,8 @@ class Database:
             ''', (book_id,)).fetchall()]
             if not chapters:
                 raise ValueError('Book has no chapters')
+            for chapter in chapters:
+                chapter['verse'] = bool(book['is_poetry'])
 
             checksum = self._reader_source_checksum(chapters)
             published = conn.execute('''
@@ -2055,7 +2067,7 @@ class Database:
             for chapter in chapters:
                 source_by_mode = {
                     'summary': self._reader_split_paragraphs(chapter.get('summary') or ''),
-                    'original': self._reader_split_paragraphs(chapter.get('chapter_text') or ''),
+                    'original': self._reader_split_paragraphs(chapter.get('chapter_text') or '', chapter.get('verse')),
                     'plain': self._reader_split_paragraphs(chapter.get('modern_english_text') or ''),
                 }
                 for mode in ('summary', 'original', 'plain'):

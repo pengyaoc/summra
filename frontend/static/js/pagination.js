@@ -248,20 +248,18 @@ export const paginationMixin = {
         let blocks;
         // Side-by-side: pull the column-headers banner out of the paginated
         // blocks so it doesn't consume a whole page by itself. We re-prepend
-        // its HTML to every page below, and shrink the per-page budget by its
-        // height so the rows still fit underneath.
+        // its HTML to every page below; each measuring page starts with it,
+        // so the rows are measured with the banner's space already taken.
         let sxsHeadersHTML = '';
         if (containerElement.classList.contains('chapter-side-by-side')) {
             const headersEl = containerElement.querySelector('.side-by-side-headers');
             if (headersEl) {
                 sxsHeadersHTML = headersEl.outerHTML;
-                this.pagination.containerHeight -= headersEl.offsetHeight;
             }
             // For side-by-side view: rows are the atomic blocks
             blocks = Array.from(containerElement.querySelectorAll('.side-by-side-row, figure.reader-illustration'));
             console.log('[calculatePages] Side-by-side mode, found blocks:', blocks.length,
-                        'headers pulled out:', !!sxsHeadersHTML,
-                        'adjusted containerHeight:', this.pagination.containerHeight);
+                        'headers pulled out:', !!sxsHeadersHTML);
         } else {
             // For regular views: use paragraphs and headings as blocks
             blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol, figure.reader-illustration'));
@@ -310,7 +308,10 @@ export const paginationMixin = {
                 padding: ${computedStyle.padding};
                 box-sizing: ${computedStyle.boxSizing};
             `;
-            document.body.appendChild(pageDiv);
+            pageDiv.innerHTML = sxsHeadersHTML;
+            // Measure beside the live page so reader CSS scoped to its
+            // ancestors (row padding, borders) applies to the measurement.
+            (containerElement.parentElement || document.body).appendChild(pageDiv);
             return pageDiv;
         };
 
@@ -352,38 +353,24 @@ export const paginationMixin = {
                     // Overflow detected - remove last block
                     pageDiv.removeChild(clone);
 
-                    // Handle side-by-side rows - try to split them when needed
+                    // Side-by-side rows split proportionally, also to fill the
+                    // rest of a partly used page; otherwise move to the next page.
                     if (block.classList && block.classList.contains('side-by-side-row')) {
-                        // If page is empty and row doesn't fit, try to split it
-                        if (pageBlocks.length === 0) {
-                            const splitResult = this.splitSideBySideRowToFit(block, pageDiv, this.pagination.containerHeight);
-
-                            if (splitResult.firstRow) {
-                                // Successfully split - add first part to current page
-                                pageDiv.appendChild(splitResult.firstRow);
-                                pageBlocks.push(splitResult.firstRow.outerHTML);
-
-                                // Create remainder row for next page
-                                const remainderRow = block.cloneNode(true);
-                                remainderRow.querySelector('.side-by-side-cell.original p').innerHTML = splitResult.remainder.leftText;
-                                remainderRow.querySelector('.side-by-side-cell.modern p').innerHTML = splitResult.remainder.rightText;
-
-                                // Insert remainder as next block to process
-                                blocks.splice(blockIndex + 1, 0, remainderRow);
-                                blockIndex++;
-                                break;
-                            } else {
-                                // Can't split - force entire row anyway
-                                console.log('[calculatePages] Side-by-side row too large for page, forcing it');
-                                pageDiv.appendChild(clone);
-                                pageBlocks.push(block.outerHTML);
-                                blockIndex++;
-                                break;
-                            }
+                        const splitResult = this.splitSideBySideRowToFit(
+                            block, pageDiv, this.pagination.containerHeight, pageBlocks.length === 0);
+                        if (splitResult.firstRow) {
+                            pageDiv.appendChild(splitResult.firstRow);
+                            pageBlocks.push(splitResult.firstRow.outerHTML);
+                            blocks.splice(blockIndex + 1, 0, splitResult.remainderRow);
+                            blockIndex++;
+                            break;
                         }
-
-                        // Otherwise, move entire row to next page
-                        console.log('[calculatePages] Side-by-side row does not fit, moving to next page');
+                        if (pageBlocks.length === 0) {
+                            // A single unit taller than the page: force it.
+                            pageDiv.appendChild(clone);
+                            pageBlocks.push(block.outerHTML);
+                            blockIndex++;
+                        }
                         break;
                     }
 
@@ -446,7 +433,7 @@ export const paginationMixin = {
             }
 
             // Clean up page container
-            document.body.removeChild(pageDiv);
+            pageDiv.remove();
         }
 
         // Store pages
@@ -468,38 +455,77 @@ export const paginationMixin = {
     },
 
     /**
-     * Split paragraph to fit remaining space using binary search (O(log n))
+     * Where each unit of a text block starts: words, or lines for verse
+     * (.reader-verse, lines separated by <br>). Slicing between these points
+     * with a Range keeps inline markup such as <em>.
+     * Returns { starts: [{node, offset}], texts: [string] }.
+     */
+    textUnits(el) {
+        const starts = [];
+        let texts = [];
+        if (el.classList.contains('reader-verse')) {
+            starts.push({ node: el, offset: 0 });
+            el.querySelectorAll('br').forEach(br => {
+                const parent = br.parentNode;
+                starts.push({ node: parent, offset: Array.prototype.indexOf.call(parent.childNodes, br) + 1 });
+            });
+            texts = starts.map((_, i) => this.sliceUnits(el, { starts }, i, i + 1, true));
+        } else {
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                for (const match of node.data.matchAll(/\S+/g)) {
+                    starts.push({ node, offset: match.index });
+                    texts.push(match[0]);
+                }
+            }
+        }
+        return { starts, texts };
+    },
+
+    /** HTML (or text, with asText) of units [from, to) of a text block. */
+    sliceUnits(el, units, from, to, asText = false) {
+        const range = document.createRange();
+        range.setStart(units.starts[from].node, units.starts[from].offset);
+        if (to >= units.starts.length) range.setEnd(el, el.childNodes.length);
+        else range.setEnd(units.starts[to].node, units.starts[to].offset);
+        if (asText) return range.toString().trim();
+        const div = document.createElement('div');
+        div.appendChild(range.cloneContents());
+        // A verse slice ends with the line break before the next line.
+        while (div.lastChild && (div.lastChild.nodeName === 'BR'
+            || (div.lastChild.nodeType === Node.TEXT_NODE && !div.lastChild.data.trim()))) {
+            div.lastChild.remove();
+        }
+        return div.innerHTML.trim();
+    },
+
+    /**
+     * Split paragraph to fit remaining space using binary search (O(log n)),
+     * at a word boundary (a line boundary for verse).
      * Returns {firstPart: Element, remainder: String} or {firstPart: null}
      */
     splitParagraphToFit(paragraph, pageDiv, pageHeight) {
-        const text = paragraph.textContent.trim();
-        const words = text.split(/\s+/).filter(w => w.length > 0);
-
-        if (words.length <= 1) {
+        const units = this.textUnits(paragraph);
+        const count = units.starts.length;
+        if (count <= 1) {
             return { firstPart: null, remainder: null };
         }
+        const makePart = (to) => {
+            const part = paragraph.cloneNode(false);
+            part.innerHTML = this.sliceUnits(paragraph, units, 0, to);
+            return part;
+        };
 
-        // Binary search for maximum words that fit
+        // Binary search for maximum units that fit
         let left = 1;
-        let right = words.length - 1;
+        let right = count - 1;
         let bestFit = 0;
-
         while (left <= right) {
             const mid = Math.floor((left + right) / 2);
-            const testText = words.slice(0, mid).join(' ');
-
-            // Create test paragraph with same attributes
-            const testP = document.createElement('p');
-            testP.innerHTML = testText;
-            for (const attr of paragraph.attributes) {
-                testP.setAttribute(attr.name, attr.value);
-            }
-
-            // Test if it fits
+            const testP = makePart(mid);
             pageDiv.appendChild(testP);
             const fits = pageDiv.scrollHeight <= pageHeight;
             pageDiv.removeChild(testP);
-
             if (fits) {
                 bestFit = mid;
                 left = mid + 1;
@@ -511,105 +537,79 @@ export const paginationMixin = {
         if (bestFit === 0) {
             return { firstPart: null, remainder: null };
         }
+        return { firstPart: makePart(bestFit), remainder: this.sliceUnits(paragraph, units, bestFit, count) };
+    },
 
-        // Create the split result
-        const firstPart = document.createElement('p');
-        firstPart.innerHTML = words.slice(0, bestFit).join(' ');
-        for (const attr of paragraph.attributes) {
-            firstPart.setAttribute(attr.name, attr.value);
+    /** Move a cut back to the nearest sentence end within the last quarter. */
+    sentenceCut(units, cut) {
+        for (let i = cut; i >= Math.max(1, Math.floor(cut * 0.75)); i -= 1) {
+            if (/[.?!;:]['"’”)\]]*$/.test(units.texts[i - 1] || '')) return i;
         }
-
-        const remainder = words.slice(bestFit).join(' ');
-
-        return { firstPart, remainder };
+        return cut;
     },
 
     /**
-     * Split side-by-side row to fit remaining space using dual binary search
-     * Each column is measured independently, then uses minimum of both word counts
-     * Returns {firstRow: Element, remainder: Object} or {firstRow: null}
+     * Split a side-by-side row so its first part fills the remaining space.
+     * Both columns are cut at the same fraction of their text (the column
+     * with more units drives the search), then each cut moves back to a
+     * nearby sentence end, so the halves on a page correspond. On a partly
+     * used page, a split leaving under three lines is refused.
+     * Returns {firstRow, remainderRow} or {firstRow: null}.
      */
-    splitSideBySideRowToFit(row, pageDiv, pageHeight) {
-        const leftCell = row.querySelector('.side-by-side-cell.original p');
-        const rightCell = row.querySelector('.side-by-side-cell.modern p');
+    splitSideBySideRowToFit(row, pageDiv, pageHeight, pageIsEmpty = true) {
+        const sides = ['.side-by-side-cell.original', '.side-by-side-cell.modern'].map(selector => {
+            const el = row.querySelector(selector)?.firstElementChild;
+            return el ? { selector, el, units: this.textUnits(el) } : null;
+        });
+        if (sides.some(side => !side)) return { firstRow: null };
+        const counts = sides.map(side => side.units.starts.length);
+        const driver = counts[0] >= counts[1] ? 0 : 1;
+        const total = counts[driver];
+        if (total < 2) return { firstRow: null };
+        const cutsFor = k => counts.map((n, i) => (i === driver ? k : Math.round(k * n / total)));
 
-        if (!leftCell || !rightCell) {
-            return { firstRow: null, remainder: null };
-        }
-
-        const leftText = leftCell.textContent.trim();
-        const rightText = rightCell.textContent.trim();
-        const leftWords = leftText.split(/\s+/).filter(w => w.length > 0);
-        const rightWords = rightText.split(/\s+/).filter(w => w.length > 0);
-
-        if (leftWords.length <= 1 && rightWords.length <= 1) {
-            return { firstRow: null, remainder: null };
-        }
-
-        // Binary search for each column independently
-        const leftFit = this.binarySearchColumnFit(leftWords, rightWords, row, pageDiv, pageHeight, 'left');
-        const rightFit = this.binarySearchColumnFit(rightWords, leftWords, row, pageDiv, pageHeight, 'right');
-
-        // Use MINIMUM of both - stop where taller column would overflow
-        const minFit = Math.min(leftFit, rightFit);
-
-        if (minFit === 0) {
-            return { firstRow: null, remainder: null };
-        }
-
-        // Create split row with first parts
-        const firstRow = row.cloneNode(true);
-        firstRow.querySelector('.side-by-side-cell.original p').innerHTML = leftWords.slice(0, minFit).join(' ');
-        firstRow.querySelector('.side-by-side-cell.modern p').innerHTML = rightWords.slice(0, minFit).join(' ');
-
-        // Create remainder data
-        const remainder = {
-            leftText: leftWords.slice(minFit).join(' '),
-            rightText: rightWords.slice(minFit).join(' ')
+        const buildRow = (cuts, remainder) => {
+            const clone = row.cloneNode(true);
+            sides.forEach((side, i) => {
+                const target = clone.querySelector(side.selector).firstElementChild;
+                const [from, to] = remainder ? [cuts[i], counts[i]] : [0, cuts[i]];
+                target.innerHTML = from < to ? this.sliceUnits(side.el, side.units, from, to) : '';
+                if (remainder && cuts[i] > 0) target.classList.add('paragraph-continuation');
+            });
+            return clone;
+        };
+        const measure = cuts => {
+            const testRow = buildRow(cuts, false);
+            pageDiv.appendChild(testRow);
+            const result = { fits: pageDiv.scrollHeight <= pageHeight, height: testRow.offsetHeight };
+            pageDiv.removeChild(testRow);
+            return result;
         };
 
-        return { firstRow, remainder };
-    },
-
-    /**
-     * Binary search for max words that fit in ONE column of a side-by-side row
-     * Tests with test text in target column and full text in other column
-     */
-    binarySearchColumnFit(targetWords, otherWords, row, pageDiv, pageHeight, side) {
-        let left = 1;
-        let right = targetWords.length;
-        let bestFit = 0;
-
-        while (left <= right) {
-            const mid = Math.floor((left + right) / 2);
-            const testText = targetWords.slice(0, mid).join(' ');
-            const fullText = otherWords.join(' ');
-
-            // Create test row
-            const testRow = row.cloneNode(true);
-
-            if (side === 'left') {
-                testRow.querySelector('.side-by-side-cell.original p').innerHTML = testText;
-                testRow.querySelector('.side-by-side-cell.modern p').innerHTML = fullText;
+        let low = 1;
+        let high = total - 1;
+        let best = 0;
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            if (measure(cutsFor(mid)).fits) {
+                best = mid;
+                low = mid + 1;
             } else {
-                testRow.querySelector('.side-by-side-cell.original p').innerHTML = fullText;
-                testRow.querySelector('.side-by-side-cell.modern p').innerHTML = testText;
-            }
-
-            // Test if it fits
-            pageDiv.appendChild(testRow);
-            const fits = pageDiv.scrollHeight <= pageHeight;
-            pageDiv.removeChild(testRow);
-
-            if (fits) {
-                bestFit = mid;
-                left = mid + 1;
-            } else {
-                right = mid - 1;
+                high = mid - 1;
             }
         }
+        if (best === 0) return { firstRow: null };
 
-        return bestFit;
+        let cuts = cutsFor(best);
+        const snapped = cuts.map((cut, i) => this.sentenceCut(sides[i].units, cut));
+        if (snapped.some((cut, i) => cut !== cuts[i]) && snapped[driver] > 0 && measure(snapped).fits) {
+            cuts = snapped;
+        }
+        if (!pageIsEmpty) {
+            const lineHeight = parseFloat(getComputedStyle(sides[0].el).lineHeight) || 24;
+            if (measure(cuts).height < lineHeight * 3) return { firstRow: null };
+        }
+        return { firstRow: buildRow(cuts, false), remainderRow: buildRow(cuts, true) };
     },
 
     /**

@@ -2320,16 +2320,13 @@ class SummraApp {
         return bookCard;
     }
 
-    // The original's level: "Original: Grade 7" (published ATOS level) when
-    // known, else the older Easy / Moderate / Challenging label from the
-    // book's CEFR level. Plain English has its own target (grade 8). Same as
-    // the difficulty_tag macro in _book_card.html.
+    // The original's level: "Original: Grade 7" (published ATOS level), or
+    // nothing — the CEFR levels are estimates, not published. Plain English
+    // has its own target (grade 8). Same as the difficulty_tag macro in
+    // _book_card.html.
     difficultyTagHtml(book) {
-        if (book?.grade_label) {
-            return `<span class="grade-tag grade-tag--${this.escapeHtml(book.grade_band)}">Original: ${this.escapeHtml(book.grade_label)}</span>`;
-        }
-        return book?.level
-            ? `<span class="level-tag level-tag--${book.level.toLowerCase()}">Original: ${this.escapeHtml(book.level)}</span>`
+        return book?.grade_label
+            ? `<span class="grade-tag grade-tag--${this.escapeHtml(book.grade_band)}">Original: ${this.escapeHtml(book.grade_label)}</span>`
             : '';
     }
 

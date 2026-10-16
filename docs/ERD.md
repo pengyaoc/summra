@@ -164,7 +164,7 @@ categories and `book_categories`, sets `books.audience`, `atos_level`, `interest
 also sets `has_plain_english` from `plain_english_book_ids()` (one EXISTS query per call that stops at each
 book's first non-blank `modern_english_text`, cached per process for 300 s; `get_all_books` runs it on its
 own connection). The ATOS grade is the original's; templates and `difficultyTagHtml()` prefix it
-"Original: " (shared `difficulty_tag` macro). Discover filters are `pages.DISCOVER_FILTERS` (grade, ages,
+"Original: " (shared `difficulty_tag` macro). Since 2026-10-15 a book with no ATOS grade gets no tag: the CEFR-based `level` (Easy / Moderate / Challenging) is still computed and returned by the API, but no longer rendered, because `books.cefr_level` holds estimates, not published levels. Discover filters are `pages.DISCOVER_FILTERS` (grade, ages,
 school, plain, length), mirrored in app.js `DISCOVER_FILTERS`; each card carries `data-<filter>` and CSS hides
 non-matches.
 
@@ -10439,3 +10439,26 @@ body.pagination-active {
 the manifest's `structure` entries) as a fixed-height `figure.reader-illustration` before each
 chapter heading; `pagination.js` treats that figure as a page block in both regular and
 side-by-side modes.
+
+**Verse passages and side-by-side splitting** (2026-10-16):
+- Data: `scripts/content/segment_verse_passages.py` inserts blank lines into an `is_poetry` book's
+  `chapter_text`, grouping lines into passages (target 20, range 12–30, ending at a sentence end;
+  falls back to `;`/`:`, then the next sentence end up to 45 lines). Paradise Lost (book 102):
+  518 passages.
+- Reader compile: `_reader_split_paragraphs(text, verse)` splits an `is_poetry` book's original on
+  blank lines and keeps `\n` inside a unit, so `reader_alignment_row` pairs passage *i* with plain
+  paragraph *i*. The checksum includes `verse: true` only for poetry, so prose checksums are unchanged.
+- Rendering: `continuousReaderBlock()` renders a unit containing `\n` as `p.reader-verse` with
+  `<br>\n` between lines (the `\n` keeps word counts right in `textContent`).
+- Pagination: `textUnits()` / `sliceUnits()` cut a block at word starts (or after each `<br>` for
+  `.reader-verse`) with a DOM Range, preserving inline markup. `splitSideBySideRowToFit()` binary
+  searches the column with more units and cuts the other proportionally, snaps each cut back to a
+  sentence end within the last quarter, and runs on partly used pages (refusing a first part under
+  three lines). Measuring pages are appended beside the live page (so `.continuous-reader-section`
+  row padding/borders apply) and start with the side-by-side header banner instead of subtracting
+  its height. Both used to make live pages overflow and clip text.
+- Plain English for verse: `scripts/content/passage_rewrite.py` (`export` / `check` / `apply`) — an
+  agent writes one paragraph per passage; `check_passages()` gates exact count, single line,
+  sentence-terminator ending, per-passage ratio 0.5–1.3, chapter ratio 0.50–1.10, no summary language.
+- Tests: `tests/test_segment_verse_passages.py`, `tests/test_reader_verse_passages.py`,
+  `tests/test_passage_rewrite.py`, `tests/e2e/sxs_row_split.mjs`.
