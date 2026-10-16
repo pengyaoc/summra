@@ -10446,7 +10446,7 @@ side-by-side modes.
   falls back to `;`/`:`, then the next sentence end up to 45 lines). Paradise Lost (book 102):
   518 passages.
 - Reader compile: `_reader_split_paragraphs(text, verse)` splits an `is_poetry` book's original on
-  blank lines and keeps `\n` inside a unit, so `reader_alignment_row` pairs passage *i* with plain
+  blank lines and keeps `\n` inside a unit, so side-by-side row *i* pairs passage *i* with plain
   paragraph *i*. The checksum includes `verse: true` only for poetry, so prose checksums are unchanged.
 - Rendering: `continuousReaderBlock()` renders a unit containing `\n` as `p.reader-verse` with
   `<br>\n` between lines (the `\n` keeps word counts right in `textContent`).
@@ -10463,3 +10463,33 @@ side-by-side modes.
   sentence-terminator ending, per-passage ratio 0.5–1.3, chapter ratio 0.50–1.10, no summary language.
 - Tests: `tests/test_segment_verse_passages.py`, `tests/test_reader_verse_passages.py`,
   `tests/test_passage_rewrite.py`, `tests/e2e/sxs_row_split.mjs`.
+
+**Reader storage: one copy of the text** (2026-10-16). This replaces the eight-table design described
+above (`reader_content_version`, `reader_mode_manifest`, `reader_structure_entry`, `reader_segment`,
+`reader_paragraph`, `reader_alignment_row`, `reader_alignment_member`, `reader_paragraph_mapping`).
+That design stored a second copy of every paragraph, normalized quotes, 37-char UUID keys and every
+retired version, and grew the database to 0.8–1.2GB.
+- `reader_version(book_id PK, version, source_checksum, manifest_etag, verse, plain_coverage)`: one
+  row per book. `ensure_reader_content()` compares the checksum of the book's chapters on each reader
+  request and recompiles on change. The migration seeds `version` from the old table's maximum, so
+  markers saved before it read as stale.
+- `reader_unit(book_id, mode, ordinal, chapter_id, chapter_ordinal, segment, word_count, word_start,
+  byte_count, gap)`, `WITHOUT ROWID`, PK `(book_id, mode, ordinal)`, plus a unique index on
+  `(book_id, mode, chapter_id, chapter_ordinal)`. **No text.** A recompile deletes and rewrites the
+  book's units; no history is kept.
+- `_reader_chapter_units(chapter, verse, plain_coverage)` is the single splitter: the compile step
+  counts with it, and `get_reader_segment()` re-splits only the chapters a segment touches to fill in
+  `content`. Coordinates therefore always index the same paragraphs.
+- IDs: a unit is `"<chapter_id>.<chapter_ordinal>"` (mode-scoped); a segment is `"<mode>.<n>"`.
+  Side-by-side row *i* pairs original *i* with plain *i*, and `map_reader_marker()` is positional
+  (summary maps to the chapter's first unit).
+- Structure, mode stats, segment descriptors and etags are computed from `chapters`/`reader_unit` per
+  manifest request.
+- `recover_reader_marker()`: a marker from another version, or with an ID that doesn't resolve,
+  recovers within its chapter to the paragraph containing its quote (`quote`), else to the same
+  position clamped to the chapter (`ordinal`).
+- `books.full_text` was dropped (only ingestion counted it); `add_book(full_text=...)` still takes it
+  for `word_count`.
+- Size: local DB 746MB → 159MB after `VACUUM` (`chapters` 132MB, `reader_unit` plus its index 32MB).
+  Compiling all 90 books takes about 7s.
+- Tests: `tests/test_reader_storage.py` (10).

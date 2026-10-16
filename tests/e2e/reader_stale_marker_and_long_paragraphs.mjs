@@ -14,10 +14,12 @@ import { chromium } from 'playwright';
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5001';
 const fail = (msg) => { console.error(`FAIL: ${msg}`); process.exit(1); };
 
-// A plain-mode marker saved against Paradise Lost's content version 1 (the
-// local database publishes version 2), captured from a real local session.
+// A plain-mode marker from an older content version, captured from a real
+// local session (old-format paragraph ID). Version 0 is older than any
+// published version, so it stays stale after reader storage was rebuilt
+// (2026-10-16) and version numbers restarted.
 const STALE_MARKER = {
-  chapter_id: 7992, content_version: 1, offset: 0.17, ordinal: 285,
+  chapter_id: 7992, content_version: 0, offset: 0.17, ordinal: 285,
   paragraph_id: 'para_f6575ed5c27a4caf90e935f75581b450',
   quote: 'He will select one special nation from all the rest to call upon Him',
   word_position: 54619,

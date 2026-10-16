@@ -443,7 +443,7 @@ for tbl in ('books','chapters','authors'): print(f'{tbl}=' + str(c.execute(f'SEL
 \""
 ```
 
-If VM counts are higher than local for anything other than `blog_posts`, STOP — the VM has data that's not in local. Investigate first. The VM's `reader_*` tables usually hold more content versions than local (it compiles its own, and saved reading places map through them). To ship one book's text, prefer updating just that book's `chapters` rows on the VM: check that the VM rows match your local pre-change backup, then run `ensure_reader_content(<book_id>)`. This keeps reader history. See WORK_LOG 2026-10-16.
+If VM counts are higher than local for anything other than `blog_posts`, STOP — the VM has data that's not in local. Investigate first. The reader index (`reader_version`, `reader_unit`) is derived from `chapters` and rebuilt on demand, so differences there don't matter. To ship one book's text you can also update just that book's `chapters` rows on the VM (check they match your local pre-change backup first), then run `ensure_reader_content(<book_id>)`.
 
 **Copy and activate:**
 ```sh
