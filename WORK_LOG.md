@@ -1,5 +1,27 @@
 # Summra Work Log
 
+## 2026-10-15: Fix shared CI test dependencies
+
+Inspected Actions runs 38846708355, 38846646556, 38749488277, and
+38749293749 (commits ce4f27a, daf6ee5, f288f96, 4bb8321). All fail
+on the same four tests: three chapter-numbering tests initialize Gemini with
+an empty key; the curated hero audit runs against the empty database created
+by app imports on a clean checkout. These are test isolation failures.
+
+Chapter-numbering setup now mocks Gemini and Database, following the existing
+summary-test pattern. The real-content audit has an explicit `content` marker,
+excluded by default and selectable with `pytest -m content`. Fixture-backed
+hero rendering and pairing tests remain in the default suite. README documents
+the audit command. No application behavior or CI secrets changed.
+
+Verification: focused modules pass (18 passed, 1 deselected); explicit content
+audit passes against the local curated database; `npm run build:check` passes.
+Full suite with `.env` loading disabled and Gemini/Google API keys unset:
+674 passed, 2 deselected (slow + content), on local Python 3.14. Network access
+was required for the existing Gutenberg checks; the sandbox-only run passed
+666 tests and failed those eight network checks. GitHub uses Python 3.11; a
+new Actions run after pushing remains the hosted confirmation.
+
 ## 2026-10-15: Repeated poetry chapter headings fixed locally
 
 Confirmed Paradise Lost source has one chapter title per book and no embedded repeated Book I headers. `renderContinuousSegments` incorrectly inserted a chapter heading and illustration at the start of every loaded segment, even when its first unit was mid-chapter. Poetry makes this especially visible because each verse line consumes one reader unit. Now only chapter ordinal zero emits chapter-start content. Added a regression in the existing manifest test file covering ordinals 0, 80, and 160; confirmed failure before the fix and four passing tests afterward. Rebuilt app.min.js; all 31 JavaScript tests pass. This fixes repeated chapter starts, independently of the passage-alignment/content quality work above. Not deployed.

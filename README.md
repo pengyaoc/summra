@@ -163,6 +163,11 @@ Both feature flags default off so the routes return clean 404s and the relevant 
 
 ### Backend (pytest)
 
+The default suite runs without Gemini credentials or the curated content database.
+To audit the locally provisioned hero content explicitly, run
+`venv/bin/python -m pytest tests/test_home_redesign.py -m content -v`.
+An empty database created by app startup is insufficient for this audit.
+
 ```bash
 PYTHONPATH=backend venv/bin/python -m pytest tests/ -v
 ```

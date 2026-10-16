@@ -5,6 +5,7 @@ Test chapter numbering logic, especially for Introduction chapters
 import sys
 import os
 import unittest
+from unittest.mock import patch
 
 
 
@@ -16,7 +17,10 @@ class TestChapterNumbering(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        self.generator = SummaryGenerator("")  # Empty API key for testing
+        # Chapter parsing needs neither Gemini nor the production database.
+        with patch("scripts.content.generate_summaries.genai.Client"), \
+             patch("scripts.content.generate_summaries.models.Database"):
+            self.generator = SummaryGenerator("")
 
     def test_introduction_as_chapter_one(self):
         """
