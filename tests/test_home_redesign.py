@@ -153,6 +153,8 @@ def test_home_content_is_in_every_page_for_in_app_navigation(client):
 REAL_DB = Path(__file__).resolve().parent.parent / 'data' / 'database.db'
 
 
+# App imports can create an empty database, so existence alone is not opt-in.
+@pytest.mark.content
 @pytest.mark.skipif(not REAL_DB.exists(), reason='needs the content database')
 def test_hero_examples_are_famous_hard_sentences(monkeypatch):
     """Every configured example resolves, and each is the kind of sentence a
