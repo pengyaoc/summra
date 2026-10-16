@@ -1,5 +1,17 @@
 # Summra Work Log
 
+## 2026-10-16: Single-copy reader storage (done locally)
+
+Goal: keep book text once, in `chapters`. The user approved all four steps with no backward compatibility (no real users).
+Plan: (1) keep no retired reader versions; (2) drop `books.full_text`; (3)+(4) replace the eight `reader_*` tables, which hold a second text copy, normalized quotes, UUID-text keys and history, with `reader_version` (one row per book) and `reader_unit`. `reader_unit` has integer keys, word counts and segment numbers, and no text. Segment text is re-split from `chapters` on request by the same function the compile step uses. Unit IDs are `<chapter_id>.<chapter_ordinal>`; side-by-side pairs by position. Recovery uses the marker's own quote, then its ordinal. The API shape for the frontend is unchanged. VACUUM after the migration.
+
+Result: the eight `reader_*` tables became `reader_version` + `reader_unit` (no text; see ERD). `books.full_text` was dropped, and `regenerate_medium_summary.py` now joins chapter text. Local DB: 746MB → 159MB after VACUUM (`chapters` 132MB, reader index 32MB); compiling all 90 books takes 7.6s. The API shape is unchanged; IDs are now `<chapter_id>.<ordinal>` and segments `<mode>.<n>`. Recovery: quote within the chapter, then position; this also applies when the version matches but the ID doesn't resolve. The migration continues each book's version numbering from the old table so pre-migration markers read as stale (unit test covers it).
+
+Tests: new `tests/test_reader_storage.py` (10; each failed before). Existing route and database reader tests pass unchanged. One fixture change: `tests/e2e/reader_stale_marker_and_long_paragraphs.mjs` marker `content_version` 1 → 0. Its premise ("older than the published version") stopped holding once local versions restarted at 1; with 0 it again passes through server quote recovery with an old-format ID. 705 pytest, 31 JS, the reader e2e suite (11 scripts) and smoke all pass.
+
+Local caveat: the Flask dev server auto-reloaded on the `models.py` edit and ran the migration before I took a backup. So `data/database.pre-slim-20261016.db` (746MB) is already migrated, just not vacuumed; it is not a pre-migration copy and can be deleted. The real pre-change local copy is `data/database.pre-verse-20261015.db`. Local had no old versions left to seed, so local versions restart at 1.
+
+
 ## 2026-10-16: Side-by-side columns fill each page independently (done, local only)
 
 User report: a split Paradise Lost row left the Plain English stopped mid-sentence ("who led the") above blank space. Cause: `splitSideBySideRowToFit()` cut both columns at the same fraction of their text, so the shorter column ended early. Now each column is filled independently to the largest prefix that fits and continues on the next page; a column that runs out leaves later cells empty. Removed `sentenceCut()` (no longer used). Changed the requirement in `tests/e2e/sxs_row_split.mjs`, since the user changed the spec: "columns stay in step" became "plain column fills every page it continues from" and "shorter column finishes first". The fill check failed before the fix (gap of about 560px on every page). Also corrected the test's re-measuring box to match the paginator's (the header band included; real container width 900px instead of a nominal 1100px). Both mismatches had shown the same false gap in both columns. Results: sxs_row_split passes, the reader e2e suite (9 scripts) passes, and on local Paradise Lost both columns end on the same line.

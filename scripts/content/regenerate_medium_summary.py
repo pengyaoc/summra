@@ -37,10 +37,10 @@ def regenerate_medium_summary(book_id: int):
 
     print(f"Book: {book['title']} by {book['author']}")
 
-    # Get full text
-    full_text = book.get('full_text')
-    if not full_text:
-        print("Error: Book has no full_text in database")
+    # Book text lives per chapter (books.full_text was dropped 2026-10-16)
+    full_text = '\n\n'.join(ch.get('chapter_text') or '' for ch in db.get_chapters(book_id))
+    if not full_text.strip():
+        print("Error: Book has no chapter text in database")
         sys.exit(1)
 
     # Limit text to first 200,000 characters for medium summary
