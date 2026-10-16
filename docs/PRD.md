@@ -1936,7 +1936,7 @@ Transform chapter reading from traditional scroll-based navigation to a page-bas
 - **Responsive:** Automatic recalculation on window resize, font change, theme change, view mode change
 - **Word Fitting:** When paragraphs exceed page height, split at word boundaries (never mid-word)
 - **Fill the page (2026-10-16):** A paragraph that doesn't fit continues on the next page instead of leaving the bottom of the page blank. No text is ever clipped: a page is measured with the reader's real styles and the column headers it will show.
-- **Side-by-side splits (2026-10-16):** A long Original/Plain English pair splits across pages at the same point in both columns (same fraction of each, moved back to a nearby sentence end), so the halves on a page correspond. Italics survive the split.
+- **Side-by-side splits (2026-10-16):** When an Original/Plain English pair doesn't fit, each column fills the page on its own and continues on the next page; the shorter column finishes sooner and leaves its later cells empty. No column stops early above blank space. Italics survive the split.
 - **Verse (2026-10-16):** Poetry books (Paradise Lost) pair a verse passage of about 20 lines with one Plain English paragraph. The original keeps its line breaks, and pages break between lines, never mid-line.
 
 #### Navigation Methods (All Supported)

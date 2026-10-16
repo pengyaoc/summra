@@ -540,20 +540,12 @@ export const paginationMixin = {
         return { firstPart: makePart(bestFit), remainder: this.sliceUnits(paragraph, units, bestFit, count) };
     },
 
-    /** Move a cut back to the nearest sentence end within the last quarter. */
-    sentenceCut(units, cut) {
-        for (let i = cut; i >= Math.max(1, Math.floor(cut * 0.75)); i -= 1) {
-            if (/[.?!;:]['"’”)\]]*$/.test(units.texts[i - 1] || '')) return i;
-        }
-        return cut;
-    },
-
     /**
      * Split a side-by-side row so its first part fills the remaining space.
-     * Both columns are cut at the same fraction of their text (the column
-     * with more units drives the search), then each cut moves back to a
-     * nearby sentence end, so the halves on a page correspond. On a partly
-     * used page, a split leaving under three lines is refused.
+     * Each column is filled independently as far as it fits (a row is as
+     * tall as its taller cell), then continues on the next page; a column
+     * whose text runs out leaves its later cells empty. On a partly used
+     * page, a split leaving under three lines is refused.
      * Returns {firstRow, remainderRow} or {firstRow: null}.
      */
     splitSideBySideRowToFit(row, pageDiv, pageHeight, pageIsEmpty = true) {
@@ -563,10 +555,6 @@ export const paginationMixin = {
         });
         if (sides.some(side => !side)) return { firstRow: null };
         const counts = sides.map(side => side.units.starts.length);
-        const driver = counts[0] >= counts[1] ? 0 : 1;
-        const total = counts[driver];
-        if (total < 2) return { firstRow: null };
-        const cutsFor = k => counts.map((n, i) => (i === driver ? k : Math.round(k * n / total)));
 
         const buildRow = (cuts, remainder) => {
             const clone = row.cloneNode(true);
@@ -586,25 +574,24 @@ export const paginationMixin = {
             return result;
         };
 
-        let low = 1;
-        let high = total - 1;
-        let best = 0;
-        while (low <= high) {
-            const mid = Math.floor((low + high) / 2);
-            if (measure(cutsFor(mid)).fits) {
-                best = mid;
-                low = mid + 1;
-            } else {
-                high = mid - 1;
+        // Largest prefix of one column that fits with the other column empty.
+        const fill = i => {
+            let low = 1;
+            let high = counts[i];
+            let best = 0;
+            while (low <= high) {
+                const mid = Math.floor((low + high) / 2);
+                if (measure(counts.map((_, j) => (j === i ? mid : 0))).fits) {
+                    best = mid;
+                    low = mid + 1;
+                } else {
+                    high = mid - 1;
+                }
             }
-        }
-        if (best === 0) return { firstRow: null };
-
-        let cuts = cutsFor(best);
-        const snapped = cuts.map((cut, i) => this.sentenceCut(sides[i].units, cut));
-        if (snapped.some((cut, i) => cut !== cuts[i]) && snapped[driver] > 0 && measure(snapped).fits) {
-            cuts = snapped;
-        }
+            return best;
+        };
+        const cuts = [fill(0), fill(1)];
+        if (cuts.every(cut => cut === 0) || cuts.every((cut, i) => cut === counts[i])) return { firstRow: null };
         if (!pageIsEmpty) {
             const lineHeight = parseFloat(getComputedStyle(sides[0].el).lineHeight) || 24;
             if (measure(cuts).height < lineHeight * 3) return { firstRow: null };

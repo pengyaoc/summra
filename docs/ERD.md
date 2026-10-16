@@ -10452,9 +10452,10 @@ side-by-side modes.
   `<br>\n` between lines (the `\n` keeps word counts right in `textContent`).
 - Pagination: `textUnits()` / `sliceUnits()` cut a block at word starts (or after each `<br>` for
   `.reader-verse`) with a DOM Range, preserving inline markup. `splitSideBySideRowToFit()` binary
-  searches the column with more units and cuts the other proportionally, snaps each cut back to a
-  sentence end within the last quarter, and runs on partly used pages (refusing a first part under
-  three lines). Measuring pages are appended beside the live page (so `.continuous-reader-section`
+  searches each column independently for the longest prefix that fits (a row is as tall as its
+  taller cell), so both columns fill the page and continue on the next; it runs on partly used
+  pages (refusing a first part under three lines). An earlier version cut both columns at the same
+  fraction, which left the shorter column stopped mid-sentence above blank space. Measuring pages are appended beside the live page (so `.continuous-reader-section`
   row padding/borders apply) and start with the side-by-side header banner instead of subtracting
   its height. Both used to make live pages overflow and clip text.
 - Plain English for verse: `scripts/content/passage_rewrite.py` (`export` / `check` / `apply`) — an
