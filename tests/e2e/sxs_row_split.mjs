@@ -7,8 +7,9 @@
 //     (Tess's preface lost the end of its long paragraphs).
 //  2. A row was split only when it started a page; otherwise it moved to the
 //     next page, so every page began at a paragraph and left a blank tail.
-//  3. Both columns were cut at the same word count, so a shorter Plain English
-//     column ran ahead of (or behind) the original. Splits lost <em>.
+//  3. Splits lost <em>. Each column must fill the page on its own and continue
+//     on the next one; cutting both at the same point (word count or fraction)
+//     left the shorter column stopped mid-sentence above blank space.
 //  4. Verse passages (Paradise Lost) must split between lines, never mid-line.
 //
 // Run: node sxs_row_split.mjs   (Flask on :5001)
@@ -32,6 +33,10 @@ try {
     container.style.width = '1100px';
     container.innerHTML = `<div class="side-by-side-headers"><div class="side-by-side-header">Original</div><div class="side-by-side-header">Plain English</div></div>${html}`;
     document.body.appendChild(container);
+    // Re-measure pages in a box shaped like the paginator's (same width and
+    // padding as the container), not the nominal 1100px.
+    const cs = getComputedStyle(container);
+    const box = `width:${container.offsetWidth}px;padding:${cs.padding};box-sizing:${cs.boxSizing};font-size:${cs.fontSize};line-height:${cs.lineHeight}`;
     app.calculatePages(container);
     container.remove();
     // Re-measure every page at the real page height to detect clipping.
@@ -39,12 +44,29 @@ try {
     const overflow = app.pagination.pages.map((pageHtml) => {
       const div = document.createElement('div');
       div.className = 'pagination-page-container chapter-side-by-side';
-      div.style.cssText = `position:absolute;left:-9999px;width:1100px;height:${height}px;overflow:hidden`;
-      div.innerHTML = pageHtml.replace(/<div class="side-by-side-headers">[\s\S]*?<\/div><\/div>/, '');
+      div.style.cssText = `position:absolute;left:-9999px;${box};height:${height}px;overflow:hidden`;
+      div.innerHTML = pageHtml; // measured as shown, header band included
       document.body.appendChild(div);
       const over = div.scrollHeight > height + 1;
       div.remove();
       return over;
+    });
+    const slack = app.pagination.pages.map((pageHtml) => {
+      const div = document.createElement('div');
+      div.className = 'pagination-page-container chapter-side-by-side';
+      div.style.cssText = `position:absolute;left:-9999px;${box};height:${height}px;overflow:hidden`;
+      div.innerHTML = pageHtml; // measured as shown, header band included
+      document.body.appendChild(div);
+      const bottom = div.getBoundingClientRect().top + height;
+      const rows = div.querySelectorAll('.side-by-side-row');
+      const last = rows[rows.length - 1];
+      const gap = (sel) => {
+        const el = last?.querySelector(`${sel} > *`);
+        return el ? Math.round(bottom - el.getBoundingClientRect().bottom) : null;
+      };
+      const out = { left: gap('.side-by-side-cell.original'), right: gap('.side-by-side-cell.modern'), lineHeight: parseFloat(getComputedStyle(div).lineHeight) || 28 };
+      div.remove();
+      return out;
     });
     const cols = app.pagination.pages.map((pageHtml) => {
       const div = document.createElement('div');
@@ -56,7 +78,7 @@ try {
         leftHtml: [...div.querySelectorAll('.side-by-side-cell.original')].map((el) => el.innerHTML).join(''),
       };
     });
-    return { overflow, cols };
+    return { overflow, cols, slack };
   }, rowsHtml);
 
   const words = (n, tag) => Array.from({ length: n }, (_, i) => `${tag}${i}${i % 12 === 11 ? '.' : ''}`).join(' ');
@@ -65,24 +87,21 @@ try {
 
   // 1. Huge row: nothing clipped, every word kept exactly once, <em> kept.
   {
-    const { overflow, cols } = await run(row(`<em>first</em> ${words(1500, 'L')}`, words(1200, 'R')));
+    const { overflow, cols, slack } = await run(row(`<em>first</em> ${words(1500, 'L')}`, words(500, 'R')));
     const left = cols.flatMap((c) => tokens(c.left, 'L'));
     const right = cols.flatMap((c) => tokens(c.right, 'R'));
     check(!overflow.some(Boolean), `huge row: no page overflows (${overflow.filter(Boolean).length}/${overflow.length} overflow)`);
     check(left.length === 1500 && new Set(left).size === 1500, `huge row: all 1500 original words once (got ${left.length})`);
-    check(right.length === 1200 && new Set(right).size === 1200, `huge row: all 1200 plain words once (got ${right.length})`);
+    check(right.length === 500 && new Set(right).size === 500, `huge row: all 500 plain words once (got ${right.length})`);
     check(cols[0].leftHtml.includes('<em>first</em>'), 'huge row: emphasis survives the split');
 
-    // 3. Proportional: on each page the two columns cover similar fractions.
-    let worst = 0;
-    let leftSeen = 0;
-    let rightSeen = 0;
-    for (const c of cols.slice(0, -1)) {
-      leftSeen += tokens(c.left, 'L').length;
-      rightSeen += tokens(c.right, 'R').length;
-      worst = Math.max(worst, Math.abs(leftSeen / 1500 - rightSeen / 1200));
-    }
-    check(worst < 0.05, `huge row: columns stay in step (max drift ${(worst * 100).toFixed(1)}%)`);
+    // 3. Each column fills the page until its text runs out: the shorter
+    // Plain English column must not stop early above blank space.
+    const rightPages = cols.filter((c) => tokens(c.right, 'R').length).length;
+    const underfilled = slack.slice(0, rightPages - 1).map((g, i) => [i + 1, g.right, g.lineHeight])
+      .filter(([, gap, lh]) => gap > lh * 1.5);
+    check(!underfilled.length, `huge row: plain column fills every page it continues from (${underfilled.map(([p, g]) => `page ${p} gap ${g}px`).join(', ') || 'all full'})`);
+    check(rightPages < cols.length, `huge row: shorter plain column finishes before the original (${rightPages} of ${cols.length} pages)`);
   }
 
   // 2. A long row after a short one starts on the same page.

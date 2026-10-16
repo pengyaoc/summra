@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-16: Side-by-side columns fill each page independently (done, local only)
+
+User report: a split Paradise Lost row left the Plain English stopped mid-sentence ("who led the") above blank space. Cause: `splitSideBySideRowToFit()` cut both columns at the same fraction of their text, so the shorter column ended early. Now each column is filled independently to the largest prefix that fits and continues on the next page; a column that runs out leaves later cells empty. Removed `sentenceCut()` (no longer used). Changed the requirement in `tests/e2e/sxs_row_split.mjs`, since the user changed the spec: "columns stay in step" became "plain column fills every page it continues from" and "shorter column finishes first". The fill check failed before the fix (gap of about 560px on every page). Also corrected the test's re-measuring box to match the paginator's (the header band included; real container width 900px instead of a nominal 1100px). Both mismatches had shown the same false gap in both columns. Results: sxs_row_split passes, the reader e2e suite (9 scripts) passes, and on local Paradise Lost both columns end on the same line.
+
+DB size question (investigated, nothing changed): the VM's `database.db` is 1.2GB because `_compile_reader_content` keeps every retired reader version. The VM has 78 retired versions, holding 372K `reader_paragraph` rows (110MB of text plus `normalized_quote`, plus indexes), against 12 locally. `reader_paragraph` alone is 523MB on the VM. Pruning has to keep whatever saved-place recovery still reads.
+
 ## 2026-10-16: Side-by-side page splitting fixed; Paradise Lost verse passages and new Plain English (done, local only)
 
 Local DB backup before changes: `data/database.pre-verse-20261015.db` (SHA-256 `9af13ce42d9d4d20aed688162848a75e972774755c701389a876e57569868cf1`).
