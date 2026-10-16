@@ -53,10 +53,21 @@ def _meta(body):
 
 def test_meta_row_is_server_rendered(client):
     meta = _meta(client.get('/books/plain-book').get_data(as_text=True))
-    assert '<span class="level-tag level-tag--challenging">Original: Challenging</span>' in meta
     assert '<span class="book-meta-item">3 chapters</span>' in meta
     assert '<span class="book-meta-item">5½ hrs</span>' in meta
     assert '<span class="plain-english-badge">Plain English · grade 8</span>' in meta
+
+
+def test_no_level_tag_without_a_published_grade(client):
+    """Only published reading levels are shown. plain-book has an estimated
+    CEFR level (C1) but no ATOS grade, so neither its book page nor its card
+    gets a level tag (no Easy / Moderate / Challenging fallback)."""
+    meta = _meta(client.get('/books/plain-book').get_data(as_text=True))
+    assert 'level-tag' not in meta and 'grade-tag' not in meta
+    assert 'Challenging' not in meta
+    discover = client.get('/discover').get_data(as_text=True)
+    card = re.search(r'<a class="book-card" href="/books/plain-book".*?</a>', discover, re.S).group(0)
+    assert 'level-tag' not in card and 'Challenging' not in card
 
 
 def test_meta_row_omits_missing_level_and_plain_english(client):

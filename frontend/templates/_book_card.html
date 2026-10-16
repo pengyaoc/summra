@@ -13,11 +13,11 @@
     </div>
 {%- endmacro %}
 
-{# The original's reading level (published ATOS grade, else the older
-   CEFR-based label). Plain English has its own target (grade 8), so the tag
+{# The original's reading level: its published ATOS grade, or no tag at
+   all (the CEFR levels are estimates, not published). Plain English has its own target (grade 8), so the tag
    always says it describes the original. Same as difficultyTagHtml() in app.js. #}
 {% macro difficulty_tag(book) -%}
-{% if book.grade_label %}<span class="grade-tag grade-tag--{{ book.grade_band }}">Original: {{ book.grade_label }}</span>{% elif book.level %}<span class="level-tag level-tag--{{ book.level|lower }}">Original: {{ book.level }}</span>{% endif %}
+{% if book.grade_label %}<span class="grade-tag grade-tag--{{ book.grade_band }}">Original: {{ book.grade_label }}</span>{% endif %}
 {%- endmacro %}
 
 {% macro book_card(book, cls='book-card') -%}

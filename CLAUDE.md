@@ -344,7 +344,7 @@ When step 4 audit flags a chapter as truncated, summary-shaped, or has a massive
 - **Truncated** — modern ends mid-sentence and is <50% of original length. Cause: `gemini-3.1-flash-lite` cut the output on a long chapter. Fix: re-run that single chapter; flash-lite is non-deterministic at temperature 0.3 and may produce a full response on retry. If a second flash-lite attempt also truncates, escalate that chapter to `--model gemini-3.5-flash`.
 - **Summary-shaped** — modern is 1 paragraph or <30% of original length, with condensed content. Sometimes Gemini prefaces with "I have provided a modern English summary of each section". Same flash-lite-first, escalate-to-3.5-on-repeat rule.
 - **Massive paragraph mismatch (diff >50 with valid full-length content)** — modern merged many original paragraphs. Manual alignment via subagent is infeasible without splitting mid-sentence. Escalate to `gemini-3.5-flash` which tends to preserve paragraph structure better. Some monster chapters (Odyssey ch.24 at 252 paragraphs / 79K chars) remain stubbornly summary-shaped even on 3.5-flash — accept and flag for manual review in those cases.
-- **Verse books** (`is_poetry=1`) — single `\n` is a verse line, not a paragraph. The paragraph-count check is meaningless. Suppress or skip.
+- **Verse books** (`is_poetry=1`) — single `\n` is a verse line. Segment the original into blank-line passages with `scripts/content/segment_verse_passages.py`, then the paragraph check compares passages to plain paragraphs and must be exact. Paradise Lost's Plain English was written per passage by agents and gated with `scripts/content/passage_rewrite.py check`; reuse that for other verse books.
 
 After regenerating, return to step 2 to reformat then re-audit (steps 3–5).
 
