@@ -317,12 +317,13 @@ export const paginationMixin = {
         const pages = [];
         let blockIndex = 0;
         let safetyCounter = 0;
-        const maxIterations = blocks.length * 3; // Safety: no more than 3x the number of blocks
 
         // Incremental algorithm: Build one page at a time
         while (blockIndex < blocks.length) {
             safetyCounter++;
-            if (safetyCounter > maxIterations) {
+            // Safety: no more than 3x the number of blocks. Re-read each pass:
+            // splitting a long paragraph or row adds its remainder to blocks.
+            if (safetyCounter > blocks.length * 3) {
                 console.error('[calculatePages] INFINITE LOOP DETECTED! Breaking out. blockIndex:', blockIndex, 'blocks.length:', blocks.length);
                 break;
             }
