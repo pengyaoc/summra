@@ -422,6 +422,8 @@ class SummraApp {
         document.body.classList.toggle('on-chapter-page', onReadingPage);
 
         const onContinuousReader = showArray.includes('continuous-reader-section');
+        // The reader's document must not scroll (CSS: body.on-reader-page).
+        document.body.classList.toggle('on-reader-page', onContinuousReader);
         document.getElementById('reader-mode-settings')?.classList.toggle('hidden', !onContinuousReader);
         if (!onContinuousReader) {
             document.getElementById('reader-toc-panel')?.classList.add('hidden');

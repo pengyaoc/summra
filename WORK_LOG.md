@@ -1,5 +1,28 @@
 # Summra Work Log
 
+## 2026-10-17: Reader text hidden under the toolbar on iPhone (deployed)
+
+User report (iPhone Safari, Iliad Introduction): the top lines of the page sat under the reader toolbar, with an empty band above the footer. This is the same mechanism as the 2026-05-31 fix for the old chapter page (the `body { min-height: 100svh }` note in style.css), brought back by the continuous reader. The document had scroll slack:
+- `.continuous-reader-section` used `min-height: 100vh`, which on iOS is the large viewport (toolbar collapsed), taller than what is visible;
+- the site's `.main-content` added `padding-bottom: 40px` below the full-height reader.
+
+The toolbar and footer are fixed, so a swipe (or iOS settling into the slack) slid the page up under the toolbar. In Chromium the slack was exactly 40px at every size.
+
+Fix:
+- The reader section uses `100svh`.
+- New body class `on-reader-page`, set in `showOnlySections` and in the template for direct chapter and `/read` loads, removes the `.main-content` bottom padding on the reader only. The summary page also has `on-chapter-page`, still scrolls, and keeps its padding.
+- app.min.js rebuilt.
+
+Test: new `tests/e2e/reader_no_scroll_slack.mjs` (10 checks).
+- iPhone 13 and desktop, plain and side by side: no slack, `scrollTo` leaves `scrollY` at 0, the first line stays below the toolbar.
+- The summary page keeps its 40px padding.
+- The slack and scroll checks failed before the fix (slack 40, scrollY 40).
+
+Regression run:
+- Reader e2e suite passes. `reader_progress` timed out once on a page load, then passed twice in a row (7/7).
+- Smoke passes, JS 31/31.
+- Not run in WebKit here: Playwright's WebKit build doesn't match the installed one. Needs a check on the iPhone.
+
 ## 2026-10-17: Backup cleanup (done)
 
 User asked to clean up the backups. Following CLAUDE.md (keep at most the last 1–2), I kept the newest backup on each side and deleted the rest.
