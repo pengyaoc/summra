@@ -10137,9 +10137,10 @@ All in `frontend/static/js/pagination.js`; styles in `style.css` next to `.pagin
 
 4. **Keyboard.** ←/PageUp/Shift+Space go back; →/PageDown/Space go forward. Space is ignored when focus is on a button, link, select or summary.
 
-5. **Swipe** (`setupTouchGestures`).
-   - `touchmove` locks the axis after 10px. On the horizontal axis it sets `translateX` on `.pagination-page-container`, at one third of the drag where `pageTurnAvailability()` says there is no page to turn to.
-   - Release turns the page past 25% of the wrapper width or on a flick (>30px at >0.5px/ms over the gesture). The turn slides 150ms out, resets, then calls `navigateToNext/PreviousPage()`. Otherwise it snaps back in 200ms.
+5. **Swipe** (`setupTouchGestures`), Kindle-style.
+   - `touchmove` locks the axis after 10px. On the horizontal axis it shows a neighbor page and sets the same `translateX` on the real page and the neighbor. Where `pageTurnAvailability()` says there is no page to turn to, there is no neighbor and the drag moves one third as far.
+   - **Neighbor:** `pageEl.cloneNode(false)` (same classes, `data-font` and inline size styles, so it renders identically) with class `pagination-neighbor`, `aria-hidden`, `inert`, and `innerHTML = pages[currentPage ± 1]`. Every `data-reader-anchor` and `id` inside is stripped so marker and progress code never see it. It is appended after the real page, so `querySelector('.pagination-page-container')` still finds the real one, and it is positioned absolute at `left = ±window.innerWidth`. While it exists the wrapper has `.is-swiping { overflow: visible }`, so both pages slide to the screen edge; html/body clip at the viewport. A change of direction mid-drag rebuilds it on the other side.
+   - **Release:** a turn happens past 25% of the wrapper width or on a flick (>30px at >0.5px/ms over the gesture). Both pages slide to ∓`innerWidth` in `max(120, 300 × remaining fraction)` ms. Then, in one task: `navigateToNext/PreviousPage()`, reset transforms, remove the neighbor, so the page that slid in becomes the real page with no blank frame. If the neighbor was empty (section boundary, async `navigateContinuousSegment`), the page stays out of view until the reader rebuilds, with a 3s fallback reset. A snap back slides both pages to 0 in 200ms, then removes the neighbor.
    - Ignored: multi-touch, drags starting with a text selection, and drags while `isNavigating`.
 
 6. **One-time hint** (`showPageTurnHintOnce`). Once per page load, after `authModule.initAuth()`.
