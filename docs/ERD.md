@@ -10477,7 +10477,8 @@ side-by-side modes.
     - `strip_illustration_captions.py --tags-only` removes only `[Illustration…]` paragraphs.
   - Process: `docs/agent_plain_english_workflow.md`.
   - Tests: `tests/test_passage_rewrite.py` (15), `tests/test_strip_footnotes.py` (6),
-    `tests/test_strip_illustration_captions.py` (3), `tests/e2e/iliad_side_by_side.mjs`.
+    `tests/test_strip_illustration_captions.py` (5), `tests/e2e/agent_plain_english_side_by_side.mjs`
+    (one data-driven test for every agent-written book).
 - Chapters start a new page (2026-10-16). `calculatePages()` ends the page before every
   `h2.reader-chapter-heading`. The reading position is a page's first paragraph
   (`settleContinuousReaderMarker`, `onContinuousPageDisplayed`), so a page that began with the end of

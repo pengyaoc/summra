@@ -26,3 +26,13 @@ def test_tags_only_is_idempotent_and_handles_empty():
 def test_default_rules_unchanged():
     new, n_caps, _ = strip_captions("[Illustration: ] DIANA\n\nSo spoke the god.")
     assert new == "So spoke the god." and n_caps == 1
+
+
+def test_tags_only_removes_picture_tags():
+    src = "[Picture: The Selfish Giant]\n\nEVERY afternoon the children played.\n\n[Picture: Decorative graphic of wreath]"
+    assert strip_captions(src, tags_only=True) == ("EVERY afternoon the children played.", 2, 0)
+
+
+def test_tags_only_drops_trailing_printer_line():
+    src = "“Pop!” gasped the Rocket, and he went out.\n\nPrinted by BALLANTYNE & CO. LIMITED Tavistock Street, Covent Garden, London\n\n[Picture: Decorative graphic of bird]"
+    assert strip_captions(src, tags_only=True) == ("“Pop!” gasped the Rocket, and he went out.", 1, 1)

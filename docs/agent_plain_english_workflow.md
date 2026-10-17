@@ -87,7 +87,7 @@ Before applying, make apostrophes consistent with the source. Agents mix `Nestor
 
 Flask must be running (`python backend/app.py`, :5001). The reader recompiles its index on the first request after the text changes (`ensure_reader_content`).
 
-- Copy `tests/e2e/iliad_side_by_side.mjs` for the new book: change the book id and slug, and the expected first and last rows. It walks every side-by-side segment through the API and checks that each row has both sides. It then opens `/books/<slug>/read?mode=side_by_side&chapter=<id>` and checks the first page for paired rows, no gaps, no overflow and no console errors.
+- Add the book to `BOOKS` in `tests/e2e/agent_plain_english_side_by_side.mjs`: its id, slug, the chapter to open, and regexes for the first and last rows. Run it before applying, to see it fail, and again after. It walks every side-by-side segment through the API: every row has both sides, and no footnote markers or image tags remain. It then opens `/books/<slug>/read?mode=side_by_side&chapter=<id>` and checks the page for the chapter heading, paired rows, no gaps, no overflow and no console errors. `BOOKS=<slug>` runs a single book.
 - Run `PATHS=/books/<slug>,/books/<slug>/read node smoke.mjs`, plus `sxs_row_split.mjs` and `reader_opens_at_chapter.mjs`.
 - Look at a screenshot.
 
@@ -126,7 +126,7 @@ Always paste the writer's own "unsure" list into the brief. Writers admit where 
 
 **Result.**
 - All 25 chapters are EXACT, with ratios of 94–107%.
-- Side by Side has 1,524 paired rows. `iliad_side_by_side.mjs` passes, and 40 consecutive pages show no clipping.
+- Side by Side has 1,524 paired rows. `agent_plain_english_side_by_side.mjs` passes, and 40 consecutive pages show no clipping.
 
 **What Sonnet QC caught (317 paragraphs fixed across the 25 chapters).**
 - Haiku's errors on Pope's compressed, inverted verse are mostly about *who did what*:
@@ -146,3 +146,28 @@ Always paste the writer's own "unsure" list into the brief. Writers admit where 
 - Running ~26 agents at once hit the account's usage limit partway through. The stopped agents kept their work and were resumed with `SendMessage` after the reset ("continue from where you stopped; re-read the JSON files first"). Expect this on a whole book, and keep about 10 agents running at a time.
 - Several reviewers wrote helper scripts named `fix.py` in the shared scratchpad and overwrote each other's. Their exact-string asserts failed before any write, so no chapter was damaged, but the brief now requires unique script names. Afterwards, check that each reported fix landed in its own chapter (`grep -l "<new text>" $DIR/out/ch*/*.json`).
 - One reviewer returned "pending" instead of a report. Ask it again before counting the chapter as done.
+
+## The Happy Prince notes (book 105, 2026-10-17): first run with Sonnet writers
+
+**Cleanup.**
+- `reformat_paragraphs.py` split the text into paragraphs.
+- `strip_illustration_captions.py --tags-only` removed 12 `[Picture: …]` tags and the trailing "Printed by BALLANTYNE…" line. The option now also covers `[Picture` tags and printer lines.
+- `strip_decorative_dividers.py` removed one `* * * * *`.
+- The Giant's notice board is three verbatim one-line paragraphs.
+- Result: 5 tales, 397 paragraphs, 85K characters, 8 chunks.
+
+**Writing.** 5 Sonnet writers, one per tale, each took under a minute and passed the gate (three on the first run). They followed the source's curly quotes, so no apostrophe fix was needed.
+
+**Verification.** 5 fresh Sonnet verifiers made **7 fixes in 397 paragraphs**:
+- one invented detail;
+- one dropped word ("lips");
+- a lost pun ("affected");
+- a quote mark that closed a story-within-a-story early;
+- three wording or archaism fixes.
+
+The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of that gap is the model, but the writers' own doubt lists were also short and accurate.
+
+**Result.** All 5 tales are EXACT, with ratios of 96–99%. `agent_plain_english_side_by_side.mjs` passes for both books.
+
+**Operational.** The usage limit stopped all five verifiers once. They were resumed with `SendMessage` after the reset, with no lost work.
+

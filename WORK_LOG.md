@@ -1,5 +1,25 @@
 # Summra Work Log
 
+## 2026-10-17: The Happy Prince (book 105) Plain English, Sonnet writers + fresh verifiers (done locally)
+
+First book under the new rule: a Sonnet subagent writes each chapter, and a separate, fresh agent verifies it.
+
+**Cleanup.** Local backup: `data/database.pre-happyprince-plain-20261017.db` (SHA-256 `9dfaacfdcc8f0f06…`).
+- `reformat_paragraphs` (5/5 chapters).
+- `strip_illustration_captions --tags-only`: 12 `[Picture: …]` tags and 1 trailing "Printed by BALLANTYNE…" line.
+- `strip_decorative_dividers`: 1 divider.
+- `--tags-only` now covers `[Picture` tags, and drops trailing notes including "printed by"; two new tests failed first.
+- Result: 397 paragraphs in 8 export chunks.
+
+**Writing and verification.**
+- 5 Sonnet writers (one per tale) all passed the gate.
+- 5 fresh Sonnet verifiers made 7 fixes: an invented "merchants", the dropped "lips", the "affected" pun, a quote mark in the Linnet's story-within-a-story, and wording. The Iliad's Haiku drafts needed 317.
+- The usage limit stopped the verifiers once; they were resumed after the reset.
+
+**Result.**
+- Applied: all 5 EXACT, ratios 96–99%.
+- `tests/e2e/iliad_side_by_side.mjs` became the data-driven `agent_plain_english_side_by_side.mjs`, with one `BOOKS` entry per book. Book 105 failed it before apply and passes after; 27/27 checks for both books.
+
 ## 2026-10-17: Reader settings icon: "Aa" instead of the gear (deployed)
 
 User: the gear icon in the reading view looked odd. It was a hand-traced gear whose teeth blurred into a blob at 20px. Replaced it with Lucide's `a-large-small` "Aa" glyph (ISC licence): the usual reading-settings icon in e-readers, drawn in the same 2px stroke as the Contents icon. Template-only change (`frontend/templates/index.html`). Test: `redesign_reader.mjs` checks for the Aa paths and the label; it failed before the change, and all 16 checks pass after. Checked in light and dark screenshots.
