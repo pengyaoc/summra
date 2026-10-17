@@ -74,14 +74,15 @@ expect("hero: the message is from the author; the reply is labelled Plain Englis
   /Austen|Dickens|Shelley|Carroll|Brontë|Doyle|Twain|Wilde|Stevenson|·/.test(desk.sender || "") && desk.replyLabel === "Plain English", JSON.stringify(desk));
 const copy = await page.evaluate(() => document.querySelector(".hero-main").textContent);
 expect("hero: tagline points to side by side for the original", /side by side/i.test(copy) && !/Stuck on a sentence/.test(copy), copy.replace(/\s+/g, " ").slice(0, 200));
-// Sections read as distinct bands: each spans the window, and no two
-// neighbouring sections share a background.
+// The dark hero is the only band: every section below it spans the window on
+// one shared paper background, separated by space and a rule, not colour.
 const bands = await page.evaluate(() => [...document.querySelectorAll("#hero-section > section")]
   .filter((el) => el.offsetParent)
   .map((el) => ({ id: el.id || el.className.split(" ").slice(-1)[0], bg: getComputedStyle(el).backgroundColor,
     full: Math.abs(el.getBoundingClientRect().width - document.documentElement.clientWidth) <= 1 })));
 expect("home: every section is a full-width band", bands.length >= 3 && bands.every((b) => b.full), JSON.stringify(bands));
-expect("home: neighbouring sections differ in background", bands.every((b, i) => i === 0 || b.bg !== bands[i - 1].bg), JSON.stringify(bands));
+expect("home: sections below the hero share one light background",
+  bands.slice(1).every((b) => b.bg === bands[1].bg && b.bg !== bands[0].bg && lum(b.bg) > 0.7), JSON.stringify(bands));
 expect("hero: friendly copy (no 'summarised' / 'prose')", !/summari[sz]ed|prose/i.test(copy), copy.replace(/\s+/g, " ").slice(0, 160));
 const replyAnim = () => page.evaluate(() => getComputedStyle([...document.querySelectorAll(".hero-sentence")]
   .find((x) => !x.hidden).querySelector(".hero-bubble--plain")).animationName);
@@ -118,6 +119,32 @@ expect("start here: cards have titles and reading times", shelf.length >= 5 && s
   JSON.stringify(shelf[0]));
 expect("start here: no 'No. N' rank badge on covers", shelf.every((c) => !c.rank));
 
+// Start here shelf: no back arrow at the start; it appears once scrolled.
+const arrows = () => page.evaluate(() => Object.fromEntries(["left", "right"].map((side) => {
+  const b = document.getElementById(`top-10-nav-${side}`), cs = getComputedStyle(b);
+  return [side, cs.visibility !== "hidden" && Number(cs.opacity) > 0];
+})));
+const atStart = await arrows();
+expect("shelf: only the forward arrow shows at the start", !atStart.left && atStart.right, JSON.stringify(atStart));
+await page.click("#top-10-nav-right");
+await page.waitForFunction(() => document.getElementById("top-10-scroll").scrollLeft > 0);
+await page.waitForTimeout(700);
+const scrolled = await arrows();
+expect("shelf: the back arrow appears once scrolled", scrolled.left, JSON.stringify(scrolled));
+await page.evaluate(() => { document.getElementById("top-10-scroll").style.scrollBehavior = "auto"; document.getElementById("top-10-scroll").scrollLeft = 0; });
+// Reading time sits on its own line under the level on every card, at
+// desktop and mobile widths, so no card wraps differently from its neighbours.
+for (const width of [1280, 375]) {
+  await page.setViewportSize({ width, height: 900 });
+  const metas = await page.evaluate(() => [...document.querySelectorAll("#top-10-scroll .top-10-book-card")].map((c) => {
+    const tag = c.querySelector(".grade-tag")?.getBoundingClientRect(), time = c.querySelector(".book-card-time")?.getBoundingClientRect();
+    return tag && time ? Math.round(time.top - tag.bottom) : null;
+  }).filter((v) => v !== null));
+  expect(`shelf (${width}px): reading time on its own line under the level on every card`,
+    metas.length >= 5 && metas.every((gap) => gap >= 0 && gap === metas[0]), JSON.stringify(metas));
+}
+await page.setViewportSize({ width: 1280, height: 900 });
+
 // Continue reading is hidden for anonymous visitors
 expect("continue reading hidden when signed out", !(await page.isVisible("#home-continue")));
 
@@ -130,6 +157,16 @@ const bandCards = await page.evaluate(() => [...document.querySelectorAll("#disc
 expect("grade card: opens Discover filtered to grades 6–8", bandCards.length > 0 && bandCards.every((g) => g === "6-8"), `${bandCards.length}`);
 const hrefs = await page.evaluate(() => [...document.querySelectorAll("#discover-grid .book-card")].map((c) => c.getAttribute("href")));
 expect("grade card: Discover grid has no duplicate cards", new Set(hrefs).size === hrefs.length, `${hrefs.length} cards, ${new Set(hrefs).size} unique`);
+
+// "How we grade books" opens the explanation on Discover.
+await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+await page.click('#reading-levels a[href="/discover#how-we-grade"]');
+await page.waitForURL(/\/discover#how-we-grade$/);
+await page.waitForFunction(() => document.getElementById("how-we-grade")?.open);
+const grade = await page.evaluate(() => { const r = document.getElementById("how-we-grade").getBoundingClientRect();
+  return { top: Math.round(r.top), vh: innerHeight }; });
+expect("how we grade: opens on Discover, scrolled into view", grade.top >= 0 && grade.top < grade.vh / 2, JSON.stringify(grade));
+await page.goto(`${BASE}/discover?grade=6-8`, { waitUntil: "networkidle" });
 
 // Cmd/Ctrl-click on a card opens a new tab and leaves this page alone.
 const before = page.url();
@@ -209,13 +246,36 @@ await signed.route(/\/library$/, (r) => r.request().resourceType() === "fetch"
   ? r.fulfill({ json: { success: true, finished: [], continue_reading: [{
     id: 30, slug: "frankenstein", title: "Frankenstein", author: "Mary Shelley", cover_image_url: "/static/covers/30.png",
     status: "in_progress", last_mode: "plain", furthest_percentage: 40,
-    current_chapter: { chapter_number: 4, chapter_title: "Chapter 4" } }] } })
+    current_chapter: { chapter_number: 4, chapter_title: "Chapter 4" } }, {
+    id: 38, slug: "a-christmas-carol-in-prose", title: "A Christmas Carol in Prose; Being a Ghost Story of Christmas", author: "Charles Dickens",
+    cover_image_url: null, status: "in_progress", last_mode: "side_by_side", furthest_percentage: 0,
+    current_chapter: { chapter_number: 1, chapter_title: "Marley's Ghost" } }, {
+    id: 5, slug: "pride-and-prejudice", title: "Pride and Prejudice", author: "Jane Austen",
+    cover_image_url: null, status: "in_progress", last_mode: "original", furthest_percentage: 0, current_chapter: null }] } })
   : r.continue());
 const sp = await signed.newPage();
 await sp.goto(`${BASE}/`, { waitUntil: "networkidle" });
 await sp.waitForSelector("#home-continue:not(.hidden) .library-card", { timeout: 5000 }).catch(() => {});
 expect("signed in: Continue reading shows the book in progress",
   /Frankenstein/.test(await sp.textContent("#home-continue").catch(() => "")) && await sp.isVisible("#home-continue"));
+{
+  const cards = await sp.evaluate(() => [...document.querySelectorAll("#home-continue .library-card")].map((c) => ({
+    meta: c.querySelector(".library-card-meta").textContent.replace(/\s+/g, " ").trim(),
+    location: c.querySelector(".library-card-location").textContent.trim(),
+    bar: !!c.querySelector(".library-card-progress"),
+    loose: !!c.querySelector(".library-card-mode"),
+    button: Math.round(c.querySelector(".library-read-action").getBoundingClientRect().bottom) })));
+  const [fr, carol, pride] = cards;
+  expect("continue card: progress shows its percentage and bar", /40%/.test(fr?.meta) && fr.bar, JSON.stringify(fr));
+  expect("continue card: no progress says Just started, with no bar or 0%",
+    [carol, pride].every((c) => /Just started/.test(c?.meta) && !/0%/.test(c.meta) && !c.bar), JSON.stringify([carol, pride]));
+  expect("continue card: reading mode joins the location line",
+    fr?.location === "Chapter 4 · Plain English" && carol?.location === "Marley's Ghost · Side by side" && pride?.location === "Beginning · Original",
+    JSON.stringify(cards.map((c) => c.location)));
+  expect("continue card: no loose mode label", cards.every((c) => !c.loose), JSON.stringify(cards));
+  expect("continue card: buttons line up across the row", cards.length === 3 && new Set(cards.map((c) => c.button)).size === 1,
+    JSON.stringify(cards.map((c) => c.button)));
+}
 for (const width of [1280, 375]) {
   await sp.setViewportSize({ width, height: 900 });
   await sp.waitForFunction(() => document.querySelector("#home-continue .library-card img")?.complete);

@@ -219,7 +219,7 @@
                 </section>
 
                 <!-- Continue reading (signed-in readers with progress; filled by app.js) -->
-                <section class="home-section home-band--deep{% if not home_continue %} hidden{% endif %}" id="home-continue">
+                <section class="home-section home-band--paper{% if not home_continue %} hidden{% endif %}" id="home-continue">
                     <div class="home-section-head">
                         <h2>Continue reading</h2>
                         <a href="{{ base_path }}/library" class="home-section-link">Your library →</a>
@@ -239,7 +239,7 @@
 
                     <div class="top-10-carousel-wrapper">
                         <div class="carousel-container top-10-carousel">
-                            <button class="carousel-nav-btn left" id="top-10-nav-left" aria-label="Scroll left">
+                            <button class="carousel-nav-btn left" id="top-10-nav-left" aria-label="Scroll left" disabled>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M15 18l-6-6 6-6"></path>
                                 </svg>
@@ -265,22 +265,21 @@
                 </section>
 
                 <!-- Find a book at the right level: grade bands into a filtered
-                     Discover, and where the levels come from. -->
+                     Discover. Where the levels come from is on Discover (#how-we-grade). -->
                 {% set gc = grade_counts or {} %}
-                <section class="home-section home-band--ink home-levels" id="reading-levels">
+                <section class="home-section home-band--paper home-levels" id="reading-levels">
                     <div class="home-section-head">
                         <div>
                             <h2>Find a book at the right level</h2>
-                            <p class="home-section-sub">Plain English is written for a grade 8 reader, whatever the book. The grade on each book is the original’s, so you can see how far Plain English brings it down.</p>
+                            <p class="home-section-sub">Every Plain English rewrite reads at about grade 8. Pick how hard you want the original to be.</p>
                         </div>
                     </div>
-                    <p class="grade-cards-label">Browse by the original’s reading level</p>
                     <div class="grade-cards">
                         {% for band, label, desc in [
-                            ('3-5', 'Grades 3–5', 'Easy originals. Good for reading the original on its own.'),
-                            ('6-8', 'Grades 6–8', 'Close to Plain English’s level. Old words are the main hurdle; side by side works well.'),
-                            ('9-10', 'Grades 9–10', 'Harder originals. Plain English brings them down to about grade 8.'),
-                            ('11-12', 'Grades 11–12+', 'The hardest originals: dense prose, where Plain English helps most.')] %}
+                            ('3-5', 'Grades 3–5', 'Easy originals'),
+                            ('6-8', 'Grades 6–8', 'Old words, simple prose'),
+                            ('9-10', 'Grades 9–10', 'Harder originals'),
+                            ('11-12', 'Grades 11–12+', 'Dense prose')] %}
                         {% set n = gc.get(band, 0) %}
                         <a class="grade-card grade-card--{{ band }}" href="{{ base_path }}/discover?grade={{ band }}">
                             <span class="grade-tag grade-tag--{{ band }}">{{ label }}</span>
@@ -289,25 +288,7 @@
                         </a>
                         {% endfor %}
                     </div>
-                    <div class="level-notes">
-                        <div class="level-note">
-                            <h3>Plain English: grade 8</h3>
-                            <p>Every rewrite aims at a grade 8 reader (about ages 13–14): sentences of 15–20 words, everyday words for old ones like <em>thou</em>, <em>ere</em> or <em>countenance</em>, and nothing left out. {{ plain_counts.plain }} of {{ plain_counts.total }} books have one so far; the rest are marked Original only.</p>
-                        </div>
-                        <div class="level-note">
-                            <h3>The original’s level</h3>
-                            <p>The ATOS book level of the original text, from Renaissance, the measure behind Accelerated Reader in US schools: 7.4 means a typical 7th grader, four months into the year. It’s what you face reading the original, or when a class assigns it. <a href="https://www.arbookfind.com" target="_blank" rel="noopener">AR BookFinder</a></p>
-                        </div>
-                        <div class="level-note">
-                            <h3>Age fit</h3>
-                            <p>How hard a book is to read isn’t how mature it is. AR Interest Levels say who a book’s themes suit, and Plain English doesn’t change them: <em>Dracula</em> is for ages 14+.</p>
-                        </div>
-                        <div class="level-note">
-                            <h3>Assigned in school</h3>
-                            <p>Books named as grade-level text exemplars in the Common Core State Standards, the texts many US classes are built around. <a href="https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf" target="_blank" rel="noopener">Appendix B</a></p>
-                        </div>
-                    </div>
-                    <p class="level-footnote">Why not score Plain English with a formula like Flesch–Kincaid? We tried. It only counts sentence and syllable lengths, so it can’t see old words like <em>thou</em>: it barely tells a rewrite from its original, and rates <em>Romeo and Juliet</em> at grade 3. So we give the grade Plain English is written for, and the original’s published level.</p>
+                    <a class="home-section-link home-levels-how" href="{{ base_path }}/discover#how-we-grade">How we grade books →</a>
                 </section>
             </div>
 
@@ -688,8 +669,31 @@
 
                 <header class="discover-header">
                     <h2>Find your next classic</h2>
-                    <p>Plain English versions are written for about a grade 8 reader. The reading level on each book is the original’s — the published ATOS level schools use — so you can see how big a step Plain English is. <a href="{{ base_path }}/#reading-levels">How we level books</a></p>
+                    <p>Plain English versions are written for about a grade 8 reader. The reading level on each book is the original’s — the published ATOS level schools use — so you can see how big a step Plain English is. <a href="#how-we-grade">How we grade books</a></p>
                 </header>
+
+                <details class="how-we-grade" id="how-we-grade">
+                    <summary>How we grade books</summary>
+                    <div class="level-notes">
+                        <div class="level-note">
+                            <h3>Plain English: grade 8</h3>
+                            <p>Every rewrite aims at a grade 8 reader (about ages 13–14): sentences of 15–20 words, everyday words for old ones like <em>thou</em>, <em>ere</em> or <em>countenance</em>, and nothing left out. {{ plain_counts.plain }} of {{ plain_counts.total }} books have one so far; the rest are marked Original only.</p>
+                        </div>
+                        <div class="level-note">
+                            <h3>The original’s level</h3>
+                            <p>The ATOS book level of the original text, from Renaissance, the measure behind Accelerated Reader in US schools: 7.4 means a typical 7th grader, four months into the year. It’s what you face reading the original, or when a class assigns it. <a href="https://www.arbookfind.com" target="_blank" rel="noopener">AR BookFinder</a></p>
+                        </div>
+                        <div class="level-note">
+                            <h3>Age fit</h3>
+                            <p>How hard a book is to read isn’t how mature it is. AR Interest Levels say who a book’s themes suit, and Plain English doesn’t change them: <em>Dracula</em> is for ages 14+.</p>
+                        </div>
+                        <div class="level-note">
+                            <h3>Assigned in school</h3>
+                            <p>Books named as grade-level text exemplars in the Common Core State Standards, the texts many US classes are built around. <a href="https://web.archive.org/web/2019/http://www.corestandards.org/assets/Appendix_B.pdf" target="_blank" rel="noopener">Appendix B</a></p>
+                        </div>
+                    </div>
+                    <p class="level-footnote">Why not score Plain English with a formula like Flesch–Kincaid? We tried. It only counts sentence and syllable lengths, so it can’t see old words like <em>thou</em>: it barely tells a rewrite from its original, and rates <em>Romeo and Juliet</em> at grade 3. So we give the grade Plain English is written for, and the original’s published level.</p>
+                </details>
 
                 <div class="discover-controls">
                     {% for name, label, options in [

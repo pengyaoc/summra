@@ -114,13 +114,34 @@ def test_right_level_section_links_grade_bands_into_discover(client):
         assert card and count in card, (band, card)
 
 
-def test_right_level_section_explains_its_sources(client):
-    body = client.get('/').get_data(as_text=True)
-    section = re.search(r'<section [^>]*id="reading-levels"[^>]*>(.*?)</section>', body, re.S).group(1)
-    assert 'ATOS' in section and 'arbookfind.com' in section, 'reading level: published ATOS levels, linked'
-    assert 'Interest' in section, 'age fit: AR interest levels'
-    assert 'Common Core' in section and 'Appendix_B.pdf' in section, 'school lists, linked'
-    assert 'Flesch' in section, 'say why a simple formula is not used'
+def _levels_section(body):
+    return re.search(r'<section [^>]*id="reading-levels"[^>]*>(.*?)</section>', body, re.S).group(1)
+
+
+def _how_we_grade(body):
+    return re.search(r'<details [^>]*id="how-we-grade"[^>]*>(.*?)</details>', body, re.S).group(1)
+
+
+def test_right_level_section_is_short_and_links_to_how_we_grade(client):
+    section = _levels_section(client.get('/').get_data(as_text=True))
+    words = re.sub(r'<[^>]+>', ' ', section).split()
+    # Heading, one line, four cards (tag, short line, count) and a link; it was ~400 words.
+    assert len(words) < 80, f'levels section should be a quick pick, got {len(words)} words'
+    for detail in ('ATOS', 'Flesch', 'Common Core', 'level-note'):
+        assert detail not in section, f'{detail} belongs in How we grade, not on the home page'
+    assert 'href="/discover#how-we-grade"' in section
+
+
+def test_how_we_grade_on_discover_explains_its_sources(client):
+    body = client.get('/discover').get_data(as_text=True)
+    panel = _how_we_grade(body)
+    assert '<summary' in panel and 'How we grade' in panel
+    assert 'ATOS' in panel and 'arbookfind.com' in panel, 'reading level: published ATOS levels, linked'
+    assert 'Interest' in panel, 'age fit: AR interest levels'
+    assert 'Common Core' in panel and 'Appendix_B.pdf' in panel, 'school lists, linked'
+    assert 'Flesch' in panel, 'say why a simple formula is not used'
+    assert 'href="#how-we-grade"' in body, 'the Discover intro links to it'
+    assert '/#reading-levels' not in body
     assert 'How it works' not in body and 'Choose by level' not in body
 
 
@@ -205,6 +226,23 @@ def test_continue_reading_is_in_the_first_html_for_a_reader_with_progress(client
     assert 'class="library-card"' in inner and 'Pride and Prejudice' in inner
     assert 'covers/5.webp' in inner, 'cover rendered server-side too'
     assert 'private' in resp.headers['Cache-Control'], 'personal HTML must not enter shared caches'
+
+
+def test_continue_card_without_progress_says_just_started(client, monkeypatch):
+    from backend import app_base
+    from backend.routes import pages
+    from backend.routes.pages import progress_routes
+    monkeypatch.setattr(pages, '_signed_in_user_id', lambda: 7)
+    book_id = app_base.db.get_book_by_slug('pride-and-prejudice')['id']
+    monkeypatch.setattr(progress_routes, 'content_db', app_base.db)
+    monkeypatch.setattr(progress_routes, 'user_db', _StubUserDb([{
+        'book_id': book_id, 'status': 'in_progress', 'last_mode': 'side_by_side', 'last_mode_state': None,
+        'last_meaningful_read_at': '2026-10-13', 'finished_at': None}]))
+    inner = _continue_section(client.get('/').get_data(as_text=True)).group(2)
+    assert 'Just started' in inner and '0%' not in inner, 'no "0%" before any real progress'
+    assert 'library-card-progress' not in inner, 'no empty progress bar'
+    assert re.search(r'class="library-card-location">[^<]*· Side by side</p>', inner), 'mode joins the location line'
+    assert 'library-card-mode' not in inner, 'no loose mode label under the button'
 
 
 def test_continue_reading_absent_without_progress(client, monkeypatch):

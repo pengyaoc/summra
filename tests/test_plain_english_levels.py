@@ -120,6 +120,12 @@ def _levels_section(body):
 def test_home_levels_section_leads_with_the_plain_english_target(client):
     section = _levels_section(client.get('/').get_data(as_text=True))
     assert 'grade 8' in section, 'say what level Plain English is written for'
-    assert "original" in section.lower() and 'ATOS' in section
-    assert '1 of 3 books' in section, 'live count of books with Plain English'
-    assert 'Original only' in section
+    assert "original" in section.lower()
+
+
+def test_how_we_grade_counts_books_with_plain_english(client):
+    body = client.get('/discover').get_data(as_text=True)
+    panel = re.search(r'<details [^>]*id="how-we-grade"[^>]*>(.*?)</details>', body, re.S).group(1)
+    assert 'ATOS' in panel
+    assert '1 of 3 books' in panel, 'live count of books with Plain English'
+    assert 'Original only' in panel

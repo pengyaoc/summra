@@ -31,7 +31,6 @@ html {
     --accent-hover: #742525;
     --on-accent: #FFFFFF;
     --accent-bright: #B23A3A; /* accent on the dark hero band */
-    --paper-band: #EAE0CC; /* alternate home bands — a clear step from --paper */
     --font-serif: 'New York', 'Iowan Old Style', Baskerville, 'Hoefler Text', Georgia, 'Times New Roman', serif;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --level-easy-bg: #E3EBDD;
@@ -425,6 +424,13 @@ body.on-chapter-page .header {
     margin: 0.2rem 0 0;
     color: var(--ink-muted);
     font-size: 0.78rem;
+}
+
+/* Reading time always gets its own line under the tags, so a long level tag
+   doesn't wrap some cards and not others. */
+.book-card-time {
+    order: 1;
+    flex-basis: 100%;
 }
 
 /* No Plain English version yet: an outline tag, quieter than the level. */
@@ -2112,8 +2118,7 @@ body.on-chapter-page .header {
 }
 
 .carousel-nav-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
+    visibility: hidden; /* nothing to scroll to on that side */
 }
 
 .carousel-scroll {
@@ -4247,18 +4252,18 @@ body.pagination-active {
 .library-card .book-card-cover { width: 108px; height: auto; margin: 0; padding: 10%; }
 .library-card .book-card-cover-title { font-size: .85rem; }
 .library-card-body { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
-.library-card-meta { display: flex; width: 100%; justify-content: space-between; gap: .75rem; color: var(--text-light); font-size: .76rem; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
+.library-card-meta { display: flex; width: 100%; justify-content: space-between; gap: .75rem; white-space: nowrap; color: var(--text-light); font-size: .76rem; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
 .library-card h3 { margin: .35rem 0 .2rem; color: var(--ink); font-family: var(--font-serif); font-size: 1.25rem; line-height: 1.22; }
-.library-card-author, .library-card-location, .library-card-mode { margin: 0; color: var(--text-light); font-size: .9rem; }
+.library-card-author, .library-card-location { margin: 0; color: var(--text-light); font-size: .9rem; }
 .library-card-location { overflow: hidden; max-width: 100%; margin-top: .5rem; text-overflow: ellipsis; white-space: nowrap; }
-.library-card-progress { width: 100%; height: 5px; margin: .75rem 0 .85rem; overflow: hidden; border-radius: 99px; background: var(--rule); }
+.library-card-foot { width: 100%; margin-top: auto; padding-top: .75rem; }
+.library-card-progress { width: 100%; height: 5px; margin: 0 0 .85rem; overflow: hidden; border-radius: 99px; background: var(--rule); }
 .library-card-progress span { display: block; height: 100%; min-width: 4px; border-radius: inherit; background: var(--accent); }
 .library-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
 .library-card-actions button { cursor: pointer; }
 .library-read-action { display: inline-flex; align-items: center; gap: .45rem; border: 0; border-radius: var(--radius-control); background: var(--accent); color: var(--on-accent); padding: .54rem .72rem; font: inherit; font-size: .87rem; font-weight: 650; }
 .library-read-action:hover { background: var(--accent-hover); }
 .library-mark-unfinished { border: 0; background: transparent; color: var(--primary-color); padding: .35rem 0; font: inherit; font-size: .82rem; font-weight: 650; }
-.library-card-mode { margin-top: auto; padding-top: .55rem; font-size: .78rem; text-transform: capitalize; }
 .library-empty { max-width: 520px; margin: 4rem auto; padding: 2rem; border: 1px dashed var(--border-light); border-radius: 12px; background: rgba(255,255,255,.72); text-align: center; }
 
 @media (max-width: 599px) {
@@ -4266,7 +4271,6 @@ body.pagination-active {
     .library-card { grid-template-columns: 82px minmax(0, 1fr); gap: .85rem; min-height: 150px; padding: .85rem; }
     .library-card .book-card-cover { width: 82px; }
     .library-card h3 { font-size: 1.1rem; }
-    .library-card-mode { display: none; }
 }
 
 .book-read-btn { display: inline-flex; align-items: center; gap: .55rem; margin-top: 1rem; padding: .65rem 1rem; border: 0; border-radius: var(--radius-control); background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 650; cursor: pointer; }
@@ -4722,9 +4726,9 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 }
 
 /* Sections below the hero */
-/* Each home section is a full-width band; neighbouring bands alternate
-   between paper and a deeper paper (the hero is ink), so sections read as
-   distinct blocks instead of blending together. */
+/* Each home section is a full-width band. The ink hero is the only coloured
+   one: everything below it sits on one paper surface, and a rule above each
+   later section's heading separates them. */
 .home-section {
     margin: 0 calc(50% - 50vw);
     padding: 3.25rem max(20px, calc(50vw - 580px));
@@ -4734,10 +4738,13 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     background: var(--paper);
 }
 
-.home-band--deep {
-    background: var(--paper-band);
+.home-section:not(.hidden) ~ .home-section {
+    padding-top: 0;
+}
+
+.home-section:not(.hidden) ~ .home-section > .home-section-head {
+    padding-top: 2.5rem;
     border-top: 1px solid var(--rule-strong);
-    border-bottom: 1px solid var(--rule-strong);
 }
 
 .home-section-head {
@@ -4803,30 +4810,7 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     background: var(--paper-deep);
 }
 
-/* Choose by level */
-/* Find a book at the right level: an ink band like the hero. */
-.home-band--ink {
-    background: var(--ink);
-    color: var(--paper);
-}
-
-.home-band--ink .home-section-head h2 {
-    color: var(--paper);
-}
-
-.home-band--ink .home-section-sub {
-    color: var(--rule-strong);
-}
-
-.grade-cards-label {
-    margin: 0 0 0.75rem;
-    color: var(--rule-strong);
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
+/* Find a book at the right level: four grade cards into a filtered Discover. */
 .grade-cards {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4839,6 +4823,7 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     align-items: flex-start;
     gap: 0.7rem;
     padding: 1.25rem;
+    border: 1px solid var(--rule);
     border-radius: 12px;
     background: var(--surface);
     color: var(--ink);
@@ -4856,8 +4841,9 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 
 .grade-card-desc {
     margin: 0;
+    color: var(--ink-muted);
     font-family: var(--font-serif);
-    font-size: 1.02rem;
+    font-size: 1rem;
     line-height: 1.45;
 }
 
@@ -4868,18 +4854,41 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
     font-weight: 600;
 }
 
+.home-levels-how {
+    display: inline-block;
+    margin-top: 1.25rem;
+}
+
+/* Discover: "How we grade books", closed until asked for. */
+.how-we-grade {
+    scroll-margin-top: 90px; /* clear the sticky header when opened by link */
+    margin: 0 0 1.5rem;
+    padding: 0.9rem 1.25rem;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.how-we-grade summary {
+    color: var(--accent);
+    font-size: 0.94rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.how-we-grade[open] summary {
+    margin-bottom: 1rem;
+}
+
 .level-notes {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.5rem 2rem;
-    margin-top: 2.25rem;
-    padding-top: 1.75rem;
-    border-top: 1px solid rgba(246, 241, 231, 0.18);
 }
 
 .level-note h3 {
     margin: 0 0 0.4rem;
-    color: var(--paper);
+    color: var(--ink);
     font-size: 1rem;
     font-weight: 600;
 }
@@ -4887,14 +4896,14 @@ body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { backgrou
 .level-note p,
 .level-footnote {
     margin: 0;
-    color: var(--rule-strong);
+    color: var(--ink-muted);
     font-size: 0.92rem;
     line-height: 1.6;
 }
 
 .level-note a,
 .level-footnote a {
-    color: var(--paper);
+    color: var(--accent);
     font-weight: 600;
 }
 

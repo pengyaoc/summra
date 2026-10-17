@@ -36,16 +36,18 @@
    wires its clicks) once app.js starts. #}
 {% macro library_card(book) -%}
 {% set pct = [[book.furthest_percentage or 0, 0]|max, 100]|min %}
+{% set mode = {'plain': 'Plain English', 'original': 'Original', 'side_by_side': 'Side by side', 'summary': 'Summary'}.get(book.last_mode or 'plain', 'Plain English') %}
 <article class="library-card" data-reader-book="{{ book.id }}">
     <div class="library-card-cover-frame">{{ book_cover(book) }}</div>
     <div class="library-card-body">
-        <div class="library-card-meta"><span>Continue reading</span><span>{{ pct }}%</span></div>
+        <div class="library-card-meta">{% if pct %}<span>Continue reading</span><span>{{ pct }}%</span>{% else %}<span>Just started</span>{% endif %}</div>
         <h3>{{ book.title }}</h3>
         <p class="library-card-author">{{ book.author }}</p>
-        <p class="library-card-location">{{ book.current_chapter.chapter_title if book.current_chapter and book.current_chapter.chapter_title else ('Chapter ' ~ book.current_chapter.chapter_number if book.current_chapter else 'Beginning') }}</p>
-        <div class="library-card-progress" aria-label="{{ pct }}% read"><span style="width: {{ pct }}%"></span></div>
-        <div class="library-card-actions"><button class="library-read-action" type="button" data-library-read="{{ book.id }}">Continue<span aria-hidden="true">→</span></button></div>
-        <p class="library-card-mode">{{ (book.last_mode or 'plain')|replace('_', ' ') }}</p>
+        <p class="library-card-location">{{ book.current_chapter.chapter_title if book.current_chapter and book.current_chapter.chapter_title else ('Chapter ' ~ book.current_chapter.chapter_number if book.current_chapter else 'Beginning') }} · {{ mode }}</p>
+        <div class="library-card-foot">
+            {% if pct %}<div class="library-card-progress" aria-label="{{ pct }}% read"><span style="width: {{ pct }}%"></span></div>{% endif %}
+            <div class="library-card-actions"><button class="library-read-action" type="button" data-library-read="{{ book.id }}">Continue<span aria-hidden="true">→</span></button></div>
+        </div>
     </div>
 </article>
 {%- endmacro %}

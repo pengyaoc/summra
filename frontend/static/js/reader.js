@@ -3,6 +3,10 @@
 // the main showChapterDetail page controller. Extracted from app.js (Phase
 // 4b continuation); merged onto SummraApp.prototype via Object.assign in
 // app.js, so every method still reads/writes `this.*` exactly as before.
+// Reading-mode names on Library / Continue reading cards; the same map is in
+// library_card() in _book_card.html.
+const LIBRARY_MODE_LABELS = { plain: 'Plain English', original: 'Original', side_by_side: 'Side by side', summary: 'Summary' };
+
 export const readerMixin = {
     renderMarkdown(text) {
         if (typeof marked !== 'undefined') {
@@ -638,19 +642,22 @@ export const readerMixin = {
             const cover = this.bookCoverHtml(book);
             const chapter = book.current_chapter?.chapter_title || (book.current_chapter ? `Chapter ${book.current_chapter.chapter_number}` : 'Beginning');
             const percentage = Math.max(0, Math.min(100, Number(book.furthest_percentage) || 0));
-            const mode = (book.last_mode || 'plain').replaceAll('_', ' ');
+            const mode = LIBRARY_MODE_LABELS[book.last_mode] || LIBRARY_MODE_LABELS.plain;
+            const status = book.status === 'finished' ? 'Finished' : (percentage ? 'Continue reading' : 'Just started');
+            const progressLabel = book.status === 'finished' || percentage ? `<span>${percentage}%</span>` : '';
             const unfinished = book.status === 'finished'
                 ? `<button class="library-mark-unfinished" type="button" data-reader-unfinish="${book.id}">Mark unfinished</button>` : '';
             return `<article class="library-card" data-reader-book="${book.id}">
                 <div class="library-card-cover-frame">${cover}</div>
                 <div class="library-card-body">
-                    <div class="library-card-meta"><span>${book.status === 'finished' ? 'Finished' : 'Continue reading'}</span><span>${percentage}%</span></div>
+                    <div class="library-card-meta"><span>${status}</span>${progressLabel}</div>
                     <h3>${this.escapeHtml(book.title)}</h3>
                     <p class="library-card-author">${this.escapeHtml(book.author)}</p>
-                    <p class="library-card-location">${this.escapeHtml(chapter)}</p>
-                    <div class="library-card-progress" aria-label="${percentage}% read"><span style="width: ${percentage}%"></span></div>
-                    <div class="library-card-actions"><button class="library-read-action" type="button" data-library-read="${book.id}">${action}<span aria-hidden="true">→</span></button>${unfinished}</div>
-                    <p class="library-card-mode">${this.escapeHtml(mode)}</p>
+                    <p class="library-card-location">${this.escapeHtml(chapter)} · ${mode}</p>
+                    <div class="library-card-foot">
+                        ${percentage ? `<div class="library-card-progress" aria-label="${percentage}% read"><span style="width: ${percentage}%"></span></div>` : ''}
+                        <div class="library-card-actions"><button class="library-read-action" type="button" data-library-read="${book.id}">${action}<span aria-hidden="true">→</span></button>${unfinished}</div>
+                    </div>
                 </div>
             </article>`;
         }).join('');

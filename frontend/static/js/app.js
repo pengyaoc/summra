@@ -166,6 +166,9 @@ class SummraApp {
             this.handleRoute();
         });
 
+        // In-page link to the Discover "How we grade books" panel.
+        window.addEventListener('hashchange', () => this.revealHowWeGrade());
+
         // Intercept all link clicks for client-side routing
         document.addEventListener('click', (e) => {
             const link = e.target.closest('a[href^="/"]');
@@ -2140,6 +2143,16 @@ class SummraApp {
         ), false);
 
         this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Summra');
+        this.revealHowWeGrade();
+    }
+
+    // /discover#how-we-grade (linked from the home page and the Discover
+    // intro) opens the "How we grade books" panel and scrolls to it.
+    revealHowWeGrade() {
+        const panel = document.getElementById('how-we-grade');
+        if (window.location.hash !== '#how-we-grade' || !panel) return;
+        panel.open = true;
+        panel.scrollIntoView({ block: 'start' });
     }
 
     // Controls persist across SPA navigations, so wire them once.
