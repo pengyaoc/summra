@@ -1,6 +1,6 @@
 # Summra Work Log
 
-## 2026-10-17: Reader page-turn controls: mouse first on web, swipe first on mobile (done locally, not committed or deployed)
+## 2026-10-17: Reader page-turn controls: mouse first on web, swipe first on mobile (deployed)
 
 User asked for better left/right navigation. On mobile the arrow circles flashed over the text on every touch; on web there was no sideways trackpad swipe and the arrows faded 1s after the mouse entered.
 
@@ -47,6 +47,11 @@ Regression:
 
 Note: the PRD's old "page turns must be instant (no animations)" rule now applies to mouse and keyboard only. A touch swipe finishes with a 150ms slide.
 - Deploy needs a gunicorn restart (backend and template-adjacent changes). The new table is created by `UserDatabase.init_db` on boot.
+
+Deployed 2026-10-17 (`92e882e`), code only, no content DB copy.
+- The VM fast-forwarded and the service restarted: active, local 200, no errors in the journal. `user_hint_seen` exists in `/opt/summra/data/summra.db`.
+- Public `/`, `/books` and `/api/books` return 200.
+- Against production: `reader_nav_mouse` 36/36, `reader_nav_touch` 14/14, `reader_nav_hint` 14/14. These stub sign-in and the hint POSTs, so nothing was written to prod.
 
 ## 2026-10-17: Reader text hidden under the toolbar on iPhone (deployed)
 
