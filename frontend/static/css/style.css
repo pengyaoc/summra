@@ -4009,6 +4009,18 @@ body.pagination-active {
     }
 }
 
+/* Touch swipe: the neighboring page rendered beside the current one (see
+   setupTouchGestures). While swiping, the wrapper stops clipping so both
+   pages slide edge to edge; the viewport still clips them. */
+.pagination-wrapper.is-swiping {
+    overflow: visible;
+}
+
+.pagination-page-container.pagination-neighbor {
+    position: absolute;
+    pointer-events: none;
+}
+
 /* Keep a sideways trackpad swipe from becoming browser back/forward. */
 html.pagination-active {
     overscroll-behavior-x: none;

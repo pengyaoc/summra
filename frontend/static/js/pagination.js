@@ -764,16 +764,50 @@ export const paginationMixin = {
      * Setup touch gestures for mobile navigation
      */
     setupTouchGestures(wrapperElement) {
-        // The page follows the finger; on release it turns (a long drag or a
-        // quick flick) or snaps back. Where there is no page to turn to, the
-        // drag meets resistance.
+        // Like Kindle: the page follows the finger with the neighboring page
+        // already rendered one screen width beside it, and both slide edge to
+        // edge. On release it turns (a long drag or a quick flick) or snaps
+        // back. Where there is no page to turn to, the drag meets resistance.
         let drag = null;
-        const pageEl = () => wrapperElement.querySelector('.pagination-page-container');
+        let neighbor = null; // { el, side: 1 next | -1 previous, filled }
+        let cleanupTimer = null;
+        const pageEl = () => wrapperElement.querySelector('.pagination-page-container:not(.pagination-neighbor)');
+        const stride = () => window.innerWidth;
         const slide = (x, ms) => {
-            const el = pageEl();
-            if (!el) return;
-            el.style.transition = ms ? `transform ${ms}ms ease-out` : 'none';
-            el.style.transform = x ? `translateX(${x}px)` : '';
+            [pageEl(), neighbor?.el].forEach(el => {
+                if (!el) return;
+                el.style.transition = ms ? `transform ${ms}ms ease-out` : 'none';
+                el.style.transform = x ? `translateX(${x}px)` : '';
+            });
+        };
+        const removeNeighbor = () => {
+            neighbor?.el.remove();
+            neighbor = null;
+            wrapperElement.classList.remove('is-swiping');
+        };
+        // A copy of the page element (same classes, font and size styles, so
+        // it renders identically) holding the next or previous page. Anchors
+        // and ids are stripped so marker and progress logic never see it.
+        const showNeighbor = (side) => {
+            if (neighbor?.side === side) return;
+            removeNeighbor();
+            const page = pageEl();
+            if (!page) return;
+            const el = page.cloneNode(false);
+            el.classList.add('pagination-neighbor');
+            el.removeAttribute('id');
+            el.setAttribute('aria-hidden', 'true');
+            el.inert = true;
+            const html = this.pagination.pages[this.pagination.currentPage + side];
+            el.innerHTML = html || '';
+            el.querySelectorAll('[data-reader-anchor]').forEach(node => node.removeAttribute('data-reader-anchor'));
+            el.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+            el.style.top = `${page.offsetTop}px`;
+            el.style.left = `${side * stride()}px`;
+            el.style.width = `${page.offsetWidth}px`;
+            wrapperElement.appendChild(el);
+            wrapperElement.classList.add('is-swiping');
+            neighbor = { el, side, filled: Boolean(html) };
         };
 
         wrapperElement.addEventListener('touchstart', (e) => {
@@ -782,6 +816,7 @@ export const paginationMixin = {
                 drag = null;
                 return;
             }
+            clearTimeout(cleanupTimer);
             drag = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp, axis: null };
         }, { passive: true });
 
@@ -794,7 +829,10 @@ export const paginationMixin = {
             }
             if (drag.axis !== 'x') return;
             const { hasPrevious, hasNext } = this.pageTurnAvailability();
-            const blocked = dx > 0 ? !hasPrevious : !hasNext;
+            const side = dx > 0 ? -1 : 1;
+            const blocked = side < 0 ? !hasPrevious : !hasNext;
+            if (blocked) removeNeighbor();
+            else showNeighbor(side);
             slide(blocked ? dx / 3 : dx, 0);
         }, { passive: true });
 
@@ -810,14 +848,27 @@ export const paginationMixin = {
             const { hasPrevious, hasNext } = this.pageTurnAvailability();
             const canTurn = forward ? hasNext : hasPrevious;
             if (e.type === 'touchend' && canTurn && (Math.abs(dx) > width * 0.25 || flick)) {
-                slide(forward ? -width : width, 150);
-                setTimeout(() => {
-                    slide(0, 0);
+                const distance = stride();
+                const ms = Math.max(120, Math.round(300 * (1 - Math.abs(dx) / distance)));
+                slide(forward ? -distance : distance, ms);
+                cleanupTimer = setTimeout(() => {
+                    const rendered = neighbor?.filled;
                     if (forward) this.navigateToNextPage();
                     else this.navigateToPreviousPage();
-                }, 150);
+                    // The neighbor was a rendered page: the real page now shows
+                    // it, so put things back in the same frame (no flash).
+                    // Otherwise the next section loads and rebuilds the reader;
+                    // keep the page out of view until then.
+                    if (rendered) {
+                        slide(0, 0);
+                        removeNeighbor();
+                    } else {
+                        cleanupTimer = setTimeout(() => { slide(0, 0); removeNeighbor(); }, 3000);
+                    }
+                }, ms);
             } else {
                 slide(0, 200);
+                cleanupTimer = setTimeout(removeNeighbor, 200);
             }
         };
         wrapperElement.addEventListener('touchend', release, { passive: true });
