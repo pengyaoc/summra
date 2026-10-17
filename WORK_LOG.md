@@ -1,5 +1,12 @@
 # Summra Work Log
 
+## 2026-10-17: Backup cleanup (done)
+
+User asked to clean up the backups. Following CLAUDE.md (keep at most the last 1–2), I kept the newest backup on each side and deleted the rest.
+- VM: deleted `database.db.bak-pre-slim-20261016-194322` (1.2GB) and `database.db.bak-pre-iliad-plain-20261017-065722`. Kept `database.db.bak-pre-happyprince-plain-20261017-151640`. Also removed the deploy temp files in `/home/pengyao`. Disk use went from 8.7G to 7.4G.
+- Local: deleted `data/database.pre-verse-20261015.db` (734MB) and `data/database.pre-iliad-plain-20261016.db`. Kept `data/database.pre-happyprince-plain-20261017.db`.
+- Prod `/` returns 200 afterwards.
+
 ## 2026-10-17: The Happy Prince (book 105) Plain English, Sonnet writers + fresh verifiers (deployed)
 
 First book under the new rule: a Sonnet subagent writes each chapter, and a separate, fresh agent verifies it.
