@@ -1,5 +1,15 @@
 # Summra Work Log
 
+## 2026-10-17: Sepia theme merged into Light (done locally)
+
+User: Light and Sepia were too similar; merge them. Light is already warm paper (#F6F1E7 with #2B2622 ink); Sepia was #f4ecd8 with #5c4f3d. Kept Light and Dark.
+- Removed the Sepia button from the picker in `index.html`; the picker grid now has 2 columns.
+- `settings.js`: a saved `reading_theme = 'sepia'` opens as Light and is rewritten to `light`.
+- `style.css`: the Light swatch now shows the real paper color instead of white; removed every `[data-theme="sepia"]` rule, the `.theme-preview-sepia` swatch and the `--reading-theme-sepia-*` variables (85 lines). A diff audit confirmed nothing else was removed. My first regex pass also swallowed `.continuous-reader-section` through a comment that mentioned sepia; I restored the file and redid the removal.
+- app.min.js rebuilt; PRD theme sections updated.
+
+Test: new `tests/e2e/reader_themes.mjs` (5 checks: only Light and Dark offered, default Light, saved Sepia → Light and rewritten, Dark unchanged). It failed first: 3 checks.
+
 ## 2026-10-17: Reader page-turn controls: mouse first on web, swipe first on mobile (deployed)
 
 User asked for better left/right navigation. On mobile the arrow circles flashed over the text on every touch; on web there was no sideways trackpad swipe and the arrows faded 1s after the mouse entered.

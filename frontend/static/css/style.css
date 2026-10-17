@@ -56,8 +56,6 @@ html {
     --sticky-header-border: #666666;
     --reading-theme-dark-bg: #1a1a1a;
     --reading-theme-dark-text: #e0e0e0;
-    --reading-theme-sepia-bg: #f4ecd8;
-    --reading-theme-sepia-text: #5c4f3d;
     --reading-font-serif: -apple-system-ui-serif, ui-serif, 'New York', 'Iowan Old Style', Georgia, serif;
     --skeleton-base: #f0f0f0;
     --skeleton-highlight: #e8e8e8;
@@ -2270,14 +2268,6 @@ body.on-chapter-page .header {
     color: rgba(255, 255, 255, 0.5);
 }
 
-.chapter-detail-section[data-theme="sepia"] .reading-progress-fill {
-    background: rgba(92, 79, 61, 0.3);
-}
-
-.chapter-detail-section[data-theme="sepia"] .reading-progress-text {
-    color: rgba(92, 79, 61, 0.5);
-}
-
 /* Next Chapter Button */
 
 /* Reading Settings Panel */
@@ -2466,7 +2456,7 @@ body.on-chapter-page .header {
 /* Theme Selection */
 .theme-choices {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
 }
 
@@ -2501,15 +2491,11 @@ body.on-chapter-page .header {
 }
 
 .theme-preview-light {
-    background: white;
+    background: var(--paper);
 }
 
 .theme-preview-dark {
     background: var(--reading-theme-dark-bg);
-}
-
-.theme-preview-sepia {
-    background: var(--reading-theme-sepia-bg);
 }
 
 .theme-choice span {
@@ -2566,39 +2552,6 @@ body:has(.chapter-detail-section[data-theme="dark"]:not(.hidden)) {
     background: rgba(92, 179, 224, 0.1);
 }
 
-.chapter-detail-section[data-theme="sepia"] {
-    background: var(--reading-theme-sepia-bg);
-    color: var(--reading-theme-sepia-text);
-}
-
-/* When chapter section is active with sepia theme, set body background */
-body:has(.chapter-detail-section[data-theme="sepia"]:not(.hidden)) {
-    background: var(--reading-theme-sepia-bg);
-}
-
-.chapter-detail-section[data-theme="sepia"] .chapter-fulltext p,
-.chapter-detail-section[data-theme="sepia"] .chapter-summary-text,
-.chapter-detail-section[data-theme="sepia"] h2,
-.chapter-detail-section[data-theme="sepia"] h4 {
-    color: var(--reading-theme-sepia-text);
-}
-
-.chapter-detail-section[data-theme="sepia"] .chapter-summary-box {
-    background: #e8dcc4;
-    border-left-color: #d4a574;
-}
-
-.chapter-detail-section[data-theme="sepia"] .next-chapter-btn {
-    color: var(--reading-theme-sepia-text);
-    border-color: #d4c5a9;
-}
-
-.chapter-detail-section[data-theme="sepia"] .next-chapter-btn:hover {
-    border-color: #a88f5a;
-    color: #4a3f2f;
-    background: rgba(168, 143, 90, 0.1);
-}
-
 /* Medium Detail Reading Themes */
 .medium-detail-section[data-theme="light"] {
     background: white;
@@ -2629,23 +2582,6 @@ body:has(.medium-detail-section[data-theme="dark"]:not(.hidden)) {
 
 .medium-detail-section[data-theme="dark"] .back-button {
     color: var(--reading-theme-dark-accent);
-}
-
-.medium-detail-section[data-theme="sepia"] {
-    background: var(--reading-theme-sepia-bg);
-    color: var(--reading-theme-sepia-text);
-}
-
-/* When medium section is active with sepia theme, set body background */
-body:has(.medium-detail-section[data-theme="sepia"]:not(.hidden)) {
-    background: var(--reading-theme-sepia-bg);
-}
-
-.medium-detail-section[data-theme="sepia"] .summary-text,
-.medium-detail-section[data-theme="sepia"] h2,
-.medium-detail-section[data-theme="sepia"] h3,
-.medium-detail-section[data-theme="sepia"] h4 {
-    color: var(--reading-theme-sepia-text);
 }
 
 /* Sticky Reading Header */
@@ -4154,10 +4090,6 @@ html.pagination-active {
     border-right-color: var(--reading-theme-dark-border) !important;
 }
 
-[data-theme="sepia"] .pagination-page-container code {
-    background-color: rgba(95, 75, 50, 0.1);
-}
-
 .pagination-page-container blockquote {
     border-left: 4px solid var(--primary-color);
     padding-left: 1em;
@@ -4280,7 +4212,7 @@ html.pagination-active {
 .book-read-btn-arrow { font-size: 1.15em; line-height: 1; }
 
 /* Focused reader chrome: a quiet paper toolbar in the light theme (matching
-   the site header); dark and sepia themes give it their own colours below. */
+   the site header); the dark theme gives it its own colours below. */
 /* The reader's document must not scroll: the toolbar and footer are fixed,
    so any scroll slides the page's first lines under the toolbar. 100svh, not
    100vh (iOS's 100vh is the large viewport; see the body note), and no
@@ -4351,22 +4283,7 @@ body.on-reader-page .main-content { padding-bottom: 0; }
 .continuous-reader-section[data-theme="dark"] .side-by-side-row,
 .continuous-reader-section[data-theme="dark"] .continuous-reader-footer { border-color: var(--reading-theme-dark-border); }
 .continuous-reader-section[data-theme="dark"] .reader-progress-track { background: var(--reading-theme-dark-border); }
-.continuous-reader-section[data-theme="sepia"] { background: var(--reading-theme-sepia-bg); color: var(--reading-theme-sepia-text); }
-.continuous-reader-section[data-theme="sepia"] .continuous-reader-content,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container p,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container .side-by-side-cell,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container h1,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container h2,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container h3,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container h4,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container h5,
-.continuous-reader-section[data-theme="sepia"] .pagination-page-container h6 { color: var(--reading-theme-sepia-text); }
-.continuous-reader-section[data-theme="sepia"] .continuous-reader-chrome,
-.continuous-reader-section[data-theme="sepia"] .continuous-reader-footer,
-.continuous-reader-section[data-theme="sepia"] .reader-panel { background: var(--reading-theme-sepia-bg); }
-.continuous-reader-section[data-theme="sepia"] .continuous-reader-chrome { color: var(--reading-theme-sepia-text); }
-body:has(.continuous-reader-section[data-theme="sepia"]:not(.hidden)) { background: var(--reading-theme-sepia-bg); }
+
 .continuous-reader-section[data-font="georgia"] .continuous-reader-content { font-family: var(--reading-font-serif); font-optical-sizing: auto; }
 .continuous-reader-section[data-font="system"] .continuous-reader-content { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .continuous-reader-section[data-font="opensans"] .continuous-reader-content { font-family: "Open Sans", Arial, sans-serif; }

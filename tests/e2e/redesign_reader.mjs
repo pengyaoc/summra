@@ -2,7 +2,7 @@
 // contents · reading settings; modes live in the settings panel) and takes
 // the new look: paper chrome in the light theme, a thin oxblood progress bar,
 // serif chapter headings, token-styled panels, and a hairline between
-// side-by-side rows. Dark and sepia themes keep matching chrome.
+// side-by-side rows. The dark theme keeps matching chrome.
 import { chromium } from "playwright";
 
 const BASE = (process.env.BASE_URL || "http://localhost:5001").replace(/\/$/, "");

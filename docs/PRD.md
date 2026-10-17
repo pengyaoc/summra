@@ -552,17 +552,14 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 
 **6d. Color Scheme (Theme):**
 - **Light Theme** (default):
-  - Background: White (#FFFFFF)
-  - Text: Dark gray (#2c3e50)
-  - Use case: Bright environments, daytime reading
+  - Background: Warm paper (#F6F1E7)
+  - Text: Dark brown ink (#2B2622)
+  - Use case: Bright environments, daytime and long reading sessions
 - **Dark Theme:**
   - Background: Dark gray (#1a1a1a)
   - Text: Light gray (#e0e0e0)
   - Use case: Low-light environments, night reading, reduced eye strain
-- **Sepia Theme:**
-  - Background: Beige/cream (#f4ecd8)
-  - Text: Warm brown (#5c4f3d)
-  - Use case: Kindle-like warm tones, reduced blue light, comfortable long reading sessions
+- **Sepia was merged into Light (2026-10-17):** the two warm-paper themes looked nearly identical. A saved Sepia choice opens as Light and is rewritten to Light.
 - **UI:** Visual theme preview squares with labels
 - **Application:**
   - Applies to all reading content (summaries, chapters)
@@ -602,7 +599,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - **Functionality:** Navigates directly to next sequential chapter
 - **Styling:**
   - Transparent background with border
-  - Theme-aware colors (adapts to light/dark/sepia)
+  - Theme-aware colors (adapts to light/dark)
   - Hover: Border color changes to accent color, subtle background tint
 - **Margin:** 48px top, 80px bottom (space above and below button)
 - **Font Behavior:** Does NOT change size or family with reading settings
@@ -1982,7 +1979,7 @@ Controls depend on the input device, not the screen width: mouse is first class 
   - Affects line height and word wrapping
   - Triggers recalculation on change
 
-- **Theme:** Light, Dark, Sepia
+- **Theme:** Light, Dark
   - Theme switching maintains pagination
   - Colors updated without recalculation
 
