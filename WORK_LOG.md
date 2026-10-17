@@ -1,5 +1,24 @@
 # Summra Work Log
 
+## 2026-10-16: Home page calmer below the hero (option A; done, local only)
+
+User feedback: the hero is good, but below it the page changed background too often (dark hero, tan, paper, dark), and "Find a book at the right level" carried too much information (four cards, four explanation blocks, a footnote). I showed three mockups (A quiet paper, B level tabs on the shelf, C level strip) and the user picked A.
+
+Changes: everything below the hero sits on one `--paper` background, separated by a rule above each later section's heading (`.home-section:not(.hidden) ~ .home-section`). Removed `.home-band--deep`, `.home-band--ink`, `.grade-cards-label` and `--paper-band`. The levels section is now one line, four cards with short descriptions, and a "How we grade books →" link (about 400 words down to about 60). The four level notes and the Flesch–Kincaid footnote moved to a collapsible `<details id="how-we-grade">` on Discover. The Discover intro link now points there instead of `/#reading-levels`. `revealHowWeGrade()` in app.js opens and scrolls to the panel on `/discover#how-we-grade` and on hashchange. Rebuilt app.min.js.
+
+Tests: the spec changed, so I rewrote the old home tests. In `tests/test_home_redesign.py`, "levels section explains its sources" became "levels section is short (<80 words), has no ATOS/Flesch/Common Core, and links to how-we-grade", plus "How we grade on Discover explains its sources". In `tests/test_plain_english_levels.py`, the live Plain English count now checks the Discover panel. In `tests/e2e/redesign_home.mjs`, "neighbouring sections differ in background" became "sections below the hero share one light background", and I added "How we grade opens on Discover, scrolled into view". Each failed before the change. 707 pytest pass; redesign_home (40), redesign_discover (27), redesign_chrome (26), footer_check (5) and the smoke checks pass.
+
+Follow-up, same day: fixed the four issues noticed above.
+- **"0%" on continue cards:** not a calculation bug. The percentage comes from the furthest marker, which only advances when you page through in order (`reader.js` qualifies it on sequential boundaries), so books opened and jumped around in have none. Tracking is unchanged. Cards with 0% now say "Just started" in place of "Continue reading", with no bar and no number.
+- **Loose mode label:** the reading mode joins the location line ("Marley's Ghost · Plain English"; labels Plain English / Original / Side by side / Summary), and `.library-card-mode` is gone.
+- **Uneven buttons:** the bar and button sit in `.library-card-foot` (`margin-top: auto`), so buttons line up across a row.
+- **Start here left arrow:** disabled carousel arrows are `visibility: hidden` rather than faded (this applies to every carousel), and the shelf's left arrow starts disabled in the HTML.
+- **Reading time wrapping:** `.book-card-time` always takes its own line under the tags, because "Original: Grade 10" plus "15½ hrs" was 6px wider than a 168px card.
+
+Both card renderers changed together (`library_card()` in `_book_card.html` and `renderLibraryCards()` in reader.js), and I rebuilt app.min.js.
+
+Tests: new pytest `test_continue_card_without_progress_says_just_started`. New checks in `redesign_home.mjs`: card progress label, Just started, mode on the location line, no loose label, buttons aligned, back arrow hidden at the start and shown after scrolling, and reading time on its own line at 1280 and 375px. All failed first (I fixed the arrow check's threshold after it falsely passed at 30% opacity). 708 pytest pass; redesign_home (49), redesign_cards, redesign_discover, reader_progress, redesign_book_page, redesign_chrome and smoke on / /discover /library pass.
+
 ## 2026-10-16: Single-copy reader storage (done locally)
 
 Goal: keep book text once, in `chapters`. The user approved all four steps with no backward compatibility (no real users).
