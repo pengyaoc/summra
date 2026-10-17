@@ -411,7 +411,7 @@ The backup branch survives so you can cherry-pick anything that turns out to mat
 | `backend/models.py` schema changes | **Yes** — `Database.__init__` runs idempotent ALTER-TABLE migrations on boot |
 | `deploy/gunicorn_config.py` | **Yes** |
 | `/home/<SERVICE_USER>/.config/systemd/user/<SYSTEMD_UNIT>` or `service.env` | **Yes** + `systemctl --user daemon-reload` (as `<SERVICE_USER>`, see service control above) first for unit-file changes |
-| `frontend/templates/**` | No — Flask re-reads templates per request |
+| `frontend/templates/**` | **Yes** — gunicorn's Jinja caches compiled templates (debug is off); without a restart the old page keeps being served (seen 2026-10-17) |
 | `frontend/static/**` (CSS, JS, images) | No — Apache serves directly. Bump cache-busting query string in `index.html` if you need clients to pull a new asset |
 | `data/books/**` raw text | No — only used during ingestion, not at request time |
 | `docs/**`, `WORK_LOG.md`, `README.md`, `tests/**` | No |
