@@ -1,6 +1,6 @@
 # Summra Work Log
 
-## 2026-10-17: Sepia theme merged into Light (done locally)
+## 2026-10-17: Sepia theme merged into Light (deployed)
 
 User: Light and Sepia were too similar; merge them. Light is already warm paper (#F6F1E7 with #2B2622 ink); Sepia was #f4ecd8 with #5c4f3d. Kept Light and Dark.
 - Removed the Sepia button from the picker in `index.html`; the picker grid now has 2 columns.
@@ -10,7 +10,12 @@ User: Light and Sepia were too similar; merge them. Light is already warm paper 
 
 Test: new `tests/e2e/reader_themes.mjs` (5 checks: only Light and Dark offered, default Light, saved Sepia → Light and rewritten, Dark unchanged). It failed first: 3 checks.
 
-## 2026-10-17: Kindle-style swipe: the neighboring page slides in edge to edge (branch `kindle-swipe`, not merged or deployed)
+Deployed 2026-10-17 together with the Kindle-style swipe: `kindle-swipe` was merged into main as `4f70ceb` (the WORK_LOG conflict kept both entries; app.min.js was rebuilt from the merged source).
+- Combined code: every reader e2e suite passes (`reader_nav_touch` 25/25), and pytest 732 passed.
+- On the VM: fast-forward, restart, active, local 200, no journal errors. Public `/`, `/books` and `/api/books` return 200.
+- Against production: `reader_nav_touch` 25/25, `reader_nav_mouse` 36/36, `reader_nav_hint` 14/14, `reader_themes` 5/5.
+
+## 2026-10-17: Kindle-style swipe: the neighboring page slides in edge to edge (deployed)
 
 User feedback, with a Kindle screenshot: during a swipe the next page should already be rendered and slide in edge to edge. Before this, only the current page moved, with a blank area behind it, and it was clipped at the text column's edge.
 
