@@ -3951,129 +3951,131 @@ body.pagination-active {
 
 /* Temporary measuring div (hidden) */
 
-/* Navigation zones - invisible tap/click areas */
-/* Navigation zones removed - text selection enabled, only visible buttons remain */
-
-/* Navigation buttons - visible on hover/always on mobile */
+/* Page-turn buttons. Touch: swipe is the control, so the buttons are
+   visually hidden and kept only for screen readers. Mouse: see below. */
 .pagination-nav-button {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 48px;
-    height: 48px;
-    border: none;
-    background-color: rgba(0, 0, 0, 0.1);
-    color: var(--text-color);
-    font-size: 32px;
-    font-weight: 300;
-    border-radius: 50%;
-    cursor: pointer;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    opacity: 0;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
-/* Show buttons when wrapper has buttons-visible class (touch/click/hover activated) */
-.pagination-wrapper.buttons-visible .pagination-nav-button {
-    opacity: 0.7;
-}
-
-/* Keep button focus state for accessibility */
-.pagination-nav-button:focus {
-    opacity: 0.7;
-}
-
-.pagination-nav-button:hover {
-    opacity: 1 !important;
-    background-color: rgba(0, 0, 0, 0.2);
-    transform: translateY(-50%) scale(1.1);
-}
-
-.pagination-nav-button:active {
-    transform: translateY(-50%) scale(0.95);
-}
-
-/* Previous button */
-.pagination-nav-prev {
-    left: 12px;
-}
-
-/* Next button */
-.pagination-nav-next {
-    right: 12px;
-}
-
-/* Dark theme button styles */
-[data-theme="dark"] .pagination-nav-button {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: var(--text-color);
-}
-
-[data-theme="dark"] .pagination-nav-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-/* Sepia theme button styles */
-[data-theme="sepia"] .pagination-nav-button {
-    background-color: rgba(95, 75, 50, 0.15);
-    color: var(--text-color);
-}
-
-[data-theme="sepia"] .pagination-nav-button:hover {
-    background-color: rgba(95, 75, 50, 0.25);
-}
-
-/* Wide screens: Position buttons OUTSIDE text container */
-@media (min-width: 600px) {
-    .pagination-wrapper {
-        overflow: visible; /* Allow buttons to extend outside */
-        max-width: calc(100% - 140px); /* Reserve 70px on each side for buttons (60px offset + 10px margin) */
-        margin: 0 auto; /* Center the text container */
-    }
-
-    .pagination-nav-prev {
-        left: -60px; /* Outside left edge */
-    }
-
-    .pagination-nav-next {
-        right: -60px; /* Outside right edge */
-    }
-}
-
-/* Wider screens: Allow more width for text container */
+/* Comfortable reading width */
 @media (min-width: 900px) {
     .pagination-wrapper {
-        max-width: 800px; /* Comfortable reading width */
+        max-width: 800px;
     }
 }
 
-/* Mobile: Smaller button size */
-@media (max-width: 768px) {
+/* Mouse: full-height click strips in the margins beside the text, visible at
+   rest. The wrapper always leaves room for them, so they never cover text. */
+@media (hover: hover) and (pointer: fine) {
+    .pagination-wrapper {
+        --nav-strip: 64px;
+        --nav-gap: 8px;
+        overflow: visible;
+        max-width: min(800px, calc(100vw - 2 * (var(--nav-strip) + var(--nav-gap)) - 32px));
+        margin: 0 auto;
+    }
+
     .pagination-nav-button {
-        width: 40px;
-        height: 40px;
-        font-size: 28px;
+        top: 0;
+        bottom: 0;
+        width: var(--nav-strip);
+        height: auto;
+        margin: 0;
+        clip-path: none;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-color);
+        font-size: 36px;
+        font-weight: 300;
+        cursor: pointer;
+        opacity: 0.35;
+        transition: opacity 0.15s ease, background-color 0.15s ease;
+    }
+
+    .pagination-nav-button:hover,
+    .pagination-nav-button:focus-visible {
+        opacity: 1;
+        background-color: rgba(0, 0, 0, 0.04);
+    }
+
+    [data-theme="dark"] .pagination-nav-button:hover,
+    [data-theme="dark"] .pagination-nav-button:focus-visible {
+        background-color: rgba(255, 255, 255, 0.06);
     }
 
     .pagination-nav-prev {
-        left: 8px;
+        left: calc(-1 * (var(--nav-strip) + var(--nav-gap)));
     }
 
     .pagination-nav-next {
-        right: 8px;
+        right: calc(-1 * (var(--nav-strip) + var(--nav-gap)));
     }
 }
 
-/* Touch device adjustments - remove always-visible behavior */
-@media (hover: none) and (pointer: coarse) {
-    .pagination-nav-button {
-        /* Removed opacity: 0.6 - buttons now hidden by default */
+/* One-time page-turn hint (see showPageTurnHintOnce) */
+.page-turn-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 64px;
+    transform: translateX(-50%);
+    z-index: 25;
+    max-width: calc(100% - 32px);
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: var(--ink, #222);
+    color: var(--paper, #fff);
+    font-size: 0.9rem;
+    text-align: center;
+    pointer-events: none;
+    animation: page-turn-hint-in 0.3s ease-out;
+    transition: opacity 0.3s ease;
+}
+
+[data-theme="dark"] .page-turn-hint {
+    background: var(--reading-theme-dark-text);
+    color: var(--reading-theme-dark-bg);
+}
+
+.page-turn-hint-out {
+    opacity: 0;
+}
+
+@keyframes page-turn-hint-in {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+}
+
+/* Touch: the page slides a little and back, twice, to show it swipes. */
+.hint-nudge .pagination-page-container {
+    animation: page-turn-hint-nudge 1.4s ease-in-out 0.4s 2;
+}
+
+@keyframes page-turn-hint-nudge {
+    0%, 60%, 100% { transform: translateX(0); }
+    30% { transform: translateX(-32px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hint-nudge .pagination-page-container,
+    .page-turn-hint {
+        animation: none;
     }
+}
+
+/* Keep a sideways trackpad swipe from becoming browser back/forward. */
+html.pagination-active {
+    overscroll-behavior-x: none;
 }
 
 /* Ensure pagination content inherits theme styles */

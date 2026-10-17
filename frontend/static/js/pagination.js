@@ -34,10 +34,17 @@ export const paginationMixin = {
                 return;
             }
 
-            if (e.key === 'ArrowLeft') {
+            // Space on a focused control should activate that control.
+            if (e.key === ' ' && e.target.closest?.('button, a, select, summary')) {
+                return;
+            }
+
+            const back = e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey);
+            const forward = e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey);
+            if (back) {
                 e.preventDefault();
                 this.navigateToPreviousPage();
-            } else if (e.key === 'ArrowRight') {
+            } else if (forward) {
                 e.preventDefault();
                 this.navigateToNextPage();
             }
@@ -65,14 +72,16 @@ export const paginationMixin = {
             if (this.pagination.totalPages > 0) {
                 e.preventDefault();
 
+                // A sideways trackpad swipe counts like the wheel: swipe left
+                // (deltaX > 0) = next page, like scrolling down.
+                const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+
                 // Debounce rapid scroll events
                 clearTimeout(this.pagination.wheelTimeout);
                 this.pagination.wheelTimeout = setTimeout(() => {
-                    if (e.deltaY > 0) {
-                        // Scrolling down = next page
+                    if (delta > 0) {
                         this.navigateToNextPage();
-                    } else if (e.deltaY < 0) {
-                        // Scrolling up = previous page
+                    } else if (delta < 0) {
                         this.navigateToPreviousPage();
                     }
                 }, 100);
@@ -177,6 +186,8 @@ export const paginationMixin = {
 
         // Setup touch gestures
         this.setupTouchGestures(paginationWrapper);
+
+        this.showPageTurnHintOnce();
 
         // Check if we should go to last page (when navigating from next chapter)
         if (this.pagination.shouldGoToLastPage) {
@@ -727,8 +738,8 @@ export const paginationMixin = {
         const existingZones = wrapperElement.querySelectorAll('.pagination-nav-zone, .pagination-nav-button');
         existingZones.forEach(zone => zone.remove());
 
-        // Navigation zones removed to enable text selection
-        // Only create visible navigation buttons
+        // Mouse: these are the margin click strips. Touch: visually hidden
+        // (swipe turns pages) and kept for screen readers. See style.css.
         const prevButton = document.createElement('button');
         prevButton.className = 'pagination-nav-button pagination-nav-prev';
         prevButton.innerHTML = '‹';
@@ -745,50 +756,6 @@ export const paginationMixin = {
         wrapperElement.appendChild(prevButton);
         wrapperElement.appendChild(nextButton);
 
-        // Auto-hide timer for mobile/touch devices
-        let buttonHideTimer = null;
-
-        const showButtonsTemporarily = () => {
-            wrapperElement.classList.add('buttons-visible');
-
-            // Clear existing timer
-            if (buttonHideTimer) {
-                clearTimeout(buttonHideTimer);
-            }
-
-            // Hide after 1 second
-            buttonHideTimer = setTimeout(() => {
-                wrapperElement.classList.remove('buttons-visible');
-            }, 1000);
-        };
-
-        // Show buttons on touch (mobile)
-        wrapperElement.addEventListener('touchstart', (e) => {
-            // Don't trigger if touching a button directly
-            if (!e.target.classList.contains('pagination-nav-button')) {
-                showButtonsTemporarily();
-            }
-        }, { passive: true });
-
-        // Show buttons on click (fallback for devices without hover)
-        wrapperElement.addEventListener('click', (e) => {
-            // Only trigger on wrapper or content click, not button clicks
-            if (!e.target.classList.contains('pagination-nav-button')) {
-                showButtonsTemporarily();
-            }
-        });
-
-        // Show buttons on hover (desktop) - also uses 5s auto-hide timer
-        wrapperElement.addEventListener('mouseenter', (e) => {
-            showButtonsTemporarily();
-        });
-
-        // Store timer reference for cleanup
-        if (!this.pagination.buttonTimers) {
-            this.pagination.buttonTimers = [];
-        }
-        this.pagination.buttonTimers.push(buttonHideTimer);
-
         // Update button visibility
         this.updateNavigationButtons();
     },
@@ -797,37 +764,104 @@ export const paginationMixin = {
      * Setup touch gestures for mobile navigation
      */
     setupTouchGestures(wrapperElement) {
-        wrapperElement.addEventListener('touchstart', (e) => {
-            this.pagination.touchStartX = e.touches[0].clientX;
-            this.pagination.touchStartY = e.touches[0].clientY;
-        }, { passive: true });
+        // The page follows the finger; on release it turns (a long drag or a
+        // quick flick) or snaps back. Where there is no page to turn to, the
+        // drag meets resistance.
+        let drag = null;
+        const pageEl = () => wrapperElement.querySelector('.pagination-page-container');
+        const slide = (x, ms) => {
+            const el = pageEl();
+            if (!el) return;
+            el.style.transition = ms ? `transform ${ms}ms ease-out` : 'none';
+            el.style.transform = x ? `translateX(${x}px)` : '';
+        };
 
-        wrapperElement.addEventListener('touchend', (e) => {
-            if (!this.pagination.touchStartX || !this.pagination.touchStartY) {
+        wrapperElement.addEventListener('touchstart', (e) => {
+            const selection = window.getSelection();
+            if (e.touches.length !== 1 || this.pagination.isNavigating || (selection && !selection.isCollapsed)) {
+                drag = null;
                 return;
             }
-
-            const touchEndX = e.changedTouches[0].clientX;
-            const touchEndY = e.changedTouches[0].clientY;
-
-            const deltaX = touchEndX - this.pagination.touchStartX;
-            const deltaY = touchEndY - this.pagination.touchStartY;
-
-            // Only trigger if horizontal swipe is more significant than vertical
-            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-                if (deltaX > 0) {
-                    // Swipe right - previous page
-                    this.navigateToPreviousPage();
-                } else {
-                    // Swipe left - next page
-                    this.navigateToNextPage();
-                }
-            }
-
-            // Reset touch positions
-            this.pagination.touchStartX = 0;
-            this.pagination.touchStartY = 0;
+            drag = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp, axis: null };
         }, { passive: true });
+
+        wrapperElement.addEventListener('touchmove', (e) => {
+            if (!drag || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - drag.x;
+            const dy = e.touches[0].clientY - drag.y;
+            if (!drag.axis && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+                drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+            }
+            if (drag.axis !== 'x') return;
+            const { hasPrevious, hasNext } = this.pageTurnAvailability();
+            const blocked = dx > 0 ? !hasPrevious : !hasNext;
+            slide(blocked ? dx / 3 : dx, 0);
+        }, { passive: true });
+
+        const release = (e) => {
+            const current = drag;
+            drag = null;
+            if (!current || current.axis !== 'x') return;
+            const dx = e.changedTouches[0].clientX - current.x;
+            const elapsed = Math.max(1, e.timeStamp - current.t);
+            const width = wrapperElement.clientWidth;
+            const flick = Math.abs(dx) > 30 && Math.abs(dx) / elapsed > 0.5;
+            const forward = dx < 0;
+            const { hasPrevious, hasNext } = this.pageTurnAvailability();
+            const canTurn = forward ? hasNext : hasPrevious;
+            if (e.type === 'touchend' && canTurn && (Math.abs(dx) > width * 0.25 || flick)) {
+                slide(forward ? -width : width, 150);
+                setTimeout(() => {
+                    slide(0, 0);
+                    if (forward) this.navigateToNextPage();
+                    else this.navigateToPreviousPage();
+                }, 150);
+            } else {
+                slide(0, 200);
+            }
+        };
+        wrapperElement.addEventListener('touchend', release, { passive: true });
+        wrapperElement.addEventListener('touchcancel', release, { passive: true });
+    },
+
+    /**
+     * First time only: tell a mouse reader about the margins, wheel and keys,
+     * or show a touch reader that the page swipes (label plus a nudge).
+     */
+    async showPageTurnHintOnce() {
+        if (this.pagination.hintShown) return;
+        this.pagination.hintShown = true;
+        await window.authModule?.initAuth?.();
+        // The wrapper may have been rebuilt (resize, font change) meanwhile.
+        const wrapperElement = this.pagination.activeWrapper;
+        const mouse = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        const key = mouse ? 'reader_nav_desktop' : 'reader_swipe_mobile';
+        if (!window.authModule || window.authModule.hintSeen(key) || !wrapperElement?.isConnected) return;
+        window.authModule.markHintSeen(key);
+
+        const hint = document.createElement('div');
+        hint.className = 'page-turn-hint';
+        hint.setAttribute('role', 'status');
+        hint.textContent = mouse
+            ? 'Click the margins, scroll, or use ← → to turn pages'
+            : 'Swipe to turn pages';
+        // Attach to the reader section, which outlives a wrapper rebuild (the
+        // reader re-paginates shortly after opening). CSS nudges the page
+        // inside it.
+        const section = wrapperElement.closest('section') || document.body;
+        section.appendChild(hint);
+        if (!mouse) section.classList.add('hint-nudge');
+
+        const events = ['touchstart', 'mousedown', 'wheel', 'keydown'];
+        const dismiss = () => {
+            clearTimeout(timer);
+            events.forEach(type => document.removeEventListener(type, dismiss, true));
+            section.classList.remove('hint-nudge');
+            hint.classList.add('page-turn-hint-out');
+            setTimeout(() => hint.remove(), 300);
+        };
+        const timer = setTimeout(dismiss, 6000);
+        events.forEach(type => document.addEventListener(type, dismiss, { capture: true, passive: true }));
     },
 
     /**
@@ -973,33 +1007,35 @@ export const paginationMixin = {
         const prevButton = document.querySelector('.pagination-nav-prev');
         const nextButton = document.querySelector('.pagination-nav-next');
 
+        const { hasPrevious, hasNext } = this.pageTurnAvailability();
+        if (prevButton) {
+            prevButton.style.visibility = hasPrevious ? 'visible' : 'hidden';
+            prevButton.style.pointerEvents = hasPrevious ? 'auto' : 'none';
+        }
+        if (nextButton) {
+            nextButton.style.visibility = hasNext ? 'visible' : 'hidden';
+            nextButton.style.pointerEvents = hasNext ? 'auto' : 'none';
+        }
+    },
+
+    /**
+     * Whether there is a page (or a chapter/segment) before and after this one.
+     */
+    pageTurnAvailability() {
+        const notFirstPage = this.pagination.currentPage > 0;
+        const notLastPage = this.pagination.currentPage < this.pagination.totalPages - 1;
         if (this.continuousReader?.active) {
             const descriptor = this.continuousReader.manifest.segments.find(item => item.id === this.continuousReader.currentSegmentId);
-            const hasPrevious = this.pagination.currentPage > 0 || (descriptor && descriptor.ordinal > 0);
-            const hasNext = this.pagination.currentPage < this.pagination.totalPages - 1 ||
-                (descriptor && this.continuousReader.manifest.segments.some(item => item.mode === this.continuousReader.mode && item.ordinal === descriptor.ordinal + 1));
-            if (prevButton) { prevButton.style.visibility = hasPrevious ? 'visible' : 'hidden'; prevButton.style.pointerEvents = hasPrevious ? 'auto' : 'none'; }
-            if (nextButton) { nextButton.style.visibility = hasNext ? 'visible' : 'hidden'; nextButton.style.pointerEvents = hasNext ? 'auto' : 'none'; }
-            return;
+            return {
+                hasPrevious: notFirstPage || Boolean(descriptor && descriptor.ordinal > 0),
+                hasNext: notLastPage || Boolean(descriptor && this.continuousReader.manifest.segments.some(item => item.mode === this.continuousReader.mode && item.ordinal === descriptor.ordinal + 1)),
+            };
         }
-
-        // Check if there are previous/next chapters (handles preface at chapter 0)
-        const hasPrevChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter - 1);
-        const hasNextChapter = this.chapters.some(ch => ch.chapter_number === this.currentChapter + 1);
-
-        if (prevButton) {
-            // Show prev button if not on first page OR if there's a previous chapter
-            // Use visibility instead of display to preserve opacity-based auto-hide
-            prevButton.style.visibility = (this.pagination.currentPage > 0 || hasPrevChapter) ? 'visible' : 'hidden';
-            prevButton.style.pointerEvents = (this.pagination.currentPage > 0 || hasPrevChapter) ? 'auto' : 'none';
-        }
-
-        if (nextButton) {
-            // Show next button if not on last page OR if there's a next chapter
-            // Use visibility instead of display to preserve opacity-based auto-hide
-            nextButton.style.visibility = (this.pagination.currentPage < this.pagination.totalPages - 1 || hasNextChapter) ? 'visible' : 'hidden';
-            nextButton.style.pointerEvents = (this.pagination.currentPage < this.pagination.totalPages - 1 || hasNextChapter) ? 'auto' : 'none';
-        }
+        // Previous/next chapters (handles preface at chapter 0)
+        return {
+            hasPrevious: notFirstPage || this.chapters.some(ch => ch.chapter_number === this.currentChapter - 1),
+            hasNext: notLastPage || this.chapters.some(ch => ch.chapter_number === this.currentChapter + 1),
+        };
     },
 
     /**
@@ -1164,14 +1200,6 @@ export const paginationMixin = {
         this.pagination.totalPages = 0;
         this.pagination.pages = [];
         this.pagination.containerHeight = 0;
-
-        // Clear button auto-hide timers
-        if (this.pagination.buttonTimers && this.pagination.buttonTimers.length > 0) {
-            this.pagination.buttonTimers.forEach(timer => {
-                if (timer) clearTimeout(timer);
-            });
-            this.pagination.buttonTimers = [];
-        }
 
         // Clear stored original content when switching chapters
         // (but keep it when just switching view modes)

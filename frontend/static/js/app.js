@@ -84,10 +84,7 @@ class SummraApp {
             pages: [], // Array of page content
             containerHeight: 0,
             isNavigating: false, // Prevent rapid page changes
-            touchStartX: 0,
-            touchStartY: 0,
-            currentViewMode: 'original', // Track current view mode for pagination
-            buttonTimers: [] // Store timer references for cleanup
+            currentViewMode: 'original' // Track current view mode for pagination
         };
 
         // Centralized list of ALL content sections (single source of truth)

@@ -1,5 +1,53 @@
 # Summra Work Log
 
+## 2026-10-17: Reader page-turn controls: mouse first on web, swipe first on mobile (done locally, not committed or deployed)
+
+User asked for better left/right navigation. On mobile the arrow circles flashed over the text on every touch; on web there was no sideways trackpad swipe and the arrows faded 1s after the mouse entered.
+
+Agreed plan (controls chosen by input device, `(hover: hover) and (pointer: fine)` vs touch, not by width):
+1. Web: full-height click strips in the margins beside the text, faint at rest and full on hover, never over text (a minimum margin is kept on narrow windows). Scroll wheel unchanged; add sideways trackpad swipe, Space/Shift+Space, PageUp/PageDown.
+2. Mobile: no visible buttons and no flash on touch; the buttons stay for screen readers only.
+3. Mobile: the page follows the finger and snaps forward/back.
+4. A once-per-account hint (`user_hint_seen` table, keys `reader_swipe_mobile` and `reader_nav_desktop`); signed-out readers use localStorage.
+
+What changed:
+- `pagination.js`:
+  - The nav buttons have no auto-hide timers or flash-on-touch any more.
+  - The wheel handler uses the dominant axis, so a sideways trackpad swipe works like the wheel.
+  - New keys: Space/Shift+Space and PageUp/PageDown. Space is ignored when a button has focus.
+  - New `pageTurnAvailability()` (shared by the buttons and the swipe).
+  - `setupTouchGestures` now moves the page with the finger: it turns past 25% of the width or on a flick, otherwise snaps back, with resistance at the book's ends.
+  - New `showPageTurnHintOnce()`.
+- `style.css`:
+  - Touch: the buttons are hidden at 1px (kept for screen readers).
+  - Mouse: full-height 64px margin strips, and the text column always leaves room for them.
+  - `overscroll-behavior-x: none` stops a trackpad swipe from going back/forward in the browser.
+  - Hint pill and nudge styles, with a dark-theme pill and reduced-motion support.
+- `auth.js`: new `hintSeen` / `markHintSeen`. A hint is seen if the account or this browser has seen it.
+- Backend:
+  - New `user_hint_seen` table and `get_seen_hints` / `mark_hint_seen` in `user_models.py`.
+  - New `POST /api/hints/<key>/seen` in `progress_routes.py` (login required, 400 for unknown keys).
+  - `/api/auth/check` returns `hints_seen`.
+- app.min.js rebuilt. PRD and ERD navigation sections rewritten.
+
+Bug found while testing: the reader rebuilds its page wrapper about 250ms after opening (and on resize). A hint attached to the wrapper vanished about 40% of the time.
+- Fix: the hint attaches to the reader section, and the nudge is a class on the section that targets the page with a descendant selector.
+- Two test scenarios reproduce it (a rebuild during the sign-in check, and one after the hint shows). Both failed before the fix.
+
+Tests (each failed first for the missing behavior):
+- New `tests/e2e/reader_nav_mouse.mjs` (36 checks), `reader_nav_touch.mjs` (14), `reader_nav_hint.mjs` (14; 8 runs in a row clean) and `tests/test_user_hints.py` (6).
+- The touch test's button checks were confirmed failing on the pre-change code with `git stash`.
+- One test parameter was mine and inconsistent with the agreed 25% rule (a 120px "short" drag is 31% of 390px), so I changed it to 80px.
+
+Regression:
+- pytest 732 passed.
+- Reader e2e suite, smoke and side-by-side tests pass.
+- Pre-existing failures, also failing on the pre-change code: `chapter_view_default.mjs` (legacy chapter page default mode) and `sxs_font_other_views.mjs` (hardcoded port 5004).
+- Not tested on a real iPhone: Safari's own edge-swipe and text-selection behavior still need a check on the device.
+
+Note: the PRD's old "page turns must be instant (no animations)" rule now applies to mouse and keyboard only. A touch swipe finishes with a 150ms slide.
+- Deploy needs a gunicorn restart (backend and template-adjacent changes). The new table is created by `UserDatabase.init_db` on boot.
+
 ## 2026-10-17: Reader text hidden under the toolbar on iPhone (deployed)
 
 User report (iPhone Safari, Iliad Introduction): the top lines of the page sat under the reader toolbar, with an empty band above the footer. This is the same mechanism as the 2026-05-31 fix for the old chapter page (the `body { min-height: 100svh }` note in style.css), brought back by the continuous reader. The document had scroll slack:

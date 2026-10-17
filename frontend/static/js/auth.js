@@ -4,6 +4,7 @@ const API_BASE = (window.APP_BASE_PATH || '') + '/api';
 const READER_DB = 'summra-reader-v2';
 let currentUser = null;
 let wrongAccountEmail = null;
+let seenHints = new Set();
 let authInitializationPromise = null;
 let readerDbPromise = null;
 // A mutation only needs a stable identity for the lifetime of this tab (the
@@ -167,7 +168,22 @@ async function checkAuthStatus() {
         const data = await response.json();
         wrongAccountEmail = null;
         currentUser = data.authenticated ? data.user : null;
+        seenHints = new Set(data.authenticated ? data.hints_seen || [] : []);
     } catch (_) { /* anonymous reading stays available; no progress persistence without an account */ }
+}
+
+// One-time hints: seen if this account (any device) or this browser has seen it.
+function hintSeen(key) {
+    if (seenHints.has(key)) return true;
+    try { return localStorage.getItem(`summra-hint-${key}`) === '1'; } catch (_) { return false; }
+}
+
+function markHintSeen(key) {
+    seenHints.add(key);
+    try { localStorage.setItem(`summra-hint-${key}`, '1'); } catch (_) { /* private mode: once per page load */ }
+    if (currentUser) {
+        fetch(`${API_BASE}/hints/${key}/seen`, { method: 'POST', credentials: 'include' }).catch(() => {});
+    }
 }
 
 function setupAuthEventListeners() {
@@ -235,7 +251,7 @@ function updateAuthUI() {
 
 window.authModule = {
     initAuth, checkAuthStatus, currentUser: () => currentUser,
-    queueReaderMutation, getReaderState, getLibrary,
+    queueReaderMutation, getReaderState, getLibrary, hintSeen, markHintSeen,
     cacheReaderManifest, getCachedReaderManifest, cacheReaderSegment, getCachedReaderSegment,
     // Legacy chapter pages can remain viewable while their routes redirect to
     // the continuous reader. They intentionally no longer persist v1 data.
