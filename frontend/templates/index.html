@@ -67,7 +67,7 @@
     </script>
     {% endif %}
 </head>
-<body{% if initial_data and initial_data.type in ['chapter', 'medium', 'reader'] %} class="on-chapter-page"{% endif %}>
+<body{% if initial_data and initial_data.type in ['chapter', 'medium', 'reader'] %} class="on-chapter-page{% if initial_data.type in ['chapter', 'reader'] %} on-reader-page{% endif %}"{% endif %}>
     <!-- Environment configuration -->
     <script>
         window.__IS_DEVELOPMENT__ = {{ 'true' if is_development else 'false' }};

@@ -4279,7 +4279,12 @@ body.pagination-active {
 
 /* Focused reader chrome: a quiet paper toolbar in the light theme (matching
    the site header); dark and sepia themes give it their own colours below. */
-.continuous-reader-section { --reader-chrome-height: 59px; min-height: 100vh; padding-top: var(--reader-chrome-height); }
+/* The reader's document must not scroll: the toolbar and footer are fixed,
+   so any scroll slides the page's first lines under the toolbar. 100svh, not
+   100vh (iOS's 100vh is the large viewport; see the body note), and no
+   .main-content bottom padding below the reader. */
+.continuous-reader-section { --reader-chrome-height: 59px; min-height: 100svh; padding-top: var(--reader-chrome-height); }
+body.on-reader-page .main-content { padding-bottom: 0; }
 .continuous-reader-chrome { position: fixed; z-index: 1000; top: 0; left: 0; right: 0; height: var(--reader-chrome-height); min-height: var(--reader-chrome-height); display: flex; align-items: center; gap: 1rem; padding: 10px 18px; box-sizing: border-box; border-bottom: 1px solid var(--rule); background: var(--paper); color: var(--ink); }
 .reader-toolbar-left { min-width: 0; flex: 1 1 0; display: flex; align-items: center; gap: 12px; }
 .reader-back-btn { flex: 0 0 auto; border: 1px solid var(--rule-strong); border-radius: 7px; background: transparent; color: inherit; padding: 7px 13px; font-size: 1rem; line-height: 1; cursor: pointer; }
