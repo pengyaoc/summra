@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 
 
 VALID_MODES = {'summary', 'original', 'plain', 'side_by_side'}
+# One-time UI hints remembered per account (shown once across devices).
+VALID_HINTS = {'reader_swipe_mobile', 'reader_nav_desktop'}
 VALID_CAUSES = {
     'page_turn', 'mode_exit', 'toc', 'hidden', 'pagehide', 'navigation',
     'completion', 'manual_unfinish',
@@ -129,6 +131,15 @@ class UserDatabase:
                 )
             ''')
             cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_hint_seen (
+                    user_id INTEGER NOT NULL,
+                    hint_key TEXT NOT NULL,
+                    seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, hint_key),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            ''')
+            cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_book_reading_library
                 ON book_reading_state(user_id, status, last_meaningful_read_at DESC)
             ''')
@@ -159,6 +170,26 @@ class UserDatabase:
                     ON CONFLICT(email) DO UPDATE SET last_login = CURRENT_TIMESTAMP
                 ''', (email,))
             return conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()['id']
+        finally:
+            conn.close()
+
+    def get_seen_hints(self, user_id: int) -> List[str]:
+        conn = self.get_connection()
+        try:
+            rows = conn.execute(
+                'SELECT hint_key FROM user_hint_seen WHERE user_id = ? ORDER BY hint_key', (user_id,)
+            ).fetchall()
+            return [row['hint_key'] for row in rows]
+        finally:
+            conn.close()
+
+    def mark_hint_seen(self, user_id: int, hint_key: str) -> None:
+        conn = self.get_connection()
+        try:
+            with conn:
+                conn.execute(
+                    'INSERT OR IGNORE INTO user_hint_seen (user_id, hint_key) VALUES (?, ?)', (user_id, hint_key)
+                )
         finally:
             conn.close()
 

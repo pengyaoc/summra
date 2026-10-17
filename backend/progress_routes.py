@@ -6,8 +6,10 @@ from flask import Blueprint, g, jsonify, request
 
 try:
     from .pchauth.flask_adapter import login_required
+    from .user_models import VALID_HINTS
 except ImportError:
     from backend.pchauth.flask_adapter import login_required
+    from backend.user_models import VALID_HINTS
 
 
 user_db = None
@@ -146,6 +148,16 @@ def library_cards(user_id):
         }
         cards['finished' if state['status'] == 'finished' else 'continue_reading'].append(card)
     return cards
+
+
+@progress_bp.route('/hints/<hint_key>/seen', methods=['POST'])
+@login_required
+def mark_hint_seen(hint_key):
+    """Remember that this account has seen a one-time hint (any device)."""
+    if hint_key not in VALID_HINTS:
+        return jsonify({'error': 'Unknown hint'}), 400
+    user_db.mark_hint_seen(g.user_id, hint_key)
+    return jsonify({'success': True})
 
 
 # Retained only as a harmless auth-route probe used by existing integration

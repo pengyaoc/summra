@@ -10122,37 +10122,38 @@ Our implementation compared to industry standards:
 - **CSS columns:** Browser-dependent, cross-platform inconsistencies
 - **Advantage:** More precise word-boundary control, consistent behavior, efficient performance
 
-### Navigation System
+### Navigation System (updated 2026-10-17)
 
-**Methods Supported:**
+All in `frontend/static/js/pagination.js`; styles in `style.css` next to `.pagination-nav-button`. Controls are chosen by input device with CSS media queries, not by width.
 
-1. **Tap Zones (Removed in v5.17)**
-   - Originally 30% left/right zones
-   - Removed due to blocking text selection
-   - Replaced with scroll-to-turn
+1. **Page-turn buttons** (`setupNavigationZones`). Two `<button>`s (`.pagination-nav-prev` / `.pagination-nav-next`) appended to the wrapper.
+   - Default (touch): visually hidden with `clip-path: inset(50%)` at 1px, kept for screen readers.
+   - `@media (hover: hover) and (pointer: fine)`: full-height 64px click strips placed 8px outside the wrapper (`--nav-strip`, `--nav-gap`). The wrapper's `max-width: min(800px, 100vw - 2 × (strip + gap) - 32px)` always leaves room, so the strips never overlap text. Opacity .35 at rest, 1 on hover. No auto-hide timers.
+   - Visibility at the book's start/end comes from `pageTurnAvailability()`.
 
-2. **Scroll-to-Turn** (Added after layout redesign)
-   - Location: `app.js` lines 4438-4465
-   - Intercepts wheel events with `preventDefault()`
-   - 100ms debounce prevents rapid page flipping
-   - Scroll down → next page, scroll up → previous page
+2. **`pageTurnAvailability()`** returns `{ hasPrevious, hasNext }`. It counts a page, or an adjacent segment (continuous reader) or chapter (legacy view). Used by `updateNavigationButtons()` and the swipe's edge resistance.
 
-3. **Keyboard Navigation**
-   - Arrow Right → next page
-   - Arrow Left → previous page
-   - Attached to document keydown event
+3. **Wheel and trackpad** (`setupPagination`). One `wheel` listener with `preventDefault()`. It uses the dominant axis (`|deltaX| > |deltaY|` → deltaX), so a sideways trackpad swipe turns pages like the wheel. A 100ms debounce gives one page per gesture, momentum included. `html.pagination-active { overscroll-behavior-x: none }` stops it from becoming browser back/forward.
 
-4. **On-Screen Buttons**
-   - Previous/Next buttons overlaid on content
-   - Fade in on desktop hover
-   - Always visible on mobile
-   - SVG chevron icons
+4. **Keyboard.** ←/PageUp/Shift+Space go back; →/PageDown/Space go forward. Space is ignored when focus is on a button, link, select or summary.
 
-5. **Swipe Gestures**
-   - Touch event listeners for mobile
-   - Swipe left → next page
-   - Swipe right → previous page
-   - Minimum swipe distance threshold
+5. **Swipe** (`setupTouchGestures`).
+   - `touchmove` locks the axis after 10px. On the horizontal axis it sets `translateX` on `.pagination-page-container`, at one third of the drag where `pageTurnAvailability()` says there is no page to turn to.
+   - Release turns the page past 25% of the wrapper width or on a flick (>30px at >0.5px/ms over the gesture). The turn slides 150ms out, resets, then calls `navigateToNext/PreviousPage()`. Otherwise it snaps back in 200ms.
+   - Ignored: multi-touch, drags starting with a text selection, and drags while `isNavigating`.
+
+6. **One-time hint** (`showPageTurnHintOnce`). Once per page load, after `authModule.initAuth()`.
+   - Picks the key `reader_nav_desktop` (mouse) or `reader_swipe_mobile` (touch).
+   - Shows a `.page-turn-hint` pill; touch also adds `.hint-nudge` (a CSS keyframe nudge, disabled under reduced motion).
+   - It calls `authModule.markHintSeen(key)` as soon as it shows.
+   - The first touchstart/mousedown/wheel/keydown, or 6s, dismisses it.
+
+**Hint storage.** `auth.js` exposes `hintSeen(key)` / `markHintSeen(key)`.
+- Seen means the account's `hints_seen` (from `/api/auth/check`) or `localStorage['summra-hint-<key>']`.
+- Marking writes localStorage and, when signed in, sends `POST /api/hints/<key>/seen`.
+- Server side: table `user_hint_seen(user_id, hint_key, seen_at, PK(user_id, hint_key))` in the user DB (`backend/user_models.py`, keys limited to `VALID_HINTS`). The route lives in `progress_routes.py` (`login_required`, 400 for unknown keys). `whoami.check` returns `hints_seen` for signed-in users.
+
+**Tests:** `tests/e2e/reader_nav_mouse.mjs`, `reader_nav_touch.mjs`, `reader_nav_hint.mjs`; `tests/test_user_hints.py`.
 
 ### Font Size Integration (Critical Fix - v5.3)
 

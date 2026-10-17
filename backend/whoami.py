@@ -18,4 +18,4 @@ def check():
     user = user_db.get_user_by_id(g.user_id)
     if user is None:
         return jsonify({'authenticated': False}), 200
-    return jsonify({'authenticated': True, 'user': user}), 200
+    return jsonify({'authenticated': True, 'user': user, 'hints_seen': user_db.get_seen_hints(g.user_id)}), 200

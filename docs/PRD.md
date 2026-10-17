@@ -1940,27 +1940,30 @@ Transform chapter reading from traditional scroll-based navigation to a page-bas
 - **Side-by-side splits (2026-10-16):** When an Original/Plain English pair doesn't fit, each column fills the page on its own and continues on the next page; the shorter column finishes sooner and leaves its later cells empty. No column stops early above blank space. Italics survive the split.
 - **Verse (2026-10-16):** Poetry books (Paradise Lost) pair a verse passage of about 20 lines with one Plain English paragraph. The original keeps its line breaks, and pages break between lines, never mid-line.
 
-#### Navigation Methods (All Supported)
-1. **Scroll-to-Turn** (Desktop)
-   - Mouse wheel scroll down → next page
-   - Mouse wheel scroll up → previous page
-   - Trackpad scroll gestures supported
-   - 100ms debounce to prevent rapid page flipping
+#### Navigation Methods (updated 2026-10-17)
+Controls depend on the input device, not the screen width: mouse is first class on web, swipe is first class on touch.
 
-2. **Swipe Gestures** (Mobile)
-   - Swipe left → next page
-   - Swipe right → previous page
-   - Minimum swipe distance threshold
+1. **Mouse** (`(hover: hover) and (pointer: fine)`)
+   - Full-height click strips in the margins beside the text, with a ‹ / › chevron. Faint at rest, full on hover. Never over the text: the text column always leaves room for them, even in a narrow window.
+   - Mouse wheel down → next page, up → previous page (100ms debounce, one page per gesture)
+   - Sideways trackpad swipe: left → next page, right → previous page; it can't trigger browser back/forward
+   - Page turns are instant
 
-3. **Keyboard Shortcuts**
-   - Arrow Right → next page
-   - Arrow Left → previous page
+2. **Swipe** (touch)
+   - No visible buttons; nothing covers the text. The buttons stay in the page for screen readers.
+   - The page follows the finger. On release it turns after a drag past 25% of the width or a quick flick (>30px at >0.5px/ms), otherwise it snaps back. The turn finishes with a 150ms slide.
+   - Where there is no page to turn to (start or end of the book), the drag meets resistance and snaps back.
+   - Mostly vertical drags and drags that start with text selected are ignored.
 
-4. **On-Screen Buttons**
-   - Previous/Next buttons overlaid on content
-   - Fade in on hover (desktop)
-   - Always visible (mobile)
-   - SVG chevron icons
+3. **Keyboard**
+   - Arrow Right, PageDown, Space → next page
+   - Arrow Left, PageUp, Shift+Space → previous page
+   - Space on a focused button activates the button instead
+
+4. **One-time hint**
+   - Touch: "Swipe to turn pages", and the page nudges sideways twice. Mouse: "Click the margins, scroll, or use ← → to turn pages".
+   - Shown once. Signed in: once per account across all devices. Signed out: once per browser. Recorded as soon as it shows.
+   - Dismissed by the first touch, click, wheel or key, or after 6 seconds.
 
 #### Progress Display
 - **Format:** "Page X of Y • Z%"
@@ -2019,14 +2022,16 @@ Transform chapter reading from traditional scroll-based navigation to a page-bas
 - Pages must fit exactly in viewport (no scrolling)
 - Text selection must work everywhere (no blocking zones)
 - Progress indicator updates instantly on page change
-- Page turns must be instant (no animations as per user preference)
+- Mouse and keyboard page turns are instant; a touch swipe follows the finger and finishes with a 150ms slide (2026-10-17)
 - Reading settings must apply immediately to paginated content
 - Visual buttons must be accessible but not intrusive
 
 **Acceptance Criteria:**
 - [✅] Pages calculated based on viewport height
 - [✅] Content breaks only at paragraph boundaries (no mid-sentence splits)
-- [✅] All 4 navigation methods work (scroll, swipe, keyboard, buttons)
+- [✅] All navigation methods work (mouse strips, wheel, trackpad swipe, touch swipe, keyboard)
+- [✅] No page-turn control covers the text on mobile or web (2026-10-17)
+- [✅] Page-turn hint shown once per account on mobile and on web (2026-10-17)
 - [✅] Progress displayed as "Page X of Y • Z%"
 - [✅] Page transitions are instant (no animations)
 - [✅] Font size controls work with pagination (v5.3 fix)
