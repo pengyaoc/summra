@@ -1,6 +1,10 @@
 # Summra Work Log
 
-## 2026-10-16: Reader: chapters start a new page; Side by Side shows chapter headings (done locally)
+## 2026-10-17: Reader settings icon: "Aa" instead of the gear (deployed)
+
+User: the gear icon in the reading view looked odd. It was a hand-traced gear whose teeth blurred into a blob at 20px. Replaced it with Lucide's `a-large-small` "Aa" glyph (ISC licence): the usual reading-settings icon in e-readers, drawn in the same 2px stroke as the Contents icon. Template-only change (`frontend/templates/index.html`). Test: `redesign_reader.mjs` checks for the Aa paths and the label; it failed before the change, and all 16 checks pass after. Checked in light and dark screenshots.
+
+## 2026-10-16: Reader: chapters start a new page; Side by Side shows chapter headings (deployed)
 
 User asked to fix the two behaviours I had reported as by design after the Iliad work.
 
@@ -62,7 +66,16 @@ Two reader behaviours I checked and left alone (by design, documented):
 - switching modes keeps the first-on-page position, so switching to side by side from the top of a Book shows the end of the previous one;
 - side by side renders no chapter headings, in any book.
 
-Process doc for other books: `docs/agent_plain_english_workflow.md`. Not deployed. Prod needs Book 66's `chapters` rows (`chapter_text` and `modern_english_text`) copied, then `ensure_reader_content(66)` (deploy step 4).
+Process doc for other books: `docs/agent_plain_english_workflow.md`.
+
+Deployed 2026-10-17 together with the reader fix (commit `7543bb4`): pushed to main and fast-forwarded the VM. No restart; backend Python was unchanged.
+- Database: only Book 66's 25 `chapters` rows. The VM rows first hashed identical to the local pre-change backup (`6f039487…`).
+- VM backup: `/opt/summra/data/database.db.bak-pre-iliad-plain-20261017-065722` (SHA-256 `b209fb22…571e`).
+- The rows were updated in one transaction as `summra` and verified equal to local. `ensure_reader_content(66)` published version 4: 1,524 units in original, plain and side by side.
+- Public `/`, `/books`, `/api/books`, `/books/the-iliad` and `/read` return 200. The served app.min.js contains the fix.
+- Against production, `iliad_side_by_side.mjs` passes 14/14 and `reader_chapter_starts_page.mjs` 10/10.
+
+User feedback after review: Haiku left too many gaps. From now on a Sonnet subagent writes and a separate, fresh agent verifies (process doc and CLAUDE.md updated).
 
 ## 2026-10-16: Home page calmer below the hero (option A; deployed)
 
