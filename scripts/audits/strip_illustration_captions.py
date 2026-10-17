@@ -31,6 +31,10 @@ Trailing transcriber/publisher notes (anchored to end of chapter) matching:
   - 'Project Gutenberg', 'TRANSCRIBER'
 are also stripped.
 
+--tags-only removes just paragraphs starting with `[Illustration`, for
+books whose headings break the rules above (Pope's Iliad: `ARGUMENT`,
+`A. POPE`, `END OF THE ILIAD` have no terminal punctuation).
+
 Idempotent. No LLM calls. Safe to run before generate_modern_english.py.
 
 Usage:
@@ -127,14 +131,18 @@ def is_trailing_noise(p: str) -> bool:
     return any(s.startswith(prefix) for prefix in _TRAILING_NOISE_PREFIXES)
 
 
-def strip_captions(text: str) -> tuple[str, int, int]:
-    """Remove caption-like paragraphs and trailing transcriber notes.
+def strip_captions(text: str, tags_only: bool = False) -> tuple[str, int, int]:
+    """Remove caption-like paragraphs and trailing transcriber notes, or
+    with tags_only just `[Illustration...` paragraphs.
 
     Returns (new_text, n_captions_removed, n_trailing_removed).
     """
     if not text:
         return text, 0, 0
     paras = text.split(SEP)
+    if tags_only:
+        kept = [p for p in paras if not p.strip().startswith("[Illustration")]
+        return SEP.join(kept), len(paras) - len(kept), 0
 
     # Strip captions from anywhere
     kept = []
@@ -168,6 +176,8 @@ def main() -> int:
         help="Which column(s) to strip (default: chapter_text only — modern "
              "should already be clean since Gemini ignores captions).",
     )
+    ap.add_argument("--tags-only", action="store_true",
+                    help="Only remove paragraphs starting with '[Illustration'.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -200,7 +210,7 @@ def main() -> int:
         for col in cols:
             text = r[col] or ""
             before = len(text.split(SEP)) if text.strip() else 0
-            new_text, n_caps, n_trail = strip_captions(text)
+            new_text, n_caps, n_trail = strip_captions(text, args.tags_only)
             after = len(new_text.split(SEP)) if new_text.strip() else 0
             deltas.append(f"{before:>4}→{after:<4} ({n_caps:>2}/{n_trail:>2})")
             if (n_caps + n_trail) > 0 and new_text != text:

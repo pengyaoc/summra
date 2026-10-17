@@ -256,8 +256,9 @@ export const paginationMixin = {
             if (headersEl) {
                 sxsHeadersHTML = headersEl.outerHTML;
             }
-            // For side-by-side view: rows are the atomic blocks
-            blocks = Array.from(containerElement.querySelectorAll('.side-by-side-row, figure.reader-illustration'));
+            // For side-by-side view: rows are the atomic blocks, plus the
+            // full-width chapter heading and illustration.
+            blocks = Array.from(containerElement.querySelectorAll('h2.reader-chapter-heading, .side-by-side-row, figure.reader-illustration'));
             console.log('[calculatePages] Side-by-side mode, found blocks:', blocks.length,
                         'headers pulled out:', !!sxsHeadersHTML);
         } else {
@@ -277,6 +278,13 @@ export const paginationMixin = {
 
         // Get computed styles from the container being measured
         const computedStyle = window.getComputedStyle(containerElement);
+        // Computed line-height is in px; the live page inherits the unitless
+        // ratio, which scales with each element's font size. Measuring with
+        // px gave a 25.6px chapter heading a 28px line instead of 44.8px.
+        const lineHeightPx = parseFloat(computedStyle.lineHeight);
+        const fontSizePx = parseFloat(computedStyle.fontSize);
+        const measuringLineHeight = lineHeightPx && fontSizePx
+            ? String(lineHeightPx / fontSizePx) : computedStyle.lineHeight;
 
         // Create page container with EXACT same styles as the real container
         // This ensures scrollHeight measurements are accurate
@@ -304,7 +312,7 @@ export const paginationMixin = {
                 overflow: hidden;
                 font-family: ${computedStyle.fontFamily};
                 font-size: ${computedStyle.fontSize};
-                line-height: ${computedStyle.lineHeight};
+                line-height: ${measuringLineHeight};
                 padding: ${computedStyle.padding};
                 box-sizing: ${computedStyle.boxSizing};
             `;
@@ -345,6 +353,11 @@ export const paginationMixin = {
                     break;
                 }
                 const block = blocks[blockIndex];
+                // A chapter starts on a new page, as in a printed book. The
+                // reading position is a page's first paragraph, so a page that
+                // began with the previous chapter's end placed the reader (and
+                // a mode switch) in the previous chapter.
+                if (pageBlocks.length > 0 && block.matches?.('h2.reader-chapter-heading')) break;
                 const clone = block.cloneNode(true);
                 pageDiv.appendChild(clone);
 
@@ -416,15 +429,6 @@ export const paginationMixin = {
                 // No overflow - keep this block
                 pageBlocks.push(block.outerHTML);
                 blockIndex++;
-            }
-
-            // Keep a chapter heading with what follows it: a page never ends
-            // on one (its illustration or first paragraph would be on the
-            // next page). Left alone when the heading is the page's only block.
-            if (blockIndex < blocks.length && pageBlocks.length > 1
-                && pageBlocks[pageBlocks.length - 1].startsWith('<h2 class="reader-chapter-heading"')) {
-                pageBlocks.pop();
-                blockIndex--;
             }
 
             // Save page content

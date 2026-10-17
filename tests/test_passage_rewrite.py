@@ -40,3 +40,48 @@ def test_summary_language_fails():
 
 def test_empty_rewrite_fails():
     assert check_passages([VERSE], [""])
+
+
+def test_summary_phrase_present_in_original_passes():
+    original = "Homer is the poet of war, and the poet never tires of it."
+    plain = "Homer is the poet of war, and the poet never gets tired of it."
+    assert check_passages([original], [plain]) == []
+
+
+def test_chunks_respect_size_and_numbering():
+    from scripts.content.passage_rewrite import chunk_paragraphs
+    paras = ["a" * 40, "b" * 40, "c" * 40, "d" * 200]
+    assert chunk_paragraphs(paras, max_chars=100) == [(1, paras[:2]), (3, [paras[2]]), (4, [paras[3]])]
+    assert chunk_paragraphs([], max_chars=100) == []
+
+
+def test_chunk_prompt_uses_generator_rules():
+    from scripts.content.passage_rewrite import build_chunk_prompt
+    prompt = build_chunk_prompt("The Iliad", "Homer", "Book I", 5, ["First para.", "Second para."], "out/ch1/005.json")
+    assert "PARAGRAPH COUNT MUST MATCH EXACTLY" in prompt  # the Gemini generator's own rules
+    assert "[P5] First para.\n\n[P6] Second para." in prompt
+    assert '"start": 5' in prompt and "out/ch1/005.json" in prompt
+
+
+def test_verbatim_heading_without_terminator_passes():
+    assert check_passages(["A. POPE", VERSE], ["A. POPE", GOOD]) == []
+
+
+def test_review_pairs_format():
+    from scripts.content.passage_rewrite import format_pairs
+    out = format_pairs(["Orig one.", "Orig two."], ["Plain one.", "Plain two."])
+    assert out == ("### P1 (ratio 1.11)\nORIGINAL: Orig one.\nPLAIN: Plain one.\n\n"
+                   "### P2 (ratio 1.11)\nORIGINAL: Orig two.\nPLAIN: Plain two.\n")
+    assert "PLAIN: (missing)" in format_pairs(["Orig one."], [])
+
+
+def test_summary_phrase_used_elsewhere_in_chapter_passes():
+    originals = ["Homer is the poet of war.", "His fancy grows upon himself and others, and becomes on fire."]
+    plains = ["Homer is the poet of war.", "His fancy grows in the poet himself and others, and catches fire."]
+    assert check_passages(originals, plains) == []
+
+
+def test_terminator_inside_italics_passes():
+    original = "Numa owed his laws to the nymph, as the elegant pen made ideal: _Numa Pompilius._"
+    plain = "Numa owed his laws to the nymph, as an elegant writer imagined it: _Numa Pompilius._"
+    assert check_passages([original], [plain]) == []

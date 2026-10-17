@@ -10463,6 +10463,32 @@ side-by-side modes.
   sentence-terminator ending, per-passage ratio 0.5–1.3, chapter ratio 0.50–1.10, no summary language.
 - Tests: `tests/test_segment_verse_passages.py`, `tests/test_reader_verse_passages.py`,
   `tests/test_passage_rewrite.py`, `tests/e2e/sxs_row_split.mjs`.
+- Prose too (2026-10-16, The Iliad): `passage_rewrite.py` works on any blank-line paragraphs.
+  - `export --max-chars` (default 12000) writes one prompt per chunk built from
+    `ModernEnglishGenerator.build_single_chapter_prompt` (now a `@staticmethod`), plus `[P#]` labels and a JSON
+    output section. `chunk_paragraphs()` does the split.
+  - `review` writes original/Plain pairs (`format_pairs()`) for a Sonnet reviewer.
+  - Gate relaxations:
+    - a verbatim paragraph (heading) needs no terminator;
+    - `_` may follow a terminator (italics);
+    - a summary phrase passes when the chapter's original contains it.
+  - Original-side cleanup:
+    - `scripts/audits/strip_footnotes.py` removes `[n]` markers and a trailing `Footnotes` block;
+    - `strip_illustration_captions.py --tags-only` removes only `[Illustration…]` paragraphs.
+  - Process: `docs/agent_plain_english_workflow.md`.
+  - Tests: `tests/test_passage_rewrite.py` (15), `tests/test_strip_footnotes.py` (6),
+    `tests/test_strip_illustration_captions.py` (3), `tests/e2e/iliad_side_by_side.mjs`.
+- Chapters start a new page (2026-10-16). `calculatePages()` ends the page before every
+  `h2.reader-chapter-heading`. The reading position is a page's first paragraph
+  (`settleContinuousReaderMarker`, `onContinuousPageDisplayed`), so a page that began with the end of
+  chapter N-1 put the title bar, the saved place and any mode switch into the previous chapter.
+  - The old "keep a heading with what follows it" rule was removed: a heading is now always first on its page.
+  - Side by Side now paginates `h2.reader-chapter-heading` as a full-width block. Its selector used to take
+    only rows and illustrations, so headings were dropped in every book.
+  - The measuring page now gets the container's line-height as a unitless ratio, not the computed px.
+    Live text inherits the ratio, so a 25.6px heading has a 44.8px line; measured at 28px it came out
+    16.8px short and the page overflowed.
+  - Test: `tests/e2e/reader_chapter_starts_page.mjs`.
 
 **Reader storage: one copy of the text** (2026-10-16). This replaces the eight-table design described
 above (`reader_content_version`, `reader_mode_manifest`, `reader_structure_entry`, `reader_segment`,
