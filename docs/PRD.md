@@ -1951,7 +1951,9 @@ Controls depend on the input device, not the screen width: mouse is first class 
 
 2. **Swipe** (touch)
    - No visible buttons; nothing covers the text. The buttons stay in the page for screen readers.
-   - The page follows the finger. On release it turns after a drag past 25% of the width or a quick flick (>30px at >0.5px/ms), otherwise it snaps back. The turn finishes with a 150ms slide.
+   - Like Kindle, the page follows the finger with the neighboring page already rendered one screen width beside it; both slide together edge to edge across the screen.
+   - On release it turns after a drag past 25% of the width or a quick flick (>30px at >0.5px/ms), otherwise it snaps back. The turn finishes the slide in 120–300ms, depending on how far is left, and the page that slid in becomes the real page with no flash.
+   - At a section boundary (the next section isn't loaded yet) the neighbor is blank until the section loads. The current and next sections load together, so this is rare.
    - Where there is no page to turn to (start or end of the book), the drag meets resistance and snaps back.
    - Mostly vertical drags and drags that start with text selected are ignored.
 
@@ -2022,7 +2024,7 @@ Controls depend on the input device, not the screen width: mouse is first class 
 - Pages must fit exactly in viewport (no scrolling)
 - Text selection must work everywhere (no blocking zones)
 - Progress indicator updates instantly on page change
-- Mouse and keyboard page turns are instant; a touch swipe follows the finger and finishes with a 150ms slide (2026-10-17)
+- Mouse and keyboard page turns are instant; a touch swipe slides the current and neighboring page together and finishes in 120–300ms (2026-10-17)
 - Reading settings must apply immediately to paginated content
 - Visual buttons must be accessible but not intrusive
 
