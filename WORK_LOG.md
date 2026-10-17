@@ -1,6 +1,6 @@
 # Summra Work Log
 
-## 2026-10-16: Home page calmer below the hero (option A; done, local only)
+## 2026-10-16: Home page calmer below the hero (option A; deployed)
 
 User feedback: the hero is good, but below it the page changed background too often (dark hero, tan, paper, dark), and "Find a book at the right level" carried too much information (four cards, four explanation blocks, a footnote). I showed three mockups (A quiet paper, B level tabs on the shelf, C level strip) and the user picked A.
 
@@ -18,6 +18,8 @@ Follow-up, same day: fixed the four issues noticed above.
 Both card renderers changed together (`library_card()` in `_book_card.html` and `renderLibraryCards()` in reader.js), and I rebuilt app.min.js.
 
 Tests: new pytest `test_continue_card_without_progress_says_just_started`. New checks in `redesign_home.mjs`: card progress label, Just started, mode on the location line, no loose label, buttons aligned, back arrow hidden at the start and shown after scrolling, and reading time on its own line at 1280 and 375px. All failed first (I fixed the arrow check's threshold after it falsely passed at 30% opacity). 708 pytest pass; redesign_home (49), redesign_cards, redesign_discover, reader_progress, redesign_book_page, redesign_chrome and smoke on / /discover /library pass.
+
+Deployed 2026-10-16: commit `1061abe` pushed to main. On the VM I fast-forwarded and restarted the service (no backend code changed; I restarted only in case gunicorn had cached the templates). The service is active with no log errors. Public `/`, `/books`, `/api/books` and `/discover` return 200 in under 0.3s, and smoke passes against production. The home page has the new layout and Discover has the `#how-we-grade` panel.
 
 ## 2026-10-16: Single-copy reader storage (done locally)
 
