@@ -223,6 +223,8 @@ See `WORK_LOG.md` "Failed-to-parse list" for the canonical inventory of skipped 
 
 ## Plain English (Modern Translation) Workflow
 
+**Without Gemini:** to write Plain English with subagents, follow `docs/agent_plain_english_workflow.md`. A Sonnet subagent writes each chapter and a separate, fresh subagent verifies it; the writing rules come from the Gemini prompt. Never use Haiku as the writer.
+
 When generating or fixing the `chapters.modern_english_text` column, follow this 6-step process in order. Steps 2, 3, 4, and 6 are **mechanical** (no LLM cost); step 1 and step 5's regen path are paid Gemini calls — confirm cost discipline before running. **Target is EXACT paragraph match** (`orig - mod == 0`), not ±2 — paragraph boundaries are load-bearing for the side-by-side reading view.
 
 ### 1. Generate the plain-English version

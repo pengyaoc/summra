@@ -73,7 +73,8 @@ class ModernEnglishGenerator:
         self.model_name = model_name or config.PLAIN_TEXT_MODEL
         self.db = Database()
 
-    def build_single_chapter_prompt(self, book_title: str, book_author: str,
+    @staticmethod
+    def build_single_chapter_prompt(book_title: str, book_author: str,
                                     chapter_title: str, chapter_text: str) -> str:
         """Build the prompt for single chapter modern English translation
 

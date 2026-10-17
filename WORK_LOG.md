@@ -1,5 +1,69 @@
 # Summra Work Log
 
+## 2026-10-16: Reader: chapters start a new page; Side by Side shows chapter headings (done locally)
+
+User asked to fix the two behaviours I had reported as by design after the Iliad work.
+
+Root causes:
+1. **Wrong chapter after opening one, or after a mode switch.** Pagination packed chapters back to back, so the page holding chapter N's heading usually began with the end of chapter N-1. The reading position is the page's first paragraph. So opening Book II put the title bar on "Book I", and switching to Side by Side mapped a Book I (or Introduction) position, landing on the end of the previous Book. Journey to the Centre of the Earth had the same wrong title.
+2. **No chapter headings in Side by Side, in any book.** Its pagination selector took only `.side-by-side-row, figure.reader-illustration`, so the `h2.reader-chapter-heading` the renderer emits was dropped.
+
+Fix (`frontend/static/js/pagination.js`, app.min.js rebuilt):
+- The page ends before each chapter heading.
+- Side by Side paginates the heading.
+- The old keep-heading-with-next rule became dead code and was removed.
+
+Including headings exposed a latent measuring bug: the measuring page got the container's computed `line-height: 28px` while live text inherits the unitless 1.75. A 25.6px heading therefore measured 16.8px short, and Iliad Book I's Side by Side page overflowed by 7px. The measuring page now gets the ratio.
+
+Tests: new `tests/e2e/reader_chapter_starts_page.mjs` (10 checks): pages open with the heading, the title bar names the opened chapter (Iliad, Journey), a switch to Side by Side at Book I stays at Book I, Side by Side shows headings (Frankenstein), and paging from Book XIX starts Book XX on a new page. 9 of 10 failed before the fix; the 10th errored before. `iliad_side_by_side.mjs` now expects the heading, and its overflow check caught the line-height bug.
+
+A 30-page sweep of plain, original and side by side in three books found no overflow, no text-less page and no heading below text. Reader e2e: 13 of 15 pass. `chapter_header_hidden` and `sxs_font_other_views` fail identically with the change stashed, because they wait for the retired `#chapter-detail-section`. JS 31/31; pytest 724.
+
+## 2026-10-16: The Iliad (book 66) Plain English by Haiku subagents, Sonnet QC (done, local only)
+
+Goal (user): write the Iliad's Plain English with Haiku subagents instead of Gemini, using the generator's own prompt (`build_single_chapter_prompt` in `generate_modern_english.py`); quality-check with Sonnet subagents; make side-by-side work; then document the process in its own file for other books.
+
+State found: Pope's translation (pg6130), `is_poetry=0`, 25 chapters (0 = Introduction + Pope's Preface, 1–24 = Books). Paragraphs are separated by single `\n` (verse lines were flattened into one line per verse paragraph at ingest). There are 46 `[Illustration: ]` caption lines, inline footnote markers `[n]`, and all 300 endnotes appended to Book XXIV. No Plain English yet. Local DB backup: `data/database.pre-iliad-plain-20261016.db` (SHA-256 `3759746e…79d0`).
+
+Plan: (1) clean the original with the standard steps (reformat paragraphs, strip captions, strip editor footnotes); (2) export per-chunk prompts and have Haiku write one Plain English paragraph per original paragraph; (3) mechanical gate; (4) Sonnet QC per chapter; (5) apply, audit, verify side-by-side; (6) write the process doc.
+
+Direction from the user mid-task: follow the app's prose workflow, not the Paradise Lost verse-passage approach, and give the agents the instructions of the Gemini generator script. So the original stays as flattened paragraphs (`is_poetry` stays 0). The Haiku prompts are built by `ModernEnglishGenerator.build_single_chapter_prompt` (made a `@staticmethod`), with numbered `[P#]` paragraphs and a JSON output section added.
+
+**Cleanup (original side).**
+- `reformat_paragraphs.py` changed all 25 chapters to `\n\n` paragraphs.
+- New `scripts/audits/strip_footnotes.py` removed 300 `[n]` markers, plus 461 endnote paragraphs appended to Book XXIV.
+- New `strip_illustration_captions.py --tags-only` removed 71 `[Illustration: ]` lines. The default caption rules would also have deleted the headings `ARGUMENT`, `A. POPE`, `END OF THE ILIAD` and the Preface title.
+- Result: 1,524 paragraphs, 987K characters.
+
+**Writing.**
+- `passage_rewrite.py export` cut the chapters into 98 chunks of about 12K characters.
+- 26 Haiku agents (one per Book, two for the Introduction and Preface) wrote JSON per chunk and ran the gate.
+- The gate gained three relaxations, each test-first:
+  - a verbatim heading needs no terminator;
+  - `._` (italics) counts as a terminator;
+  - a summary phrase passes if the chapter's original uses it (the Preface says "the poet").
+
+**QC.**
+- The new `review` command pairs paragraphs for review. 26 Sonnet agents fixed 317 paragraphs, 5–22 per Book.
+- Most fixes were swapped speakers or agents, reversed meanings ("I doubt not" had become "I doubt that"; curses and counterfactuals inverted), wrong genealogy, invented details, and text the writer admitted it compressed.
+- Apostrophes were normalized to curly `’` (155 paragraphs).
+- The account's usage limit stopped the run once. Agents were resumed with SendMessage; nothing was lost.
+- Several reviewers shared a scratchpad `fix.py` and overwrote each other's. Their asserts failed before any write; I checked the fixes landed in the right chapters and found no duplicated paragraphs.
+
+**Result.**
+- `passage_rewrite.py apply`: all 25 chapters EXACT, ratios 94–107%.
+- Reader manifest: side by side has 1,524 units, equal to the original's.
+- New `tests/e2e/iliad_side_by_side.mjs` (14 checks) passes. It walks every segment (both sides present, Book I opens with ARGUMENT on both sides, ends with END OF THE ILIAD, no footnotes or tags) and opens `/read?mode=side_by_side&chapter=<Book I>` (paired rows, no gaps, no overflow, no console errors).
+- 40 consecutive pages show no clipping.
+- Smoke on `/books/the-iliad` and `/read` passes, as do `sxs_row_split`, `reader_opens_at_chapter`, `redesign_reader` and `sxs_page1_has_rows`.
+- pytest: 724 passed.
+
+Two reader behaviours I checked and left alone (by design, documented):
+- switching modes keeps the first-on-page position, so switching to side by side from the top of a Book shows the end of the previous one;
+- side by side renders no chapter headings, in any book.
+
+Process doc for other books: `docs/agent_plain_english_workflow.md`. Not deployed. Prod needs Book 66's `chapters` rows (`chapter_text` and `modern_english_text`) copied, then `ensure_reader_content(66)` (deploy step 4).
+
 ## 2026-10-16: Home page calmer below the hero (option A; deployed)
 
 User feedback: the hero is good, but below it the page changed background too often (dark hero, tan, paper, dark), and "Find a book at the right level" carried too much information (four cards, four explanation blocks, a footnote). I showed three mockups (A quiet paper, B level tabs on the shelf, C level strip) and the user picked A.
