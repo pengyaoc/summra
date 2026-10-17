@@ -40,6 +40,16 @@ expect("chrome keeps back · contents · settings", ["reader-back-button", "read
   .every((id) => chrome.buttons.includes(id)), JSON.stringify(chrome.buttons));
 expect("no mode toggle in the header (modes live in settings)", chrome.headerToggles === 0);
 
+// Reading settings uses the "Aa" text icon (as e-readers do), not a gear:
+// the old hand-traced gear blurred into a blob at 20px.
+const settingsIcon = await page.evaluate(() => {
+  const b = document.getElementById("reader-settings-button");
+  return { label: b.getAttribute("aria-label"), paths: [...b.querySelectorAll("svg path")].map((p) => p.getAttribute("d")) };
+});
+expect("settings button: Aa icon with an accessible label",
+  settingsIcon.label === "Reading settings" && settingsIcon.paths.length === 4
+  && settingsIcon.paths.includes("m3 16 4.5-9 4.5 9"), JSON.stringify(settingsIcon.paths.map((d) => d.slice(0, 20))));
+
 const heading = await page.evaluate(() => {
   const h = document.querySelector("#continuous-reader-content .reader-chapter-heading, #continuous-reader-content h2, #continuous-reader-content h1");
   return h && getComputedStyle(h).fontFamily;
