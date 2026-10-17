@@ -254,7 +254,12 @@ export const settingsMixin = {
         try {
             const font = localStorage.getItem('reading_font') || 'georgia';
             const fontSize = localStorage.getItem('reading_fontSize') || '16';
-            const theme = localStorage.getItem('reading_theme') || 'light';
+            let theme = localStorage.getItem('reading_theme') || 'light';
+            // Sepia was merged into Light (2026-10-17); move saved choices over.
+            if (theme === 'sepia') {
+                theme = 'light';
+                localStorage.setItem('reading_theme', theme);
+            }
 
             // Update UI to reflect saved preferences
             const fontBtn = document.querySelector(`.font-choice[data-font="${font}"]`);
