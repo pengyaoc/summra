@@ -1,5 +1,22 @@
 # Summra Work Log
 
+## 2026-10-17: Kindle-style swipe: the neighboring page slides in edge to edge (branch `kindle-swipe`, not merged or deployed)
+
+User feedback, with a Kindle screenshot: during a swipe the next page should already be rendered and slide in edge to edge. Before this, only the current page moved, with a blank area behind it, and it was clipped at the text column's edge.
+
+What changed:
+- `setupTouchGestures` (`pagination.js`) renders a neighbor page (a copy of the page element holding `pages[current ± 1]`, with anchors and ids stripped, inert) one screen width beside the current page. Both pages translate together.
+- A committed turn slides both pages the rest of the way (120–300ms), then navigates, resets and removes the neighbor in the same task, so there is no flash.
+- At a section boundary the neighbor is blank until the next section loads (the page stays out of view, with a 3s fallback reset).
+- CSS: `.pagination-wrapper.is-swiping { overflow: visible }` and `.pagination-neighbor { position: absolute; pointer-events: none }`.
+
+Test: `tests/e2e/reader_nav_touch.mjs` gains 11 checks, now 25 in all.
+- During the drag: the neighbor shows exactly the next (or previous) page, sits one screen width away, is visible at the screen edge (not clipped), and carries no anchors.
+- After a turn: only the real page remains, and it shows the same text that slid in.
+- The new checks failed before the change. The edge check was confirmed to fail when the wrapper clips. The probe briefly lifts `inert` and `pointer-events` on the neighbor, because `elementFromPoint` skips both.
+
+Worktree gotcha: the shared venv has `backend` installed editable from the main checkout. Flask started in a worktree silently serves the MAIN checkout's code and static files unless started with `PYTHONPATH=<worktree>`.
+
 ## 2026-10-17: Reader page-turn controls: mouse first on web, swipe first on mobile (deployed)
 
 User asked for better left/right navigation. On mobile the arrow circles flashed over the text on every touch; on web there was no sideways trackpad swipe and the arrows faded 1s after the mouse entered.
