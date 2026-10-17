@@ -31,9 +31,10 @@ Trailing transcriber/publisher notes (anchored to end of chapter) matching:
   - 'Project Gutenberg', 'TRANSCRIBER'
 are also stripped.
 
---tags-only removes just paragraphs starting with `[Illustration`, for
-books whose headings break the rules above (Pope's Iliad: `ARGUMENT`,
-`A. POPE`, `END OF THE ILIAD` have no terminal punctuation).
+--tags-only removes just image tags (paragraphs starting with
+`[Illustration` or `[Picture`) and the trailing notes below, for books whose
+headings break the caption rules (Pope's Iliad: `ARGUMENT`, `A. POPE`,
+`END OF THE ILIAD` have no terminal punctuation).
 
 Idempotent. No LLM calls. Safe to run before generate_modern_english.py.
 
@@ -84,12 +85,16 @@ _TRAILING_NOISE_PREFIXES = (
     "transcriber's notes",
     "project gutenberg",
     "transcriber",
+    "printed by ",
     "this is a list of",
     "the final page is",
     "after the novel",
     "most of the novels",
     "we included l",  # truncated, but pattern from Little Women ch.47
 )
+
+
+_IMAGE_TAGS = ("[Illustration", "[Picture")
 
 
 def looks_like_caption(p: str) -> bool:
@@ -141,8 +146,13 @@ def strip_captions(text: str, tags_only: bool = False) -> tuple[str, int, int]:
         return text, 0, 0
     paras = text.split(SEP)
     if tags_only:
-        kept = [p for p in paras if not p.strip().startswith("[Illustration")]
-        return SEP.join(kept), len(paras) - len(kept), 0
+        kept = [p for p in paras if not p.strip().startswith(_IMAGE_TAGS)]
+        n_captions = len(paras) - len(kept)
+        n_trailing = 0
+        while kept and is_trailing_noise(kept[-1]):
+            kept.pop()
+            n_trailing += 1
+        return SEP.join(kept), n_captions, n_trailing
 
     # Strip captions from anywhere
     kept = []
@@ -177,7 +187,7 @@ def main() -> int:
              "should already be clean since Gemini ignores captions).",
     )
     ap.add_argument("--tags-only", action="store_true",
-                    help="Only remove paragraphs starting with '[Illustration'.")
+                    help="Only remove image tags ('[Illustration', '[Picture') and trailing notes.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
