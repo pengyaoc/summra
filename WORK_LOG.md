@@ -1,6 +1,6 @@
 # Summra Work Log
 
-## 2026-10-17: The Happy Prince (book 105) Plain English, Sonnet writers + fresh verifiers (done locally)
+## 2026-10-17: The Happy Prince (book 105) Plain English, Sonnet writers + fresh verifiers (deployed)
 
 First book under the new rule: a Sonnet subagent writes each chapter, and a separate, fresh agent verifies it.
 
@@ -19,6 +19,13 @@ First book under the new rule: a Sonnet subagent writes each chapter, and a sepa
 **Result.**
 - Applied: all 5 EXACT, ratios 96–99%.
 - `tests/e2e/iliad_side_by_side.mjs` became the data-driven `agent_plain_english_side_by_side.mjs`, with one `BOOKS` entry per book. Book 105 failed it before apply and passes after; 27/27 checks for both books.
+
+Deployed 2026-10-17 with the user's OK, the same way as the Iliad. Only Book 105's 5 `chapters` rows were copied.
+- The VM rows first hashed identical to the local pre-change backup (`52e8ad60…`).
+- VM backup: `/opt/summra/data/database.db.bak-pre-happyprince-plain-20261017-151640` (SHA-256 `736ba702…8271`).
+- The update ran as `summra` and matched local. `ensure_reader_content(105)` published version 4.
+- The VM fast-forwarded to `c7ab432`; no runtime code changed, so no restart.
+- Public `/`, `/books`, `/api/books` and the book and `/read` pages return 200. Against production, `agent_plain_english_side_by_side.mjs` passes 27/27 for both books.
 
 ## 2026-10-17: Reader settings icon: "Aa" instead of the gear (deployed)
 
