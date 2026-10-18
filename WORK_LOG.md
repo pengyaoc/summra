@@ -1,5 +1,15 @@
 # Summra Work Log
 
+## 2026-10-18: Pending commits pushed; Origin of Species deployed (complete)
+
+User requested committing/pushing everything and uploading the translation to production.
+- The worktree was already clean with four pending commits. Pushed all through `b83f7a3` (new favicon, Origin completion, E2E adjustment, Mississippi completion documentation); production checkout fast-forwarded from `9665e13` to the same commit without modifying its untracked config/backup files.
+- Uploaded only book 2's verified `modern_english_text`, using an in-memory SSH transfer and one SQLite transaction. All 14 source hashes and the expected old/new translation hashes were checked before writing. Changed chapters 1, 6, 7, 9, 10, 11–14; all 14 resulting translation hashes match local. No whole-DB replacement or DB backup; other books and user state were left intact.
+- Rebuilt book 2's reader index: production reader version 4, all 14 chapters available, 1,264 paired paragraphs, 565 index paragraphs verbatim. The first transfer script stopped on a quoting error before any remote code executed; corrected and syntax-checked before the successful retry.
+- Restarted the user service because the favicon template changed; service active, local HTTP 200, normal startup logs. Public HTML references the new SVG favicon.
+- Validation: **40 local tests passed** (favicon + rewrite/reformat helpers); public full-book Side by Side E2E **14 checks passed**; all **14 public chapter hashes** equal local; public smoke passed home, books, Origin book and reader routes with no console/request errors.
+- Deployment record committed and pushed after verification. Only the Origin translation was synchronized; the separate Mississippi translation remains local as recorded below.
+
 ## 2026-10-18: Life on the Mississippi (book 112) Plain English (complete locally)
 
 User picked book 112 from the queue. All **61 chapters now have Plain English, 1,974 exactly paired paragraphs** (ratios 0.94–1.06). Local DB only; not deployed or committed. DB backup: `data/database.pre-112-plain-20261018.db`. Run dir (gitignored): `data/log/agent_plain_english/book112`.
