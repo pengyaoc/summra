@@ -876,6 +876,14 @@ export const readerMixin = {
             nextDescriptor ? this.fetchContinuousSegment(nextDescriptor.id, true) : null,
         ]);
         if (!loaded) return;
+        // Pages are cut by measuring text, so the reading font must be loaded
+        // first. A web font (Figtree) arriving later re-wraps the text and
+        // pushes each page's last line under the footer.
+        const content = document.getElementById('continuous-reader-content');
+        if (content && document.fonts?.load) {
+            const style = getComputedStyle(content);
+            await document.fonts.load(`${style.fontSize} ${style.fontFamily}`).catch(() => {});
+        }
         reader.currentSegmentId = descriptor.id;
         reader.segmentIds = [loaded.id, next?.id].filter(Boolean);
         this.renderContinuousSegments([loaded, next].filter(Boolean), marker, chapterId);

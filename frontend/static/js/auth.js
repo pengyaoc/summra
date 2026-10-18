@@ -239,8 +239,10 @@ function updateAuthUI() {
         if (avatar && email) avatar.textContent = email[0].toUpperCase();
         account.classList.toggle('hidden', !currentUser);
     }
-    const signin = document.getElementById('footer-signin-link');
-    if (signin) { signin.href = signinUrl(); signin.classList.toggle('hidden', !!currentUser); }
+    for (const id of ['footer-signin-link', 'header-signin-link']) {
+        const signin = document.getElementById(id);
+        if (signin) { signin.href = signinUrl(); signin.classList.toggle('hidden', !!currentUser); }
+    }
     document.getElementById('library-nav-btn')?.classList.toggle('hidden', !currentUser);
     const banner = document.getElementById('wrong-account-banner');
     if (banner) {

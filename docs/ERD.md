@@ -5828,7 +5828,7 @@ setupReadingSettings() {
 
 1. **Georgia** (Default) - Classic serif font, traditional book feel
 2. **System** - Native system font stack, familiar to user's OS
-3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `frontend/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `style.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`
+3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `frontend/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `style.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`. Pagination measures text, so `loadContinuousReaderAt()` awaits `document.fonts.load()` for the content's computed font before rendering. Otherwise Figtree loads after the pages are cut, the text re-wraps, and each page's last line falls under the footer (`tests/e2e/reader_last_line_visible.mjs`)
 
 **CSS Data Attribute Pattern:**
 

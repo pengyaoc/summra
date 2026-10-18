@@ -4936,26 +4936,29 @@ body.on-reader-page .main-content { padding-bottom: 0; }
 }
 
 @media (max-width: 899px) {
-    /* The bar anchors to .header (position: relative), not the icon. */
+    /* The bar is its own full-width row of the header, in the flow, so it
+       pushes the page (and its breadcrumb) down instead of covering it.
+       display: contents makes the icon and bar items of .header-content. */
+    .header-content {
+        flex-wrap: wrap;
+    }
+
     .header-search {
-        position: static;
+        display: contents;
     }
 
     .header-search-toggle {
         display: grid;
     }
 
+    /* static: the results list anchors to .header (position: relative),
+       outside .header-content, whose phone overflow-x scroll would clip it. */
     .header-search-panel {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 1001;
+        position: static;
+        order: 1;
+        flex: 0 0 100%;
         display: none;
         width: auto;
-        padding: 0.6rem 16px 0.75rem;
-        background: var(--paper);
-        border-bottom: 1px solid var(--rule);
     }
 
     .header-search.open .header-search-panel {
@@ -4963,8 +4966,10 @@ body.on-reader-page .main-content { padding-bottom: 0; }
     }
 
     .header-search-panel::before {
-        left: calc(16px + 0.8rem);
-        top: calc(0.6rem + 20px);
+        left: calc(20px + 0.8rem);
+        top: auto;
+        bottom: 24px; /* header padding 12px + (40px input - 15px icon) / 2 */
+        transform: none;
     }
 
     .header-search-input {
@@ -4973,10 +4978,10 @@ body.on-reader-page .main-content { padding-bottom: 0; }
     }
 
     .header-search .hero-search-results {
-        left: 16px;
-        right: 16px;
+        left: 20px;
+        right: 20px;
         width: auto;
-        top: calc(100% - 0.25rem);
+        top: calc(100% - 8px);
     }
 }
 
@@ -5053,6 +5058,16 @@ body.on-reader-page .main-content { padding-bottom: 0; }
     }
 }
 
+.header-signin {
+    display: none;
+    flex-shrink: 0;
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
 /* Phone header: the icon alone links home, leaving room for the nav links. */
 @media (max-width: 600px) {
     .header .logo {
@@ -5068,11 +5083,30 @@ body.on-reader-page .main-content { padding-bottom: 0; }
         font-size: 0.9rem;
     }
 
-    /* Also linked from the footer */
-    #categories-nav-btn {
-        display: none;
+    /* The footer's sign-in link is a long scroll away on a phone (and the
+       reader has no footer), so phones also get one in the header. */
+    .header-signin {
+        display: block;
     }
 }
+
+/* Narrow phones: signed in, Library + Discover + Categories + search +
+   account must still fit on one line at 360px. */
+@media (max-width: 400px) {
+    .header-content {
+        gap: 8px;
+    }
+
+    .header-nav-buttons {
+        gap: 10px;
+        margin-left: 0;
+    }
+
+    .header-nav-btn {
+        font-size: 0.85rem;
+    }
+}
+
 
 .sr-only {
     position: absolute;
