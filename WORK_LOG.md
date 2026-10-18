@@ -1,5 +1,13 @@
 # Summra Work Log
 
+## 2026-10-18: New flat favicon, open book with gold spark (done locally)
+
+Replaced the detailed illustrated book-and-vines icon with a flat mark: two paper-coloured pages (`#F6F1E7`) on the burgundy accent tile (`#8A2E2E`), with a four-point gold spark (`#D9A441`) above them. The user first picked a plain book (option B), found it too plain, then chose "spark of insight" (option I) from a second round.
+- New `frontend/static/images/icon.svg` is the main favicon (`<link rel="icon" type="image/svg+xml">` in `index.html`). Regenerated `icon-16/32/192.png`, `icon.png` (512, header logo) and their `.webp` versions from it with ImageMagick plus cwebp. `icon-180.png` (apple-touch) is full-bleed with no rounded corners because iOS adds its own mask.
+- Same filenames, so the manifest and header logo pick up the new mark with no other changes. `asset_v` hashes bust the caches.
+- Tests: `tests/test_favicon.py` (3, red then green, including the spark colour); full suite 743 passed; smoke `/` passed; header screenshot checked.
+- Deploy: needs a gunicorn restart because `index.html` changed.
+
 ## 2026-10-18: Mobile fixes — reader last line, phone header, search bar (worktree `mobile-fixes`)
 
 User reported three iPhone bugs with screenshots.
