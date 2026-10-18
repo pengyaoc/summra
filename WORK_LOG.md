@@ -12,7 +12,7 @@ Prep:
 - Ingest flattened the tables (ch.111 `PRICES OF WHEAT`, ch.409 salt tables, money totals in ch.502–503) into rows of numbers. They stay verbatim in Plain English.
 - Export: 211 chunks. Chapters with more than 6 chunks are split across writers.
 
-## 2026-10-17: Figtree replaces Open Sans as the sans reading font (done locally, not deployed)
+## 2026-10-17: Figtree replaces Open Sans as the sans reading font (deployed)
 
 User wanted a better sans font. Compared Source Sans 3, Atkinson Hyperlegible Next, Inter, IBM Plex Sans, Nunito Sans and Figtree in a preview page; the user picked Figtree.
 
@@ -25,6 +25,7 @@ Changes:
 - New `tests/e2e/reader_font_figtree.mjs` (7/7): picker choices and labels, Figtree applied and actually loaded, saved Open Sans migrated. `sxs_font_regression.mjs` / `sxs_font_other_views.mjs` switch to `figtree` instead of `opensans`.
 - Regression: `sxs_font_regression` 8, `reader_themes` 5, `redesign_reader` 16, `text_size_adjust`, smoke pass. `sxs_font_other_views` fails on main before this change too (hardcoded `:5004`, waits for the old `#chapter-detail-section` to be visible); left as is.
 - Deploy note: static files only plus `index.html` → needs a gunicorn restart for the template.
+- Deployed `52868f6`: VM fast-forwarded, gunicorn restarted (active, no errors). Public `/`, `/books`, `/api/books` and `/static/fonts/figtree-latin.woff2` return 200; `reader_font_figtree.mjs` passes 7/7 against prod.
 
 ## 2026-10-17: Home page stuck (no scroll) on iOS Chrome after reader → back (deployed)
 
