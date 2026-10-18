@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-18: Life on the Mississippi (book 112) Plain English (in progress)
+
+User picked book 112 (61 chapters incl. front matter, ~867K characters, 98 chunks) from the queue. DB backed up to `data/database.pre-112-plain-20261018.db`.
+- Cleanup: `reformat_paragraphs.py` split all 61 chapters (ingest had one hard-wrapped line per chapter). No footnotes, captions or dividers. Ch0 is front matter (Gutenberg credit, title, contents list, epigraph); ch60 includes Appendices A–D. Both left as they are and written verbatim for headings.
+- Plan: Sonnet writers batched at ~70K characters (13 writers: ch0–3, 4–8, 9–13, 14–17, 18–24, 25–29, 30–34, 35–41, 42–48, 49–53, 54–59, ch60 in two halves), then fresh Sonnet verifiers on the same split. Run dir `data/log/agent_plain_english/book112`.
+
 ## 2026-10-18: New flat favicon, open book with gold spark (done locally)
 
 Replaced the detailed illustrated book-and-vines icon with a flat mark: two paper-coloured pages (`#F6F1E7`) on the burgundy accent tile (`#8A2E2E`), with a four-point gold spark (`#D9A441`) above them. The user first picked a plain book (option B), found it too plain, then chose "spark of insight" (option I) from a second round.
@@ -19,12 +25,16 @@ User reported three iPhone bugs with screenshots.
 - Regression: 23 e2e scripts pass. `sticky_overlap.mjs` already fails the same way on main (legacy chapter route timeout); not related.
 - Dev note: `backend` is an editable install pointing at the main checkout. To serve a worktree's own code, run Flask with `PYTHONPATH=.`.
 
-## 2026-10-18: Origin of Species remaining Plain English chapters (in progress)
+## 2026-10-18: Origin of Species remaining Plain English chapters (complete locally)
 
-User resumed chapters 11–14. Keep Sol (`gpt-6-sol`) for writers and fresh verifiers, preserve the existing chapters 1–10, and do not create a database backup. Prior scratch-file authorization continues.
-- Source hashes still match the prior run. Re-exported only remaining chapters using the updated shared RULES.md prompts and connective-warning gate.
-- Resume chapter 11 from its saved unverified P1–10 draft; retain chapter 14 index entries P51 onward verbatim.
-- Plan: complete remaining drafts, fresh verification of every pair and gate warning, apply only verified text, then audit full-book alignment and desktop/mobile reader behavior.
+User resumed chapters 11–14 with Sol writers and fresh Sol verifiers. All **14 chapters now have Plain English**, with **1,264 exactly paired paragraphs**. The 565 alphabetical index paragraphs remain verbatim. No DB backup created; no deployment or commit.
+
+- Completed ch11 (47 paragraphs), ch12 (32), ch13 (66), ch14 (50 prose + 565 index). Used updated shared RULES.md prompts and gates; resumed the saved ch11 draft and copied index chunks rather than discarding them.
+- Fresh `gpt-6-sol` reviewers checked every remaining prose pair and mechanically confirmed every index pair. Corrected **18 new-chapter paragraphs**: ch11 P29/P47; ch12 P7/P18/P30; ch13 P17/P23/P24/P39/P48/P50/P51/P59; ch14 P24/P31/P42/P43/P49. No unresolved meaning issues.
+- The updated gate flagged 23 pairs in earlier chapters. A separate fresh review (batched with ch12) corrected **7 earlier paragraphs**: ch1 P24/P34, ch6 P27, ch7 P44, ch9 P35/P42, ch10 P37. This restored qualifiers/connectives, plant coverage, and removed filler. The remaining 19 keyword WARNs are faithful equivalents such as “may”, “as well as”, or paired sentences; independently checked and recorded in `continuation_warning_ledger.json` and `continuation_existing_flags_review.md`.
+- Normalized apostrophes in 98 paragraphs, then reran the complete apply dry-run and gate. Applied all verified output atomically through the existing helper. Original source hashes stayed unchanged; unaffected chapters 2–5 and 8 retained their existing modern text. All chapters are EXACT, ratios 74–86%.
+- Validation: **37 helper tests passed**. Full-book E2E passed (14 checks), including all 1,264 pairs, chapter 11 opening, the final prose paragraph and the index endpoint. Additional API audit confirmed all 565 index entries verbatim; desktop Side by Side and mobile Plain English checks passed for chapters 11 and 14 with no gaps/overflow/console errors. Both book/reader smoke routes, side-by-side pagination and chapter-opening regressions passed. Screenshots inspected.
+- Added Origin to the existing full-book E2E; updated scratch `verify_reader.mjs` from partial to complete coverage. Final provenance, review reports and hashes: `data/log/agent_plain_english/book2/result.json` and adjacent files (gitignored). Existing development server was reused and left running.
 
 ## 2026-10-18: Agent Plain English: gate, prompt and token improvements (done locally)
 

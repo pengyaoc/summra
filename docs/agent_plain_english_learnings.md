@@ -38,7 +38,7 @@ Changes made:
 2. **Agent types `plain-english-writer` and `plain-english-verifier`.** Each has only Read, Write and Bash, with the brief built in and reports capped at 6–8 lines. Launch prompts shrink to the assignment, and each agent loads less.
 3. **Bigger assignments: ~60–80K characters of text per agent.** Short chapters are batched, so the fixed cost is paid about half as often. Wealth of Nations would have needed ~30 writers and ~30 verifiers instead of 48 + 49.
 
-Untested on a real book yet. The next run should log each agent's token use, to compare against these numbers.
+First exercised on the Origin of Species continuation below. Agent token totals were unavailable from the collaboration tool, so the expected token savings have not been measured.
 
 4. **Effort:** writer `low`, verifier `medium` (set in the agent files).
 5. **Coordinator:** a fresh Sonnet session per sitting instead of one long Opus session.
@@ -132,3 +132,13 @@ The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of th
 - **Gate:** now fails "…something. If he…" filler unless the original says "something". It also warns when "therefore", "perhaps" or "not only" has no plain-English equivalent. On the Iliad's finished output the warning fires on 3 of 1,524 paragraphs.
 - **Exported prompts:** now carry the rules that emerged mid-run on this book: connectives, short parenthetical glosses, braces, no filler, and scanning-error names.
 - **Workflow doc:** gained the structure check, sitting planning, and shared brief files.
+
+
+## The Origin of Species notes (book 2, 2026-10-17/18): Sol writers and verifiers
+
+- Initial sitting completed chapters 1–10; the resumed sitting completed 11–14. All 14 chapters now have 1,264 paired paragraphs, including 565 verbatim index entries. Sol (`gpt-6-sol`) wrote and independently verified the prose; no Gemini calls.
+- Initial fresh verification corrected 69 paragraphs in chapters 1–10. The continuation corrected 18 paragraphs in chapters 11–14, plus seven earlier paragraphs found by the new gate's focused review. These are correction events across two passes, not a count of distinct paragraphs across the entire book.
+- Darwin's errors concentrate on scientific distinctions, causal direction and qualifications: geographic range versus abundance, first crosses versus hybrids, inherited structure versus common use, conditional migration and future possibilities. Preserve the historical claims and first-person voice; do not insert modern editorial commentary.
+- The continuation exercised the shared RULES.md prompts and updated gate on real content. All 23 earlier gate flags were independently reviewed; 19 warnings remained as faithful equivalents (“may”, “as well as”, or paired claims) rather than genuine omissions. Do not force keyword matches where the argument is already intact.
+- Four remaining-chapter writers and four fresh verifiers were used; the short chapter 12 review was batched with the earlier flagged pairs. Agent token totals were not exposed by the collaboration tool, so no token-efficiency comparison is claimed.
+- Full-book pairing, index equality, desktop/mobile reader checks, smoke and reader regressions passed. The result is local, not deployed.

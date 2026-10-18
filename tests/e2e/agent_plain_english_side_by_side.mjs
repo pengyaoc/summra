@@ -13,6 +13,12 @@ import { chromium } from 'playwright';
 const BASE = (process.env.BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
 const BOOKS = [
   {
+    id: 2, slug: 'the-origin-of-species', chapter: 11,
+    first: { original: /^GEOGRAPHICAL DISTRIBUTION\.$/, plain: /^GEOGRAPHICAL DISTRIBUTION\.$/ },
+    pairs: [{ chapter: 14, index: 49, original: /^It is interesting to contemplate an entangled bank/, plain: /bank|plants/ }],
+    last: { original: /^Zebra, stripes on, 163\.$/, plain: /^Zebra, stripes on, 163\.$/ },
+  },
+  {
     id: 66, slug: 'the-iliad', chapter: 1,
     first: { original: /^ARGUMENT\.$/, plain: /^ARGUMENT\.$/ },
     pairs: [{ chapter: 1, index: 3, original: /^Achilles’ wrath/, plain: /Achilles’ anger/ }],
@@ -29,6 +35,12 @@ const BOOKS = [
     first: { original: /^OF THE DIVISION OF LABOUR\.$/, plain: /^OF THE DIVISION OF LABOUR\.$/ },
     pairs: [{ chapter: 2, index: 2, original: /^Whether this propensity/, plain: /butcher, the brewer, or the baker/ }],
     last: { original: /mediocrity of her circumstances\.$/, plain: /modesty of her circumstances\.$/ },
+  },
+  {
+    id: 112, slug: 'life-on-the-mississippi', chapter: 1,
+    first: { original: /^THE Mississippi is well worth reading about/, plain: /^The Mississippi is well worth reading about/ },
+    pairs: [{ chapter: 3, index: 0, original: /^APPARENTLY the river was ready for business/, plain: /river was ready for business/ }],
+    last: { original: /descended into the depths below\.$/, plain: /depths below\.$/ },
   },
 ].filter((b) => !process.env.BOOKS || process.env.BOOKS.split(',').includes(b.slug));
 
