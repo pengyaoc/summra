@@ -1,6 +1,6 @@
 # Summra Work Log
 
-## 2026-10-17: Home page stuck (no scroll) on iOS Chrome after reader → back (fixed locally)
+## 2026-10-17: Home page stuck (no scroll) on iOS Chrome after reader → back (deployed)
 
 User report: the home page couldn't scroll on iOS Chrome, maybe after reader → back.
 
@@ -17,6 +17,10 @@ Fix:
 Test: new `tests/e2e/reader_back_unlocks_scroll.mjs`. It goes home → reader in-app, then three kinds of browser back: plain, during an edge swipe whose finger lifts after the back, and while a section is still loading. It checks that the home page scrolls. `ENGINE=webkit` runs it in WebKit (iOS's engine); Playwright WebKit was installed for this.
 - The edge-swipe case failed before the fix in both Chromium and WebKit (html/body `hidden`, `pagination-active`), and passes after in both.
 - Regression: reader e2e suites, `redesign_home` 49/49 and smoke pass; pytest 732 passed. app.min.js rebuilt.
+
+Committed as `b81a69b` and deployed 2026-10-17 as a VM fast-forward only. Front-end only, so no restart: Apache serves static files, and `asset_v` hashes file contents on each render.
+- Public `/`, `/books` and `/api/books` return 200. The live `app.min.js` matches local (md5).
+- Against production: `reader_back_unlocks_scroll` 3/3 in Chromium and in WebKit, `reader_nav_touch` 25/25.
 
 ## 2026-10-17: Sepia theme merged into Light (deployed)
 
