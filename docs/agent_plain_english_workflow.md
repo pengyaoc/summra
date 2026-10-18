@@ -66,6 +66,10 @@ Do not use Haiku: its Iliad drafts passed the gate but needed 317 meaning fixes.
 
 **Plan the sittings.** Every agent counts against the session usage limit, and running more agents at once does not change the total. A limit hit stops every running agent at once. `SendMessage` resumes each one after the reset with its work intact ("the usage limit has reset; re-read your JSON files and continue"). A book over ~1M characters will hit the limit at least once, so agree the plan with the user first. Keep about 10 agents running at a time.
 
+**Keep the coordinator cheap.** On Wealth of Nations the coordinator (Opus, one long session) likely cost as much as all the writers. Every report re-read a growing history. Run each sitting in a fresh session on Sonnet, and keep scratch files for doubts and fix tallies so a new session can pick up from them.
+
+**Effort.** The writer runs at `effort: low` and the verifier at `effort: medium`, both set in the agent files. This is new as of 2026-10-18 and untested. On the next book, compare verifier fixes per paragraph with Wealth of Nations' 5%. If the rate rises noticeably, remove `effort: low` from the writer.
+
 The agents report in at most 6–8 lines, which keeps the coordinator's context small over ~100 launches. Keep their doubt lists in a scratch file, so you can paste them into the verifier assignments without re-reading the reports.
 
 Agents that own only part of a chapter skip the gate, because it fails until the chapter is complete. Run it yourself once all parts land.
