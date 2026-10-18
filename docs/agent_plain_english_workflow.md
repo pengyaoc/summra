@@ -171,3 +171,25 @@ The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of th
 
 **Operational.** The usage limit stopped all five verifiers once. They were resumed with `SendMessage` after the reset, with no lost work.
 
+
+## The Wealth of Nations notes (book 3, 2026-10-17/18): a 2.3M-character book
+
+**Size.**
+- 32 chapters (34 after the restructure), 2,271 paragraphs, 211 chunks.
+- 48 Sonnet writers and 49 verifier ranges. Chapters over 6 chunks were split 2–5 ways, with disjoint file lists for both writers and verifiers.
+
+**Shared briefs.** Put the writer and verifier briefs in files (`$DIR/WRITER_BRIEF.md`, `$DIR/VERIFIER_BRIEF.md`) and keep each agent's prompt to the assignment: the chapter, the files or paragraph range, and the writer's doubts. This keeps the coordinator's context small across about 100 launches.
+
+**Usage limits.** The session limit hit twice. Both times every running agent stopped at once, and `SendMessage` resumed them after the reset with no lost work. Expect this on any book this size.
+
+**Gate change.** A terminator followed by a closing `}` now passes. Smith's paragraphs often end with a citation like `{See Pfeffel.}`.
+
+**What verifiers caught (109 fixes).**
+- Mostly lost logical connectives ("therefore", "not only… but", "perhaps"/"seem").
+- A few reversals and invented framings.
+- OCR names left as printed.
+- Unglossed false friends: "undertaker", "workhouse", "police".
+
+**Writer tic.** Sonnet sometimes turns a "that"-clause into filler: "…noticed something. If he…". Grep for `something\. [A-Z]` before applying.
+
+**Structure.** If a book encodes Book/Chapter as chapter numbers (101, 201…), move it to `book_sections` with chapters numbered 1..N. Book introductions that ingest attached to the previous Book's last chapter become their own "Introduction" chapters. Both text columns must move together.

@@ -85,3 +85,16 @@ def test_terminator_inside_italics_passes():
     original = "Numa owed his laws to the nymph, as the elegant pen made ideal: _Numa Pompilius._"
     plain = "Numa owed his laws to the nymph, as an elegant writer imagined it: _Numa Pompilius._"
     assert check_passages([original], [plain]) == []
+
+
+def test_terminator_inside_citation_braces_passes():
+    original = "The princes of Germany first became formidable. {See Pfeffel.}"
+    plain = "The German princes first became powerful. {See Pfeffel.}"
+    assert check_passages([original], [plain]) == []
+
+
+def test_unterminated_citation_braces_fails():
+    original = "The princes of Germany first became formidable. {See Pfeffel.}"
+    plain = "The German princes first became powerful. {See Pfeffel}"
+    errors = check_passages([original], [plain])
+    assert errors and "terminator" in errors[0]
