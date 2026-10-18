@@ -12,7 +12,7 @@ User requested Sol writers and fresh Sol verifiers in place of Sonnet, following
 - Validation: passage/reformat tests **31 passed**; API confirms all 504 completed paragraphs paired and later chapters unavailable; desktop side-by-side and mobile Plain English reader checks, two book/reader smoke routes, side-by-side pagination, and chapter-opening regressions pass. Screenshots inspected. Mobile reader validation uses Plain English (side-by-side requires a 1024px viewport).
 - The full-book E2E registration was removed when the scope became partial; scratch `verify_reader.mjs` checks the exact applied range and remaining gaps. Changes are local; no deployment or commit performed.
 
-## 2026-10-17: Plain English for The Wealth of Nations (book 3), plus Book/chapter structure (done locally, not deployed)
+## 2026-10-17: Plain English for The Wealth of Nations (book 3), plus Book/chapter structure (DB deployed 2026-10-18)
 
 User picked Wealth of Nations first from the hardest-to-read queue. Agent workflow (`docs/agent_plain_english_workflow.md`): Sonnet writers, fresh Sonnet verifiers. No Gemini.
 
@@ -53,7 +53,8 @@ Tests:
 - `agent_plain_english_side_by_side.mjs`: new Wealth of Nations entry. It failed before applying and passes after (11/11; the suite is 40/40 across 3 books).
 - smoke (book and reader pages), `reader_opens_at_chapter`, `sxs_row_split` pass.
 - pytest 734 passed.
-- Deploy: DB-only change. Ship with the DB copy flow, or by updating book 3's rows and `book_sections` on the VM.
+- Deployed 2026-10-18 with the DB copy flow. Pre-flight: local had the same or more rows than prod in every table. md5 matched, the service is active, and public `/`, `/books`, `/api/books` and the book page return 200. `agent_plain_english_side_by_side.mjs` against prod passes 14/14. The VM snapshot is `database.db.bak-pre-copy-20261018-171143`.
+- Deploy note: DB-only change. Ship with the DB copy flow, or by updating book 3's rows and `book_sections` on the VM.
 
 ## 2026-10-17: Figtree replaces Open Sans as the sans reading font (deployed)
 
