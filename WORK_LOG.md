@@ -1,5 +1,16 @@
 # Summra Work Log
 
+## 2026-10-18: Mobile fixes — reader last line, phone header, search bar (worktree `mobile-fixes`)
+
+User reported three iPhone bugs with screenshots.
+
+1. **Reader: last line cut off by the progress footer** (Wealth of Nations, "Of Public Debts", Figtree). Cause: pages were cut before the Figtree web font loaded. When it loaded, the text re-wrapped into more lines and each page's last line slid under the footer. Georgia (system font) was never affected. Fix: `loadContinuousReaderAt()` in `reader.js` awaits `document.fonts.load()` for the content's font before rendering. Test `tests/e2e/reader_last_line_visible.mjs` holds back the font request and checks 50 pages. It failed before the fix (pages overflowed by 1–19px) and passes after.
+2. **No Categories or sign-in on phones.** A ≤600px rule hid `#categories-nav-btn` ("also linked from the footer"); that rule is removed. Added a phone-only `Sign in` link to the header (`#header-signin-link`). `updateAuthUI()` handles it together with the footer link. Below 400px the header gap, nav gap and font shrink, so a signed-in Library + Discover + Categories + search + account still fits at 360px.
+3. **Search bar covered the breadcrumb.** Below 900px the bar was absolutely positioned over the page. Now it is a full-width row inside the header (`.header-search { display: contents }`, panel `flex: 0 0 100%`, `order: 1`) and pushes the page down. The panel is `position: static`, so the results list anchors to `.header`. If it anchored to `.header-content`, that element's phone `overflow-x: auto` would clip it.
+- Test `tests/e2e/mobile_header.mjs` covers 360/402px signed out and signed in: Categories and sign-in visible, no clipping, search bar above the breadcrumb, results unclipped. It failed before the fix and 14/14 pass after.
+- Regression: 23 e2e scripts pass. `sticky_overlap.mjs` already fails the same way on main (legacy chapter route timeout); not related.
+- Dev note: `backend` is an editable install pointing at the main checkout. To serve a worktree's own code, run Flask with `PYTHONPATH=.`.
+
 ## 2026-10-18: Origin of Species remaining Plain English chapters (in progress)
 
 User resumed chapters 11–14. Keep Sol (`gpt-6-sol`) for writers and fresh verifiers, preserve the existing chapters 1–10, and do not create a database backup. Prior scratch-file authorization continues.
