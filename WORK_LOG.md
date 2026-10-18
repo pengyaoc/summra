@@ -1,5 +1,33 @@
 # Summra Work Log
 
+## 2026-10-18: Origin of Species remaining Plain English chapters (in progress)
+
+User resumed chapters 11–14. Keep Sol (`gpt-6-sol`) for writers and fresh verifiers, preserve the existing chapters 1–10, and do not create a database backup. Prior scratch-file authorization continues.
+- Source hashes still match the prior run. Re-exported only remaining chapters using the updated shared RULES.md prompts and connective-warning gate.
+- Resume chapter 11 from its saved unverified P1–10 draft; retain chapter 14 index entries P51 onward verbatim.
+- Plan: complete remaining drafts, fresh verification of every pair and gate warning, apply only verified text, then audit full-book alignment and desktop/mobile reader behavior.
+
+## 2026-10-18: Agent Plain English: gate, prompt and token improvements (done locally)
+
+Follow-up to the Wealth of Nations run. The user asked for better gates and docs, a separate learnings doc, and lower token use.
+
+- Gate (`scripts/content/passage_rewrite.py`):
+  - FAILs "…something. If he…" filler unless the original says "something".
+  - WARNs (prints, does not fail) when "therefore", "perhaps" or "not only" has no plain-English equivalent. On the Iliad's finished output: 3 warnings in 1,524 paragraphs, no new failures.
+- Export:
+  - Writes `$DIR/in/RULES.md` once per book. Chunk files carry only the chapter title, numbered paragraphs and output path. The repeated rules were 39% of prompt text before.
+  - The rules gained the mid-run lessons: keep connectives and hedges, short parenthetical glosses, keep `{See …}` braces, no filler, fix scanning errors in names.
+- Agent types `.claude/agents/plain-english-writer.md` and `plain-english-verifier.md`: Sonnet, Read/Write/Bash only, brief built in, short reports. `.gitignore` now ignores `.claude/*` except `agents/`.
+- Docs:
+  - New `docs/agent_plain_english_learnings.md`: cross-book lessons, token analysis, and the per-book notes moved out of the workflow doc.
+  - The workflow doc now covers the agent types, ~60–80K characters per agent, sitting planning and the structure check.
+  - The CLAUDE.md pointer is updated.
+- Tests: `tests/test_passage_rewrite.py`.
+  - New: filler fails; "something" in the original is not filler; a dropped connective warns; a kept connective doesn't; the rules state the lessons.
+  - The two prompt tests were rewritten for the new spec: the rules live in RULES.md, and a chunk holds only its paragraphs. All failed first.
+  - 23/23 pass; full pytest 740 passed.
+- Not tried on a real book, at the user's request.
+
 ## 2026-10-17: Plain English for The Origin of Species (book 2) (partial, stopped at user request)
 
 User requested Sol writers and fresh Sol verifiers in place of Sonnet, following `docs/agent_plain_english_workflow.md`. Later requested wrapping up without starting more chapter rewrites.

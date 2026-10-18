@@ -1,0 +1,129 @@
+# Agent Plain English: Learnings
+
+What each Plain English run taught us, and why `docs/agent_plain_english_workflow.md` has the rules it has. The workflow doc is the process; this doc is the evidence. Add a section per book.
+
+## Lessons across books
+
+| Book | Writer | Paragraphs | Verifier fixes | Rate |
+|---|---|---|---|---|
+| The Iliad (66), Pope's verse | Haiku | 1,524 | 317 | 21% |
+| The Happy Prince (105) | Sonnet | 397 | 7 | 2% |
+| The Wealth of Nations (3) | Sonnet | 2,271 | 109 | 5% |
+
+1. **Sonnet writes; a fresh Sonnet verifies.** Haiku drafts pass the gate but carry many meaning errors. The verifier is never optional: every chapter passed the gate on every book, and verifiers still found real errors.
+2. **The errors depend on the prose.**
+   - Verse (Pope) fails on *who did what*: swapped speakers and reversed meanings.
+   - Argument (Smith) fails on *logic*: dropped connectives and hedges, reversed conclusions, invented framing.
+   - Simple stories (Wilde) barely fail at all.
+   Tune the verifier brief to the book.
+3. **The gate should catch what it can.** Each repeated, mechanical error became a gate rule:
+   - the `{See …}` terminator;
+   - "…something." filler as a FAIL;
+   - dropped connectives as a WARN.
+   Rules that need judgment stay in the briefs.
+4. **Writers' doubt lists are accurate.** They flag almost every risky spot: source typos, compressed passages, odd figures. Always paste them into the verifier's brief.
+5. **Verifiers can be wrong too.** Check unresolved items and source-typo calls yourself before accepting them. On Wealth of Nations, "usurers" → "insurers" looked wrong but was right in context.
+6. **Usage limits set the pace.** A limit hit stops every running agent; `SendMessage` resumes them with no lost work. Plan big books as several sittings.
+7. **Fix structure before writing.** Headings and introductions stranded at chapter ends, and Book/Part levels encoded in chapter numbers, are cheap to fix at ingest. They are expensive once two columns must move together.
+
+## Token efficiency (from the Wealth of Nations run)
+
+Where the tokens went, about 100 agents in all:
+- **Fixed startup cost per agent dominated.** That is the system prompt, tool definitions and project instructions. A writer with one 9K-character chunk used ~82K tokens, and a writer with five chunks ~110–120K. So most of each agent's tokens were overhead, paid 97 times.
+- **The rules repeated in every chunk.** Each chunk file carried the full 7.4K-character rules: 39% of all prompt text (211 chunks, ~1.6M characters).
+- **The coordinator's context grew with every report.** Some reports ran 20–30 lines.
+
+Changes made:
+1. **One `RULES.md` per book.** Chunk files hold only their paragraphs, and agents read the rules once.
+2. **Agent types `plain-english-writer` and `plain-english-verifier`.** Each has only Read, Write and Bash, with the brief built in and reports capped at 6–8 lines. Launch prompts shrink to the assignment, and each agent loads less.
+3. **Bigger assignments: ~60–80K characters of text per agent.** Short chapters are batched, so the fixed cost is paid about half as often. Wealth of Nations would have needed ~30 writers and ~30 verifiers instead of 48 + 49.
+
+Untested on a real book yet. The next run should log each agent's token use, to compare against these numbers.
+
+Not changed: the fresh verifier per range. It is the most expensive step, but it found 109 real errors that no gate could. Chapters that came back with 0 fixes were simple prose, and nothing tells you that in advance.
+
+## Iliad notes (book 66, 2026-10-16)
+
+**Source.** Pope's translation (pg6130), `is_poetry=0`. Ingest had flattened each verse paragraph onto one line, so paragraphs were single-`\n` lines, which the reader already treats as paragraphs. We left the original as flattened couplets (prose workflow) rather than restoring verse lines.
+
+**Cleanup.**
+- `reformat_paragraphs.py` changed all 25 chapters to `\n\n` paragraphs.
+- `strip_footnotes.py` removed about 300 inline `[n]` markers, plus 461 endnote paragraphs that had been appended to Book XXIV.
+- `strip_illustration_captions.py --tags-only` removed 71 `[Illustration: ]` lines. The default rules would also have deleted the headings `ARGUMENT`, `END OF THE ILIAD`, `A. POPE` and `POPE’S PREFACE TO THE ILIAD OF HOMER`.
+
+**Size.** 25 chapters (the Introduction and Pope's Preface, then Books I–XXIV), 1,524 paragraphs, 987K characters, cut into 98 chunks of about 12K characters. 26 Haiku writers and 26 Sonnet verifiers, with the Introduction split in two for both steps.
+
+**Result.**
+- All 25 chapters are EXACT, with ratios of 94–107%.
+- Side by Side has 1,524 paired rows. `agent_plain_english_side_by_side.mjs` passes, and 40 consecutive pages show no clipping.
+
+**What Sonnet QC caught (317 paragraphs fixed across the 25 chapters).**
+- Haiku's errors on Pope's compressed, inverted verse are mostly about *who did what*:
+  - swapped speakers or agents (Book IV: Atrides and Nestor reversed; Book XIII: Menelaus and Helenus swapped; Book XX: wrong spear-thrower);
+  - reversed meanings (Book III: a curse inverted; the Preface: "I doubt not" became "I doubt that"; Book IX: Achilles made the giver instead of the receiver);
+  - wrong genealogy (Book XIII: Medon; Book XIV: Diomed's ancestry);
+  - invented details (a cliff, a chariot, "of gold");
+  - spots where the writer admitted it compressed text.
+- Plain prose chapters such as the Introduction needed far fewer fixes (7 in 123 paragraphs).
+
+**Gate adjustments made during the run.**
+- A paragraph kept verbatim (a heading such as `A. POPE`) may end without a terminator.
+- A terminator inside italics (`_Numa Pompilius._`) counts.
+- A summary phrase ("the poet") is allowed when the chapter's original uses it, as in the Preface, which is commentary.
+
+**Operational lessons.**
+- Running ~26 agents at once hit the account's usage limit partway through. The stopped agents kept their work and were resumed with `SendMessage` after the reset ("continue from where you stopped; re-read the JSON files first"). Expect this on a whole book, and keep about 10 agents running at a time.
+- Several reviewers wrote helper scripts named `fix.py` in the shared scratchpad and overwrote each other's. Their exact-string asserts failed before any write, so no chapter was damaged, but the brief now requires unique script names. Afterwards, check that each reported fix landed in its own chapter (`grep -l "<new text>" $DIR/out/ch*/*.json`).
+- One reviewer returned "pending" instead of a report. Ask it again before counting the chapter as done.
+
+## The Happy Prince notes (book 105, 2026-10-17): first run with Sonnet writers
+
+**Cleanup.**
+- `reformat_paragraphs.py` split the text into paragraphs.
+- `strip_illustration_captions.py --tags-only` removed 12 `[Picture: …]` tags and the trailing "Printed by BALLANTYNE…" line. The option now also covers `[Picture` tags and printer lines.
+- `strip_decorative_dividers.py` removed one `* * * * *`.
+- The Giant's notice board is three verbatim one-line paragraphs.
+- Result: 5 tales, 397 paragraphs, 85K characters, 8 chunks.
+
+**Writing.** 5 Sonnet writers, one per tale, each took under a minute and passed the gate (three on the first run). They followed the source's curly quotes, so no apostrophe fix was needed.
+
+**Verification.** 5 fresh Sonnet verifiers made **7 fixes in 397 paragraphs**:
+- one invented detail;
+- one dropped word ("lips");
+- a lost pun ("affected");
+- a quote mark that closed a story-within-a-story early;
+- three wording or archaism fixes.
+
+The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of that gap is the model, but the writers' own doubt lists were also short and accurate.
+
+**Result.** All 5 tales are EXACT, with ratios of 96–99%. `agent_plain_english_side_by_side.mjs` passes for both books.
+
+**Operational.** The usage limit stopped all five verifiers once. They were resumed with `SendMessage` after the reset, with no lost work.
+
+
+## The Wealth of Nations notes (book 3, 2026-10-17/18): a 2.3M-character book
+
+**Size.**
+- 32 chapters (34 after the restructure), 2,271 paragraphs, 211 chunks.
+- 48 Sonnet writers and 49 verifier ranges. Chapters over 6 chunks were split 2–5 ways, with disjoint file lists for both writers and verifiers.
+
+**Shared briefs.** Put the writer and verifier briefs in files (`$DIR/WRITER_BRIEF.md`, `$DIR/VERIFIER_BRIEF.md`) and keep each agent's prompt to the assignment: the chapter, the files or paragraph range, and the writer's doubts. This keeps the coordinator's context small across about 100 launches.
+
+**Usage limits.** The session limit hit twice. Both times every running agent stopped at once, and `SendMessage` resumed them after the reset with no lost work. Expect this on any book this size.
+
+**Gate change.** A terminator followed by a closing `}` now passes. Smith's paragraphs often end with a citation like `{See Pfeffel.}`.
+
+**What verifiers caught (109 fixes).**
+- Mostly lost logical connectives ("therefore", "not only… but", "perhaps"/"seem").
+- A few reversals and invented framings.
+- OCR names left as printed.
+- Unglossed false friends: "undertaker", "workhouse", "police".
+
+**Writer tic.** Sonnet sometimes turns a "that"-clause into filler: "…noticed something. If he…". Grep for `something\. [A-Z]` before applying.
+
+**Structure.** If a book encodes Book/Chapter as chapter numbers (101, 201…), move it to `book_sections` with chapters numbered 1..N. Book introductions that ingest attached to the previous Book's last chapter become their own "Introduction" chapters. Both text columns must move together.
+
+**Follow-up changes (2026-10-18).**
+- **Gate:** now fails "…something. If he…" filler unless the original says "something". It also warns when "therefore", "perhaps" or "not only" has no plain-English equivalent. On the Iliad's finished output the warning fires on 3 of 1,524 paragraphs.
+- **Exported prompts:** now carry the rules that emerged mid-run on this book: connectives, short parenthetical glosses, braces, no filler, and scanning-error names.
+- **Workflow doc:** gained the structure check, sitting planning, and shared brief files.

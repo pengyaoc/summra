@@ -55,12 +55,20 @@ def test_chunks_respect_size_and_numbering():
     assert chunk_paragraphs([], max_chars=100) == []
 
 
-def test_chunk_prompt_uses_generator_rules():
+def test_rules_file_uses_generator_rules():
+    from scripts.content.passage_rewrite import build_rules
+    rules = build_rules("The Iliad", "Homer")
+    assert "PARAGRAPH COUNT MUST MATCH EXACTLY" in rules  # the Gemini generator's own rules
+    assert "The Iliad" in rules and "Homer" in rules
+
+
+def test_chunk_prompt_points_to_rules_and_holds_only_its_paragraphs():
     from scripts.content.passage_rewrite import build_chunk_prompt
-    prompt = build_chunk_prompt("The Iliad", "Homer", "Book I", 5, ["First para.", "Second para."], "out/ch1/005.json")
-    assert "PARAGRAPH COUNT MUST MATCH EXACTLY" in prompt  # the Gemini generator's own rules
+    prompt = build_chunk_prompt("Book I", 5, ["First para.", "Second para."], "out/ch1/005.json", "in/RULES.md")
+    assert "in/RULES.md" in prompt and "Book I" in prompt
     assert "[P5] First para.\n\n[P6] Second para." in prompt
     assert '"start": 5' in prompt and "out/ch1/005.json" in prompt
+    assert "PARAGRAPH COUNT MUST MATCH EXACTLY" not in prompt  # rules are read once, not repeated per chunk
 
 
 def test_verbatim_heading_without_terminator_passes():
@@ -98,3 +106,38 @@ def test_unterminated_citation_braces_fails():
     plain = "The German princes first became powerful. {See Pfeffel}"
     errors = check_passages([original], [plain])
     assert errors and "terminator" in errors[0]
+
+
+def test_something_filler_fails():
+    original = "One of those boys observed that, by tying a string, the valve would open."
+    plain = "One of those boys noticed something. If he tied a string, the valve would open."
+    errors = check_passages([original], [plain])
+    assert errors and "filler" in errors[0]
+
+
+def test_something_in_original_is_not_filler():
+    original = "It might not be worth all it cost, but it would always be worth something. Nobody would lose it."
+    plain = "It might not be worth all it cost, but it would always be worth something. Nobody would lose it."
+    assert check_passages([original], [plain]) == []
+
+
+def test_dropped_connective_warns():
+    from scripts.content.passage_rewrite import connective_warnings
+    original = "The price, therefore, must rise; and it is perhaps not only the rich who feel it."
+    plain = "The price must rise, and the rich feel it, along with others."
+    warnings = connective_warnings([original], [plain])
+    assert len(warnings) == 3 and all(w.startswith("P1:") for w in warnings)
+
+
+def test_kept_connective_does_not_warn():
+    from scripts.content.passage_rewrite import connective_warnings
+    original = "The price, therefore, must rise; and it is perhaps not only the rich who feel it."
+    plain = "So the price must rise. Maybe it is not just the rich who feel it."
+    assert connective_warnings([original], [plain]) == []
+
+
+def test_rules_state_book_learnings():
+    from scripts.content.passage_rewrite import build_rules
+    rules = build_rules("A Book", "An Author")
+    for rule in ("short parenthetical", "{See", "therefore", "something.", "scanning errors"):
+        assert rule in rules, rule
