@@ -9,6 +9,7 @@ What each Plain English run taught us, and why `docs/agent_plain_english_workflo
 | The Iliad (66), Pope's verse | Haiku | 1,524 | 317 | 21% |
 | The Happy Prince (105) | Sonnet | 397 | 7 | 2% |
 | The Wealth of Nations (3) | Sonnet | 2,271 | 109 | 5% |
+| Life on the Mississippi (112) | Sonnet (effort low) | 1,974 | 26 | 1.3% |
 
 1. **Sonnet writes; a fresh Sonnet verifies.** Haiku drafts pass the gate but carry many meaning errors. The verifier is never optional: every chapter passed the gate on every book, and verifiers still found real errors.
 2. **The errors depend on the prose.**
@@ -142,3 +143,20 @@ The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of th
 - The continuation exercised the shared RULES.md prompts and updated gate on real content. All 23 earlier gate flags were independently reviewed; 19 warnings remained as faithful equivalents (“may”, “as well as”, or paired claims) rather than genuine omissions. Do not force keyword matches where the argument is already intact.
 - Four remaining-chapter writers and four fresh verifiers were used; the short chapter 12 review was batched with the earlier flagged pairs. Agent token totals were not exposed by the collaboration tool, so no token-efficiency comparison is claimed.
 - Full-book pairing, index equality, desktop/mobile reader checks, smoke and reader regressions passed. The result is local, not deployed.
+
+
+## Life on the Mississippi notes (book 112, 2026-10-18): first run with `effort: low` writers
+
+**Size.** 61 chapters, 1,974 paragraphs, 867K characters, 98 chunks. 13 writers (about 70K characters each; ch60's appendices split in two) and 13 verifiers. One session limit hit, right after the first launch: all 10 running writers had saved nothing yet, and `SendMessage` restarted them cleanly.
+
+**Result.** Verifiers made 26 fixes (1.3%), against 5% on Wealth of Nations. `effort: low` for writers is fine on clear prose; keep it. The errors were few and typical: lost "not only … but", invented numbers ("three months" for "months"), unglossed words (undertaker, chute, Sandwich Islands), wrong glosses (quarter less twain, doughface, "come up to blow").
+
+**Brief mistake to avoid.** Telling a writer to "keep dialect faithful" made it copy a 110-paragraph Huck Finn passage word for word. Say "rewrite dialect spelling into standard English, keep the speaker's attitude and the joke".
+
+**Slurs.** Writers replaced the period slur with "Black man" or similar, as earlier books did. Put this in every brief; verifiers need it too so they do not "restore" it.
+
+**Gate vs. dashes.** The terminator rule fails speech lead-ins that end in `--`, `:` or `,`. Writers changed them to a period or "said this." (about 120 paragraphs). It reads a little oddly but is accepted. If this repeats, consider letting the gate accept a trailing colon, comma or dash when the next original paragraph is a quotation.
+
+**Footnotes.** This Gutenberg text has inline `{footnote [...]}` paragraphs. `strip_footnotes.py` does not touch them, and they stay as paired rows. The E2E footnote check was narrowed so "[Illustrations of it…" is not flagged.
+
+**Verifier speed.** Verifiers finished in 20–50 seconds each with few fixes. A spot check of six random pairs and a number-by-number comparison of ch14–17 found no misses.
