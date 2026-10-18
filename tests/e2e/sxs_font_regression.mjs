@@ -58,7 +58,7 @@ assert(before.rowsInFirstSxsPage >= 1, `text page has at least one row before fo
 
 // === ACTION UNDER TEST ===
 const currentFont = await page.evaluate(() => document.getElementById('continuous-reader-section')?.getAttribute('data-font'));
-const targetFont = currentFont === 'opensans' ? 'georgia' : 'opensans';
+const targetFont = currentFont === 'figtree' ? 'georgia' : 'figtree';
 console.log(`switching font ${currentFont} -> ${targetFont}`);
 await page.evaluate(() => { window.__pagesBeforeFontSwitch = window.summraApp.pagination.pages; });
 await page.click(`.font-choice[data-font="${targetFont}"]`);

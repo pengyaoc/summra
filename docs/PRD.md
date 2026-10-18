@@ -532,7 +532,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - **Options:**
   1. **Georgia** (default) - Classic serif font, traditional book feel
   2. **System** - Native system font stack, familiar to user's OS
-  3. **Open Sans** - Modern sans-serif, clean and readable
+  3. **Figtree** - Modern sans-serif, clean and readable. Bundled web font (`frontend/static/fonts/`), so it looks the same on every device. Replaced Open Sans on 2026-10-17; a saved Open Sans choice opens as Figtree
 - **UI:** Radio-style buttons with font preview ("Aa")
 - **Labels:** Font names displayed below preview buttons
 - **Application:** Applies to chapter summaries, chapter full text, and medium summaries
@@ -1977,7 +1977,7 @@ Controls depend on the input device, not the screen width: mouse is first class 
   - Inline styles applied to pagination containers
   - No hardcoded CSS overrides
 
-- **Font Family:** Georgia, System, Open Sans
+- **Font Family:** Georgia, System, Figtree
   - Affects line height and word wrapping
   - Triggers recalculation on change
 

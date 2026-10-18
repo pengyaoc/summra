@@ -252,7 +252,12 @@ export const settingsMixin = {
 
     loadReadingPreferences() {
         try {
-            const font = localStorage.getItem('reading_font') || 'georgia';
+            let font = localStorage.getItem('reading_font') || 'georgia';
+            // Figtree replaced Open Sans (2026-10-17); move saved choices over.
+            if (font === 'opensans') {
+                font = 'figtree';
+                localStorage.setItem('reading_font', font);
+            }
             const fontSize = localStorage.getItem('reading_fontSize') || '16';
             let theme = localStorage.getItem('reading_theme') || 'light';
             // Sepia was merged into Light (2026-10-17); move saved choices over.
