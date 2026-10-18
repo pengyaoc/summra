@@ -24,6 +24,12 @@ const BOOKS = [
     pairs: [{ chapter: 3, index: 0, original: /^EVERY afternoon/, plain: /Giant/ }],
     last: { original: /gasped the Rocket, and he went out\.$/, plain: /Rocket/ },
   },
+  {
+    id: 3, slug: 'an-inquiry-into-the-nature-and-causes-of-the-wealth-of-nations', chapter: 1,
+    first: { original: /^OF THE DIVISION OF LABOUR\.$/, plain: /^OF THE DIVISION OF LABOUR\.$/ },
+    pairs: [{ chapter: 2, index: 2, original: /^Whether this propensity/, plain: /butcher, the brewer, or the baker/ }],
+    last: { original: /mediocrity of her circumstances\.$/, plain: /modesty of her circumstances\.$/ },
+  },
 ].filter((b) => !process.env.BOOKS || process.env.BOOKS.split(',').includes(b.slug));
 
 let failed = false;

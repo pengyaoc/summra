@@ -45,7 +45,7 @@ DB_PATH = config.DATABASE_PATH
 
 PASSAGE_RATIO = (0.5, 1.3)
 CHAPTER_RATIO = (0.50, 1.10)
-_TERMINATOR = re.compile(r"[.?!][’”'\")\]_]*$")
+_TERMINATOR = re.compile(r"[.?!][’”'\")\]_}]*$")
 _SUMMARY = re.compile(r"\b(this passage|this section|the poet|the narrator|summar\w*)\b", re.IGNORECASE)
 
 

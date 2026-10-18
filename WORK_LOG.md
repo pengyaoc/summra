@@ -1,6 +1,18 @@
 # Summra Work Log
 
-## 2026-10-17: Plain English for The Wealth of Nations (book 3) (in progress)
+## 2026-10-17: Plain English for The Origin of Species (book 2) (partial, stopped at user request)
+
+User requested Sol writers and fresh Sol verifiers in place of Sonnet, following `docs/agent_plain_english_workflow.md`. Later requested wrapping up without starting more chapter rewrites.
+
+- Applied **chapters 1–10 only**: 504 paragraphs, all exactly aligned with their originals. Ratios 76–86%, every chapter passes the mechanical gate and ends at its original narrative endpoint.
+- Sol (`gpt-6-sol`) wrote the drafts; separate fresh Sol agents reviewed every pair and corrected 69 paragraphs. Corrections included omitted qualifiers, reversed comparisons, scientific distinctions, first-person voice, and historical claims. No unresolved issues in applied chapters.
+- Normalized original paragraph separators in all 14 chapters: 1,264 paragraphs total. No footnotes, illustration tags, or decorative dividers needed removing. Source hashes captured before rewriting and checked unchanged before apply. Apostrophes normalized after review, then all ten apply dry-runs and gates passed.
+- User approved scratch files and then requested no DB backup; the already-created task backup was removed. Scratch/provenance/review reports: `data/log/agent_plain_english/book2/` (gitignored).
+- **Chapters 11–14 have no applied Plain English.** Ch11 has one unverified scratch chunk (P1–10), ch12–13 are unwritten, and ch14 has only verbatim index-only chunks copied mechanically. The index begins at ch14 P51 and must remain verbatim when resumed.
+- Validation: passage/reformat tests **31 passed**; API confirms all 504 completed paragraphs paired and later chapters unavailable; desktop side-by-side and mobile Plain English reader checks, two book/reader smoke routes, side-by-side pagination, and chapter-opening regressions pass. Screenshots inspected. Mobile reader validation uses Plain English (side-by-side requires a 1024px viewport).
+- The full-book E2E registration was removed when the scope became partial; scratch `verify_reader.mjs` checks the exact applied range and remaining gaps. Changes are local; no deployment or commit performed.
+
+## 2026-10-17: Plain English for The Wealth of Nations (book 3), plus Book/chapter structure (done locally, not deployed)
 
 User picked Wealth of Nations first from the hardest-to-read queue. Agent workflow (`docs/agent_plain_english_workflow.md`): Sonnet writers, fresh Sonnet verifiers. No Gemini.
 
@@ -11,6 +23,37 @@ Prep:
 - Did NOT run `strip_illustration_captions.py`: its 15 hits are real section headings (italic sub-headings in ch.111, `APPENDIX TO BOOK IV`, `PART II. Of the Expense of Justice`) and flattened table rows. Writers keep those verbatim.
 - Ingest flattened the tables (ch.111 `PRICES OF WHEAT`, ch.409 salt tables, money totals in ch.502–503) into rows of numbers. They stay verbatim in Plain English.
 - Export: 211 chunks. Chapters with more than 6 chunks are split across writers.
+- Gate change: `passage_rewrite.py` now accepts a terminator followed by a closing `}`. Smith's paragraphs often end with a citation like `{See Pfeffel.}`. New tests in `tests/test_passage_rewrite.py`: a braced citation passes, and an unterminated one (`{See Pfeffel}`) still fails. The first failed before the change; 17/17 pass after.
+- Usage limit: about 17 agents running at once hit the session limit at about 20:50 and stopped 18 agents. They were resumed with `SendMessage` after the 21:20 reset, 8 at a time.
+- A second usage limit hit at about 23:00 and stopped 12 agents; they were resumed on 2026-10-18 after the reset.
+
+Writing and verification:
+- 48 Sonnet writers (chapters with more than 6 chunks split 2–5 ways) and 49 fresh Sonnet verifier ranges. Shared briefs: `data/log/agent_plain_english/book3/WRITER_BRIEF.md` and `VERIFIER_BRIEF.md`.
+- Verifiers fixed 109 paragraphs. The main error types:
+  - lost "therefore", "not only… but" and hedges ("perhaps", "seem");
+  - reversed meanings (Chinese "own ships"; the East India Company "claim"; the shepherds/hunters direction);
+  - invented framing or locations;
+  - OCR names left in (Vasco da Gama, Walter Raleigh, Tyrrell);
+  - unglossed false friends ("undertaker", "workhouse", "police", "pretty");
+  - Spain and Portugal figures stated per country instead of combined.
+- A writer habit: a "that"-clause turned into filler ("…noticed something. If he…"). Verifiers fixed some; I fixed the last four by grep.
+- Kept verbatim: headings, italic sub-headings, flattened tables (`PRICES OF WHEAT`, salt duties, sums with dotted leaders) and quoted statutes where a verifier judged them quotations. Braced citations `{See …}` are kept with their prose translated.
+- Word apostrophes were normalised to ’ (580 paragraphs) to match the source.
+- Result: all 32 chapters EXACT, ratio 87–100%, gate PASS.
+
+Structure (user request): the book is now two-level, like the newer books.
+- 5 `book_sections` (type BOOK, Smith's Book titles); chapters renumbered 1..34 with `section_id`. Before, the Book was encoded in the chapter number (101..503).
+- The Book II introduction had been stuck at the end of "Of the Rent of Land" and the Book IV introduction at the end of ch. 304. Both are now their own "Introduction" chapters (12 and 22), with new short summaries.
+- The stray Book III and Book V heading paragraphs at the ends of chs. 205 and 409 were removed. Both text columns moved together, so alignment holds.
+- Chapter summaries that said "Chapter 202" now say "Book II, Chapter 2".
+- Done with a one-off script (not committed). Backup: `data/database.pre-wealth-sections-20261018.db`.
+- The main "Introduction and Plan of the Work" was never ingested and is still missing.
+
+Tests:
+- `agent_plain_english_side_by_side.mjs`: new Wealth of Nations entry. It failed before applying and passes after (11/11; the suite is 40/40 across 3 books).
+- smoke (book and reader pages), `reader_opens_at_chapter`, `sxs_row_split` pass.
+- pytest 734 passed.
+- Deploy: DB-only change. Ship with the DB copy flow, or by updating book 3's rows and `book_sections` on the VM.
 
 ## 2026-10-17: Figtree replaces Open Sans as the sans reading font (deployed)
 
