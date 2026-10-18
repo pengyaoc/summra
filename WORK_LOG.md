@@ -1,5 +1,31 @@
 # Summra Work Log
 
+## 2026-10-17: Plain English for The Wealth of Nations (book 3) (in progress)
+
+User picked Wealth of Nations first from the hardest-to-read queue. Agent workflow (`docs/agent_plain_english_workflow.md`): Sonnet writers, fresh Sonnet verifiers. No Gemini.
+
+Prep:
+- Backup: `data/database.pre-wealth-plain-20261017.db`.
+- `reformat_paragraphs.py`: all 32 chapters were one hard-wrapped paragraph each; now 2,271 paragraphs, 2.3M characters.
+- `strip_footnotes.py` and `strip_decorative_dividers.py`: nothing to strip.
+- Did NOT run `strip_illustration_captions.py`: its 15 hits are real section headings (italic sub-headings in ch.111, `APPENDIX TO BOOK IV`, `PART II. Of the Expense of Justice`) and flattened table rows. Writers keep those verbatim.
+- Ingest flattened the tables (ch.111 `PRICES OF WHEAT`, ch.409 salt tables, money totals in ch.502–503) into rows of numbers. They stay verbatim in Plain English.
+- Export: 211 chunks. Chapters with more than 6 chunks are split across writers.
+
+## 2026-10-17: Figtree replaces Open Sans as the sans reading font (done locally, not deployed)
+
+User wanted a better sans font. Compared Source Sans 3, Atkinson Hyperlegible Next, Inter, IBM Plex Sans, Nunito Sans and Figtree in a preview page; the user picked Figtree.
+
+Finding: "Open Sans" was never loaded (no `@font-face` or font link), so it showed Helvetica Neue on Apple and Segoe UI/Roboto elsewhere.
+
+Changes:
+- Self-hosted Figtree variable font (300–900, SIL OFL) from Google Fonts: `frontend/static/fonts/figtree-latin.woff2` (20 KB) and `figtree-latin-ext.woff2` (10 KB). `@font-face` at the top of `style.css`.
+- `data-font="opensans"` → `"figtree"` in `style.css` and `index.html`; label "Figtree".
+- `settings.js` `loadReadingPreferences()` rewrites a saved `opensans` to `figtree` (same pattern as the Sepia → Light migration). app.min.js rebuilt.
+- New `tests/e2e/reader_font_figtree.mjs` (7/7): picker choices and labels, Figtree applied and actually loaded, saved Open Sans migrated. `sxs_font_regression.mjs` / `sxs_font_other_views.mjs` switch to `figtree` instead of `opensans`.
+- Regression: `sxs_font_regression` 8, `reader_themes` 5, `redesign_reader` 16, `text_size_adjust`, smoke pass. `sxs_font_other_views` fails on main before this change too (hardcoded `:5004`, waits for the old `#chapter-detail-section` to be visible); left as is.
+- Deploy note: static files only plus `index.html` → needs a gunicorn restart for the template.
+
 ## 2026-10-17: Home page stuck (no scroll) on iOS Chrome after reader → back (deployed)
 
 User report: the home page couldn't scroll on iOS Chrome, maybe after reader → back.

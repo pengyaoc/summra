@@ -5828,7 +5828,7 @@ setupReadingSettings() {
 
 1. **Georgia** (Default) - Classic serif font, traditional book feel
 2. **System** - Native system font stack, familiar to user's OS
-3. **Open Sans** - Modern sans-serif, clean and readable
+3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `frontend/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `style.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`
 
 **CSS Data Attribute Pattern:**
 
@@ -6013,7 +6013,7 @@ applyTheme(theme) {
 
 **Storage Keys:**
 
-- `reading_font` - Font family choice (georgia/system/opensans)
+- `reading_font` - Font family choice (georgia/system/figtree; legacy `opensans` is migrated to `figtree` on load)
 - `reading_fontSize` - Font size in pixels (12-24)
 - `reading_theme` - Color scheme (light/dark/sepia)
 
