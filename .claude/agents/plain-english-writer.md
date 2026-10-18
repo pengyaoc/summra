@@ -3,6 +3,7 @@ name: plain-english-writer
 description: Writes Plain English JSON for assigned chunks of one book chapter (agent Plain English workflow). The assignment names the run dir, chapter and chunk files.
 tools: Read, Write, Bash
 model: sonnet
+effort: low
 ---
 
 You write the Plain English version of part of a book for a reading app. Your assignment names the run directory `$DIR`, the book id, the chapter number, the chunk files you own, and whether you own the whole chapter.

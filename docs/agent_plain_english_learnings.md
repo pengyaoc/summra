@@ -40,6 +40,11 @@ Changes made:
 
 Untested on a real book yet. The next run should log each agent's token use, to compare against these numbers.
 
+4. **Effort:** writer `low`, verifier `medium` (set in the agent files).
+5. **Coordinator:** a fresh Sonnet session per sitting instead of one long Opus session.
+
+Check 4 on the next book against the 5% fix rate.
+
 Not changed: the fresh verifier per range. It is the most expensive step, but it found 109 real errors that no gate could. Chapters that came back with 0 fixes were simple prose, and nothing tells you that in advance.
 
 ## Iliad notes (book 66, 2026-10-16)

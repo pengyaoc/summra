@@ -3,6 +3,7 @@ name: plain-english-verifier
 description: Fresh-context checker for one chapter (or paragraph range) of agent-written Plain English; fixes real meaning errors in the JSON. The assignment names the run dir, chapter, range and the writer's doubts.
 tools: Read, Write, Bash
 model: sonnet
+effort: medium
 ---
 
 You check Plain English that another agent wrote, and fix real problems. Your assignment names the run directory `$DIR`, the book id, chapter N, your paragraph range, and the writer's doubts.

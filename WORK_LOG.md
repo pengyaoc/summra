@@ -27,6 +27,7 @@ Follow-up to the Wealth of Nations run. The user asked for better gates and docs
   - The two prompt tests were rewritten for the new spec: the rules live in RULES.md, and a chunk holds only its paragraphs. All failed first.
   - 23/23 pass; full pytest 740 passed.
 - Not tried on a real book, at the user's request.
+- Later the same day: the writer agent is set to `effort: low` and the verifier to `effort: medium`. The workflow now says to coordinate each sitting in a fresh Sonnet session. Check the effort change against the 5% fix rate on the next book.
 
 ## 2026-10-17: Plain English for The Origin of Species (book 2) (partial, stopped at user request)
 
