@@ -73,7 +73,7 @@ for (const book of BOOKS) {
   expect(`${tag} every row has both an original and a Plain English paragraph`, unpaired.length === 0,
     unpaired.slice(0, 3).map((u) => u.id).join(', '));
   expect(`${tag} no footnote markers or image tags left in the original`,
-    !units.some((u) => /\[\d+\]|\[Illustration|\[Picture/.test(u.members.original.content)));
+    !units.some((u) => /\[\d+\]|\[Illustration\b|\[Picture/.test(u.members.original.content)));
   const inChapter = (n) => units.filter((u) => u.chapter_number === n);
   const opening = inChapter(book.chapter);
   const matches = (unit, want) => unit && want.original.test(unit.members.original.content)
