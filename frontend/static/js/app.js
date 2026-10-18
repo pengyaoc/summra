@@ -419,6 +419,13 @@ class SummraApp {
         document.body.classList.toggle('on-chapter-page', onReadingPage);
 
         const onContinuousReader = showArray.includes('continuous-reader-section');
+        // Leaving the reader by any route, browser back included: save, then
+        // stop it, so late reader work (a section load, the turn of the swipe
+        // that was the back gesture) can't re-paginate and lock this page.
+        if (!onContinuousReader && this.continuousReader?.active) {
+            this.saveContinuousReader('navigation');
+            this.continuousReader.active = false;
+        }
         // The reader's document must not scroll (CSS: body.on-reader-page).
         document.body.classList.toggle('on-reader-page', onContinuousReader);
         document.getElementById('reader-mode-settings')?.classList.toggle('hidden', !onContinuousReader);

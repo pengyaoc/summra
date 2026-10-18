@@ -1,5 +1,23 @@
 # Summra Work Log
 
+## 2026-10-17: Home page stuck (no scroll) on iOS Chrome after reader → back (fixed locally)
+
+User report: the home page couldn't scroll on iOS Chrome, maybe after reader → back.
+
+Cause (reproduced): iOS Chrome's back is an edge swipe from the left.
+- The page goes back to home before the finger lifts, and that touch still ends on the reader's now-hidden page area.
+- The Kindle-style swipe (deployed today) took it as a completed turn. After the slide it called `navigateToPreviousPage()`.
+- Pagination had been cleared by the route change, so the turn went to `navigateContinuousSegment(-1)`.
+- Browser back (popstate → `handleRoute`) never marked the reader inactive; only the reader's ← button and `selectBook` did. So the section load re-ran `initializePagination`, which locks html/body (`overflow: hidden`, `pagination-active`) on the home page.
+
+Fix:
+- `showOnlySections`: leaving the reader by any route saves (`navigation`) and sets `continuousReader.active = false`. Late reader work (section loads, viewport enforcement) is then a no-op.
+- `setupTouchGestures`: a release, or the delayed turn after the slide, does nothing but reset if the page area is no longer on screen (`offsetParent === null`).
+
+Test: new `tests/e2e/reader_back_unlocks_scroll.mjs`. It goes home → reader in-app, then three kinds of browser back: plain, during an edge swipe whose finger lifts after the back, and while a section is still loading. It checks that the home page scrolls. `ENGINE=webkit` runs it in WebKit (iOS's engine); Playwright WebKit was installed for this.
+- The edge-swipe case failed before the fix in both Chromium and WebKit (html/body `hidden`, `pagination-active`), and passes after in both.
+- Regression: reader e2e suites, `redesign_home` 49/49 and smoke pass; pytest 732 passed. app.min.js rebuilt.
+
 ## 2026-10-17: Sepia theme merged into Light (deployed)
 
 User: Light and Sepia were too similar; merge them. Light is already warm paper (#F6F1E7 with #2B2622 ink); Sepia was #f4ecd8 with #5c4f3d. Kept Light and Dark.

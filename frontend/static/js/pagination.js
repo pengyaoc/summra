@@ -836,10 +836,18 @@ export const paginationMixin = {
             slide(blocked ? dx / 3 : dx, 0);
         }, { passive: true });
 
+        // Hidden (offsetParent null) once the reader is left, e.g. when the
+        // drag was iOS's edge-swipe back gesture.
+        const onScreen = () => wrapperElement.isConnected && wrapperElement.offsetParent !== null;
         const release = (e) => {
             const current = drag;
             drag = null;
             if (!current || current.axis !== 'x') return;
+            if (!onScreen()) {
+                slide(0, 0);
+                removeNeighbor();
+                return;
+            }
             const dx = e.changedTouches[0].clientX - current.x;
             const elapsed = Math.max(1, e.timeStamp - current.t);
             const width = wrapperElement.clientWidth;
@@ -852,6 +860,11 @@ export const paginationMixin = {
                 const ms = Math.max(120, Math.round(300 * (1 - Math.abs(dx) / distance)));
                 slide(forward ? -distance : distance, ms);
                 cleanupTimer = setTimeout(() => {
+                    if (!onScreen()) {
+                        slide(0, 0);
+                        removeNeighbor();
+                        return;
+                    }
                     const rendered = neighbor?.filled;
                     if (forward) this.navigateToNextPage();
                     else this.navigateToPreviousPage();
