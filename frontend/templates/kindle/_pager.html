@@ -1,0 +1,7 @@
+{% if pages > 1 %}
+<div class="pager">
+  {% if prev_url %}<a class="btn" href="{{ prev_url }}">&lsaquo; Previous</a>{% else %}<span class="btn off">&lsaquo; Previous</span>{% endif %}
+  <span class="pager-count">{{ page }} of {{ pages }}</span>
+  {% if next_url %}<a class="btn" href="{{ next_url }}">Next &rsaquo;</a>{% else %}<span class="btn off">Next &rsaquo;</span>{% endif %}
+</div>
+{% endif %}

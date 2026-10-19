@@ -1110,6 +1110,19 @@ Two above-the-fold areas are server-rendered so they paint with the HTML instead
 
 Shared helper `_cover_base()` produces the extension-less static path both renderings use, matching `getImageHtml()` in `app.js`.
 
+### Kindle E-ink Mode (Added 2026-10-19)
+
+**Location:** `backend/kindle.py` (UA detection), `backend/routes/kindle.py` (blueprint), `frontend/templates/kindle/*.html`, `frontend/static/css/kindle.css`, `frontend/static/js/kindle.js`. Tests: `tests/test_kindle_mode.py`, `tests/e2e/kindle_mode.mjs`.
+
+- **Interception.** The `kindle` blueprint's `before_app_request` hook checks `request.endpoint` against the SPA page endpoints that have a Kindle version (`pages.index/discover/library/all_books` → library, `pages.book_detail` → book, `pages.book_reader/book_chapter_detail` → reader). If `kindle_mode()` is on it returns the Kindle page and the SPA view never runs. `kindle_mode()`: `?kindle=0|1`, then the `kindle` cookie, then `is_kindle_user_agent()`. `after_app_request` adds `Vary: User-Agent, Cookie` on those endpoints; Kindle pages are `Cache-Control: private, no-cache`.
+- **Why a separate front end.** The older Kindle browser is WebKit 531 (Safari 4): it can't run `app.js` (ES modules, ES2015+). E-ink also ghosts on scrolling and animation. So pages are server-rendered and usable without JS, and `kindle.js` is ES5 only (no `let/const`, arrows, classes, template literals, `classList`, `bind`; `test_kindle_script_is_es5` enforces the syntax part).
+- **Pagination.** `#flow` is one viewport tall with `column-width` = viewport width and `column-gap` 72px, so each CSS column is a page; turning a page sets `flow.style.left = -page * (width + gap)`. Page count is the column of `#chapter-end`. If columns aren't supported (content taller than the viewport but still in column 0) it falls back to viewport-tall vertical slices snapped to whole lines. `starts[]`/`ends[]` hold each paragraph's first/last page (from `getClientRects`); the paragraph at the top of the page is the first whose last page ≥ the current page.
+- **Paragraph identity.** `chapter_paragraphs()` splits with `Database._reader_split_paragraphs` (verse passages for `is_poetry` originals), keeps each paragraph's source index as `data-i`, and drops a leading paragraph equal to the chapter title (shown as `<h1>`). Plain English and original indexes pair 1:1 (the Plain English workflow guarantees equal paragraph counts), so the version switch links append `#p=<data-i>` and the other version opens on the same paragraph.
+- **State (cookies, path = base path):** `kpos_<book_id>` = `<chapter>.<paragraph>`, `klast` = last book slug (library *Continue reading*), `ktext` = `plain|original`, `kfs` = text size 1–5 (server sets `fs-N` on `<html>`; default 3), `kindle` = manual override.
+- **Progress.** `Database.get_chapter_outline()` returns each chapter's number, title and character counts (original and Plain English) without the text. The reader gets the characters before this chapter, in it, and in the book; `kindle.js` shows `% of book` and minutes left in the chapter (6 chars/word, 230 wpm).
+- **Inline markup.** The `kindle_inline` Jinja filter escapes a paragraph, then turns `*x*` and `_x_` into `<em>`, the same regexes as the web reader's non-`marked` fallback.
+- **404s** inside Kindle mode render `kindle/not_found.html`.
+
 ### Catalog-Free Routing (Added 2026-10-12)
 
 `/api/books` (the whole library) is only fetched by pages that genuinely list every book (`/books`, `/categories`, search). Everything else renders without it:

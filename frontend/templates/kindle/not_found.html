@@ -1,0 +1,10 @@
+{% extends 'kindle/base.html' %}
+{% block title %}Not found — Plainly{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block body %}
+{% set back_url = base_path ~ '/' %}{% set back_label = 'Library' %}
+{% include 'kindle/_masthead.html' %}
+<h1>Page not found</h1>
+<p>That book or chapter isn't here.</p>
+<p><a class="btn" href="{{ base_path }}/">Back to the library</a></p>
+{% endblock %}

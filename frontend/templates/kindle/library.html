@@ -1,0 +1,39 @@
+{% extends 'kindle/base.html' %}
+{% block title %}Plainly — Classics in Plain English{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block body %}
+{% include 'kindle/_masthead.html' %}
+<p class="tagline">Classic books, rewritten in plain modern English.</p>
+
+{% if continue_book %}
+<a class="continue" href="{{ base_path }}/books/{{ continue_book.slug }}/read">
+  <span class="label">Continue reading</span>
+  <span class="title">{{ continue_book.title }}</span>
+  <span class="author">{{ continue_book.author }}</span>
+</a>
+{% endif %}
+
+<form class="search" action="{{ base_path }}/" method="get">
+  {% if show == 'all' %}<input type="hidden" name="show" value="all">{% endif %}
+  <input type="text" name="q" value="{{ query }}" placeholder="Search title or author">
+  <button type="submit" class="btn">Search</button>
+</form>
+
+<div class="tabs">
+  {% if show == 'plain' %}<span class="tab on">Plain English</span>{% else %}<a class="tab" href="{{ base_path }}/{% if query %}?q={{ query|urlencode }}{% endif %}">Plain English</a>{% endif %}
+  {% if show == 'all' %}<span class="tab on">All books</span>{% else %}<a class="tab" href="{{ base_path }}/?show=all{% if query %}&amp;q={{ query|urlencode }}{% endif %}">All books</a>{% endif %}
+</div>
+
+<ul class="list">
+  {% for book in books %}
+  <li><a href="{{ base_path }}/books/{{ book.slug }}">
+    <span class="title">{{ book.title }}</span>
+    <span class="author">{{ book.author }}{% if not book.has_plain_english %} · Original only{% endif %}</span>
+  </a></li>
+  {% else %}
+  <li class="empty">No books found.</li>
+  {% endfor %}
+</ul>
+{% include 'kindle/_pager.html' %}
+<p class="fineprint"><a href="{{ base_path }}/?kindle=0">Full website</a></p>
+{% endblock %}

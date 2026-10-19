@@ -28,7 +28,7 @@ try:
     from .pchauth.config import AuthConfig
     from .pchauth.config import load_config as load_pchauth_config
     from .pchauth.flask_adapter import init_pchauth
-    from .routes import common, pages, books, taxonomy, authors, blog, system
+    from .routes import common, pages, books, taxonomy, authors, blog, system, kindle
 except ImportError:
     from backend import config
     from backend import models
@@ -38,7 +38,7 @@ except ImportError:
     from backend.pchauth.config import AuthConfig
     from backend.pchauth.config import load_config as load_pchauth_config
     from backend.pchauth.flask_adapter import init_pchauth
-    from backend.routes import common, pages, books, taxonomy, authors, blog, system
+    from backend.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
 # Configure logging
 logging.basicConfig(
@@ -119,6 +119,7 @@ if config.FEATURE_AUTH:
 
 app.register_blueprint(system.bp)
 app.register_blueprint(pages.bp)
+app.register_blueprint(kindle.bp)
 app.register_blueprint(books.bp)
 app.register_blueprint(taxonomy.bp)
 app.register_blueprint(authors.bp)
