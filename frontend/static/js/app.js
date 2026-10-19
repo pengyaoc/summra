@@ -182,6 +182,9 @@ class SummraApp {
                 return;
             }
 
+            // /login is Apache's OIDC sign-in, not an SPA route — let it load.
+            if (href.startsWith(withBasePath('/login'))) return;
+
             // Handle clean URLs
             if (href.startsWith('/') && !href.startsWith(withBasePath('/api/')) && !href.startsWith(withBasePath('/static/'))) {
                 e.preventDefault();
