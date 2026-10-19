@@ -36,7 +36,7 @@ Serves on `127.0.0.1:5000`. Put nginx (`nginx-summra-standalone.conf` +
 
 **Cohosted** (adding Summra to a VM that already runs other services behind Apache):
 ```bash
-sudo deploy/install.sh --prefix /summrabook --bind 127.0.0.1:5001
+sudo deploy/install.sh --prefix /plainly --bind 127.0.0.1:5001
 ```
 This also drops `deploy/apache/summra.conf` into `/etc/apache2/service-locations/`. The host's
 shared vhost (TLS, `ServerName`, `ProxyPreserveHost`, `Define SUMMRA_PREFIX`,

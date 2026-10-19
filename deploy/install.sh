@@ -17,7 +17,7 @@
 #   sudo deploy/install.sh [--user summra] [--prefix ""] [--bind 127.0.0.1:5000]
 #
 # --prefix ""            standalone (mounted at /, default)
-# --prefix /summrabook    cohosted behind Apache at this path — also
+# --prefix /plainly    cohosted behind Apache at this path — also
 #                         installs deploy/apache/summra.conf and requires
 #                         Apache with mod_proxy/mod_headers/mod_expires
 
