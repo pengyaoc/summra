@@ -176,3 +176,13 @@ The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of th
 **Verifier errors in this book were archaic words left in place** ("rue", "thee", "desert", "sexton", "slut" in its old sense) and one or two reversals ("my own amusement" for "your amusement"). Fairy-tale prose is simple, so the rate was low.
 
 **Quotes.** Briefs that say "use curly quotes ‘ ’ “ ” as the source does" worked; the one batch launched before that note used straight quotes, and a smart-quote pass over the JSON fixed it.
+
+
+## Beyond Good and Evil (book 61, 2026-10-18): Codex GPT 6.1 Sol
+
+- **Models:** six Codex writers on `gpt-6.1-sol`, low effort; six separate, fresh verifiers on the same model, medium effort. Maximum three child agents at once.
+- **Source:** 10 sections, 352 paragraphs, 41 chunks. Replaced single-newline paragraph separators; removed transcriber/contents debris preceding the preface and Gutenberg end marker. Retained all aphorisms 1–296 plus 65A/73A/237A, and the closing poem's stanzas. Original chapter rows backed up in the run directory.
+- **QC:** all 352 pairs independently reviewed; 66 paragraphs corrected (18.75%). Most errors were lost hedges or modal scope, uncertainty vs doubt, technical glosses, omitted details and causal/negative reversals. The poem also needed rhetorical polarity and agency fixes. This philosophy text had a higher correction rate than the prior ~5% benchmark; retain the mandatory fresh review and the user's specified effort settings.
+- **Source limitation:** aphorism 190 in both the database and `data/books/pg4363.txt` literally has `[Greek words inserted here.]`. Preserved that omission rather than inventing a quotation. The odd printed ch7 P11 bad-taste claim and Magnus's ambiguous ch9 P59 wording were reviewed against the supplied source.
+- **Result:** every gate passes without warnings; exact paragraph matches, chapter ratios 0.82–0.93. Reader has 352 paired units. All 14 book-specific side-by-side checks, both page smoke checks, and 33 unit tests pass. Reader screenshot inspected. Applied locally; no production deployment.
+- **Provenance:** `data/log/agent_plain_english/book61/completion.json` records model/effort, counts, ratios and hashes of applied text.

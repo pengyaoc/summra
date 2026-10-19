@@ -13,6 +13,12 @@ import { chromium } from 'playwright';
 const BASE = (process.env.BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
 const BOOKS = [
   {
+    id: 61, slug: 'beyond-good-and-evil', chapter: 1,
+    first: { original: /^1\. The Will to Truth/, plain: /^1\..*[Tt]ruth/ },
+    pairs: [{ chapter: 4, index: 0, original: /^63\. He who is a thorough teacher/, plain: /^63\..*teacher/ }],
+    last: { original: /Light and Dark were one that wedding-morn\.$/, plain: /[Ll]ight.*[Dd]ark/ },
+  },
+  {
     id: 2, slug: 'the-origin-of-species', chapter: 11,
     first: { original: /^GEOGRAPHICAL DISTRIBUTION\.$/, plain: /^GEOGRAPHICAL DISTRIBUTION\.$/ },
     pairs: [{ chapter: 14, index: 49, original: /^It is interesting to contemplate an entangled bank/, plain: /bank|plants/ }],

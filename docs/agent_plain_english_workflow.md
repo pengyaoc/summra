@@ -1,10 +1,17 @@
-# Plain English by Claude Subagents (no Gemini)
+# Plain English by Subagents (Codex or Claude, no Gemini)
 
-How to write a book's `chapters.modern_english_text` with Claude subagents and make sure Side-by-Side pairs every paragraph. A **Sonnet** subagent writes each chapter; a **separate, fresh** subagent then verifies it against the original. First run: The Iliad (book 66), 2026-10-16, with Haiku writers. Haiku left too many meaning errors, so the writer is now Sonnet (see `docs/agent_plain_english_learnings.md`).
+How to write a book's `chapters.modern_english_text` with subagents and make sure Side-by-Side pairs every paragraph. Use the host-specific writer below; a **separate, fresh** subagent then verifies it against the original. First run: The Iliad (book 66), 2026-10-16, with Haiku writers. Haiku left too many meaning errors, so the writer is now Sonnet (see `docs/agent_plain_english_learnings.md`).
 
 Lessons from each run, and why these rules exist, are in `docs/agent_plain_english_learnings.md`.
 
 This is an alternative to Step 1 and Step 6 of `docs/plain_english_workflow.md` (the Gemini generator). The cleanup steps (2, 3, 5e) and the audit (Step 4) are the same.
+
+## Agent selection by host (required)
+
+- **Running under Codex:** use Codex collaboration subagents. Writers use **GPT 6.1 Sol** (`gpt-6.1-sol`) with **low** reasoning effort; fresh verifiers use the same model with **medium** reasoning effort. Spawn with `fork_turns="none"` and pass the assignment, repository path, rules path, and role instructions explicitly. Do not launch Claude or Gemini for this workflow.
+- **Running under Claude:** retain the existing **Sonnet** `plain-english-writer` (low effort) and fresh **Sonnet** `plain-english-verifier` (medium effort) agent types in `.claude/agents/`.
+- These role briefs and all cleanup, gate, independent verification, apply, and reader checks below apply to both hosts. Under Codex, include the contents of the relevant role brief in the task or tell the agent to read it; the host/model selection above overrides its Claude-specific frontmatter.
+- Respect the host's actual concurrency limit. Codex currently has four slots including the coordinator, so run at most three child agents at once. Queue remaining assignments; never have a writer verify its own assignment.
 
 ## Why it works
 
@@ -18,7 +25,7 @@ This is an alternative to Step 1 and Step 6 of `docs/plain_english_workflow.md` 
   - there is no "…something. If he…" filler where a that-clause should be, unless the original says "something".
 
   A terminator may be followed by closing quotes, `)`, `]`, `_` or `}` (a braced citation such as `{See Pfeffel.}`). The gate also prints **WARN** lines, which do not fail the chapter: the original has "therefore", "perhaps" or "not only" and the plain English has no equivalent. Dropped connectives were the most common meaning error on The Wealth of Nations, so the verifier checks every WARN line.
-- **Sonnet reads for meaning.** The gate cannot tell a faithful paragraph from a fluent wrong one. A Sonnet subagent per chapter compares every pair and fixes the JSON.
+- **Fresh verifiers read for meaning.** The gate cannot tell a faithful paragraph from a fluent wrong one. A verifier using the host-specific model above compares every pair and fixes the JSON.
 
 ## Steps
 
@@ -51,9 +58,9 @@ PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py export -
 
 Writes `$DIR/in/RULES.md` once per book: the Gemini generator's rules plus the agent output rules. It also writes `$DIR/in/ch<N>/<start>.md`, one short file per chunk: the chapter title, the numbered paragraphs, and the absolute path of the JSON to write in `$DIR/out/ch<N>/`. Agents read RULES.md once, not once per chunk. Before this split, the repeated rules were 39% of all prompt text on Wealth of Nations.
 
-### 3. Sonnet writers (background)
+### 3. Writers (background)
 
-Use the `plain-english-writer` agent type (`.claude/agents/plain-english-writer.md`). It runs on Sonnet with Read, Write and Bash only, and the brief is built in. A launch prompt is just the assignment:
+Use the host-specific model and effort above. Under Claude, use the `plain-english-writer` agent type (`.claude/agents/plain-english-writer.md`), which runs on Sonnet with Read, Write and Bash only. Under Codex, give a Codex subagent the same brief with GPT 6.1 Sol at low effort. A launch prompt is just the assignment:
 
 > Run dir `data/log/agent_plain_english/book<id>`, book id <id>, chapter <N> ("<title>"). You own the WHOLE chapter (or: only these files). Chunk files: `in/ch<N>/001.md, 013.md, …`. Book notes: <one or two lines, e.g. "keep the salt tables verbatim">.
 
@@ -64,11 +71,11 @@ Use the `plain-english-writer` agent type (`.claude/agents/plain-english-writer.
 
 Do not use Haiku: its Iliad drafts passed the gate but needed 317 meaning fixes.
 
-**Plan the sittings.** Every agent counts against the session usage limit, and running more agents at once does not change the total. A limit hit stops every running agent at once. `SendMessage` resumes each one after the reset with its work intact ("the usage limit has reset; re-read your JSON files and continue"). A book over ~1M characters will hit the limit at least once, so agree the plan with the user first. Keep about 10 agents running at a time.
+**Plan the sittings.** Every agent counts against the session usage limit, and running more agents at once does not change the total. A limit hit stops every running agent at once. `SendMessage` resumes each one after the reset with its work intact ("the usage limit has reset; re-read your JSON files and continue"). A book over ~1M characters will hit the limit at least once, so agree the plan with the user first. Respect the host concurrency limit above (at most three child agents under Codex).
 
 **Keep the coordinator cheap.** On Wealth of Nations the coordinator (Opus, one long session) likely cost as much as all the writers. Every report re-read a growing history. Run each sitting in a fresh session on Sonnet, and keep scratch files for doubts and fix tallies so a new session can pick up from them.
 
-**Effort.** The writer runs at `effort: low` and the verifier at `effort: medium`, both set in the agent files. This is new as of 2026-10-18 and untested. On the next book, compare verifier fixes per paragraph with Wealth of Nations' 5%. If the rate rises noticeably, remove `effort: low` from the writer.
+**Effort.** Writers use low effort and fresh verifiers use medium effort. Set these explicitly in Codex spawn arguments; Claude uses the agent files. This is new as of 2026-10-18 and untested. On the next book, compare verifier fixes per paragraph with Wealth of Nations' 5%. If the rate rises noticeably, report it before changing the prescribed effort.
 
 The agents report in at most 6–8 lines, which keeps the coordinator's context small over ~100 launches. Keep their doubt lists in a scratch file, so you can paste them into the verifier assignments without re-reading the reports.
 
@@ -88,7 +95,7 @@ Spot-check 3–4 pairs from the first chapter that finishes before launching the
 PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py review --book-id $BOOK --dir $DIR
 ```
 
-This writes `$DIR/review/ch<N>.md`: each original paragraph next to its Plain English, with the length ratio. Regenerate it after any writer finishes late. Then launch **new** `plain-english-verifier` agents (`.claude/agents/plain-english-verifier.md`). Never ask the writer to check its own work; a fresh context reads the original without the writer's assumptions.
+This writes `$DIR/review/ch<N>.md`: each original paragraph next to its Plain English, with the length ratio. Regenerate it after any writer finishes late. Then launch **new** verifiers using the host-specific model above: GPT 6.1 Sol at medium effort under Codex, or the `plain-english-verifier` agent type (`.claude/agents/plain-english-verifier.md`) under Claude. Never ask the writer to check its own work; a fresh context reads the original without the writer's assumptions.
 
 Size verifier assignments like writers: about 60–80K characters of original text each. Use disjoint paragraph ranges and file lists within a chapter, and several short chapters per verifier.
 

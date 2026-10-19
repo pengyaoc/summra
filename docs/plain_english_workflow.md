@@ -2,6 +2,8 @@
 
 End-to-end process for generating, validating, and fixing `chapters.modern_english_text` — the "plain English" version of each chapter shown alongside the original in the side-by-side reading view.
 
+For full-book generation, default to [the host-native subagent workflow](agent_plain_english_workflow.md): under Codex, GPT 6.1 Sol (`gpt-6.1-sol`) with low effort writers and separate, fresh medium effort verifiers; under Claude, the existing Sonnet writer/verifier agents. Use the Gemini generation steps below only when explicitly requested. The cleanup and audit requirements apply to both paths.
+
 This document is the long-form companion to the "Plain English Workflow" section in `CLAUDE.md`. CLAUDE.md is the cheat-sheet; this is the full story, including every corner case we hit during the first 20-book migration and how we solved it.
 
 ## The end goal
