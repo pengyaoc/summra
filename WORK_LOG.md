@@ -1,5 +1,16 @@
 # Summra Work Log
 
+## 2026-10-18: Grimms' Fairy Tales (book 62) Plain English (complete locally)
+
+User asked to process book 62. All **61 tales now have Plain English, 908 exactly paired paragraphs** (ratios 0.94–1.01). Local DB only; not deployed or committed. DB backup: `data/database.pre-62-plain-20261018.db`. Run dir (gitignored): `data/log/agent_plain_english/book62`.
+- Cleanup: `reformat_paragraphs.py` split 60 of 61 tales (ingest had one hard-wrapped line each). **Order mistake:** I ran the footnote, caption and divider dry-runs *before* the reformat, when every chapter was one paragraph, so they found nothing. Re-run after reformat they found a `*****` divider (ch61, stripped from the original, and from the JSON entry) and the default caption rules, which would have deleted 16 Juniper-tree song lines in ch40 and real headings in ch15/56/57, so they were not run (`--tags-only` finds nothing). ch50 had a `[*] Simpleton` footnote paragraph and a `[*]` marker; both removed from the original and the JSON by hand. ch61 ends with a Grimm-brothers biography paragraph, kept and translated.
+- Writers: 9 Sonnet writers (`effort: low`) at ~60–70K characters each (ch1–8, 9–16, 17–23, 24–30, 31–37, 38–46, 47–53, 54–58, 59–61). First batch spot-checked before launching the rest. No usage limit was hit.
+- Gate workaround again: paragraphs introducing a rhyme or spell end in a colon in the source. Writers changed them to "…sang this song." / "said these words." (about 70 paragraphs). Rhymes were rendered without rhyme, with thee/thou modernized.
+- Quotes: the first batch used straight `'` and `"`; later writers, told to use curly quotes, did. A smart-quote script over the JSON fixed 61 paragraphs before apply.
+- 9 fresh Sonnet verifiers made **17 fixes in 908 paragraphs (1.9%)**: leftover archaic words ("rue" x5, "thee", "desert" meaning wilderness, "slut" meaning untidy woman, "sexton"), a reversed pronoun ("my own amusement"), "grief" turned into "anger", one invented detail ("nine dead men's leg bones"), a dropped "therefore", and a wrong sense in "whom to blame". Six of nine verifier ranges had 0 fixes.
+- Tests: `agent_plain_english_side_by_side.mjs` now includes book 62 and passes (908 rows). `smoke.mjs` (book and reader), `sxs_row_split.mjs` and `reader_opens_at_chapter.mjs` pass.
+- Open: not deployed. Needs the DB copy flow in CLAUDE.md or a per-book `chapters` update on the VM. Check ch53 P6 ("I come" to "I came") if re-reading.
+
 ## 2026-10-18: Sign-in links did nothing (fixed and deployed)
 
 User reported the sign in button doesn't work. Root cause: `setupRouting()`'s delegated `a[href^="/"]` click handler in `app.js` also caught `/login?logout=…`, the Apache OIDC entry point. It ran `pushState` and the SPA router instead of loading the page, so the URL changed and Google sign-in never started. Production showed the same thing (header and footer links). The server side was fine: `/summrabook/login` returns a 302 to Google.

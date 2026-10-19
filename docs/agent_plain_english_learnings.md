@@ -10,6 +10,7 @@ What each Plain English run taught us, and why `docs/agent_plain_english_workflo
 | The Happy Prince (105) | Sonnet | 397 | 7 | 2% |
 | The Wealth of Nations (3) | Sonnet | 2,271 | 109 | 5% |
 | Life on the Mississippi (112) | Sonnet (effort low) | 1,974 | 26 | 1.3% |
+| Grimms' Fairy Tales (62) | Sonnet (effort low) | 908 | 17 | 1.9% |
 
 1. **Sonnet writes; a fresh Sonnet verifies.** Haiku drafts pass the gate but carry many meaning errors. The verifier is never optional: every chapter passed the gate on every book, and verifiers still found real errors.
 2. **The errors depend on the prose.**
@@ -160,3 +161,18 @@ The Iliad's Haiku drafts needed 317. Wilde is easier than Pope, so not all of th
 **Footnotes.** This Gutenberg text has inline `{footnote [...]}` paragraphs. `strip_footnotes.py` does not touch them, and they stay as paired rows. The E2E footnote check was narrowed so "[Illustrations of it…" is not flagged.
 
 **Verifier speed.** Verifiers finished in 20–50 seconds each with few fixes. A spot check of six random pairs and a number-by-number comparison of ch14–17 found no misses.
+
+
+## Grimms' Fairy Tales notes (book 62, 2026-10-18): fairy tales with embedded rhymes
+
+**Size.** 61 tales, 908 paragraphs, 516K characters, 9 writers and 9 verifiers (each about two minutes). 17 verifier fixes (1.9%); six of nine ranges needed none.
+
+**Run the paragraph-level cleanup scripts after `reformat_paragraphs.py`, never before.** The footnote, caption and divider scripts work on `\n\n` paragraphs. Run on hard-wrapped text they report "0 changes" and look clean. Here a `*****` divider and a `[*] Simpleton` footnote slipped through to the writers and had to be removed from both columns afterwards. Re-run all dry-runs after the reformat.
+
+**Do not run the caption script's default rules on verse-bearing prose.** Short unpunctuated lines are real content in fairy tales (the Juniper-tree bird's song, ch40, 16 lines; `FIRST STORY` headings). Use `--tags-only`.
+
+**Rhyme lead-ins hit the terminator rule.** "…and sang:" before a rhyme fails the gate, so writers wrote "…and sang this song." (about 70 paragraphs). Accepted by verifiers. This is the same issue as the Mississippi speech lead-ins; the gate could accept a trailing colon when the next original paragraph is a quotation or verse.
+
+**Verifier errors in this book were archaic words left in place** ("rue", "thee", "desert", "sexton", "slut" in its old sense) and one or two reversals ("my own amusement" for "your amusement"). Fairy-tale prose is simple, so the rate was low.
+
+**Quotes.** Briefs that say "use curly quotes ‘ ’ “ ” as the source does" worked; the one batch launched before that note used straight quotes, and a smart-quote pass over the JSON fixed it.
