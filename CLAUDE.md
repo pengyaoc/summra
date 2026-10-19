@@ -223,7 +223,7 @@ See `WORK_LOG.md` "Failed-to-parse list" for the canonical inventory of skipped 
 
 ## Plain English (Modern Translation) Workflow
 
-**Without Gemini:** to write Plain English with subagents, follow `docs/agent_plain_english_workflow.md`. Use the `plain-english-writer` agent to write and a separate, fresh `plain-english-verifier` agent to check (`.claude/agents/`, both Sonnet); the writing rules come from the Gemini prompt via `RULES.md`. Never use Haiku as the writer. Lessons per book are in `docs/agent_plain_english_learnings.md`.
+**Default subagent workflow:** follow `docs/agent_plain_english_workflow.md` with host-native subagents. **Under Codex**, use GPT 6.1 Sol (`gpt-6.1-sol`) with low effort for writers and medium effort for separate, fresh verifiers. **Under Claude**, retain `plain-english-writer` and fresh `plain-english-verifier` (`.claude/agents/`, both Sonnet, low/medium effort respectively). The writing rules come from the shared prompt via `RULES.md`. Never use Haiku as the writer. Use cleanup, gate, independent meaning review, apply and reader checks from that workflow. Gemini below is an alternative only when explicitly requested. Lessons per book are in `docs/agent_plain_english_learnings.md`.
 
 When generating or fixing the `chapters.modern_english_text` column, follow this 6-step process in order. Steps 2, 3, 4, and 6 are **mechanical** (no LLM cost); step 1 and step 5's regen path are paid Gemini calls — confirm cost discipline before running. **Target is EXACT paragraph match** (`orig - mod == 0`), not ±2 — paragraph boundaries are load-bearing for the side-by-side reading view.
 

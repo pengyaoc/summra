@@ -9613,3 +9613,32 @@ the banner → footer link → Google's account picker → pick the right accoun
 clears) needs a second real Google account, not done live this session — same caveat as
 reader's equivalent entry. Full test suite (523) unaffected — all changes are
 frontend/auth-adapter/Apache-config only, no Python route logic changed.
+
+
+## 2026-10-18 — Beyond Good and Evil Plain English (in progress)
+
+User requested Plain English for existing book 61. Confirmed all ten chapters (preface 0 and chapters 1–9) lack rewrites. Dry-run: eight Gemini batches. Preserved chapter rows in `/private/tmp/plainly-book61-before.json`; removed stray transcriber/contents material before the preface and the Gutenberg end marker. Normalize source paragraph boundaries before generating; stage output for alignment/completeness review before applying.
+
+Generation stopped before producing output: Gemini API returned `402 RESOURCE_EXHAUSTED` (prepayment credits depleted). Asked user whether to use Codex subagents for the alternative writer/verifier workflow. Prepared numbered prompts and added book 61 to the existing side-by-side regression harness. Source audit: 352 paragraphs, all aphorisms 1–296 plus 65A, 73A, 237A retained. Baseline reader manifest: original 352 units; Plain English and side-by-side unavailable (0 units). No translated content applied.
+
+User authorized Codex subagents and specified GPT 6.1 Sol: low effort writing, medium effort independent verification. Updated local workflow and CLAUDE.md routing accordingly; continuing book 61 via numbered paragraph JSON.
+
+Codex writing underway in disjoint chapter groups using `gpt-6.1-sol` low effort. Persisted original chapter backup at `data/log/agent_plain_english/book61/chapters-before.json`. Initial completed drafts: preface/chapter 1 pass (2/26 paragraphs, ratios 0.90/0.83). Existing gate and availability tests: 33 passed. Fresh medium effort verification remains required before apply.
+
+Seven sections drafted and gated (0–5 and 8). Fresh `gpt-6.1-sol` medium effort verifier started on preface/chapter 1 while writers finish 6–7 and 9. Preserve source edition limitations: aphorism 190 literally contains `[Greek words inserted here.]` in both the ingested text and `data/books/pg4363.txt`; no quotation fabricated.
+
+Independent medium effort QC complete for chapters 0–3: 68 pairs reviewed, 18 paragraphs corrected (7 in 0–1, 11 in 2–3), all four chapter gates pass with no connective warnings. Corrections include lost modal/conditional scope, uncertainty vs doubt, a dropped number, and technical glosses. Writers have completed 350/352 draft paragraphs; QC continues for remaining chapters.
+
+All 352 paragraphs drafted in 41 JSON chunks; independent verification complete for 279 paragraphs across sections 0–8. QC has corrected 57 paragraphs so far (7 + 11 + 17 + 13 + 9 across reviewer groups). Final chapter/poem review in progress. No rewrite applied to DB before all independent reviews finish.
+
+### Beyond Good and Evil — complete (local library)
+
+All 10 sections (preface + 9 chapters), 352 paragraphs, written by six fresh-context GPT 6.1 Sol low effort writers and independently reviewed by six fresh GPT 6.1 Sol medium effort verifiers. Review corrected 66 paragraphs (7/11/17/13/9/9 by group); all aphorism/stanza numbers retained. Applied via `passage_rewrite.py apply` after all reviews and dry-run. Every chapter has exact paragraph alignment, ratios 0.82–0.93, no gate warnings.
+
+Validation: 33 gate/Plain English unit tests passed; side-by-side harness passed all 14 checks, walking all 352 paired units and verifying first/last anchors, no gaps, overflow or console errors. Book page and reader smoke checks passed; reader screenshot inspected. Reader manifest exposes original/plain/side_by_side at 352 units each. Local only; no production deployment. Run outputs, original backup and completion audit are in `data/log/agent_plain_english/book61/` (gitignored). Source limitation: aphorism 190 retains the supplied edition's missing-Greek placeholder.
+
+Local instructions now route Codex to `gpt-6.1-sol` low writing/medium fresh verification via AGENTS.md, CLAUDE.md and both workflow documents; Claude's Sonnet setup remains intact.
+
+### GitHub and production deployment — in progress
+
+User authorized commit/push and VM update. Production: `wordpress-2-vm`, `us-west1-a`, project `pelagic-magpie-277922`, app `/opt/summra`, public prefix `/plainly`. Confirmed no tracked VM edits; existing untracked service config/backups preserved. VM book 61 has the expected original source and no Plain English. Deploy only book 61 chapter source/Plain English with source-hash guards and a full content-DB backup; keep unrelated content and user DB intact. Local gate rechecked: 10/10 pass, no warnings.
