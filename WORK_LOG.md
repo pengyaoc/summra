@@ -1,11 +1,12 @@
 # Summra Work Log
 
-## 2026-10-19: Kindle mode sign-in and synced progress (complete locally, not committed or deployed)
+## 2026-10-19: Kindle mode sign-in and synced progress (complete, deployed)
 
 User signed in on a Kindle through `/login` by hand and asked for an entry point in Kindle mode plus progress synced like the web version.
 - Entry points: *Sign in* in the library masthead, a "Sign in to keep your place in sync" line on the library and book pages, and a link in the reader menu. All use the web's logout-first `/login` URL. Signed in shows "Signed in as <email>" (or "Signed in." when the account has no email, as in local off-mode, caught by looking at a screenshot).
 - Sync: new `POST /api/kindle/progress`; the server turns the Kindle's (chapter, paragraph, text) into a web-reader progress mutation, so the ES5 script stays small. Resume, *Continue reading* and the furthest point now come from the account when signed in, so the Kindle and website share one position. Details in ERD "Kindle E-ink Mode" and PRD §12.
 - Tests: 16 new cases in `tests/test_kindle_mode.py` (40 total) failed first, then pass; full pytest **812 passed**. `kindle_mode.mjs` gained 3 sync checks (page turn saved with HTTP 200, `/api/progress/v2/books/<id>` shows the Kindle's paragraph, reopening resumes at that chapter); all checks pass locally. On a signed-out browser (prod test runs) the sync checks are skipped.
+- Deployed `e5bb90e`: pushed main, VM fast-forwarded, gunicorn restarted (active, local HTTP 200, no errors in the log). Public `/`, `/books`, `/api/books` return 200; the Kindle library's Sign in link is `/plainly/login?logout=%2Fplainly%2Flogin`; `POST /plainly/api/kindle/progress` signed out returns 401. `kindle_mode.mjs` passes against production with the sync checks skipped (test browser is signed out), so signed-in sync on production is verified only locally.
 
 ## 2026-10-19: Kindle e-ink mode (complete, deployed)
 
