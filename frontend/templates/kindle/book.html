@@ -1,0 +1,34 @@
+{% extends 'kindle/base.html' %}
+{% block title %}{{ book.title }} — Plainly{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block body %}
+{% set back_url = base_path ~ '/' %}{% set back_label = 'Library' %}
+{% include 'kindle/_masthead.html' %}
+<div class="book-head">
+  {% if cover_url %}<img class="cover" src="{{ cover_url }}" alt="">{% endif %}
+  <div class="book-meta">
+    <h1>{{ book.title }}</h1>
+    <p class="author">{{ book.author }}</p>
+    {% if first_chapter is not none %}
+    <div class="actions">
+      {% if saved %}<a class="btn primary" href="{{ base_path }}/books/{{ book.slug }}/read">Continue reading</a>{% endif %}
+      {% if has_plain %}<a class="btn{% if not saved %} primary{% endif %}" href="{{ base_path }}/books/{{ book.slug }}/read?ch={{ first_chapter }}&amp;text=plain">Read in Plain English</a>{% endif %}
+      <a class="btn" href="{{ base_path }}/books/{{ book.slug }}/read?ch={{ first_chapter }}&amp;text=original">Read the original</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<h2 class="section">Contents</h2>
+<ul class="list contents">
+  {% for c in chapters %}
+  <li><a href="{{ base_path }}/books/{{ book.slug }}/read?ch={{ c.chapter_number }}">
+    <span class="title">{{ c.chapter_title or ('Chapter ' ~ c.chapter_number) }}</span>
+    {% if saved and saved[0] == c.chapter_number %}<span class="author">You are here</span>{% endif %}
+  </a></li>
+  {% else %}
+  <li class="empty">This book has no chapters yet.</li>
+  {% endfor %}
+</ul>
+{% include 'kindle/_pager.html' %}
+{% endblock %}

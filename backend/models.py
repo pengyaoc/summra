@@ -658,6 +658,19 @@ class Database:
 
         return [add_chapter_cues(dict(row)) for row in rows]
 
+    def get_chapter_outline(self, book_id: int) -> List[Dict]:
+        """Chapter numbers and titles with text lengths in characters (no
+        text), for the Kindle reader's contents and whole-book progress."""
+        conn = self.get_connection()
+        rows = conn.execute('''
+            SELECT chapter_number, chapter_title,
+                   LENGTH(COALESCE(chapter_text, '')) AS text_chars,
+                   LENGTH(TRIM(COALESCE(modern_english_text, ''), char(32) || char(9) || char(10) || char(13))) AS plain_chars
+            FROM chapters WHERE book_id = ? ORDER BY chapter_number
+        ''', (book_id,)).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
     def count_chapters(self, book_id: int) -> int:
         """Number of chapters in a book (for the book page's meta row)."""
         conn = self.get_connection()

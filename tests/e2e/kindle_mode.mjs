@@ -1,0 +1,136 @@
+// Kindle e-ink mode: a Kindle user agent gets the paginated, tap-to-turn
+// reader; a desktop browser keeps the SPA.
+//
+//   BASE_URL=http://localhost:5001 node kindle_mode.mjs
+//
+// Screenshots land in ./screenshots/kindle_*.png.
+
+import { chromium } from "playwright";
+import { mkdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const shots = join(here, "screenshots");
+await mkdir(shots, { recursive: true });
+
+const base = (process.env.BASE_URL || "http://localhost:5001").replace(/\/$/, "");
+const SLUG = process.env.KINDLE_SLUG || "pride-and-prejudice";
+const KINDLE_UA =
+  "Mozilla/5.0 (X11; U; Linux armv7l like Android; en-us) AppleWebKit/531.2+ " +
+  "(KHTML, like Gecko) Version/5.0 Safari/533.2+ Kindle/3.0+";
+
+const failures = [];
+const check = (ok, label) => {
+  console.log(`${ok ? "PASS" : "FAIL"} ${label}`);
+  if (!ok) failures.push(label);
+};
+
+const browser = await chromium.launch({ headless: !process.env.HEADED });
+// Paperwhite's browser viewport is roughly 758x1024 CSS px under its toolbar.
+const ctx = await browser.newContext({ userAgent: KINDLE_UA, viewport: { width: 758, height: 950 } });
+const page = await ctx.newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+
+// Library
+await page.goto(`${base}/`);
+check(await page.locator("html.kindle").count() === 1, "home is the Kindle library");
+check(await page.locator('script[src*="app.min.js"], script[src*="/app.js"]').count() === 0, "SPA bundle not loaded");
+check(await page.locator(".list li a").count() > 0, "library lists books");
+await page.screenshot({ path: join(shots, "kindle_library.png") });
+
+// Book page
+await page.goto(`${base}/books/${SLUG}`);
+check(await page.locator("h1").count() === 1, "book page has a title");
+check(await page.locator(".contents li").count() > 0, "book page lists chapters");
+await page.screenshot({ path: join(shots, "kindle_book.png") });
+
+// Reader
+await ctx.clearCookies();
+await page.goto(`${base}/books/${SLUG}/read?ch=1&text=plain`);
+const vp = page.viewportSize();
+const noScroll = await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1);
+check(noScroll, "reader page does not scroll");
+const footer = async () => (await page.locator("#foot").innerText()).trim();
+const flowLeft = () => page.evaluate(() => document.getElementById("flow").style.left);
+check(/%/.test(await footer()), "footer shows progress");
+await page.screenshot({ path: join(shots, "kindle_reader_p1.png") });
+
+const left0 = await flowLeft();
+await page.mouse.click(vp.width * 0.8, vp.height / 2);
+const left1 = await flowLeft();
+check(left0 !== left1, `tap right turns the page (${left0} -> ${left1})`);
+await page.screenshot({ path: join(shots, "kindle_reader_p2.png") });
+await page.mouse.click(vp.width * 0.1, vp.height / 2);
+check((await flowLeft()) === left0, "tap left goes back");
+
+// No line is cut at the page's bottom edge: every visible line box is inside the viewport.
+const cut = await page.evaluate(() => {
+  const v = document.getElementById("viewport").getBoundingClientRect();
+  let bad = 0;
+  for (const p of document.querySelectorAll("#flow p")) {
+    for (const r of p.getClientRects()) {
+      if (r.right <= v.left || r.left >= v.right) continue; // other pages
+      if (r.bottom > v.bottom + 1 || r.top < v.top - 1) bad++;
+    }
+  }
+  return bad;
+});
+check(cut === 0, `no text cut at page edges (${cut})`);
+
+// Menu
+await page.mouse.click(vp.width / 2, 20);
+check(await page.locator("#menu:not(.hidden)").count() === 1, "top tap opens the menu");
+await page.screenshot({ path: join(shots, "kindle_menu.png") });
+const pagesBefore = await page.locator("#menu-pos").innerText();
+await page.click("#bigger");
+const pagesAfter = await page.locator("#menu-pos").innerText();
+check(pagesBefore !== pagesAfter, `A+ re-paginates (${pagesBefore} -> ${pagesAfter})`);
+check((await ctx.cookies()).some((c) => c.name === "kfs" && c.value === "4"), "font size remembered");
+await page.click("#close");
+check(await page.locator("#menu.hidden").count() === 1, "close hides the menu");
+
+// Paging past the last page opens the next chapter.
+for (let i = 0; i < 200 && page.url().includes("ch=1&"); i++) {
+  await page.mouse.click(vp.width * 0.8, vp.height / 2);
+  await page.waitForTimeout(20);
+}
+await page.waitForLoadState("load");
+check(/ch=2/.test(page.url()), `last page turns to chapter 2 (${page.url()})`);
+check((await ctx.cookies()).some((c) => c.name === "kpos_" + "" || c.name.startsWith("kpos_")), "position saved");
+
+// Back from chapter 2's first page lands on chapter 1's last page.
+await page.mouse.click(vp.width * 0.1, vp.height / 2);
+await page.waitForLoadState("load");
+await page.waitForTimeout(100);
+const atEnd = await page.locator("#left").innerText();
+check(/ch=1/.test(page.url()) && /End of chapter/.test(atEnd), `back from chapter 2 opens end of chapter 1 (${atEnd})`);
+await page.screenshot({ path: join(shots, "kindle_reader_end.png") });
+
+// Switching to the original keeps the paragraph.
+await page.mouse.click(vp.width / 2, 20);
+const posCookie = async () => (await ctx.cookies()).find((c) => c.name.startsWith("kpos_"))?.value;
+const plainPara = Number((await posCookie()).split(".")[1]);
+await Promise.all([page.waitForNavigation(), page.click("a.keep:not(.on)")]);
+await page.waitForTimeout(100);
+check(/text=original/.test(page.url()), "switched to original");
+const shown = await page.evaluate((i) => {
+  const v = document.getElementById("viewport").getBoundingClientRect();
+  const p = document.querySelector(`#flow p[data-i="${i}"]`);
+  return !!p && [...p.getClientRects()].some((r) => r.left >= v.left - 1 && r.left < v.right);
+}, plainPara);
+check(shown, `original opens on the same paragraph (${plainPara})`);
+await page.screenshot({ path: join(shots, "kindle_reader_original.png") });
+
+check(errors.length === 0, `no page errors (${errors.join(" | ")})`);
+
+// Desktop is unaffected.
+const desk = await browser.newPage();
+await desk.goto(`${base}/`);
+check(await desk.locator("html.kindle").count() === 0, "desktop browser keeps the normal site");
+
+await browser.close();
+console.log(failures.length ? `\n${failures.length} FAILED` : "\nall checks passed");
+process.exit(failures.length ? 1 : 0);

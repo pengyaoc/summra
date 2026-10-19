@@ -1271,6 +1271,25 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 **Files Modified:**
 - `frontend/templates/index.html:4-12` - Google Analytics script tag
 
+### 12. Kindle E-ink Mode (Added 2026-10-19)
+
+**User story:** As a reader with a Kindle, I open Plainly in the Kindle's browser and read it like a Kindle book: tap to turn pages, no scrolling, crisp black text.
+
+**Trigger:** Only when the browser identifies itself as an e-ink Kindle (user agent contains `Kindle`, excluding Fire tablets, which send `Silk`, a `KF…` model, `Kindle Fire` or `Android <n>`). Every other device gets the normal site. Escape hatches, remembered by cookie: `?kindle=0` (a "Full website" link at the bottom of the Kindle library) and `?kindle=1`.
+
+**Pages (same URLs as the web app):**
+- **Library** (`/`, `/discover`, `/library`, `/books`): wordmark, *Continue reading* card for the last book read, title/author search, *Plain English* (default) / *All books* tabs, 7 books per page with Previous/Next buttons instead of scrolling.
+- **Book** (`/books/<slug>`): cover, title, author, *Continue reading* (when there is a saved position), *Read in Plain English*, *Read the original*, and the contents, 8 chapters per page.
+- **Reader** (`/books/<slug>/read`, `/books/<slug>/chapters/<n>`): one chapter laid out as fixed pages. Running head with the book title; footer with "N mins left in chapter" and % of the book, like a Kindle.
+  - Tap the right two-thirds: next page (past the last page, the next chapter). Tap the left third: previous page (before the first page, the end of the previous chapter). Tap the top band: menu. Arrow/Page keys also work.
+  - Menu: Contents, Library, Plain English / Original switch (opens the other version on the same paragraph), text size A− / A+ (5 sizes), previous/next chapter, page N of M.
+  - Book typography: serif (Bookerly where available), justified and hyphenated, indented paragraphs with no gaps, centred chapter title, an end-of-chapter ornament with a *Next* button. Verse keeps line breaks and is left-aligned. `_x_` / `*x*` render as italics.
+  - Chapters without Plain English show the original with a one-line notice.
+  - Position (chapter + paragraph), last book, text version and size are remembered in cookies, so reopening a book resumes where you stopped. No login needed.
+- **E-ink rules:** black on white only, no gray text, shadows, transitions or animation, 44px+ tap targets, no scrolling in the reader. Without JavaScript the chapter still reads (scrolling) with chapter links below it.
+
+**Out of scope:** summaries, audio, illustrations, sign-in and synced progress, Side-by-Side view.
+
 ## User Workflows
 
 ### Workflow 1: Browsing by Category (Added 2025-11-28)
