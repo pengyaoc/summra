@@ -9642,3 +9642,9 @@ Local instructions now route Codex to `gpt-6.1-sol` low writing/medium fresh ver
 ### GitHub and production deployment — in progress
 
 User authorized commit/push and VM update. Production: `wordpress-2-vm`, `us-west1-a`, project `pelagic-magpie-277922`, app `/opt/summra`, public prefix `/plainly`. Confirmed no tracked VM edits; existing untracked service config/backups preserved. VM book 61 has the expected original source and no Plain English. Deploy only book 61 chapter source/Plain English with source-hash guards and a full content-DB backup; keep unrelated content and user DB intact. Local gate rechecked: 10/10 pass, no warnings.
+
+### Beyond Good and Evil — deployed to production
+
+Committed and pushed `d59645a` to `origin/main`; VM checkout fast-forwarded to that commit. Updated only the ten book 61 chapter source/Plain English fields, guarded by hashes of the prior production source and verified against the local payload. Full content DB backup: `/opt/summra/data/database.pre-book61-plain-20261019T051032Z.db`. Backup and updated database both pass SQLite quick_check. Unrelated books, user DB and existing untracked VM configuration preserved. No new static assets or dependency changes required.
+
+Restarted the `summra` user service; `systemctl --user is-active summra` returned `active`. Live verification at `https://pengyaochen.com/plainly`: all 14 `agent_plain_english_side_by_side.mjs` checks pass, including every one of 352 paired units, correct first/last anchors, chapter opening, no gaps/overflow and no console errors. Public reader: `https://pengyaochen.com/plainly/books/beyond-good-and-evil/read?mode=side_by_side`.
