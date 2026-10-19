@@ -42,6 +42,12 @@ const BOOKS = [
     pairs: [{ chapter: 3, index: 0, original: /^APPARENTLY the river was ready for business/, plain: /river was ready for business/ }],
     last: { original: /descended into the depths below\.$/, plain: /depths below\.$/ },
   },
+  {
+    id: 62, slug: 'grimms-fairy-tales', chapter: 1,
+    first: { original: /^A certain king had a beautiful garden/, plain: /^A certain king had a beautiful garden/ },
+    pairs: [{ chapter: 61, index: 0, original: /^There was once a poor widow who lived in a lonely cottage/, plain: /^Once there was a poor widow who lived in a lonely cottage/ }],
+    last: { original: /ever since\.$/, plain: /children’s reading ever since\.$/ },
+  },
 ].filter((b) => !process.env.BOOKS || process.env.BOOKS.split(',').includes(b.slug));
 
 let failed = false;
