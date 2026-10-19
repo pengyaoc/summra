@@ -1872,7 +1872,7 @@ class SummraApp {
         this.restoreScrollPosition('home');
 
         // Update page title
-        this.updatePageTitle('Free Classic Book Summaries, Chapter Summaries & Full Text | Plainly');
+        this.updatePageTitle('Plainly — Read the Classics in Plain English');
     }
 
     // "Another example" steps through the hero's sentence pairs.

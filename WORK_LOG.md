@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-18: Home tab title shows Plainly (complete, not deployed)
+
+User asked to update the browser-tab text for Plainly. The server already rendered `Plainly — Read the Classics in Plain English`, but `showHomeSection()` in `app.js` replaced it with the pre-rebrand tagline `Free Classic Book Summaries, Chapter Summaries & Full Text | Plainly`, which hid the brand on narrow tabs. The user picked "fix home only": other pages keep `… | Plainly`. Rebuilt `app.min.js` (`build:check` up to date).
+- Test: `tests/e2e/home_tab_title.mjs` checks the title on first load and after SPA navigation back to home. Both checks failed before the fix and pass after; `smoke.mjs` passes.
+- Deploy is static-only (`frontend/static/js/`), so no gunicorn restart needed.
+
 ## 2026-10-18: Production URL moved to pengyaochen.com/plainly (complete, deployed)
 
 User asked to change the domain to `pengyaochen.com/plainly` after the Plainly rename. The app reads `X-Forwarded-Prefix`, so only Apache changed.
