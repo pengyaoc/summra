@@ -23,6 +23,10 @@ This document provides in-depth technical documentation for the Summra project, 
 
 ---
 
+## Brand name
+
+The user-facing name is **Plainly** (renamed from "Summra" on 2026-10-18). Only text a reader sees changed: page titles and meta tags (`backend/routes/*.py`, `index.html`, JS `updatePageTitle` calls), the header logo and footer, `manifest.json`, `robots.txt`, the audio player's album name, and the blog's default author (`'Plainly Team'`). These deliberately keep the old name: the `SummraApp` class and `window.summraApp`, `SUMMRA_*` env vars, the `/summrabook` URL prefix, `summra.db`, deploy/systemd/Apache file names, the repo name and the production domain. `tests/test_brand_name.py` fails if a quoted "Summra" string comes back in the JS, the routes or `app.min.js`.
+
 ## Backend Module Map
 
 *Last restructured 2026-09-05 — see `WORK_LOG.md` Phases 1/3/5 for the history of this split.*

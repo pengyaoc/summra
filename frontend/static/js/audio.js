@@ -371,7 +371,7 @@ export const audioMixin = {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: displayTitle,
                 artist: chapterTitle,
-                album: 'Summra Audiobook Summaries',
+                album: 'Plainly Audiobook Summaries',
                 artwork: coverUrl ? [
                     { src: coverUrl, sizes: '512x512', type: 'image/jpeg' },
                     { src: coverUrl, sizes: '256x256', type: 'image/jpeg' },

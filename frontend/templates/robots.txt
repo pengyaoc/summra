@@ -1,4 +1,4 @@
-# Summra - Classic Book Summaries
+# Plainly - Classic Books in Plain English
 # robots.txt
 
 User-agent: *

@@ -2,7 +2,7 @@
 // BlogPost.render() already set via document.title.
 //
 // Bug: showBlogPost's finishPageTransition() call always passed the generic
-// placeholder 'Blog Post | Summra' as the title, which runs AFTER
+// placeholder 'Blog Post | Plainly' as the title, which runs AFTER
 // blogPost.render(slug) has already called updatePageTitle() with the real
 // post title (BlogPost.js) — silently clobbering it back to the placeholder
 // on every real blog post view.
@@ -60,7 +60,7 @@ try {
         !!realTitle && title.startsWith(realTitle),
         `actual document.title: ${JSON.stringify(title)}, expected to start with: ${JSON.stringify(realTitle)}`);
   check('document.title is not the generic placeholder',
-        title !== 'Blog Post | Summra',
+        title !== 'Blog Post | Plainly',
         `actual: ${JSON.stringify(title)}`);
 } finally {
   await browser.close();

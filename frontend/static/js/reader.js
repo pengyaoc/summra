@@ -196,7 +196,7 @@ export const readerMixin = {
         this.updateBreadcrumbs('medium');
 
         // Update page title
-        this.updatePageTitle(`Summary of ${book.title} by ${book.author} | Summra`);
+        this.updatePageTitle(`Summary of ${book.title} by ${book.author} | Plainly`);
     },
 
     /**
@@ -627,7 +627,7 @@ export const readerMixin = {
         this.updateBreadcrumbs('chapter');
 
         // Update page title
-        this.updatePageTitle(`Full Text of ${chapterTitle} - ${book.title} | Summra`);
+        this.updatePageTitle(`Full Text of ${chapterTitle} - ${book.title} | Plainly`);
 
         // Track chapter view for reading progress
         if (window.authModule && book.id) {
@@ -705,7 +705,7 @@ export const readerMixin = {
         emptyEl?.classList.toggle('hidden', cards.continue_reading.length + cards.finished.length > 0);
         document.getElementById('continue-reading-shelf')?.classList.toggle('hidden', !cards.continue_reading.length);
         document.getElementById('finished-shelf')?.classList.toggle('hidden', !cards.finished.length);
-        this.updatePageTitle('Your Library | Summra');
+        this.updatePageTitle('Your Library | Plainly');
     },
 
     async markReaderBookUnfinished(bookId) {

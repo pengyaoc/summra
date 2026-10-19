@@ -170,7 +170,7 @@ def _home_continue():
 def index():
     """Serve the main page"""
     return render_template('index.html',
-                         meta_title='Summra — Read the Classics in Plain English',
+                         meta_title='Plainly — Read the Classics in Plain English',
                          top_10_books=_top_10_books(),
                          home_continue=_home_continue())
 
@@ -226,7 +226,7 @@ def discover():
     )
     return render_template(
         'index.html',
-        meta_title='Discover Classic Books by Reading Level, Age and Length | Summra',
+        meta_title='Discover Classic Books by Reading Level, Age and Length | Plainly',
         initial_data={'type': 'discover'},
         discover={
             'books': books,
@@ -242,7 +242,7 @@ def library():
     """Authenticated readers populate this shell from the Library API."""
     return render_template(
         'index.html',
-        meta_title='Your Library | Summra',
+        meta_title='Your Library | Plainly',
         initial_data={'type': 'library'},
     )
 
@@ -265,7 +265,7 @@ def book_detail(slug):
     summary_text = concise_summary['content'][:200] if concise_summary else ''
 
     # Prepare meta tags
-    meta_title = f"{book['title']} by {book['author']} - Summary | Summra"
+    meta_title = f"{book['title']} by {book['author']} - Summary | Plainly"
     meta_description = f"Read AI-generated summaries of {book['title']} by {book['author']}. {summary_text}..."
     canonical_url = f"{site_origin()}/books/{slug}"
 
@@ -346,7 +346,7 @@ def book_summary_detail(slug):
     summary_text = medium_summary['content'][:200] if medium_summary else ''
 
     # Prepare meta tags
-    meta_title = f"{book['title']} - Full Summary | Summra"
+    meta_title = f"{book['title']} - Full Summary | Plainly"
     meta_description = f"Read the complete AI-generated summary of {book['title']} by {book['author']}. {summary_text}..."
     canonical_url = f"{site_origin()}/books/{slug}/summary"
 
@@ -403,7 +403,7 @@ def book_reader(slug):
     description = (summary or {}).get('content', '')[:200]
     return render_template(
         'index.html',
-        meta_title=f"Read {book['title']} by {book['author']} | Summra",
+        meta_title=f"Read {book['title']} by {book['author']} | Plainly",
         meta_description=description,
         canonical_url=f"{common.site_origin()}/books/{slug}/read",
         initial_data={
@@ -435,7 +435,7 @@ def book_chapter_detail(slug, chapter_number):
     chapter_title = chapter.get('chapter_title', f'Chapter {chapter_number}')
 
     # Prepare meta tags
-    meta_title = f"{book['title']} - Chapter {chapter_number}: {chapter_title} | Summra"
+    meta_title = f"{book['title']} - Chapter {chapter_number}: {chapter_title} | Plainly"
     meta_description = f"Read Chapter {chapter_number} of {book['title']} by {book['author']}. {chapter_summary}..."
     canonical_url = f"{site_origin()}/books/{slug}/chapters/{chapter_number}"
 
@@ -501,7 +501,7 @@ def category_detail(category_id):
     book_count = len(books)
 
     # Prepare meta tags
-    meta_title = f"{category['name']} - Classic Books | Summra"
+    meta_title = f"{category['name']} - Classic Books | Plainly"
     meta_description = f"Explore {book_count} classic {category['name']} books with AI-generated summaries. Browse timeless literature with concise and comprehensive analyses."
     canonical_url = f"{site_origin()}/categories/{category_id}"
 
@@ -531,7 +531,7 @@ def categories_list():
     categories = db.get_all_categories()
 
     # Prepare meta tags
-    meta_title = "Browse Categories - Classic Book Summaries | Summra"
+    meta_title = "Browse Categories - Classic Book Summaries | Plainly"
     meta_description = f"Browse {len(categories)} categories of classic literature. Discover timeless books organized by genre, theme, and literary movement with AI-generated summaries."
     canonical_url = f"{site_origin()}/categories"
 

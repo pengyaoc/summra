@@ -1,6 +1,6 @@
 {
-  "name": "Summra - Classic Literature Summaries",
-  "short_name": "Summra",
+  "name": "Plainly - Classics in Plain English",
+  "short_name": "Plainly",
   "description": "AI-powered summaries and full text of classic books. Read, listen, and understand classic literature with chapter-by-chapter analysis.",
   "start_url": "{{ base_path }}/",
   "scope": "{{ base_path }}/",

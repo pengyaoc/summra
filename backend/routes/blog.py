@@ -23,7 +23,7 @@ def blog_index():
     db = common.db
     site_origin = common.site_origin
 
-    meta_title = "Blog - Classic Literature Guides | Summra"
+    meta_title = "Blog - Classic Literature Guides | Plainly"
     meta_description = "Read our guides on classic literature, ESL learning, and book recommendations. Learn how to read classics as a non-native English speaker."
     canonical_url = f"{site_origin()}/blog"
 
@@ -34,7 +34,7 @@ def blog_index():
     structured_data = {
         "@context": "https://schema.org",
         "@type": "Blog",
-        "name": "Summra Blog",
+        "name": "Plainly Blog",
         "description": "Classic literature guides and reading tips for ESL learners"
     }
 
@@ -72,7 +72,7 @@ def blog_post_page(slug):
         return render_template('index.html'), 404
 
     # Prepare meta tags
-    meta_title = f"{post['title']} | Summra Blog"
+    meta_title = f"{post['title']} | Plainly Blog"
 
     # Extract first 160 chars for description
     meta_description = post.get('excerpt', '')[:160] if post.get('excerpt') else post['title']
@@ -87,11 +87,11 @@ def blog_post_page(slug):
         "datePublished": post.get('published_date', post.get('created_at', '')),
         "author": {
             "@type": "Organization",
-            "name": post.get('author', 'Summra Team')
+            "name": post.get('author', 'Plainly Team')
         },
         "publisher": {
             "@type": "Organization",
-            "name": "Summra"
+            "name": "Plainly"
         }
     }
 
