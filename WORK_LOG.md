@@ -1,11 +1,11 @@
 # Summra Work Log
 
-## 2026-10-18: Sign-in links did nothing (fixed locally)
+## 2026-10-18: Sign-in links did nothing (fixed and deployed)
 
 User reported the sign in button doesn't work. Root cause: `setupRouting()`'s delegated `a[href^="/"]` click handler in `app.js` also caught `/login?logout=…`, the Apache OIDC entry point. It ran `pushState` and the SPA router instead of loading the page, so the URL changed and Google sign-in never started. Production showed the same thing (header and footer links). The server side was fine: `/summrabook/login` returns a 302 to Google.
 - Fix: the router lets any link starting with `withBasePath('/login')` load normally. Rebuilt `app.min.js`.
 - Test: `tests/e2e/signin_link_navigates.mjs` clicks the phone header link and the desktop footer link and checks that the browser requests `/login`. It failed before the fix (URL changed, no request) and passes after. `mobile_header.mjs` and `smoke.mjs` pass.
-- Deploy: static JS only (`app.js`, `app.min.js`), so no gunicorn restart is needed.
+- Deployed `af4f6ef`: production fast-forwarded from `f6b4667`. Only static JS changed, so there was no gunicorn restart. The live page loads the new `app.min.js?v=301915641`, which matches the local bundle's CRC. `signin_link_navigates.mjs` passes against production (both links), and a real click on the footer link reached Google's account chooser.
 
 ## 2026-10-18: Pending commits pushed; Origin of Species deployed (complete)
 
