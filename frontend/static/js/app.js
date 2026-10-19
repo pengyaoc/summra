@@ -1137,7 +1137,7 @@ class SummraApp {
         this.updateURL(book);
 
         // Update page title
-        this.updatePageTitle(`${book.title} by ${book.author} | Summra`);
+        this.updatePageTitle(`${book.title} by ${book.author} | Plainly`);
     }
 
     showBookDetail(restoreScroll = false) {
@@ -1872,7 +1872,7 @@ class SummraApp {
         this.restoreScrollPosition('home');
 
         // Update page title
-        this.updatePageTitle('Free Classic Book Summaries, Chapter Summaries & Full Text | Summra');
+        this.updatePageTitle('Free Classic Book Summaries, Chapter Summaries & Full Text | Plainly');
     }
 
     // "Another example" steps through the hero's sentence pairs.
@@ -1990,7 +1990,7 @@ class SummraApp {
             pageKey,
             restoreScroll,
             categoryData && categoryData.category
-                ? `${categoryData.category.name} - Classic Books | Summra`
+                ? `${categoryData.category.name} - Classic Books | Plainly`
                 : null
         );
     }
@@ -2023,7 +2023,7 @@ class SummraApp {
             'all-categories',
             'all-categories',
             restoreScroll,
-            'Browse Categories - Classic Book Summaries | Summra'
+            'Browse Categories - Classic Book Summaries | Plainly'
         );
     }
 
@@ -2111,7 +2111,7 @@ class SummraApp {
                 'author',
                 `author-${authorName}`,
                 restoreScroll,
-                `${authorName} - Author | Summra`
+                `${authorName} - Author | Plainly`
             );
         } catch (error) {
             console.error('Error loading author:', error);
@@ -2151,7 +2151,7 @@ class SummraApp {
             [...Object.keys(DISCOVER_FILTERS), 'sort'].map(name => [name, query.get(name)])
         ), false);
 
-        this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Summra');
+        this.finishPageTransition('discover', 'discover', restoreScroll, 'Discover Classic Books | Plainly');
         this.revealHowWeGrade();
     }
 
@@ -2277,7 +2277,7 @@ class SummraApp {
 
             ${books.length > 0 ? `
                 <div class="author-books-section">
-                    <h2>Books on Summra <span class="count">(${books.length})</span></h2>
+                    <h2>Books on Plainly <span class="count">(${books.length})</span></h2>
                     <div id="author-books-carousel" class="books-carousel"></div>
                 </div>
             ` : ''}
@@ -2388,7 +2388,7 @@ class SummraApp {
             'blog',
             'blog',
             restoreScroll,
-            'Blog - Classic Literature Guides | Summra'
+            'Blog - Classic Literature Guides | Plainly'
         );
     }
 
@@ -2413,7 +2413,7 @@ class SummraApp {
             'blog-post',
             `blog-post-${slug}`,
             restoreScroll,
-            this.blogPost.post ? null : 'Blog Post | Summra'
+            this.blogPost.post ? null : 'Blog Post | Plainly'
         );
     }
 

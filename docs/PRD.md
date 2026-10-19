@@ -1,8 +1,10 @@
-# Summra - Product Requirements Document
+# Plainly - Product Requirements Document
 
 ## Product Vision
 
-Summra makes public-domain classics easier to read. The headline feature is a **sentence-by-sentence rewrite of every chapter into modern English**, displayed side-by-side with the original. Summaries (short and full), chapter-by-chapter breakdowns, AI illustrations, and audio narration round out the experience.
+Plainly makes public-domain classics easier to read. The headline feature is a **sentence-by-sentence rewrite of every chapter into modern English**, displayed side-by-side with the original. Summaries (short and full), chapter-by-chapter breakdowns, AI illustrations, and audio narration round out the experience.
+
+**Brand:** the product is called **Plainly** (renamed from "Summra" on 2026-10-18, when the focus moved from summaries to Plain English). Code identifiers, env vars, URLs and deploy names still say `summra` — see ERD "Brand name".
 
 **Mission:** Democratize access to classic literature by removing the language barrier — translating Victorian, Romantic, and Enlightenment-era prose into the English a modern reader actually speaks, while preserving the original.
 
@@ -290,7 +292,7 @@ Users can browse a curated collection of classic books with cover images and met
     - 0.75rem gap between books in carousel
 
 **Header Navigation (Added 2025-11-28, Updated 2025-11-28):**
-- **Logo and Home Link:** Left side (Summra icon + text)
+- **Logo and Home Link:** Left side (Plainly icon + text)
 - **Navigation Menu Items:** Right side (left-aligned, 20px from logo)
   - "Categories" → All Categories page
   - "All Books" → All Books grid page
@@ -1661,7 +1663,7 @@ Each book details page now includes an "About the Author" section with author in
   - Author biography (placeholder: 100 words, ready for AI-generated content)
 
 - **Books by This Author:**
-  - Scrollable carousel of other books by the same author available on Summra
+  - Scrollable carousel of other books by the same author available on Plainly
   - Book covers displayed when available
   - Left/right navigation arrows for browsing
   - Click any book to navigate to its details page
@@ -1674,7 +1676,7 @@ Each book details page now includes an "About the Author" section with author in
 **Specifications:**
 - Shows up to 20 books by the same author
 - Excludes the current book from the carousel
-- Automatically hides section if author has no other books on Summra
+- Automatically hides section if author has no other books on Plainly
 - Reuses carousel design from "You May Also Like" for consistency
 
 ### Enhanced Chapter Experience
@@ -2072,7 +2074,7 @@ Controls depend on the input device, not the screen width: mouse is first class 
 
 **Document Version:** 2.0
 **Last Updated:** 2025-12-19
-**Author:** Summra Team
+**Author:** Plainly Team
 **Status:** Living Document
 
 
@@ -2124,7 +2126,7 @@ Automated audit system to verify data integrity of chapter text stored in the da
 
 **Document Version:** 2.0
 **Last Updated:** 2025-12-14
-**Author:** Summra Team
+**Author:** Plainly Team
 **Status:** Living Document
 
 
@@ -2138,12 +2140,12 @@ Automated audit system to verify data integrity of chapter text stored in the da
 
 ### Overview
 
-Summra can be installed to a device's home screen for a native, browser-chrome-free launch experience. It has no offline mode: the app assumes an internet connection is always available. The previous "Progressive Web App" offering (service worker, automatic page caching, "Save for Offline" book downloads, an offline fallback page) was removed — it caused more problems (stale-cache bugs, iOS cache-eviction workarounds, sync complexity) than it solved. See `WORK_LOG.md` for the removal entry.
+Plainly can be installed to a device's home screen for a native, browser-chrome-free launch experience. It has no offline mode: the app assumes an internet connection is always available. The previous "Progressive Web App" offering (service worker, automatic page caching, "Save for Offline" book downloads, an offline fallback page) was removed — it caused more problems (stale-cache bugs, iOS cache-eviction workarounds, sync complexity) than it solved. See `WORK_LOG.md` for the removal entry.
 
 ### User Stories
 
 **As a mobile user**, I want to:
-- Install Summra as an app on my home screen
+- Install Plainly as an app on my home screen
 - Have the app feel native without browser chrome
 
 **As an iOS user**, I want to:
@@ -2159,7 +2161,7 @@ Summra can be installed to a device's home screen for a native, browser-chrome-f
 #### Installable App
 
 **What:**
-- Users can install Summra as a standalone app
+- Users can install Plainly as a standalone app
 - App icon appears on device home screen
 - Opens in full-screen mode (no browser UI)
 
@@ -2312,5 +2314,5 @@ When updating the PRD or ERD for a feature-flagged subsystem, always note the fl
 
 **Document Version:** 2.2
 **Last Updated:** 2026-05-30
-**Author:** Summra Team
+**Author:** Plainly Team
 **Status:** Living Document

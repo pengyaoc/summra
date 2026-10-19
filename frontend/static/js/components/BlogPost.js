@@ -31,7 +31,7 @@ class BlogPost {
 
         // Format date
         const date = this.formatDate(this.post.published_date || this.post.created_at);
-        const author = this.post.author || 'Summra Team';
+        const author = this.post.author || 'Plainly Team';
 
         // Render markdown content (strip first H1 since we show title in header)
         let content = this.post.content;
@@ -70,7 +70,7 @@ class BlogPost {
         `;
 
         // Update page title and breadcrumb with actual post title
-        this.app.updatePageTitle(`${this.post.title} | Summra Blog`);
+        this.app.updatePageTitle(`${this.post.title} | Plainly Blog`);
         this.app.currentBlogPost = this.post;
         this.app.updateBreadcrumbs('blog-post');
 

@@ -22,25 +22,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Primary Meta Tags -->
-    <title>{{ meta_title|default('Summra — Read the Classics in Plain English') }}</title>
+    <title>{{ meta_title|default('Plainly — Read the Classics in Plain English') }}</title>
     <meta name="description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free.') }}">
     <meta name="keywords" content="classic books, book summaries, literature summaries, AI summaries, public domain books, chapter summaries, {{ meta_keywords|default('') }}">
-    <meta name="author" content="Summra">
+    <meta name="author" content="Plainly">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="{{ canonical_url|default(site_origin ~ '/') }}">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{{ og_type|default('website') }}">
     <meta property="og:url" content="{{ canonical_url|default(site_origin ~ '/') }}">
-    <meta property="og:title" content="{{ meta_title|default('Summra — Read the Classics in Plain English') }}">
+    <meta property="og:title" content="{{ meta_title|default('Plainly — Read the Classics in Plain English') }}">
     <meta property="og:description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English. Read side-by-side with the original, or just the plain version. Free.') }}">
     <meta property="og:image" content="{{ og_image|default(site_origin ~ '/static/images/og-image.png') }}">
-    <meta property="og:site_name" content="Summra">
+    <meta property="og:site_name" content="Plainly">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="{{ canonical_url|default(site_origin ~ '/') }}">
-    <meta name="twitter:title" content="{{ meta_title|default('Summra — Read the Classics in Plain English') }}">
+    <meta name="twitter:title" content="{{ meta_title|default('Plainly — Read the Classics in Plain English') }}">
     <meta name="twitter:description" content="{{ meta_description|default('Every classic, rewritten sentence-by-sentence into modern English.') }}">
     <meta name="twitter:image" content="{{ og_image|default(site_origin ~ '/static/images/og-image.png') }}">
 
@@ -57,7 +57,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="Summra">
+    <meta name="apple-mobile-web-app-title" content="Plainly">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}{{ asset_v('css/style.css') }}">
 
@@ -86,7 +86,7 @@
         <div class="ios-banner-content">
             <div class="ios-banner-icon">📱</div>
             <div class="ios-banner-text">
-                <div class="ios-banner-title">Install Summra</div>
+                <div class="ios-banner-title">Install Plainly</div>
                 <div class="ios-banner-subtitle">
                     Tap <svg class="ios-share-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z"/></svg> then "Add to Home Screen"
                 </div>
@@ -102,9 +102,9 @@
                 <a href="{{ base_path }}/" class="header-link" id="header-home-link">
                     <picture>
                         <source srcset="{{ url_for('static', filename='images/icon.webp') }}{{ asset_v('images/icon.webp') }}" type="image/webp">
-                        <img src="{{ url_for('static', filename='images/icon.png') }}{{ asset_v('images/icon.png') }}" alt="Summra Icon" class="logo-icon">
+                        <img src="{{ url_for('static', filename='images/icon.png') }}{{ asset_v('images/icon.png') }}" alt="Plainly Icon" class="logo-icon">
                     </picture>
-                    <h1 class="logo">Summra</h1>
+                    <h1 class="logo">Plainly</h1>
                 </a>
                 <div class="header-nav-buttons">
                     <a href="{{ base_path }}/library" class="header-nav-btn hidden" id="library-nav-btn">Library</a>
@@ -780,7 +780,7 @@
         {% if not initial_data or initial_data.type != 'chapter' %}
         <footer class="footer">
             <div class="footer-row">
-                <p class="footer-note">© 2026 Summra · The classics in Plain English</p>
+                <p class="footer-note">© 2026 Plainly · The classics in Plain English</p>
                 <nav class="footer-links" aria-label="Footer">
                     <a href="{{ base_path }}/discover">Discover</a>
                     <a href="{{ base_path }}/categories">Categories</a>

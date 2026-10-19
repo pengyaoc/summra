@@ -246,7 +246,7 @@ function updateAuthUI() {
     document.getElementById('library-nav-btn')?.classList.toggle('hidden', !currentUser);
     const banner = document.getElementById('wrong-account-banner');
     if (banner) {
-        banner.textContent = wrongAccountEmail ? `Signed in as ${wrongAccountEmail}, which isn't authorized for Summra.` : '';
+        banner.textContent = wrongAccountEmail ? `Signed in as ${wrongAccountEmail}, which isn't authorized for Plainly.` : '';
         banner.classList.toggle('hidden', !wrongAccountEmail);
     }
 }

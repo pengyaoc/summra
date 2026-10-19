@@ -45,7 +45,7 @@ def slugify(text: str) -> str:
 
 
 class Database:
-    """Database handler for Summra"""
+    """Database handler for Plainly"""
 
     def __init__(self, db_path: Path = config.DATABASE_PATH):
         self.db_path = db_path
@@ -211,7 +211,7 @@ class Database:
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
                 excerpt TEXT,
-                author TEXT DEFAULT 'Summra Team',
+                author TEXT DEFAULT 'Plainly Team',
                 published_date DATE,
                 updated_date DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1744,7 +1744,7 @@ class Database:
     # Blog-related methods
 
     def add_blog_post(self, slug: str, title: str, content: str, excerpt: str = None,
-                      author: str = 'Summra Team', published_date: str = None, header_image_url: str = None) -> int:
+                      author: str = 'Plainly Team', published_date: str = None, header_image_url: str = None) -> int:
         """Add a new blog post to the database"""
         conn = self.get_connection()
         cursor = conn.cursor()

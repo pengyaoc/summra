@@ -95,7 +95,7 @@ def author_page(author_slug):
     books = db.get_books_by_author_id(author['id'], limit=100) if author.get('id') else []
 
     # Prepare meta tags
-    meta_title = f"{author_name} - Author Profile | Summra"
+    meta_title = f"{author_name} - Author Profile | Plainly"
     meta_description = f"Explore books and summaries by {author_name}."
     if author.get('short_bio'):
         meta_description = author['short_bio'][:160]

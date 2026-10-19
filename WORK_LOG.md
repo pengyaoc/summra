@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-18: Brand renamed Summra → Plainly (complete, not deployed)
+
+User picked "Plainly" from a name shortlist, since the app's focus moved from summaries to Plain English. Changed only user-facing text: page titles and meta/OG tags, logo, footer, iOS install banner, manifest, robots.txt, audio album name, the "isn't authorized for…" sign-in banner, and the blog's default author. Code identifiers, `SUMMRA_*` env vars, the `/summrabook` prefix, DB and deploy names are unchanged (listed in ERD "Brand name"). Rebuilt `app.min.js`.
+- Test: `tests/test_brand_name.py` (24 cases) failed before the change and passes after; full pytest **767 passed**. `smoke.mjs` passes on `/` and `/discover`. `/blog` returns 404 locally on unchanged `main` too, so `blog_post_title_not_overwritten.mjs` can't run here (string updated to `Blog Post | Plainly`).
+- Not done: 8 existing `blog_posts` rows in the DB still say "Summra" in their content or author. Prod needs a pull plus a gunicorn restart (templates and backend changed).
+
 ## 2026-10-18: Grimms' Fairy Tales (book 62) Plain English (complete, deployed to production)
 
 User asked to process book 62. All **61 tales now have Plain English, 908 exactly paired paragraphs** (ratios 0.94–1.01). Deployed to production (see below). DB backup: `data/database.pre-62-plain-20261018.db`. Run dir (gitignored): `data/log/agent_plain_english/book62`.
