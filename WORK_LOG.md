@@ -1,10 +1,11 @@
 # Summra Work Log
 
-## 2026-10-19: Kindle home shows books in progress with progress (complete locally, not committed or deployed)
+## 2026-10-19: Kindle home shows books in progress with progress (complete, deployed)
 
 User asked to see the books they were reading, with progress, on the Kindle home page. Signed in, home now starts with *Reading now*: up to 3 books in progress (the website Library's Continue reading list), each with current chapter, a black progress bar and the furthest-point %, linking into the reader; *See all N* opens `/?show=reading`, paginated. Signed out keeps the single cookie-based Continue reading card.
 - Tests: 4 new cases in `tests/test_kindle_mode.py` failed first, then pass (44 total). `test_signed_in_library_continue_reading_comes_from_account` was updated to the new behaviour at the user's request ("Reading now" replaces the signed-in Continue reading card). Full pytest **816 passed**.
 - `kindle_mode.mjs` caught a regression: the new `.reading` CSS also matched the reader's `<html class="reading">`, adding an 18 px margin so the reader page could scroll. Scoped to `section.reading`; all checks pass. Screenshot of the home page checked.
+- Deployed `6fcdef6`: pushed main, VM fast-forwarded, gunicorn restarted (active, local HTTP 200, no errors in the log). Public `/`, `/books`, `/api/books` return 200; signed-out `/?show=reading` falls back to the Plain English list; the live `kindle.css` has the scoped `section.reading` rules. `kindle_mode.mjs` passes against production (sync checks skipped: the test browser is signed out), so the signed-in Reading now list is verified locally only.
 
 ## 2026-10-19: Kindle mode sign-in and synced progress (complete, deployed)
 
