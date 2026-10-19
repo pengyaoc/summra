@@ -6,7 +6,7 @@
 //
 // Usage:
 //   OUT_DIR=../../docs/redesign/before/local node capture_pages.mjs
-//   BASE_URL=https://pengyaochen.com/summrabook OUT_DIR=... node capture_pages.mjs
+//   BASE_URL=https://pengyaochen.com/plainly OUT_DIR=... node capture_pages.mjs
 //
 // Exit code is non-zero if any page fails to load (non-2xx).
 

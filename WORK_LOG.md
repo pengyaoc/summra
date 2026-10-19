@@ -1,5 +1,13 @@
 # Summra Work Log
 
+## 2026-10-18: Production URL moved to pengyaochen.com/plainly (complete, deployed)
+
+User asked to change the domain to `pengyaochen.com/plainly` after the Plainly rename. The app reads `X-Forwarded-Prefix`, so only Apache changed.
+- Repo: `deploy/apache/summra.conf` now has `RedirectMatch 301 ^/summrabook(/.*)?$ ${SUMMRA_PREFIX}$1`, so old links land on the same page and keep their query string. `tests/test_apache_conf.py` renders the fragment the way `install.sh` does; it failed before the line was added and passes after. Full pytest **770 passed**. Deploy docs' example prefix is now `/plainly`.
+- VM: pulled `ed07a6b`. Backed up the vhost (`wordpress-https.conf.bak-<ts>-plainly`) and the old fragment (moved to `/etc/apache2/summra.conf.bak-<ts>-plainly`, outside `service-locations/` so `*.conf` doesn't include it). Changed `Define SUMMRA_PREFIX` to `/plainly`, re-rendered the fragment with install.sh's sed, `apache2ctl configtest` OK, reloaded Apache. No gunicorn restart (no app code changed). OIDC needed no change: its callback is `/oidc/callback` and the cookie path is `/`.
+- Verified: `/plainly/`, `/api/books`, `manifest.json`, `sitemap.xml`, `robots.txt` and static CSS return 200; `/plainly/login` sends you to Google; `APP_BASE_PATH`, canonical, manifest `start_url` and the robots sitemap line all use `/plainly`. `/summrabook`, `/summrabook/` and `/summrabook/books/moby-dick-or-the-whale?…` 301 to the `/plainly` equivalents. Smoke passes against prod (home, Moby Dick, discover), and `signin_link_navigates.mjs` passes. WordPress root still 200.
+- Follow-up for the user: update Google Search Console (new sitemap URL) and any links outside this server.
+
 ## 2026-10-18: Brand renamed Summra → Plainly (complete, deployed to production)
 
 User picked "Plainly" from a name shortlist, since the app's focus moved from summaries to Plain English. Changed only user-facing text: page titles and meta/OG tags, logo, footer, iOS install banner, manifest, robots.txt, audio album name, the "isn't authorized for…" sign-in banner, and the blog's default author. Code identifiers, `SUMMRA_*` env vars, the `/summrabook` prefix, DB and deploy names are unchanged (listed in ERD "Brand name"). Rebuilt `app.min.js`.

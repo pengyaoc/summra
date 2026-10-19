@@ -4,7 +4,7 @@
 
 Plainly makes public-domain classics easier to read. The headline feature is a **sentence-by-sentence rewrite of every chapter into modern English**, displayed side-by-side with the original. Summaries (short and full), chapter-by-chapter breakdowns, AI illustrations, and audio narration round out the experience.
 
-**Brand:** the product is called **Plainly** (renamed from "Summra" on 2026-10-18, when the focus moved from summaries to Plain English). Code identifiers, env vars, URLs and deploy names still say `summra` — see ERD "Brand name".
+**Brand:** the product is called **Plainly** (renamed from "Summra" on 2026-10-18, when the focus moved from summaries to Plain English). It lives at `pengyaochen.com/plainly` (old `/summrabook` links redirect). Code identifiers, env vars and deploy names still say `summra` — see ERD "Brand name".
 
 **Mission:** Democratize access to classic literature by removing the language barrier — translating Victorian, Romantic, and Enlightenment-era prose into the English a modern reader actually speaks, while preserving the original.
 
