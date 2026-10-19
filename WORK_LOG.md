@@ -1,12 +1,13 @@
 # Summra Work Log
 
-## 2026-10-19: Kindle e-ink mode (complete locally, not committed or deployed)
+## 2026-10-19: Kindle e-ink mode (complete, deployed)
 
 User asked for an e-ink Kindle mode like WeChat Reading's ink version (微信读书墨水屏版), triggered only when the device is a Kindle. Research: Kindle's browser has no app install, is slow, and ghosts on scrolling (sspai); the older browser is WebKit 531, so `app.js` can't run there. Design: a separate server-rendered front end at the same URLs (library → book → reader), tap-to-turn CSS-column pages, ES5 script, black-on-white, no animation. Details in PRD §12 and ERD "Kindle E-ink Mode".
 - Detection: `backend/kindle.py`. The Paperwhite UA says "like Android", so Fire tablets are excluded by `Android <digit>`, `Silk`, `KF…` or `Kindle Fire` (caught by the first test run). `?kindle=0|1` overrides by cookie.
 - Bug found by the e2e test: the resume paragraph was the last one *starting* on the page, so A+ jumped a page ahead. Now it's the first paragraph whose last page is ≥ the current page.
 - Tests: `tests/test_kindle_mode.py` (24) failed first, then pass; full pytest **796 passed**. `tests/e2e/kindle_mode.mjs` (21 checks: no scroll, tap right/left, no cut lines, menu, A+ re-paginates and is remembered, last page → next chapter, back → end of previous chapter, Plain↔Original keeps the paragraph, desktop unaffected) passes; `smoke.mjs` passes on `/`, `/discover`, book and reader pages with a desktop UA.
 - Not verified on a real Kindle. The Kindle UA on the newest firmware (5.16.4+, updated browser) wasn't confirmed by any source; if it lacks the `Kindle` token, detection misses and the reader can use `?kindle=1`.
+- Deployed `9e49d25`: pushed main, VM fast-forwarded from `e708282`, gunicorn restarted (new templates and backend; active, local HTTP 200, no errors in the log). Public `/`, `/books`, `/api/books` return 200. `kindle_mode.mjs` passes all 21 checks against `https://pengyaochen.com/plainly` (links and cookies work under the prefix) and `smoke.mjs` passes on `/` and a book page with a desktop UA.
 
 ## 2026-10-18: Home tab title shows Plainly (complete, deployed)
 
