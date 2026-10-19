@@ -1288,7 +1288,13 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
   - Position (chapter + paragraph), last book, text version and size are remembered in cookies, so reopening a book resumes where you stopped. No login needed.
 - **E-ink rules:** black on white only, no gray text, shadows, transitions or animation, 44px+ tap targets, no scrolling in the reader. Without JavaScript the chapter still reads (scrolling) with chapter links below it.
 
-**Out of scope:** summaries, audio, illustrations, sign-in and synced progress, Side-by-Side view.
+- **Sign-in and synced progress (added 2026-10-19):** signed out, the library masthead has *Sign in*, the library and book pages end with "Sign in to keep your place in sync with the website", and the reader menu has the same link. They go to the website's `/login` (Google). Signed in, those pages say "Signed in as <email>. Your place syncs with the website." Each page you settle on is saved to your account, the same place the web reader saves, so:
+  - Opening a book on the Kindle (or *Continue reading*) resumes where you last read on any device. A Side-by-Side position opens as Plain English; a Summary position is ignored.
+  - The web reader and Library resume from where you stopped on the Kindle, and the Kindle library's *Continue reading* card shows your account's latest book.
+  - Paging forward counts toward your furthest point and toward a book counting as started; turning back doesn't lower it. Staying 2 seconds on the book's last page after paging to it marks the book finished.
+  - Signed out, the Kindle keeps your place in cookies on the device, as before.
+
+**Out of scope:** summaries, audio, illustrations, Side-by-Side view.
 
 ## User Workflows
 

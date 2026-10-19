@@ -1,5 +1,12 @@
 # Summra Work Log
 
+## 2026-10-19: Kindle mode sign-in and synced progress (complete locally, not committed or deployed)
+
+User signed in on a Kindle through `/login` by hand and asked for an entry point in Kindle mode plus progress synced like the web version.
+- Entry points: *Sign in* in the library masthead, a "Sign in to keep your place in sync" line on the library and book pages, and a link in the reader menu. All use the web's logout-first `/login` URL. Signed in shows "Signed in as <email>" (or "Signed in." when the account has no email, as in local off-mode, caught by looking at a screenshot).
+- Sync: new `POST /api/kindle/progress`; the server turns the Kindle's (chapter, paragraph, text) into a web-reader progress mutation, so the ES5 script stays small. Resume, *Continue reading* and the furthest point now come from the account when signed in, so the Kindle and website share one position. Details in ERD "Kindle E-ink Mode" and PRD §12.
+- Tests: 16 new cases in `tests/test_kindle_mode.py` (40 total) failed first, then pass; full pytest **812 passed**. `kindle_mode.mjs` gained 3 sync checks (page turn saved with HTTP 200, `/api/progress/v2/books/<id>` shows the Kindle's paragraph, reopening resumes at that chapter); all checks pass locally. On a signed-out browser (prod test runs) the sync checks are skipped.
+
 ## 2026-10-19: Kindle e-ink mode (complete, deployed)
 
 User asked for an e-ink Kindle mode like WeChat Reading's ink version (微信读书墨水屏版), triggered only when the device is a Kindle. Research: Kindle's browser has no app install, is slow, and ghosts on scrolling (sspai); the older browser is WebKit 531, so `app.js` can't run there. Design: a separate server-rendered front end at the same URLs (library → book → reader), tap-to-turn CSS-column pages, ES5 script, black-on-white, no animation. Details in PRD §12 and ERD "Kindle E-ink Mode".

@@ -2,7 +2,7 @@
 {% block html_class %}reading fs-{{ font_size }}{% endblock %}
 {% block title %}{{ chapter.chapter_title or ('Chapter ' ~ chapter.chapter_number) }} — {{ book.title }}{% endblock %}
 {% block body_class %}reader{% endblock %}
-{% block body_attrs %}data-book="{{ book.id }}" data-slug="{{ book.slug }}" data-ch="{{ chapter.chapter_number }}" data-text="{{ text }}" data-start="{{ start }}" data-before="{{ chars_before }}" data-chars="{{ chapter_chars }}" data-total="{{ total_chars }}" data-cookie-path="{{ cookie_path }}"{% if prev_url %} data-prev="{{ prev_url }}"{% endif %}{% if next_url %} data-next="{{ next_url }}"{% endif %}{% endblock %}
+{% block body_attrs %}data-book="{{ book.id }}" data-slug="{{ book.slug }}" data-ch="{{ chapter.chapter_number }}" data-text="{{ text }}" data-start="{{ start }}" data-before="{{ chars_before }}" data-chars="{{ chapter_chars }}" data-total="{{ total_chars }}" data-cookie-path="{{ cookie_path }}"{% if sync_url %} data-sync="{{ sync_url }}"{% endif %}{% if prev_url %} data-prev="{{ prev_url }}"{% endif %}{% if next_url %} data-next="{{ next_url }}"{% endif %}{% endblock %}
 {% block body %}
 <div id="head" class="runhead">{{ book.title }}</div>
 <div id="viewport">
@@ -46,6 +46,7 @@
       {% if next_url %}<a class="btn" href="{{ next_url }}">Next chapter &rsaquo;</a>{% endif %}
     </div>
     <p id="menu-pos" class="menu-pos"></p>
+    {% if auth_enabled and not signed_in %}<p class="menu-pos"><a href="{{ signin_url }}">Sign in</a> to keep your place in sync with the website.</p>{% endif %}
   </div>
 </div>
 <script src="{{ url_for('static', filename='js/kindle.js') }}{{ asset_v('js/kindle.js') }}"></script>

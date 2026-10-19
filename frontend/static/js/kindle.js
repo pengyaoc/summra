@@ -151,11 +151,58 @@
     setCookie('kpos_' + bookId, chapter + '.' + currentParagraph());
     setCookie('klast', data('slug'));
     setCookie('ktext', data('text'));
+    scheduleSync();
+  }
+
+  // Signed in: save each page you settle on to your account, like the web
+  // reader, so the website and other devices open at the same place.
+  var syncTimer = null;
+  var finishTimer = null;
+  var forwardTurn = false;
+  var pageShownAt = new Date().getTime();
+
+  function sync(paragraph, forward, seconds, finished) {
+    var url = data('sync');
+    if (!url || !window.XMLHttpRequest || !window.JSON) return;
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify({
+        book_id: parseInt(bookId, 10), ch: parseInt(chapter, 10), p: paragraph,
+        text: data('text'), forward: forward, seconds: seconds, finished: finished
+      }));
+    } catch (e) { /* best effort: the cookie still has your place */ }
+  }
+
+  function lastParagraph() {
+    for (var i = paragraphs.length - 1; i >= 0; i--) {
+      var idx = paragraphs[i].getAttribute('data-i');
+      if (idx !== null) return parseInt(idx, 10);
+    }
+    return 0;
+  }
+
+  function scheduleSync() {
+    if (!data('sync')) return;
+    var forward = forwardTurn;
+    forwardTurn = false;
+    var now = new Date().getTime();
+    var seconds = Math.min(60, Math.floor((now - pageShownAt) / 1000));
+    pageShownAt = now;
+    var paragraph = currentParagraph();
+    clearTimeout(syncTimer);
+    clearTimeout(finishTimer);
+    syncTimer = setTimeout(function () { sync(paragraph, forward, seconds, false); }, 600);
+    // Staying on the book's last page after paging to it finishes the book.
+    if (forward && page === pages - 1 && !data('next')) {
+      finishTimer = setTimeout(function () { sync(lastParagraph(), true, 2, true); }, 2000);
+    }
   }
 
   function next() {
-    if (page < pages - 1) show(page + 1);
-    else if (data('next')) window.location.href = data('next');
+    if (page < pages - 1) { forwardTurn = true; show(page + 1); }
+    else if (data('next')) window.location.href = data('next') + '#fwd';
   }
 
   function prev() {
@@ -239,7 +286,8 @@
   layout();
   var hash = window.location.hash;
   var m = /^#p=(\d+)$/.exec(hash);
-  if (hash === '#end') show(pages - 1);
+  if (hash === '#fwd') { forwardTurn = true; show(0); }
+  else if (hash === '#end') show(pages - 1);
   else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
   else show(pageOfParagraph(num('start')));
 })();

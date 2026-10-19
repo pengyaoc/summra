@@ -160,3 +160,5 @@ button.btn { -webkit-appearance: none; }
 .menu-pos { margin: 4px 0 8px; font-size: 16px; }
 #close { display: none; }
 .js #close { display: inline-block; }
+.account { margin: 22px 0 0; font-size: 17px; text-align: center; }
+.account .btn { margin: 0 6px 0 0; }
