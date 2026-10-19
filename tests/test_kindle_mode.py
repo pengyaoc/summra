@@ -303,7 +303,7 @@ def test_signed_in_library_continue_reading_comes_from_account(client, monkeypat
     for i in range(3):  # enough reading for the book to count as started
         assert save(client, book_id=client.book_id, ch=1, p=i % 3, text='plain', forward=True, seconds=30).status_code == 200
     html = body(kget(client, '/'))
-    assert 'Continue reading' in html and 'href="/books/moby-dick/read"' in html
+    assert 'Reading now' in html and 'href="/books/moby-dick/read"' in html
 
 
 def test_reaching_the_last_paragraph_finishes_the_book(client, monkeypatch):
@@ -320,3 +320,73 @@ def test_account_without_email_says_signed_in_without_blank_name(client, monkeyp
     sign_in(client, monkeypatch, email='')
     html = body(kget(client, '/'))
     assert 'Signed in as .' not in html and 'Signed in.' in html
+
+
+# ---- Reading now: books in progress with progress, on the home page ----
+
+def start_reading(client, slug_or_id, ch=1, p=0, text='plain'):
+    book_id = slug_or_id if isinstance(slug_or_id, int) else client.db.get_book_by_slug(slug_or_id)['id']
+    for _ in range(2):  # two forward page turns: the book counts as started
+        assert save(client, book_id=book_id, ch=ch, p=p, text=text, forward=True, seconds=30).status_code == 200
+
+
+def add_book(client, n):
+    book = client.db.add_book(title=f'Extra {n}', author='Writer', filename=f'e{n}.txt', full_text='x')
+    client.db.update_book_slug(book, f'extra-{n}')
+    client.db.add_chapter(book, 1, 'Only', 's', chapter_text='One.\n\nTwo.', modern_english_text='One.\n\nTwo.')
+    return book
+
+
+def reading_section(html):
+    m = re.search(r'<section class="reading"(.*?)</section>', html, re.S)
+    return m.group(1) if m else ''
+
+
+def test_home_lists_books_in_progress_with_chapter_and_progress(client, monkeypatch):
+    sign_in(client, monkeypatch)
+    user = client.users.upsert_user_by_email('reader@example.com')
+    start_reading(client, 'moby-dick', ch=2, p=0)
+    start_reading(client, 'zeta', text='original')
+    conn = client.users.get_connection()  # read times have 1 s resolution: make Moby the older one
+    conn.execute("UPDATE book_reading_state SET last_meaningful_read_at = '2026-01-01 00:00:00' "
+                 "WHERE user_id = ? AND book_id = ?", (user, client.book_id))
+    conn.commit()
+    conn.close()
+    section = reading_section(body(kget(client, '/')))
+    assert 'Reading now' in section
+    assert 'Moby &amp; Dick' in section and 'Zeta Original Only' in section
+    assert section.index('Zeta Original Only') < section.index('Moby &amp; Dick')  # most recent first
+    assert 'The Carpet-Bag' in section
+    assert re.search(r'\d+%', section)
+    assert re.search(r'class="bar"><span style="width: ?\d+%', section)
+    assert 'href="/books/moby-dick/read"' in section
+
+
+def test_home_shows_three_books_and_links_to_all(client, monkeypatch):
+    sign_in(client, monkeypatch)
+    for n in range(4):
+        start_reading(client, add_book(client, n))
+    html = body(kget(client, '/'))
+    section = reading_section(html)
+    assert section.count('class="bar"') == 3
+    assert 'href="/?show=reading"' in section and 'See all 4' in section
+    full = reading_section(body(kget(client, '/?show=reading')))
+    assert full.count('class="bar"') == 4
+    assert 'See all' not in full
+
+
+def test_reading_list_paginates(client, monkeypatch):
+    from backend.routes import kindle
+    monkeypatch.setattr(kindle, 'LIBRARY_PAGE_SIZE', 2)
+    sign_in(client, monkeypatch)
+    for n in range(3):
+        start_reading(client, add_book(client, n))
+    html = body(kget(client, '/?show=reading'))
+    assert reading_section(html).count('class="bar"') == 2
+    assert 'href="/?show=reading&amp;page=2"' in html
+    assert reading_section(body(kget(client, '/?show=reading&page=2'))).count('class="bar"') == 1
+
+
+def test_signed_out_home_has_no_reading_now_section(client):
+    assert reading_section(body(kget(client, '/'))) == ''
+    assert reading_section(body(kget(client, '/?show=reading'))) == ''

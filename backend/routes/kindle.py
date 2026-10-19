@@ -26,6 +26,7 @@ from backend.routes.pages import _cover_base
 bp = Blueprint('kindle', __name__)
 
 LIBRARY_PAGE_SIZE = 7
+READING_ON_HOME = 3
 CONTENTS_PAGE_SIZE = 8
 FONT_SIZES = range(1, 6)
 DEFAULT_FONT_SIZE = 3
@@ -177,25 +178,32 @@ def _font_size():
 
 
 def library_page():
-    show = 'all' if request.args.get('show') == 'all' else 'plain'
-    query = request.args.get('q', '').strip()
-    books = [b for b in common.db.get_all_books() if b.get('slug')]
-    if show == 'plain':
-        books = [b for b in books if b.get('has_plain_english')]
-    if query:
-        needle = query.lower()
-        books = [b for b in books if needle in b['title'].lower() or needle in (b['author'] or '').lower()]
-    shown, page, pages = _paginate(books, LIBRARY_PAGE_SIZE, _page_number())
+    """Books, filtered by ?show= (plain / all / reading) and ?q=. Signed in,
+    home starts with Reading now: the account's books in progress (the web
+    Library's Continue reading), with chapter and progress."""
     user_id = _account_user_id()
-    if user_id is not None:
-        in_progress = progress_routes.library_cards(user_id)['continue_reading']
-        continue_book = in_progress[0] if in_progress else None
+    reading = progress_routes.library_cards(user_id)['continue_reading'] if user_id is not None else []
+    show = request.args.get('show')
+    if show not in ('all', 'reading') or (show == 'reading' and user_id is None):
+        show = 'plain'
+    query = request.args.get('q', '').strip()
+    if show == 'reading':
+        books = reading
     else:
+        books = [b for b in common.db.get_all_books() if b.get('slug')]
+        if show == 'plain':
+            books = [b for b in books if b.get('has_plain_english')]
+        if query:
+            needle = query.lower()
+            books = [b for b in books if needle in b['title'].lower() or needle in (b['author'] or '').lower()]
+    shown, page, pages = _paginate(books, LIBRARY_PAGE_SIZE, _page_number())
+    continue_book = None
+    if user_id is None:
         last = request.cookies.get('klast')
         continue_book = common.db.get_book_by_slug(last) if last else None
 
     def page_url(n):
-        return _url('/', show=show if show == 'all' else None, q=query, page=n)
+        return _url('/', show=show if show != 'plain' else None, q=query, page=n)
 
     return _render(
         'library.html',
@@ -203,6 +211,8 @@ def library_page():
         prev_url=page_url(page - 1) if page > 1 else None,
         next_url=page_url(page + 1) if page < pages else None,
         continue_book=continue_book,
+        reading=shown if show == 'reading' else (reading[:READING_ON_HOME] if page == 1 and not query else []),
+        reading_count=len(reading),
     )
 
 
