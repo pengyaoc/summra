@@ -124,6 +124,27 @@ const shown = await page.evaluate((i) => {
 check(shown, `original opens on the same paragraph (${plainPara})`);
 await page.screenshot({ path: join(shots, "kindle_reader_original.png") });
 
+// Signed in (local dev runs auth "off", which counts as signed in): a page
+// turn is saved to the account, the web reader's API sees it, and reopening
+// the book resumes there.
+await page.goto(`${base}/books/${SLUG}/read?ch=3&text=plain`);
+if (await page.locator("body[data-sync]").count()) {
+  const bookId = await page.locator("body").getAttribute("data-book");
+  const saved = page.waitForResponse((r) => r.url().includes("/api/kindle/progress") && r.request().method() === "POST");
+  await page.mouse.click(vp.width * 0.8, vp.height / 2);
+  const resp = await saved;
+  check(resp.status() === 200, `page turn saved to account (HTTP ${resp.status()})`);
+  const para = Number((await posCookie()).split(".")[1]);
+  const projection = await page.evaluate(async (id) => (await (await fetch(`${location.pathname.split("/books/")[0]}/api/progress/v2/books/${id}`)).json()).projection, bookId);
+  const plain = projection.modes.find((m) => m.mode === "plain");
+  check(projection.book.last_mode === "plain" && plain.current_marker.paragraph_id.endsWith(`.${para}`),
+    `web reader API has the Kindle position (${plain && plain.current_marker.paragraph_id}, paragraph ${para})`);
+  await page.goto(`${base}/books/${SLUG}/read`);
+  check((await page.locator("body").getAttribute("data-ch")) === "3", "reopening the book resumes at the synced chapter");
+} else {
+  console.log("SKIP sync checks (signed out)");
+}
+
 check(errors.length === 0, `no page errors (${errors.join(" | ")})`);
 
 // Desktop is unaffected.

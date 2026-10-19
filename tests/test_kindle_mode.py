@@ -47,9 +47,19 @@ def client(test_db_path, monkeypatch):
     db.add_chapter(other, 1, 'One', 's', chapter_text='Only the original.')
     monkeypatch.setattr(app_base, 'db', db)
     monkeypatch.setattr(common, 'db', db)
+    # Reading progress goes to a throwaway user DB; signed out unless a test
+    # signs in (the auth boundary is kindle._signed_in_user_id).
+    from backend import progress_routes, user_models
+    from backend.routes import kindle
+    users = user_models.UserDatabase(test_db_path.with_name(test_db_path.stem + '_users.db'))
+    monkeypatch.setattr(progress_routes, 'user_db', users)
+    monkeypatch.setattr(progress_routes, 'content_db', db)
+    monkeypatch.setattr(kindle, '_signed_in_user_id', lambda: None)
     app_base.app.testing = True
     c = app_base.app.test_client()
     c.book_id = book
+    c.users = users
+    c.db = db
     return c
 
 
@@ -187,3 +197,126 @@ def test_reader_renders_underscore_and_asterisk_italics_like_the_web_reader(clie
                           modern_english_text='"_You_ want it," said *she*, <b>not</b> snake_case_name.')
     html = body(kget(client, '/books/moby-dick/read?ch=2'))
     assert '<em>You</em> want it," said <em>she</em>, &lt;b&gt;not&lt;/b&gt; snake_case_name.' in html.replace('&#34;', '"')
+
+
+# ---- Sign-in and synced progress ----
+
+def sign_in(client, monkeypatch, email='reader@example.com'):
+    from backend.routes import kindle
+    user_id = client.users.upsert_user_by_email(email)
+    monkeypatch.setattr(kindle, '_signed_in_user_id', lambda: user_id)
+    return user_id
+
+
+def save(client, **payload):
+    return client.post('/api/kindle/progress', json=payload, headers={'User-Agent': KINDLE_PW})
+
+
+def unit_id(client, chapter_number, ordinal):
+    from backend.models import Database
+    chapter = client.db.get_chapter(client.book_id, chapter_number)
+    return Database._reader_unit_id(chapter['id'], ordinal)
+
+
+def test_signed_out_library_and_book_page_link_to_sign_in(client):
+    for path in ('/', '/books/moby-dick'):
+        html = body(kget(client, path))
+        assert 'href="/login?logout=%2Flogin"' in html, path
+        assert 'Sign in' in html
+
+
+def test_signed_in_pages_show_account_instead_of_sign_in(client, monkeypatch):
+    sign_in(client, monkeypatch)
+    html = body(kget(client, '/'))
+    assert 'Sign in' not in html
+    assert 'reader@example.com' in html
+
+
+def test_reader_only_syncs_when_signed_in(client, monkeypatch):
+    assert 'data-sync' not in body(kget(client, '/books/moby-dick/read?ch=1'))
+    sign_in(client, monkeypatch)
+    assert 'data-sync="/api/kindle/progress"' in body(kget(client, '/books/moby-dick/read?ch=1'))
+
+
+def test_saving_progress_requires_sign_in(client):
+    assert save(client, book_id=client.book_id, ch=1, p=1, text='plain').status_code == 401
+
+
+def test_kindle_page_turn_is_saved_as_web_reader_progress(client, monkeypatch):
+    user = sign_in(client, monkeypatch)
+    resp = save(client, book_id=client.book_id, ch=1, p=2, text='plain', forward=True, seconds=20)
+    assert resp.status_code == 200, resp.get_json()
+    projection = client.users.get_book_projection(user, client.book_id)
+    assert projection['book']['last_mode'] == 'plain'
+    plain = next(m for m in projection['modes'] if m['mode'] == 'plain')
+    assert plain['current_marker']['paragraph_id'] == unit_id(client, 1, 2)
+    assert plain['furthest_marker']['paragraph_id'] == unit_id(client, 1, 2)
+
+
+def test_turning_back_does_not_lower_furthest_point(client, monkeypatch):
+    user = sign_in(client, monkeypatch)
+    assert save(client, book_id=client.book_id, ch=2, p=0, text='plain', forward=True).status_code == 200
+    assert save(client, book_id=client.book_id, ch=1, p=1, text='plain', forward=False).status_code == 200
+    plain = next(m for m in client.users.get_book_projection(user, client.book_id)['modes'] if m['mode'] == 'plain')
+    assert plain['current_marker']['paragraph_id'] == unit_id(client, 1, 1)
+    assert plain['furthest_marker']['paragraph_id'] == unit_id(client, 2, 0)
+
+
+@pytest.mark.parametrize('bad', [
+    {'ch': 99, 'p': 0, 'text': 'plain'},
+    {'ch': 1, 'p': 50, 'text': 'plain'},
+    {'ch': 1, 'p': 0, 'text': 'summary'},
+    {'ch': 'x', 'p': 0, 'text': 'plain'},
+    {'book_id': 999999, 'ch': 1, 'p': 0, 'text': 'plain'},
+])
+def test_bad_progress_is_rejected(client, monkeypatch, bad):
+    sign_in(client, monkeypatch)
+    assert save(client, **{'book_id': client.book_id, **bad}).status_code == 400
+
+
+def test_reader_resumes_where_the_web_reader_left_off(client, monkeypatch):
+    """Progress saved by the web reader (here: Side by Side, which shares the
+    paragraph ids) opens the Kindle reader on the same chapter and paragraph,
+    and wins over this device's cookie."""
+    user = sign_in(client, monkeypatch)
+    marker = client.db.resolve_reader_marker(client.book_id, {
+        'mode': 'side_by_side', 'paragraph_id': unit_id(client, 2, 0), 'offset': 0})
+    client.users.apply_mutation(user, {
+        'mutation_id': 'web-1', 'device_id': 'web', 'device_sequence': 1, 'book_id': client.book_id,
+        'mode': 'side_by_side', 'event_cause': 'page_turn', 'base_revision': 0,
+    }, marker, marker)
+    client.set_cookie('kpos_%d' % client.book_id, '1.1')
+    html = body(kget(client, '/books/moby-dick/read'))
+    assert 'I packed a shirt or two.' in html
+    assert 'data-text="plain"' in html and 'data-start="0"' in html
+
+
+def test_reader_resumes_original_text_from_server(client, monkeypatch):
+    user = sign_in(client, monkeypatch)
+    assert save(client, book_id=client.book_id, ch=1, p=2, text='original').status_code == 200
+    html = body(kget(client, '/books/moby-dick/read'))
+    assert 'data-text="original"' in html and 'data-ch="1"' in html and 'data-start="2"' in html
+
+
+def test_signed_in_library_continue_reading_comes_from_account(client, monkeypatch):
+    sign_in(client, monkeypatch)
+    for i in range(3):  # enough reading for the book to count as started
+        assert save(client, book_id=client.book_id, ch=1, p=i % 3, text='plain', forward=True, seconds=30).status_code == 200
+    html = body(kget(client, '/'))
+    assert 'Continue reading' in html and 'href="/books/moby-dick/read"' in html
+
+
+def test_reaching_the_last_paragraph_finishes_the_book(client, monkeypatch):
+    user = sign_in(client, monkeypatch)
+    resp = save(client, book_id=client.book_id, ch=2, p=0, text='original', forward=True, finished=True)
+    assert client.users.get_book_projection(user, client.book_id)['book']['status'] != 'finished'
+    # The book's last paragraph in the original is chapter 3's only one.
+    resp = save(client, book_id=client.book_id, ch=3, p=0, text='original', forward=True, finished=True)
+    assert resp.status_code == 200
+    assert client.users.get_book_projection(user, client.book_id)['book']['status'] == 'finished'
+
+
+def test_account_without_email_says_signed_in_without_blank_name(client, monkeypatch):
+    sign_in(client, monkeypatch, email='')
+    html = body(kget(client, '/'))
+    assert 'Signed in as .' not in html and 'Signed in.' in html

@@ -1,0 +1,6 @@
+{% if auth_enabled %}
+<p class="account">
+  {% if signed_in %}Signed in{% if account_email %} as {{ account_email }}{% endif %}. Your place syncs with the website.
+  {% else %}<a class="btn" href="{{ signin_url }}">Sign in</a> to keep your place in sync with the website.{% endif %}
+</p>
+{% endif %}
