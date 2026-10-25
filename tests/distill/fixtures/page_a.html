@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><title>Tiny Book</title><style>.x{color:red}</style></head>
+<body>
+<div class="hero"><div class="hero-content"><span class="eyebrow">Book Reading Companion</span>
+<h1>Tiny Book &mdash; Reading Companion</h1>
+<p class="subtitle">A guide to Jane Doe&rsquo;s ideas on small things.</p></div></div>
+<div class="tab-bar"><div class="tab-bar-inner">
+<button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+<button class="tab-btn" onclick="switchTab('p1')">The Basics</button>
+<button class="tab-btn" onclick="switchTab('sources')">Sources &amp; Notes</button>
+<button class="tab-btn" onclick="switchTab('worklog')">Worklog</button>
+</div></div>
+<div class="nav active" id="nav-overview"><div class="nav-content"><a href="#ov">The book</a></div></div>
+<div class="tab-content active" id="tab-overview"><main><section id="ov">
+<span class="eyebrow">Overview</span><h2>The book in one page</h2>
+<p class="lead">Small things <strong>matter</strong> a lot, and *footnote* stars like 2*3 appear.</p>
+<p>Plain <em>italic</em> and a <a href="https://example.com/x">linked phrase</a> and a <b>bold <i>both</i></b> run. Also a &lt;b literal and x &lt; y.</p>
+<div class="table-wrap"><table><thead><tr><th>Tab</th><th>Theme</th></tr></thead><tbody><tr><td>Basics</td><td>Why <strong>small</strong></td></tr></tbody></table></div>
+</section></main></div>
+<div class="tab-content" id="tab-p1"><main>
+<section class="part-intro"><span class="eyebrow">Part 1</span><h2>The Basics</h2><p>This part covers the basics of small things.</p></section>
+<section>
+<h3>Why Small Works</h3>
+<figure class="figure"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAIAAABvrngfAAAAFElEQVR4nGM8ISfHgAqY0PhUFgIAdYgBEED+8ToAAAAASUVORK5CYII=" alt="red square" onclick="openLightbox(this.src)"><figcaption>A red square. <span class="credit">Credit: Someone</span></figcaption></figure>
+<p>First paragraph of chapter one.</p>
+<ul><li>First <strong>item</strong></li><li>Second item</li></ul>
+<h4>A sub-heading</h4>
+<ol><li>Step one</li><li>Step two</li></ol>
+<blockquote>A wise quote.</blockquote>
+<div class="keypoints-wrap"><h4>Key points</h4><ul class="keypoints"><li>Point one</li><li>Point <em>two</em></li></ul></div>
+</section>
+<section>
+<h3>Counting Things</h3>
+<p>Second chapter text.</p>
+<div class="chapter-points"><p><strong>Key points:</strong></p><ul><li>Count them</li></ul></div>
+</section>
+</main></div>
+<div class="tab-content" id="tab-sources"><main><section><h2>Sources &amp; Notes</h2><p>Edition used: first.</p></section></main></div>
+<div class="tab-content" id="tab-worklog"><main><div class="worklog"><div class="worklog-entry"><span class="worklog-time">10:00</span><span class="worklog-desc">did a thing</span></div></div></main></div>
+<script>function switchTab(i){}</script>
+</body></html>
