@@ -67,6 +67,7 @@
     {{ structured_data|tojson }}
     </script>
     {% endif %}
+    {% include 'shared/reader/_config_script.html' %}
 </head>
 <body{% if initial_data and initial_data.type in ['chapter', 'medium', 'reader'] %} class="on-chapter-page{% if initial_data.type in ['chapter', 'reader'] %} on-reader-page{% endif %}"{% endif %}>
     <!-- Environment configuration -->

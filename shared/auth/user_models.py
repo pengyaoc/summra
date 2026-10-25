@@ -10,8 +10,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from shared.reader.modes import ALL_MODES
 
-VALID_MODES = {'summary', 'original', 'plain', 'side_by_side'}
+VALID_MODES = set(ALL_MODES)
 VALID_CAUSES = {
     'page_turn', 'mode_exit', 'toc', 'hidden', 'pagehide', 'navigation',
     'completion', 'manual_unfinish',

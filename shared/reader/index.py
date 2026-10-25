@@ -11,6 +11,8 @@ import re
 import sqlite3
 from typing import Dict, List, Optional
 
+from shared.reader.modes import ALL_MODES, SIDE_BY_SIDE_MEMBERS, SINGLE_MODES
+
 
 def create_reader_tables(cursor: sqlite3.Cursor) -> None:
     cursor.execute('''
@@ -62,7 +64,7 @@ class ReaderIndexMixin:
       `structure` entries (parts and chapters, in reading order)
     """
 
-    _READER_MODES = ('summary', 'original', 'plain', 'side_by_side')
+    _READER_MODES = ALL_MODES
     _READER_SEGMENT_UNITS = 80
     _READER_SEGMENT_BYTES = 24 * 1024
     _READER_OVERSIZED_BYTES = 64 * 1024
@@ -144,7 +146,7 @@ class ReaderIndexMixin:
         rows: Dict[str, List[Dict]] = {mode: [] for mode in self._READER_MODES}
         for chapter in chapters:
             units = self._reader_chapter_units(chapter, verse, plain_coverage)
-            for mode in ('summary', 'original', 'plain'):
+            for mode in SINGLE_MODES:
                 for chapter_ordinal, text in enumerate(units[mode]):
                     rows[mode].append({
                         'chapter_id': chapter['id'], 'chapter_ordinal': chapter_ordinal,
@@ -321,7 +323,7 @@ class ReaderIndexMixin:
                 unit['canonical_word_count'] = row['word_count']
                 unit['members'] = {
                     member_mode: self._reader_member(texts[member_mode], row['chapter_ordinal'], unit_id, member_mode)
-                    for member_mode in ('original', 'plain')
+                    for member_mode in SIDE_BY_SIDE_MEMBERS
                 }
             else:
                 text = texts[mode][row['chapter_ordinal']]

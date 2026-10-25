@@ -19,9 +19,10 @@ from plainly import config
 from plainly import models
 from plainly.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
-from shared.auth import user_models, whoami
+from plainly.reader_config import PLAINLY_READER
+from shared.auth import user_models
+from shared.reader.platform import install_reader_platform
 from shared.web import install_shared_ui, install_web_basics
-from shared.progress import routes as progress_routes
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
 from shared.auth.pchauth.flask_adapter import init_pchauth
@@ -48,10 +49,6 @@ CORS(app, supports_credentials=True)
 db = models.Database()
 user_db = user_models.UserDatabase(config.USER_DATABASE_PATH, valid_hints=config.READER_HINTS)
 
-# Set user_db in progress routes
-progress_routes.user_db = user_db
-progress_routes.content_db = db
-
 # Inject db/config into the routes.common module so plainly/routes/*.py can
 # reach them without importing this module back (see plainly/routes/common.py).
 common.db = db
@@ -76,9 +73,10 @@ if config.FEATURE_AUTH:
         pchauth_config,
         upsert_user=lambda identity: user_db.upsert_user_by_email(identity.email),
     )
-    whoami.user_db = user_db
-    app.register_blueprint(progress_routes.progress_bp)
-    app.register_blueprint(whoami.whoami_bp)
+
+# Reader API, plus the progress/whoami globals and (under FEATURE_AUTH) their
+# blueprints. Runs after init_pchauth so the auth middleware is in place.
+install_reader_platform(app, PLAINLY_READER, lambda: common.db, user_db)
 
 app.register_blueprint(system.bp)
 app.register_blueprint(pages.bp)
