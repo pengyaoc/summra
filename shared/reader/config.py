@@ -84,6 +84,8 @@ class ReaderConfig:
         for mode in self.modes:
             if mode.layout not in LAYOUTS:
                 raise ValueError(f'unknown layout {mode.layout!r} for mode {mode.id!r}')
+            if (mode.layout == 'side_by_side') != (mode.id == 'side_by_side'):
+                raise ValueError("layout 'side_by_side' and mode id 'side_by_side' go together")
             if mode.layout == 'side_by_side' and tuple(m.id for m in mode.members) != SIDE_BY_SIDE_MEMBERS:
                 raise ValueError(f'side_by_side members of {mode.id!r} must be {SIDE_BY_SIDE_MEMBERS}')
             self._require_configured(mode.narrow_fallback, f'narrow_fallback of {mode.id!r}')
@@ -94,7 +96,8 @@ class ReaderConfig:
             if self.kindle is None:
                 raise ValueError('features.kindle requires kindle options')
             self._require_configured(tuple(m for m, _ in self.kindle.text_modes), 'kindle text_modes')
-            self._require_configured((self.kindle.default_text,), 'kindle default_text')
+            if self.kindle.default_text not in [m for m, _ in self.kindle.text_modes]:
+                raise ValueError('kindle default_text is not among text_modes')
         settings = self.settings
         if settings.font_default not in [f for f, _ in settings.fonts]:
             raise ValueError('font_default is not among fonts')

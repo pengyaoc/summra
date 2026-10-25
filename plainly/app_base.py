@@ -47,7 +47,7 @@ CORS(app, supports_credentials=True)
 
 # Initialize databases
 db = models.Database()
-user_db = user_models.UserDatabase(config.USER_DATABASE_PATH, valid_hints=config.READER_HINTS)
+user_db = user_models.UserDatabase(config.USER_DATABASE_PATH, valid_hints=PLAINLY_READER.hint_keys)
 
 # Inject db/config into the routes.common module so plainly/routes/*.py can
 # reach them without importing this module back (see plainly/routes/common.py).
@@ -100,7 +100,6 @@ def inject_environment():
         'feature_blog': config.FEATURE_BLOG,
         'base_path': request.script_root,
         'site_origin': common.site_origin(),
-        'app_name': 'Plainly',
     }
 
 

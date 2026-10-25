@@ -11,8 +11,6 @@ BASE_DIR = Path(__file__).parent.parent
 # Database
 DATABASE_PATH = BASE_DIR / 'data' / 'database.db'
 USER_DATABASE_PATH = BASE_DIR / 'data' / 'summra.db'
-# One-time UI hints remembered per account (shown once across devices).
-READER_HINTS = frozenset({'reader_swipe_mobile', 'reader_nav_desktop'})
 
 # Data directories
 BOOKS_DIR = BASE_DIR / 'data' / 'books'

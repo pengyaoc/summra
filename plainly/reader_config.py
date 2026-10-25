@@ -29,5 +29,5 @@ PLAINLY_READER = ReaderConfig(
         progress=config.FEATURE_AUTH, illustrations=True, page_turn_hint=True, kindle=True,
     ),
     kindle=KindleOptions((('plain', 'Plain English'), ('original', 'Original')), 'plain'),
-    hint_keys=config.READER_HINTS,
+    hint_keys=frozenset({'reader_swipe_mobile', 'reader_nav_desktop'}),
 )

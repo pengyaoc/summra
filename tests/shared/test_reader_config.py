@@ -1,13 +1,14 @@
 import json
 import re
 import sqlite3
+from dataclasses import replace
 
 import pytest
 
 from plainly.reader_config import PLAINLY_READER
 from shared.auth.user_models import UserDatabase
 from shared.reader.config import (
-    KindleOptions, ReaderConfig, ReaderFeatures, ReaderMember, ReaderMode,
+    DEFAULT_SETTINGS, KindleOptions, ReaderConfig, ReaderFeatures, ReaderMember, ReaderMode,
 )
 from shared.reader.index import create_reader_tables
 from shared.reader.modes import ALL_MODES
@@ -81,6 +82,64 @@ def test_to_client_is_json_and_omits_kindle():
     assert modes['plain']['library_label'] == 'Plain English'
     assert modes['side_by_side']['library_label'] == 'Side by side'
     assert client['features']['kindle'] is True
+
+
+def _plain_mode(mode_id, label, **extra):
+    return {'id': mode_id, 'label': label, 'layout': 'single', 'members': [],
+            'library_label': label, 'min_width': None, 'narrow_fallback': [], **extra}
+
+
+def test_plainly_to_client_is_pinned_exactly():
+    assert PLAINLY_READER.to_client() == {
+        'app_name': 'Plainly',
+        'cache_db_name': 'summra-reader-v2',
+        'api_base': '/api',
+        'extra_page_blocks': '',
+        'default_modes': ['plain', 'original'],
+        'modes': [
+            _plain_mode('summary', 'Summary'),
+            _plain_mode('original', 'Original'),
+            _plain_mode('plain', 'Plain English'),
+            _plain_mode(
+                'side_by_side', 'Side-by-Side', layout='side_by_side',
+                members=[{'id': 'original', 'label': 'Original', 'cell_class': 'original'},
+                         {'id': 'plain', 'label': 'Plain English', 'cell_class': 'modern'}],
+                library_label='Side by side', min_width=1024, narrow_fallback=['plain', 'original']),
+        ],
+        'features': {'progress': True, 'illustrations': True, 'page_turn_hint': True, 'kindle': True},
+        'settings': {
+            'fonts': [['georgia', 'Reader Serif'], ['system', 'System'], ['figtree', 'Figtree']],
+            'font_default': 'georgia', 'size_min': 12, 'size_max': 24, 'size_default': 16,
+            'themes': [['light', 'Light'], ['dark', 'Dark']], 'theme_default': 'light',
+        },
+    }
+
+
+@pytest.mark.parametrize('change', [
+    {'font_default': 'comic'},
+    {'theme_default': 'sepia'},
+    {'size_default': 30},
+    {'size_default': 8},
+])
+def test_settings_defaults_must_be_valid(change):
+    with pytest.raises(ValueError):
+        make(settings=replace(DEFAULT_SETTINGS, **change))
+
+
+def test_kindle_default_text_must_be_a_configured_mode():
+    with pytest.raises(ValueError):
+        make(features=ReaderFeatures(kindle=True),
+             kindle=KindleOptions((('original', 'Original'),), 'summary'))
+
+
+def test_layout_and_mode_id_must_agree():
+    # side_by_side layout needs the side_by_side id
+    with pytest.raises(ValueError):
+        make(modes=(ReaderMode('original', 'O', layout='side_by_side', members=SXS_MEMBERS),),
+             default_modes=('original',))
+    # the side_by_side id needs the side_by_side layout
+    with pytest.raises(ValueError):
+        make(modes=(ReaderMode('side_by_side', 'S'),), default_modes=('side_by_side',))
 
 
 def test_registry_matches_schema_checks(tmp_path):

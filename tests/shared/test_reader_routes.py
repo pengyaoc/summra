@@ -1,5 +1,5 @@
 import pytest
-from flask import Flask
+from flask import Flask, g
 
 from shared.auth import whoami
 from shared.progress import routes as progress_routes
@@ -89,9 +89,27 @@ def test_progress_feature_off_leaves_progress_and_auth_check_404():
     assert c.get('/api/auth/check').status_code == 404
 
 
-def test_progress_feature_on_registers_progress_routes():
-    c = client_for(config(progress=True), lambda: FakeDB(), user_db=object())
-    assert c.get('/api/library').status_code != 404
+def test_progress_feature_on_registers_progress_and_whoami_routes():
+    app = Flask(__name__)
+    app.before_request(lambda: setattr(g, 'user_id', None))  # what pchauth does for an anonymous caller
+    install_reader_platform(app, config(progress=True), lambda: FakeDB(), object())
+    c = app.test_client()
+    library = c.get('/api/library')
+    assert library.status_code == 401
+    assert library.get_json() == {'error': 'Authentication required'}
+    check = c.get('/api/auth/check')
+    assert check.status_code == 200
+    assert check.get_json() == {'authenticated': False}
+
+
+def test_no_user_db_leaves_progress_globals_untouched():
+    sentinel_user, sentinel_db = object(), object()
+    progress_routes.user_db, progress_routes.content_db = sentinel_user, sentinel_db
+    whoami.user_db = sentinel_user
+    client_for(config(progress=False), lambda: FakeDB(), user_db=None)
+    assert progress_routes.user_db is sentinel_user
+    assert progress_routes.content_db is sentinel_db
+    assert whoami.user_db is sentinel_user
 
 
 def test_platform_sets_progress_globals_even_when_feature_off():
