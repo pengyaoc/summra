@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-24: Distill phase 1 — repo split (in progress)
+
+Splitting the repo into `shared/`, `plainly/` and `distill/` with Plainly unchanged. Plan and design: see the Distill design and phase 1 plan commit.
+- Task 1 baseline (before any change): pytest **816 passed**, 2 deselected. e2e against local Flask on :5002: `smoke.mjs` passes, `kindle_mode.mjs` all checks passed.
+- Task 1: added empty `shared/` and `distill/` packages, `pyproject.toml` include now `backend*, scripts*, shared*, distill*`, and `tests/shared/test_layering.py` (shared must not import plainly/distill/backend/scripts). Guard test failed first (no `shared/`), then passes.
+
 ## 2026-10-19: Kindle home shows books in progress with progress (complete, deployed)
 
 User asked to see the books they were reading, with progress, on the Kindle home page. Signed in, home now starts with *Reading now*: up to 3 books in progress (the website Library's Continue reading list), each with current chapter, a black progress bar and the furthest-point %, linking into the reader; *See all N* opens `/?show=reading`, paginated. Signed out keeps the single cookie-based Continue reading card.
