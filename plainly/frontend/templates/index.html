@@ -924,7 +924,9 @@
 
     {# route_utils.js exposes window.{currentAppPath,parseAppRoute,stripBasePath,
        withBasePath} and must load before app.js / app.min.js — and before the
-       Blog Components below, which also call withBasePath(). #}
+       Blog Components below, which also call withBasePath(). withBasePath
+       comes from the shared base_path.js, loaded first. #}
+    <script src="{{ url_for('static', filename='shared/js/base_path.js') }}{{ asset_v('shared/js/base_path.js') }}"></script>
     <script src="{{ url_for('static', filename='js/route_utils.js') }}{{ asset_v('js/route_utils.js') }}"></script>
 
     <!-- Blog Components -->
@@ -934,6 +936,7 @@
     {% endif %}
 
     <!-- Local-first reader state runs for anonymous and signed-in readers. -->
+    <script src="{{ url_for('static', filename='shared/js/reader_state.js') }}{{ asset_v('shared/js/reader_state.js') }}"></script>
     <script src="{{ url_for('static', filename='js/auth.js') }}{{ asset_v('js/auth.js') }}"></script>
 
     {# view_mode.js exposes window.resolveInitialChapterViewMode and must

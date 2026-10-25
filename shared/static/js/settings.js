@@ -252,14 +252,15 @@ export const settingsMixin = {
 
     loadReadingPreferences() {
         try {
-            let font = localStorage.getItem('reading_font') || 'georgia';
+            const settings = this.readerConfig().settings;
+            let font = localStorage.getItem('reading_font') || settings.font_default;
             // Figtree replaced Open Sans (2026-10-17); move saved choices over.
             if (font === 'opensans') {
                 font = 'figtree';
                 localStorage.setItem('reading_font', font);
             }
-            const fontSize = localStorage.getItem('reading_fontSize') || '16';
-            let theme = localStorage.getItem('reading_theme') || 'light';
+            const fontSize = localStorage.getItem('reading_fontSize') || String(settings.size_default);
+            let theme = localStorage.getItem('reading_theme') || settings.theme_default;
             // Sepia was merged into Light (2026-10-17); move saved choices over.
             if (theme === 'sepia') {
                 theme = 'light';

@@ -45,6 +45,7 @@ def test_manifest_and_robots_use_plainly(client):
 
 @pytest.mark.parametrize('path', sorted(
     [p for p in (ROOT / 'plainly/frontend/static/js').rglob('*.js') if p.name != 'app.min.js']
+    + list((ROOT / 'shared/static/js').glob('*.js'))
     + list((ROOT / 'plainly/routes').glob('*.py'))
     + [ROOT / 'plainly/models.py']
 ), ids=lambda p: str(p.relative_to(ROOT)))

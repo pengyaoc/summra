@@ -157,9 +157,9 @@ test("saved 'side-by-side' but no modern available → original", () => {
 });
 
 test("continuous reader restores each mode's latest in-session marker", async () => {
-    const readerSourcePath = join(here, "..", "..", "plainly", "frontend", "static", "js", "reader.js");
+    const readerSourcePath = join(here, "..", "..", "shared", "static", "js", "continuous_reader.js");
     const readerSource = readFileSync(readerSourcePath, "utf8")
-        .replace("export const readerMixin =", "const readerMixin =");
+        .replace("export const continuousReaderMixin =", "const readerMixin =");
     const queued = [];
     const readerSandbox = {
         clearTimeout,

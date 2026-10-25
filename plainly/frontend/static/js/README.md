@@ -22,10 +22,13 @@ inline, and cross-calls between methods (e.g. `this.navigateToNextPage()` callin
 in, since `Object.assign` puts them all on the one `SummraApp.prototype`.
 
 Modules so far:
-- `pagination.js` — the page-based chapter reading engine (splitting text into fixed-height
-  pages, illustration pages, touch/wheel/keyboard navigation, position persistence). The single
-  largest subsystem (~1,100 lines) before this split.
-- `route_utils.js` — pure route-parsing helpers (`withBasePath`, `parseAppRoute`, etc.), loaded
+- The shared reader platform, `shared/static/js/` (served at `static/shared/js/`):
+  `pagination.js` (the page-based reading engine), `settings.js` (font/size/theme),
+  `continuous_reader.js`, `reader_utils.js` (`escapeHtml` and `READER_CONFIG` lookups), merged
+  onto `SummraApp` by `applyReaderPlatform()` from `platform.js`. Plain scripts loaded before
+  `app.js`: `base_path.js` (`withBasePath`) and `reader_state.js` (`window.readerState`, the
+  progress/cache half of `auth.js`).
+- `route_utils.js` — pure route-parsing helpers (`parseAppRoute`, etc.), loaded
   before `app.js` (see below) rather than `import`ed, since `components/BlogIndex.js` and
   `components/BlogPost.js` need `withBasePath()` too and load earlier still.
 

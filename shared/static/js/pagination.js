@@ -11,6 +11,20 @@
 // Object.assign puts these methods on the exact same prototype as the rest
 // of SummraApp's methods — `this` is unaffected by which file a method's
 // source lives in.
+
+// Pagination state for chapter reading; a host sets this.pagination to it.
+export function createPaginationState() {
+    return {
+        enabled: true, // Pagination is enabled by default
+        currentPage: 0,
+        totalPages: 0,
+        pages: [], // Array of page content
+        containerHeight: 0,
+        isNavigating: false, // Prevent rapid page changes
+        currentViewMode: 'original' // Track current view mode for pagination
+    };
+}
+
 export const paginationMixin = {
     // ========================================
     // PAGINATION SYSTEM FOR CHAPTER READING
@@ -274,7 +288,8 @@ export const paginationMixin = {
                         'headers pulled out:', !!sxsHeadersHTML);
         } else {
             // For regular views: use paragraphs and headings as blocks
-            blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol, figure.reader-illustration'));
+            const extraBlocks = this.readerConfig().extra_page_blocks;
+            blocks = Array.from(containerElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol, figure.reader-illustration' + (extraBlocks ? `, ${extraBlocks}` : '')));
             console.log('[calculatePages] Regular mode, found blocks:', blocks.length);
         }
 
@@ -893,6 +908,7 @@ export const paginationMixin = {
      * or show a touch reader that the page swipes (label plus a nudge).
      */
     async showPageTurnHintOnce() {
+        if (!this.readerConfig().features.page_turn_hint) return;
         if (this.pagination.hintShown) return;
         this.pagination.hintShown = true;
         await window.authModule?.initAuth?.();

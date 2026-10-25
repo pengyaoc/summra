@@ -1,6 +1,7 @@
 // Pure route-parsing helpers shared by handleRoute() and buildBreadcrumbs()
-// in app.js — and withBasePath(), used by every module that builds an
-// app-relative URL (fetch calls, hrefs). Loaded as a plain <script> before
+// in app.js. withBasePath(), used by every module that builds an
+// app-relative URL (fetch calls, hrefs), now lives in
+// shared/static/js/base_path.js, loaded just before this file. Loaded as a plain <script> before
 // app.js (and before components/BlogIndex.js, components/BlogPost.js, which
 // need withBasePath too) and exposed on `window`, same pattern as
 // view_mode.js.
@@ -38,20 +39,6 @@
         return path.length > 1 ? path.replace(/\/+$/, '') : path;
     }
 
-    // Inverse of stripBasePath: prepend the deploy-time base path (e.g.
-    // "/summrabook") to an app-relative path, for fetch() calls and hrefs.
-    // Leaves absolute/external URLs untouched.
-    function summraBasePath() {
-        return root.APP_BASE_PATH || '';
-    }
-
-    function withBasePath(path) {
-        if (!path || path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) {
-            return path;
-        }
-        return summraBasePath() + path;
-    }
-
     // Parse an app-relative path (already stripped of any base path) into the
     // route match object shared by handleRoute() and buildBreadcrumbs().
     //
@@ -86,6 +73,4 @@
     root.stripBasePath = stripBasePath;
     root.currentAppPath = currentAppPath;
     root.parseAppRoute = parseAppRoute;
-    root.summraBasePath = summraBasePath;
-    root.withBasePath = withBasePath;
 })(typeof window !== "undefined" ? window : globalThis);

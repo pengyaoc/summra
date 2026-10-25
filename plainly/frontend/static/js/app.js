@@ -17,7 +17,13 @@
 // (e.g. /summrabook) without any other code changes. summraBasePath()/
 // withBasePath() are defined in route_utils.js (loaded before this file, and
 // before components/BlogIndex.js and components/BlogPost.js, which also need
-// withBasePath) rather than duplicated here.
+// withBasePath) rather than duplicated here. They now live in
+// shared/static/js/base_path.js, loaded just before route_utils.js.
+//
+// SHARED READER: escapeHtml, pagination, reading settings and the continuous
+// reader are the shared reader platform (shared/static/js, served at
+// static/shared/js), merged onto SummraApp by applyReaderPlatform() below and
+// driven by window.READER_CONFIG.
 //
 // MODULE SPLIT (2026-09 refactor, in progress): this file is loaded as
 // `<script type="module">` (see index.html) so it can `import` sibling
@@ -27,8 +33,7 @@
 // only their source location moved. The production build bundles these
 // back into one file (`esbuild --bundle`, see package.json) so app.min.js
 // stays a single <script> with no import/export left in it.
-import { paginationMixin } from './pagination.js';
-import { settingsMixin } from './settings.js';
+import { applyReaderPlatform, createPaginationState } from '../shared/js/platform.js';
 import { breadcrumbsMixin } from './breadcrumbs.js';
 import { audioMixin } from './audio.js';
 import { readerMixin } from './reader.js';
@@ -77,15 +82,7 @@ class SummraApp {
         this.conciseSummaryExpanded = false;
 
         // Pagination state for chapter reading
-        this.pagination = {
-            enabled: true, // Pagination is enabled by default
-            currentPage: 0,
-            totalPages: 0,
-            pages: [], // Array of page content
-            containerHeight: 0,
-            isNavigating: false, // Prevent rapid page changes
-            currentViewMode: 'original' // Track current view mode for pagination
-        };
+        this.pagination = createPaginationState();
 
         // Centralized list of ALL content sections (single source of truth)
         // When adding a new page/section, add its ID here once
@@ -2417,12 +2414,6 @@ class SummraApp {
         );
     }
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
     // ===== Skeleton Loading Helpers =====
 
     createImageWithSkeleton(src, alt, className) {
@@ -2677,8 +2668,7 @@ class SummraApp {
     // Chapter dropdown removed - using simple summary button instead
 }
 
-Object.assign(SummraApp.prototype, paginationMixin);
-Object.assign(SummraApp.prototype, settingsMixin);
+applyReaderPlatform(SummraApp);
 Object.assign(SummraApp.prototype, breadcrumbsMixin);
 Object.assign(SummraApp.prototype, audioMixin);
 Object.assign(SummraApp.prototype, readerMixin);
