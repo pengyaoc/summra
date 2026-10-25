@@ -22,23 +22,18 @@ import zlib
 try:
     from . import config
     from . import models
-    from . import user_models
     from . import progress_routes
-    from . import whoami
-    from .pchauth.config import AuthConfig
-    from .pchauth.config import load_config as load_pchauth_config
-    from .pchauth.flask_adapter import init_pchauth
     from .routes import common, pages, books, taxonomy, authors, blog, system, kindle
 except ImportError:
     from backend import config
     from backend import models
-    from backend import user_models
     from backend import progress_routes
-    from backend import whoami
-    from backend.pchauth.config import AuthConfig
-    from backend.pchauth.config import load_config as load_pchauth_config
-    from backend.pchauth.flask_adapter import init_pchauth
     from backend.routes import common, pages, books, taxonomy, authors, blog, system, kindle
+
+from shared.auth import user_models, whoami
+from shared.auth.pchauth.config import AuthConfig
+from shared.auth.pchauth.config import load_config as load_pchauth_config
+from shared.auth.pchauth.flask_adapter import init_pchauth
 
 # Configure logging
 logging.basicConfig(
@@ -83,7 +78,7 @@ CORS(app, supports_credentials=True)
 
 # Initialize databases
 db = models.Database()
-user_db = user_models.UserDatabase(config.USER_DATABASE_PATH)
+user_db = user_models.UserDatabase(config.USER_DATABASE_PATH, valid_hints=config.READER_HINTS)
 
 # Set user_db in progress routes
 progress_routes.user_db = user_db

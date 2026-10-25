@@ -4,6 +4,7 @@
 
 Splitting the repo into `shared/`, `plainly/` and `distill/` with Plainly unchanged. Plan and design: see the Distill design and phase 1 plan commit.
 - Task 1 baseline (before any change): pytest **816 passed**, 2 deselected. e2e against local Flask on :5002: `smoke.mjs` passes, `kindle_mode.mjs` all checks passed.
+- Task 2: moved `backend/pchauth`, `user_models.py`, `whoami.py` into `shared/auth/` (git mv, no shims). `UserDatabase(db_path, valid_hints=frozenset())` now requires a path; Plainly passes `config.USER_DATABASE_PATH` and `config.READER_HINTS`; `progress_routes` checks `user_db.valid_hints`. Moved user_models/user_hints/pchauth_integration tests to `tests/shared/`. Owner-approved: `test_deploy_config.py::test_user_database_class_default_matches_configured_path` body replaced with a `TypeError` assertion (the class default was removed on purpose). pytest **820 passed** (baseline 818 + 2 new).
 - Task 1: added empty `shared/` and `distill/` packages, `pyproject.toml` include now `backend*, scripts*, shared*, distill*`, and `tests/shared/test_layering.py` (shared must not import plainly/distill/backend/scripts). Guard test failed first (no `shared/`), then passes.
 
 ## 2026-10-19: Kindle home shows books in progress with progress (complete, deployed)

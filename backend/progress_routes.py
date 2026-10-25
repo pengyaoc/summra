@@ -4,12 +4,7 @@ import logging
 
 from flask import Blueprint, g, jsonify, request
 
-try:
-    from .pchauth.flask_adapter import login_required
-    from .user_models import VALID_HINTS
-except ImportError:
-    from backend.pchauth.flask_adapter import login_required
-    from backend.user_models import VALID_HINTS
+from shared.auth.pchauth.flask_adapter import login_required
 
 
 user_db = None
@@ -154,7 +149,7 @@ def library_cards(user_id):
 @login_required
 def mark_hint_seen(hint_key):
     """Remember that this account has seen a one-time hint (any device)."""
-    if hint_key not in VALID_HINTS:
+    if hint_key not in user_db.valid_hints:
         return jsonify({'error': 'Unknown hint'}), 400
     user_db.mark_hint_seen(g.user_id, hint_key)
     return jsonify({'success': True})

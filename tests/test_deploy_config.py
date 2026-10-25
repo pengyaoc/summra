@@ -33,7 +33,7 @@ def test_user_database_path_resolves_under_data_dir():
 def test_user_database_uses_configured_path():
     """app_base.py's UserDatabase() call site must pass config.USER_DATABASE_PATH
     explicitly rather than relying on the class's repo-root default."""
-    from backend.user_models import UserDatabase
+    from shared.auth.user_models import UserDatabase
 
     db = UserDatabase.__init__
     # Inspect app_base's actual call site behavior by importing it fresh and
@@ -53,22 +53,13 @@ def test_user_database_uses_configured_path():
 
 
 def test_user_database_class_default_matches_configured_path():
-    """UserDatabase()'s own default (used by any caller that doesn't pass a
-    path explicitly — e.g. a script or a future test) must match
-    config.USER_DATABASE_PATH (data/summra.db), not fall back to a repo-root
-    summra.db. app_base.py's call site already passes the path explicitly
-    (see test_user_database_uses_configured_path above), but the class
-    default was never fixed to match, so any other caller still creates a
-    stray repo-root summra.db."""
-    from backend import config
-    from backend.user_models import UserDatabase
+    """Shared code can't know Plainly's path, so UserDatabase no longer has a
+    default: callers must pass db_path explicitly."""
+    import pytest
+    from shared.auth.user_models import UserDatabase
 
-    db = UserDatabase()
-    assert db.db_path == config.USER_DATABASE_PATH, (
-        f"UserDatabase()'s default db_path is {db.db_path!r}, expected "
-        f"{config.USER_DATABASE_PATH!r} — the class default in "
-        "user_models.py must use config.USER_DATABASE_PATH."
-    )
+    with pytest.raises(TypeError):
+        UserDatabase()
 
 
 def test_gunicorn_bind_defaults_to_5000_when_unset():

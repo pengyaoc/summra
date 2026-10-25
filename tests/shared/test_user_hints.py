@@ -3,7 +3,7 @@ account, so a signed-in reader sees each hint once across all devices."""
 import importlib
 import sys
 
-from backend.user_models import UserDatabase
+from shared.auth.user_models import UserDatabase
 
 
 def test_new_user_has_seen_no_hints(test_db_path):

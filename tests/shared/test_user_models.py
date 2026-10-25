@@ -3,7 +3,7 @@
 Replaces the old username/password schema — see WORK_LOG.md and
 pchauth's spec, docs/superpowers/specs/2026-09-05-consolidated-login-design.md.
 """
-from backend.user_models import UserDatabase
+from shared.auth.user_models import UserDatabase
 
 
 def _marker(ordinal=0, paragraph_id=None):

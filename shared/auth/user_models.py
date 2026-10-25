@@ -12,8 +12,6 @@ from typing import Any, Dict, List, Optional
 
 
 VALID_MODES = {'summary', 'original', 'plain', 'side_by_side'}
-# One-time UI hints remembered per account (shown once across devices).
-VALID_HINTS = {'reader_swipe_mobile', 'reader_nav_desktop'}
 VALID_CAUSES = {
     'page_turn', 'mode_exit', 'toc', 'hidden', 'pagehide', 'navigation',
     'completion', 'manual_unfinish',
@@ -23,14 +21,10 @@ VALID_CAUSES = {
 class UserDatabase:
     """SQLite persistence for current/furthest markers and mutations."""
 
-    def __init__(self, db_path: Path = None):
-        if db_path is None:
-            try:
-                from . import config
-            except ImportError:
-                from backend import config
-            db_path = config.USER_DATABASE_PATH
+    def __init__(self, db_path: Path, valid_hints: frozenset = frozenset()):
         self.db_path = db_path
+        # One-time UI hints the app accepts; supplied by the app, not shared code.
+        self.valid_hints = valid_hints
         self.init_db()
 
     def get_connection(self):
