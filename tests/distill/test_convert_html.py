@@ -344,14 +344,14 @@ def test_cover_image_caption_is_kept_as_paragraph(tmp_path):
     assert report.dropped == []
 
 
-def test_unexpected_keypoint_label_and_heading_only_intro_are_reported(tmp_path):
+def test_unexpected_keypoint_label_is_reported(tmp_path):
     html = _page(('p1', '<section class="part-intro"><h2>Only A Heading</h2></section>'
                         '<h3>Ch</h3><div class="chapter-points"><p><strong>Remember these:</strong></p><ul><li>a</li></ul></div>'
                         '<div class="keypoints-wrap"><h4>Key points</h4><ul class="keypoints"><li>b</li></ul></div>'))
     report = conv.convert_page(html, 'kp', tmp_path, _no_fetch)
 
     assert any('Remember these' in d for d in report.dropped)
-    assert any('Only A Heading' in d for d in report.dropped)
+    assert not any('Only A Heading' in d for d in report.dropped)  # kept as a block (fix round 2)
     assert not any('Key points' in d for d in report.dropped)  # the expected label is not a loss
 
 
@@ -361,3 +361,42 @@ def test_picture_element_keeps_its_img(tmp_path):
     conv.convert_page(html, 'pc', tmp_path, _no_fetch)
 
     assert load_book(tmp_path / 'pc')['overview'][0]['type'] == 'image'
+
+
+def _heading_only_part(tmp_path, label, heading, name='hp'):
+    buttons = f'<button class="tab-btn" onclick="switchTab(\'p1\')">{label}</button>'
+    html = _page(('p1', f'<section class="part-intro"><h2>{heading}</h2></section><h3>Ch</h3><p>Body.</p>'), buttons=buttons)
+    report = conv.convert_page(html, name, tmp_path, _no_fetch)
+    return report, load_book(tmp_path / name)['parts'][0]
+
+
+def test_heading_only_intro_equal_to_part_title_is_dropped_silently(tmp_path):
+    report, part = _heading_only_part(tmp_path, '1733–1737', '1733-1737')
+
+    assert part['title'] == '1733–1737'
+    assert part['chapters'][0]['blocks'] == [{'type': 'p', 'text': 'Body.'}]
+    assert report.dropped == [] and not report.flagged
+
+
+def test_heading_only_intro_extending_part_title_becomes_part_title(tmp_path):
+    report, part = _heading_only_part(tmp_path, 'Part I', 'Part I: The “Discovery” of Africa')
+
+    assert part['title'] == 'Part I: The “Discovery” of Africa'
+    assert part['chapters'][0]['blocks'] == [{'type': 'p', 'text': 'Body.'}]
+    assert report.dropped == []
+
+
+def test_part_title_prefix_must_end_at_a_word_boundary(tmp_path):
+    _, part = _heading_only_part(tmp_path, 'Part I', 'Part II: Something')
+
+    assert part['title'] == 'Part I'
+    assert part['chapters'][0]['blocks'][0] == {'type': 'h', 'text': 'Part II: Something'}
+
+
+def test_other_heading_only_intro_is_kept_as_h_block_in_first_chapter(tmp_path):
+    report, part = _heading_only_part(tmp_path, '1st Law: Make It Obvious', 'Cue: make the cues visible')
+
+    assert part['title'] == '1st Law: Make It Obvious'
+    assert part['chapters'][0]['blocks'][:2] == [{'type': 'h', 'text': 'Cue: make the cues visible'},
+                                                {'type': 'p', 'text': 'Body.'}]
+    assert report.dropped == []

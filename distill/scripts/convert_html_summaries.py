@@ -28,7 +28,6 @@ from PIL import Image
 from distill.book_format import FORMAT_VERSION, block_text, word_count
 
 MAX_WIDTH = 1600
-HEADING_ONLY_INTRO = 'part heading (no intro text)'
 THUMB_WIDTH = 1280
 JPEG_QUALITY = 82
 FEW_COLOURS = 32
@@ -589,9 +588,27 @@ def convert_page(html: str, slug: str, out_dir: Path, fetch: Callable[[str], byt
             'lang': report.lang, 'cover': cover, 'overview': overview, 'parts': parts, 'sources': sources}
     (folder / 'book.json').write_text(json.dumps(book, ensure_ascii=False, indent=1), encoding='utf-8')
     report.dropped = sorted(set(report.dropped))
-    real_drops = [d for d in report.dropped if not d.startswith(HEADING_ONLY_INTRO)]
-    report.flagged = bool(report.chapters == 0 or real_drops or report.empty_chapters or report.images_failed)
+    report.flagged = bool(report.chapters == 0 or report.dropped or report.empty_chapters or report.images_failed)
     return report
+
+
+def _norm_title(text: str) -> str:
+    return re.sub(r'[\W_]+', ' ', text.casefold()).strip()
+
+
+def _apply_part_headings(part_title: str, headings: list):
+    """A heading-only part intro is the part's subtitle: same as the tab label -> drop it, extends the label ->
+    it becomes the part title, otherwise keep it as an h block. Returns (part_title, blocks to keep)."""
+    keep = []
+    for block in headings:
+        heading, label = _norm_title(block['text']), _norm_title(part_title)
+        if heading == label:
+            continue
+        if heading.startswith(label + ' ') and not keep:
+            part_title = block['text']
+            continue
+        keep.append(block)
+    return part_title, keep
 
 
 def _build_part(part_title: str, events: list, report: PageReport) -> dict:
@@ -605,7 +622,10 @@ def _build_part(part_title: str, events: list, report: PageReport) -> dict:
             intro.append(payload)
     kept = []
     if intro and all(b['type'] == 'h' for b in intro):
-        report.dropped.append(f'{HEADING_ONLY_INTRO}: {_snippet(" / ".join(b["text"] for b in intro))}')
+        part_title, heading_blocks = _apply_part_headings(part_title, intro)
+        if chapters:
+            chapters[0]['blocks'][0:0] = heading_blocks
+        intro = []
     if any(b['type'] != 'h' for b in intro):
         kept.append({'title': f'{part_title} — Introduction', 'blocks': intro})
     for chapter in chapters:
