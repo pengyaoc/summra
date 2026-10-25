@@ -28,6 +28,7 @@ from PIL import Image
 from distill.book_format import FORMAT_VERSION, block_text, word_count
 
 MAX_WIDTH = 1600
+HEADING_ONLY_INTRO = 'part heading (no intro text)'
 THUMB_WIDTH = 1280
 JPEG_QUALITY = 82
 FEW_COLOURS = 32
@@ -42,7 +43,8 @@ _SKIP_TAGS = frozenset({'script', 'style', 'button', 'nav', 'hr', 'noscript', 'm
 _SKIP_CLASSES = frozenset({'eyebrow', 'chapter-num', 'nav', 'tab-bar', 'listen-btn', 'kp-label',
                            'key-points-label', 'worklog', 'lightbox-overlay', 'lightbox-close'})
 _KEYPOINT_CLASSES = frozenset({'keypoints-wrap', 'chapter-points'})
-_LOSSY_TAGS = frozenset({'svg', 'iframe', 'canvas', 'video', 'audio', 'object', 'embed', 'picture'})
+_LOSSY_TAGS = frozenset({'svg', 'iframe', 'canvas', 'video', 'audio', 'object', 'embed'})
+_SOURCES_LABEL_RE = re.compile(r'sources|notes|来源', re.I)
 _KEYPOINT_LABEL_RE = re.compile(r'key\s*points?|要点|关键', re.I)
 _KEYPOINT_HEADING_RE = re.compile(r'^(key\s*points?|要点|关键要点)\s*[:：]?$', re.I)
 _CJK_RE = re.compile(r'[一-鿿]')
@@ -201,6 +203,14 @@ def _classes(el) -> set:
     return set(el.get('class') or [])
 
 
+def _is_worklog(el) -> bool:
+    return 'worklog' in (el.get('id') or '') or any('worklog' in c for c in _classes(el))
+
+
+def _snippet(text: str) -> str:
+    return text if len(text) <= 60 else text[:57] + '...'
+
+
 class _Walker:
     """Walk one tab's DOM, yielding ('chapter', title) and ('block', dict) events."""
 
@@ -209,6 +219,7 @@ class _Walker:
         self.report = report
         self.skip_ids = set()
         self.keypoint_lists = set()
+        self.alts = {}  # saved image path -> alt text
 
     # -- inline text ------------------------------------------------------
     def inline(self, node) -> str:
@@ -225,7 +236,7 @@ class _Walker:
             if isinstance(child, NavigableString):
                 parts.append(str(child).replace('*', ''))
                 continue
-            if not isinstance(child, Tag) or id(child) in self.skip_ids:
+            if not isinstance(child, Tag) or id(child) in self.skip_ids or _is_worklog(child):
                 continue
             name = child.name
             if name in _SKIP_TAGS or name == 'img' or _classes(child) & (_SKIP_CLASSES | {'credit'}):
@@ -251,9 +262,10 @@ class _Walker:
 
     # -- images -----------------------------------------------------------
     def image_block(self, img: Tag, caption: Optional[str] = None) -> Optional[dict]:
-        src = self.saver.save(img.get('src') or img.get('data-src') or '')
+        src = self.saver.save(img.get('src') or '')
         if not src:
             return None
+        self.alts.setdefault(src, img.get('alt') or '')
         return {'type': 'image', 'src': src, 'caption': caption or None}
 
     def figure_blocks(self, fig: Tag):
@@ -265,6 +277,8 @@ class _Walker:
             if block:
                 first = False
                 yield ('block', block)
+        if first and caption:
+            self.note_dropped(f'caption of failed image: {_snippet(caption)}')
 
     # -- containers -------------------------------------------------------
     def walk_children(self, el, in_chapter: bool):
@@ -294,7 +308,7 @@ class _Walker:
     def walk(self, el: Tag, in_chapter: bool):
         name = el.name
         classes = _classes(el)
-        if id(el) in self.skip_ids or name in _SKIP_TAGS or classes & _SKIP_CLASSES:
+        if id(el) in self.skip_ids or name in _SKIP_TAGS or classes & _SKIP_CLASSES or _is_worklog(el):
             return
         if name in _LOSSY_TAGS:
             self.note_dropped(name)
@@ -317,10 +331,6 @@ class _Walker:
                 text = self.inline(el)
                 if text:
                     yield ('block', {'type': 'p', 'text': text})
-        elif name == 'pre':
-            text = self.inline(el)
-            if text:
-                yield ('block', {'type': 'p', 'text': text})
         elif name in ('ul', 'ol'):
             yield from self.list_block(el)
         elif name == 'blockquote':
@@ -337,7 +347,7 @@ class _Walker:
                 yield ('block', block)
         elif classes & _KEYPOINT_CLASSES:
             yield from self.keypoints_container(el, in_chapter)
-        elif 'callout' in classes or 'warning-callout' in classes or any(c.endswith('-callout') for c in classes):
+        elif 'callout' in classes or any(c.endswith('-callout') for c in classes):
             yield from self.callout(el)
         else:
             yield from self.walk_children(el, in_chapter or name in ('div', 'section', 'article') and bool(classes & {'card'}))
@@ -385,14 +395,21 @@ class _Walker:
         if header_row is not None:
             yield ('block', {'type': 'table', 'header': header_row, 'rows': grid})
 
-    def keypoints_container(self, el: Tag, in_chapter: bool):
+    def _list_items(self, el: Tag) -> list:
         lists = [ul for ul in el.find_all(['ul', 'ol']) if not ul.find_parent(['ul', 'ol'])]
+        return [t for ul in lists for t in (self.inline(li) for li in ul.find_all('li', recursive=False)) if t]
+
+    def keypoints_container(self, el: Tag, in_chapter: bool):
+        """Everything in el except its lists, then all its list items as one keypoints block."""
+        has_list = bool(el.find(['ul', 'ol']))
         for child in el.children:
             if isinstance(child, Tag) and child.name in ('h4', 'h5', 'h6', 'p') and not child.find(['ul', 'ol']):
                 text = self.inline(child)
-                if len(text) <= 40 and (child.name != 'p' or lists):
+                if len(text) <= 40 and (child.name != 'p' or has_list):
                     self.skip_ids.add(id(child))
-        items = [t for ul in lists for t in (self.inline(li) for li in ul.find_all('li', recursive=False)) if t]
+                    if not _KEYPOINT_LABEL_RE.search(text):
+                        self.note_dropped(f'keypoints label: {_snippet(text)}')
+        items = self._list_items(el)
         for kind, payload in self.walk_children(el, in_chapter):
             if kind == 'block' and payload['type'] in ('ul', 'ol', 'keypoints'):
                 continue
@@ -409,19 +426,10 @@ class _Walker:
             text = ' '.join(([f'**{title}**'] if title else []) + [p for p in paragraphs if p])
             if text:
                 yield ('block', {'type': 'quote', 'text': text})
-            return
-        if label and _KEYPOINT_LABEL_RE.search(self.inline(label)):
-            self.skip_ids.add(id(label))
-            lists = [ul for ul in el.find_all(['ul', 'ol']) if not ul.find_parent(['ul', 'ol'])]
-            items = [t for ul in lists for t in (self.inline(li) for li in ul.find_all('li', recursive=False)) if t]
-            for kind, payload in self.walk_children(el, True):
-                if kind == 'block' and payload['type'] in ('ul', 'ol', 'keypoints'):
-                    continue
-                yield (kind, payload)
-            if items:
-                yield ('block', {'type': 'keypoints', 'items': items})
-            return
-        yield from self.walk_children(el, True)
+        elif label and _KEYPOINT_LABEL_RE.search(self.inline(label)):
+            yield from self.keypoints_container(el, True)
+        else:
+            yield from self.walk_children(el, True)
 
     def chapter(self, el: Tag):
         heading = el.find(['h2', 'h3', 'h4'])
@@ -548,15 +556,16 @@ def convert_page(html: str, slug: str, out_dir: Path, fetch: Callable[[str], byt
     overview, sources, parts = [], [], []
     for tab in soup.select('div.tab-content[id^=tab-]'):
         key = tab['id'][len('tab-'):]
-        if 'worklog' in key:
+        label = labels.get(key) or ''
+        if 'worklog' in key or 'worklog' in label.lower():
             continue
         events = list(walker.walk_children(tab, False))
         if key == 'overview':
             overview = _events_to_blocks(events)
-        elif key == 'sources':
-            sources = _events_to_blocks(events)
+        elif key in ('sources', 'notes') or _SOURCES_LABEL_RE.search(label):
+            sources += _events_to_blocks(events)
         else:
-            part_title = labels.get(key) or key
+            part_title = label or key
             parts.append(_build_part(part_title, events, report))
 
     if report.author is None:
@@ -564,9 +573,10 @@ def convert_page(html: str, slug: str, out_dir: Path, fetch: Callable[[str], byt
 
     if cover is None:
         for i, block in enumerate(overview):
-            if block['type'] == 'image' and re.search(r'cover|封面', _alt_of(soup, block, saver), re.I):
+            if block['type'] == 'image' and re.search(r'cover|封面', walker.alts.get(block['src'], ''), re.I):
                 cover = block['src']
-                del overview[i]
+                # the image is the cover now; keep its caption (edition line) as a plain paragraph
+                overview[i:i + 1] = [{'type': 'p', 'text': block['caption']}] if block['caption'] else []
                 break
 
     parts = [p for p in parts if p['chapters']]
@@ -579,18 +589,9 @@ def convert_page(html: str, slug: str, out_dir: Path, fetch: Callable[[str], byt
             'lang': report.lang, 'cover': cover, 'overview': overview, 'parts': parts, 'sources': sources}
     (folder / 'book.json').write_text(json.dumps(book, ensure_ascii=False, indent=1), encoding='utf-8')
     report.dropped = sorted(set(report.dropped))
-    report.flagged = bool(report.chapters == 0 or report.dropped or report.empty_chapters or report.images_failed)
+    real_drops = [d for d in report.dropped if not d.startswith(HEADING_ONLY_INTRO)]
+    report.flagged = bool(report.chapters == 0 or real_drops or report.empty_chapters or report.images_failed)
     return report
-
-
-def _alt_of(soup, block, saver) -> str:
-    """Alt text of the first <img> whose saved file is block['src'] (used to spot cover images)."""
-    for src, saved in saver.by_src.items():
-        if saved == block['src']:
-            for img in soup.find_all('img'):
-                if (img.get('src') or '').strip() == src:
-                    return img.get('alt') or ''
-    return ''
 
 
 def _build_part(part_title: str, events: list, report: PageReport) -> dict:
@@ -603,6 +604,8 @@ def _build_part(part_title: str, events: list, report: PageReport) -> dict:
         else:
             intro.append(payload)
     kept = []
+    if intro and all(b['type'] == 'h' for b in intro):
+        report.dropped.append(f'{HEADING_ONLY_INTRO}: {_snippet(" / ".join(b["text"] for b in intro))}')
     if any(b['type'] != 'h' for b in intro):
         kept.append({'title': f'{part_title} — Introduction', 'blocks': intro})
     for chapter in chapters:

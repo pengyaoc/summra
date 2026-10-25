@@ -289,3 +289,75 @@ def test_author_falls_back_to_name_before_parenthesis_in_overview(tmp_path):
     conv.convert_page(html, 't', tmp_path, _no_fetch)
 
     assert load_book(tmp_path / 't')['author'] == 'Ezra Klein'
+
+
+def _page(*tabs, buttons=''):
+    return (f'<div class="hero"><h1>F</h1></div><div class="tab-bar">{buttons}</div>'
+            + ''.join(f'<div class="tab-content" id="tab-{i}">{body}</div>' for i, body in tabs))
+
+
+def test_notes_tab_becomes_sources_and_nested_worklog_is_skipped(tmp_path):
+    html = _page(('p1', '<h3>Ch</h3><p>Body.</p>'),
+                 ('notes', '<section><h2>How this page was made</h2><p>Method text.</p></section>'
+                           '<section id="worklog"><span class="eyebrow">Worklog</span><h2>Update Log</h2>'
+                           '<div class="worklog"><div class="worklog-desc">Initial publish</div></div></section>'))
+    report = conv.convert_page(html, 'n', tmp_path, _no_fetch)
+    book = load_book(tmp_path / 'n')
+
+    assert [p['title'] for p in book['parts']] == ['p1']
+    assert book['sources'] == [{'type': 'h', 'text': 'How this page was made'},
+                               {'type': 'p', 'text': 'Method text.'}]
+    assert 'Update Log' not in json.dumps(book) and 'Initial publish' not in json.dumps(book)
+    assert report.chapters == 1
+
+
+def test_tab_with_sources_label_becomes_sources(tmp_path):
+    buttons = ('<button class="tab-btn" onclick="switchTab(\'refs\')">Sources &amp; Notes</button>'
+               '<button class="tab-btn" onclick="switchTab(\'p1\')">Part</button>')
+    html = _page(('p1', '<h3>Ch</h3><p>Body.</p>'), ('refs', '<p>Edition used.</p>'), buttons=buttons)
+    conv.convert_page(html, 'r', tmp_path, _no_fetch)
+    book = load_book(tmp_path / 'r')
+
+    assert [p['title'] for p in book['parts']] == ['Part']
+    assert book['sources'] == [{'type': 'p', 'text': 'Edition used.'}]
+
+
+def test_failed_image_caption_is_reported_as_dropped(tmp_path):
+    html = _page(('overview', '<figure><img src="data:image/svg+xml;utf8,x"><figcaption>Lost words here</figcaption></figure>'))
+    report = conv.convert_page(html, 'd', tmp_path, _no_fetch)
+
+    assert any('Lost words here' in d for d in report.dropped)
+    assert report.flagged
+
+
+def test_cover_image_caption_is_kept_as_paragraph(tmp_path):
+    buf = io.BytesIO()
+    Image.new('RGB', (4, 4), 'red').save(buf, 'PNG')
+    import base64
+    uri = 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+    html = _page(('overview', f'<figure><img src="{uri}" alt="Book cover: X"><figcaption>X, by Y (Press, 2018)</figcaption></figure><p>Hi.</p>'))
+    report = conv.convert_page(html, 'cv', tmp_path, _no_fetch)
+    book = load_book(tmp_path / 'cv')
+
+    assert book['cover'].startswith('images/')
+    assert book['overview'] == [{'type': 'p', 'text': 'X, by Y (Press, 2018)'}, {'type': 'p', 'text': 'Hi.'}]
+    assert report.dropped == []
+
+
+def test_unexpected_keypoint_label_and_heading_only_intro_are_reported(tmp_path):
+    html = _page(('p1', '<section class="part-intro"><h2>Only A Heading</h2></section>'
+                        '<h3>Ch</h3><div class="chapter-points"><p><strong>Remember these:</strong></p><ul><li>a</li></ul></div>'
+                        '<div class="keypoints-wrap"><h4>Key points</h4><ul class="keypoints"><li>b</li></ul></div>'))
+    report = conv.convert_page(html, 'kp', tmp_path, _no_fetch)
+
+    assert any('Remember these' in d for d in report.dropped)
+    assert any('Only A Heading' in d for d in report.dropped)
+    assert not any('Key points' in d for d in report.dropped)  # the expected label is not a loss
+
+
+def test_picture_element_keeps_its_img(tmp_path):
+    uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAIAAABvrngfAAAAFElEQVR4nGM8ISfHgAqY0PhUFgIAdYgBEED+8ToAAAAASUVORK5CYII='
+    html = _page(('overview', f'<picture><source srcset="x.webp"><img src="{uri}"></picture>'))
+    conv.convert_page(html, 'pc', tmp_path, _no_fetch)
+
+    assert load_book(tmp_path / 'pc')['overview'][0]['type'] == 'image'
