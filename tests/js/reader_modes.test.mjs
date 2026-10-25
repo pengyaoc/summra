@@ -272,3 +272,20 @@ test("page_turn_hint off shows no hint", async () => {
     assert.equal(authProbed, false);
     assert.equal(app.pagination.hintShown, undefined);
 });
+
+function splitSelectors() {
+    const seen = [];
+    const row = { querySelector: selector => { seen.push(selector); return null; } };
+    const app = Object.assign({}, readerUtilsMixin, paginationMixin);
+    assert.deepEqual(app.splitSideBySideRowToFit(row, null, 100), { firstRow: null });
+    return seen;
+}
+
+test("side-by-side row splitting finds its cells by the configured cell_class", () => {
+    assert.deepEqual(splitSelectors(), [".side-by-side-cell.original", ".side-by-side-cell.modern"]);
+    const members = [{ id: "original", label: "Left", cell_class: "left" }, { id: "plain", label: "Right", cell_class: "right" }];
+    window.READER_CONFIG = config([single("original", "Original"), sideBySide(members)], ["original"]);
+    assert.deepEqual(splitSelectors(), [".side-by-side-cell.left", ".side-by-side-cell.right"]);
+    window.READER_CONFIG = config([single("summary", "Summary")], ["summary"]);
+    assert.deepEqual(splitSelectors(), [".side-by-side-cell.original", ".side-by-side-cell.modern"]);
+});

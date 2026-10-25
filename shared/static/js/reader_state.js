@@ -3,7 +3,7 @@
    The IndexedDB name comes from READER_CONFIG.cache_db_name so two apps on
    one origin never share cached segments (book ids collide between apps). */
 (function () {
-const API_BASE = (window.APP_BASE_PATH || '') + '/api';
+const API_BASE = (window.APP_BASE_PATH || '') + (window.READER_CONFIG?.api_base || '/api');
 let currentUser = null;
 let wrongAccountEmail = null;
 let seenHints = new Set();
@@ -177,5 +177,14 @@ window.readerState = {
     cacheReaderManifest, getCachedReaderManifest, cacheReaderSegment, getCachedReaderSegment,
     checkAuthStatus, hintSeen, markHintSeen,
     currentUser: () => currentUser, wrongAccountEmail: () => wrongAccountEmail,
+};
+
+// The shared reader reaches progress, caching and hints through
+// window.authModule. A host with its own auth UI sets the full module after
+// this script (e.g. an app's auth.js); otherwise this default is the module.
+let authCheck = null;
+window.authModule ||= {
+    ...window.readerState,
+    initAuth: () => (authCheck ||= checkAuthStatus()),
 };
 })();

@@ -335,7 +335,7 @@ export const continuousReaderMixin = {
                 .filter(candidate => candidate.dataset.readerAnchor === marker.paragraph_id);
             if (!fragments.length) continue;
             const words = fragments.reduce((sum, candidate) => {
-                const text = reader.mode === 'side_by_side'
+                const text = this.readerLayout(reader.mode) === 'side_by_side'
                     ? (candidate.querySelector(`.side-by-side-cell.${this.readerMode(reader.mode).members[0].cell_class}`)?.textContent || candidate.textContent || '')
                     : candidate.textContent || '';
                 return sum + text.trim().split(/\s+/).filter(Boolean).length;
@@ -369,7 +369,7 @@ export const continuousReaderMixin = {
         const totalWords = Number(anchor?.dataset.readerWordCount) || reader?.unitsById?.get(anchor?.dataset.readerAnchor)?.word_count || 0;
         if (!anchor || totalWords <= 0 || !this.pagination?.pages?.length) return 0;
         const countWords = element => {
-            const source = reader.mode === 'side_by_side'
+            const source = this.readerLayout(reader.mode) === 'side_by_side'
                 ? (element.querySelector(`.side-by-side-cell.${this.readerMode(reader.mode).members[0].cell_class}`)?.textContent || element.textContent || '')
                 : element.textContent || '';
             return source.trim().split(/\s+/).filter(Boolean).length;

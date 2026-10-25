@@ -579,7 +579,9 @@ export const paginationMixin = {
      * Returns {firstRow, remainderRow} or {firstRow: null}.
      */
     splitSideBySideRowToFit(row, pageDiv, pageHeight, pageIsEmpty = true) {
-        const sides = ['.side-by-side-cell.original', '.side-by-side-cell.modern'].map(selector => {
+        const members = this.readerConfig().modes.find(mode => mode.layout === 'side_by_side')?.members;
+        const cellClasses = members?.length ? members.map(member => member.cell_class) : ['original', 'modern'];
+        const sides = cellClasses.map(cellClass => `.side-by-side-cell.${cellClass}`).map(selector => {
             const el = row.querySelector(selector)?.firstElementChild;
             return el ? { selector, el, units: this.textUnits(el) } : null;
         });
