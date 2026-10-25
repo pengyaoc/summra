@@ -3,6 +3,7 @@
 ## 2026-10-25: Distill phase 2 — format, import, converter (in progress)
 
 - Task 1: `distill/book_format.py` (`load_book`, `validate_book`, `block_text`, `iter_chapters`, `FORMAT_VERSION`, `BLOCK_TYPES`). Errors carry the block path, e.g. `parts[1].chapters[3].blocks[2]: ...`. Tests in `tests/distill/test_book_format.py` (15) failed first with `ModuleNotFoundError`.
+- Task 2: `distill/config.py` and `distill/models.py` (`DistillDatabase(ReaderIndexMixin)`: `books`/`chapters`/`images`, `import_book`, getters, library hooks, reader hooks; summary-only units, one per block; CJK-aware word count). Re-import upserts chapters by `(book_id, ordinal)`, so chapter ids stay stable as well as the book id (markers carry chapter ids). Tests in `tests/distill/test_models.py` (13) plus `tests/distill/conftest.py` fixtures; failed first with `ModuleNotFoundError`. pytest **863 passed**. No `shared/` change.
 
 ## 2026-10-24: Distill phase 1 — repo split (complete, deployed)
 
