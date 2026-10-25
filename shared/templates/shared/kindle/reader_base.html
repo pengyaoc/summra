@@ -1,0 +1,53 @@
+{% extends 'shared/kindle/base.html' %}
+{% block html_class %}reading fs-{{ font_size }}{% endblock %}
+{% block title %}{{ chapter.chapter_title or ('Chapter ' ~ chapter.chapter_number) }} — {{ book.title }}{% endblock %}
+{% block body_class %}reader{% endblock %}
+{% block body_attrs %}data-book="{{ book.id }}" data-slug="{{ book.slug }}" data-ch="{{ chapter.chapter_number }}" data-text="{{ text }}" data-start="{{ start }}" data-before="{{ chars_before }}" data-chars="{{ chapter_chars }}" data-total="{{ total_chars }}" data-cookie-path="{{ cookie_path }}"{% if sync_url %} data-sync="{{ sync_url }}"{% endif %}{% if prev_url %} data-prev="{{ prev_url }}"{% endif %}{% if next_url %} data-next="{{ next_url }}"{% endif %}{% endblock %}
+{% block body %}
+<div id="head" class="runhead">{{ book.title }}</div>
+<div id="viewport">
+  <div id="flow" class="flow{% block flow_class %}{% endblock %}">
+    <h1 class="chapter-title">{{ chapter.chapter_title or ('Chapter ' ~ chapter.chapter_number) }}</h1>
+    {% block flow_body %}{% endblock %}
+    <div id="chapter-end" class="chapter-end">
+      {% if next_url %}
+      <p class="end-mark">&#10086;</p>
+      <a class="btn" href="{{ next_url }}">Next: {{ next_title or 'next chapter' }} &rsaquo;</a>
+      {% else %}
+      <p class="end-mark">The End</p>
+      <a class="btn" href="{{ base_path }}/">Back to the library</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<div id="foot" class="runfoot"><span id="left"></span><span id="right"></span></div>
+
+<div id="menu" class="menu hidden">
+  <div class="menu-top">
+    <a class="btn" href="{{ base_path }}/books/{{ book.slug }}">&lsaquo; Contents</a>
+    <a class="btn" href="{{ base_path }}/">Library</a>
+    <span id="close" class="btn">Close</span>
+  </div>
+  <div class="menu-bottom">
+    {% if reader_config.kindle.text_modes|length > 1 %}
+    <div class="row">
+      <span class="row-label">Text</span>
+      {% for mode, label in reader_config.kindle.text_modes %}{% if mode in text_urls %}<a class="btn keep{% if text == mode %} on{% endif %}" href="{{ text_urls[mode] }}">{{ label }}</a>
+      {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="row">
+      <span class="row-label">Size</span>
+      <span id="smaller" class="btn">A&minus;</span>
+      <span id="bigger" class="btn big">A+</span>
+    </div>
+    <div class="row">
+      {% if prev_url %}<a class="btn" href="{{ prev_url }}">&lsaquo; Previous chapter</a>{% endif %}
+      {% if next_url %}<a class="btn" href="{{ next_url }}">Next chapter &rsaquo;</a>{% endif %}
+    </div>
+    <p id="menu-pos" class="menu-pos"></p>
+    {% if auth_enabled and not signed_in %}<p class="menu-pos"><a href="{{ signin_url }}">Sign in</a> to keep your place in sync with the website.</p>{% endif %}
+  </div>
+</div>
+<script src="{{ url_for('static', filename='shared/js/kindle.js') }}{{ asset_v('shared/js/kindle.js') }}"></script>
+{% endblock %}

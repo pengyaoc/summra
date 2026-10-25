@@ -1,8 +1,8 @@
-{% extends 'kindle/base.html' %}
+{% extends 'shared/kindle/base.html' %}
 {% block title %}Plainly — Classics in Plain English{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block body %}
-{% include 'kindle/_masthead.html' %}
+{% include 'shared/kindle/_masthead.html' %}
 <p class="tagline">Classic books, rewritten in plain modern English.</p>
 
 {% if reading %}
@@ -53,7 +53,7 @@
   {% endfor %}
 </ul>
 {% endif %}
-{% include 'kindle/_pager.html' %}
-{% include 'kindle/_account.html' %}
+{% include 'shared/kindle/_pager.html' %}
+{% include 'shared/kindle/_account.html' %}
 <p class="fineprint"><a href="{{ base_path }}/?kindle=0">Full website</a></p>
 {% endblock %}

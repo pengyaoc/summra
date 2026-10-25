@@ -1,5 +1,5 @@
 <div class="masthead">
-  <a class="wordmark" href="{{ base_path }}/">Plainly</a>
+  <a class="wordmark" href="{{ base_path }}/">{{ app_name }}</a>
   {% if back_url %}<a class="mast-link" href="{{ back_url }}">&lsaquo; {{ back_label }}</a>
   {% elif auth_enabled and not signed_in %}<a class="mast-link" href="{{ signin_url }}">Sign in</a>{% endif %}
 </div>

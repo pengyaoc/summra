@@ -1,4 +1,4 @@
-/* Kindle e-ink reader (templates/kindle/reader.html).
+/* Kindle e-ink reader (shared/kindle/reader_base.html).
  *
  * Turns the server-rendered chapter into pages with CSS columns: the flow is
  * one viewport tall, each column one page wide, and turning a page moves the
@@ -39,7 +39,11 @@
 
   var bookId = data('book');
   var chapter = data('ch');
-  var paragraphs = flow.getElementsByTagName('p');
+  var units = [];     // the #flow descendants carrying data-i, in document order
+  var all = flow.getElementsByTagName('*');
+  for (var u = 0; u < all.length; u++) {
+    if (all[u].getAttribute('data-i') !== null) units.push(all[u]);
+  }
   var rows = false;   // fallback when columns aren't supported: pages stacked vertically
   var step = 1;       // width (or height) of one page
   var pages = 1;
@@ -92,9 +96,9 @@
     pages = pageOf(end) + 1;
     starts = [];
     ends = [];
-    for (var i = 0; i < paragraphs.length; i++) {
-      starts.push(pageOf(paragraphs[i]));
-      ends.push(lastPageOf(paragraphs[i], starts[i]));
+    for (var i = 0; i < units.length; i++) {
+      starts.push(pageOf(units[i]));
+      ends.push(lastPageOf(units[i], starts[i]));
     }
   }
 
@@ -111,7 +115,7 @@
   }
 
   function lineHeight() {
-    var p = paragraphs[0] || flow;
+    var p = flow.getElementsByTagName('p')[0] || flow;
     var lh = parseFloat(window.getComputedStyle(p, null).lineHeight);
     return lh > 0 ? lh : 30;
   }
@@ -119,8 +123,8 @@
   // Index (data-i) of the paragraph at the top of the current page.
   function currentParagraph() {
     var last = 0;
-    for (var i = 0; i < paragraphs.length; i++) {
-      var idx = paragraphs[i].getAttribute('data-i');
+    for (var i = 0; i < units.length; i++) {
+      var idx = units[i].getAttribute('data-i');
       if (idx === null) continue;
       last = parseInt(idx, 10);
       if (ends[i] >= page) return last;
@@ -129,8 +133,8 @@
   }
 
   function pageOfParagraph(index) {
-    for (var i = 0; i < paragraphs.length; i++) {
-      var idx = paragraphs[i].getAttribute('data-i');
+    for (var i = 0; i < units.length; i++) {
+      var idx = units[i].getAttribute('data-i');
       if (idx !== null && parseInt(idx, 10) >= index) return starts[i];
     }
     return 0;
@@ -176,8 +180,8 @@
   }
 
   function lastParagraph() {
-    for (var i = paragraphs.length - 1; i >= 0; i--) {
-      var idx = paragraphs[i].getAttribute('data-i');
+    for (var i = units.length - 1; i >= 0; i--) {
+      var idx = units[i].getAttribute('data-i');
       if (idx !== null) return parseInt(idx, 10);
     }
     return 0;

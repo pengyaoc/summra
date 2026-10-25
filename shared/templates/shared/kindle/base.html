@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>{% block title %}Plainly{% endblock %}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/kindle.css') }}{{ asset_v('css/kindle.css') }}">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='shared/css/kindle.css') }}{{ asset_v('shared/css/kindle.css') }}">
+{% block head_extra %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}" {% block body_attrs %}{% endblock %}>
 {% block body %}{% endblock %}

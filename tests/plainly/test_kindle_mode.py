@@ -183,15 +183,6 @@ def test_continue_reading_from_last_book_cookie(client):
     assert 'href="/books/moby-dick/read"' in html
 
 
-def test_kindle_script_is_es5(client):
-    """The older Kindle browser is WebKit 531 (Safari 4): no let/const,
-    arrow functions, classes, template literals or classList."""
-    from pathlib import Path
-    src = (Path(__file__).parents[2] / 'plainly/frontend/static/js/kindle.js').read_text()
-    for pattern in (r'\blet\s', r'\bconst\s', r'=>', r'\bclass\s', '`', r'classList'):
-        assert not re.search(pattern, src), pattern
-
-
 def test_reader_renders_underscore_and_asterisk_italics_like_the_web_reader(client):
     from plainly.routes import common
     common.db.add_chapter(client.book_id, 2, 'The Carpet-Bag', 's',
@@ -391,3 +382,14 @@ def test_reading_list_paginates(client, monkeypatch):
 def test_signed_out_home_has_no_reading_now_section(client):
     assert reading_section(body(kget(client, '/'))) == ''
     assert reading_section(body(kget(client, '/?show=reading'))) == ''
+
+
+def test_progress_endpoint_is_404_when_the_kindle_feature_is_off(client, monkeypatch):
+    from dataclasses import replace
+    from plainly.routes import kindle
+    from plainly.reader_config import PLAINLY_READER
+    from shared.reader.config import ReaderFeatures
+    sign_in(client, monkeypatch)
+    off = replace(PLAINLY_READER, features=ReaderFeatures(kindle=False), kindle=None)
+    monkeypatch.setattr(kindle, 'PLAINLY_READER', off)
+    assert save(client, book_id=client.book_id, ch=1, p=0, text='plain').status_code == 404

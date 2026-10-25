@@ -1,4 +1,4 @@
-/* Kindle e-ink mode (plainly/routes/kindle.py).
+/* Kindle e-ink mode (shared/kindle).
    E-ink rules: pure black on white, no grays for text, no shadows, gradients,
    transitions or animation (each repaint ghosts), big tap targets, and no
    scrolling in the reader: kindle.js turns the chapter into pages. Old

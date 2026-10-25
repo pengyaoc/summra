@@ -1,9 +1,9 @@
-{% extends 'kindle/base.html' %}
+{% extends 'shared/kindle/base.html' %}
 {% block title %}{{ book.title }} — Plainly{% endblock %}
 {% block body_class %}page{% endblock %}
 {% block body %}
 {% set back_url = base_path ~ '/' %}{% set back_label = 'Library' %}
-{% include 'kindle/_masthead.html' %}
+{% include 'shared/kindle/_masthead.html' %}
 <div class="book-head">
   {% if cover_url %}<img class="cover" src="{{ cover_url }}" alt="">{% endif %}
   <div class="book-meta">
@@ -30,6 +30,6 @@
   <li class="empty">This book has no chapters yet.</li>
   {% endfor %}
 </ul>
-{% include 'kindle/_pager.html' %}
-{% include 'kindle/_account.html' %}
+{% include 'shared/kindle/_pager.html' %}
+{% include 'shared/kindle/_account.html' %}
 {% endblock %}
