@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-25: Distill phase 3 — shared reader + web app (in progress)
+
+- Task 1: shared static/template plumbing and Plainly baselines. `shared.web.SHARED_TEMPLATES` and `install_shared_ui(app)` (ChoiceLoader, app templates first), called from `plainly/app_base.py`; Plainly's context processor adds `app_name='Plainly'`. `shared/static/` and `shared/templates/shared/` created; `plainly/frontend/static/shared` is a symlink to `shared/static` (Apache static `<Directory>` now `Options -Indexes +FollowSymLinks`; repo copy only, VM untouched). Baselines recorded on unchanged code: golden markup (`tests/plainly/test_reader_shell_markup.py`, 2 tests, `tests/plainly/golden/`) and the computed-style snapshot (`tests/e2e/reader_style_snapshot.mjs`, `MODE=record|compare`; 4 variants, 52 elements; compare after the change: no differences). New tests in `tests/shared/test_shared_ui.py` (5) and `test_apache_conf.py` (1) failed first. pytest **924 passed**, 2 deselected.
+
 ## 2026-10-25: Distill phase 2 — format, import, converter (complete)
 
 - Final-review fixes: CI installs `distill/requirements-tools.txt` (bs4 tests no longer skipped), `CJK_RE` public in `book_format`, converter runs `validate_book` and flags/reports `errors`, `list_books` ordered by title (case-insensitive, id tiebreak), heading-only chapters reported empty before part headings are inserted, `distill/requirements.txt` (Pillow).

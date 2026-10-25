@@ -6,6 +6,9 @@ import zlib
 from pathlib import Path
 
 from flask import Flask, request
+from jinja2 import ChoiceLoader, FileSystemLoader
+
+SHARED_TEMPLATES = Path(__file__).resolve().parent / 'templates'
 
 
 class PrefixMiddleware:
@@ -98,3 +101,12 @@ def install_web_basics(app: Flask, static_dir_override_env: str) -> None:
     app.wsgi_app = PrefixMiddleware(app.wsgi_app)
     app.after_request(gzip_response)
     app.jinja_env.globals['asset_v'] = make_asset_v(app, static_dir_override_env)
+
+
+def install_shared_ui(app: Flask) -> None:
+    """Let `app` include templates from shared/templates as a fallback root.
+
+    The app's own templates are searched first, so an app can override any
+    shared template by providing one at the same path. Shared templates live
+    under shared/templates/shared/ to keep names from colliding."""
+    app.jinja_loader = ChoiceLoader([app.jinja_loader, FileSystemLoader(str(SHARED_TEMPLATES))])

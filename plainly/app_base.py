@@ -20,7 +20,7 @@ from plainly import models
 from plainly.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
 from shared.auth import user_models, whoami
-from shared.web import install_web_basics
+from shared.web import install_shared_ui, install_web_basics
 from shared.progress import routes as progress_routes
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
@@ -102,6 +102,7 @@ def inject_environment():
         'feature_blog': config.FEATURE_BLOG,
         'base_path': request.script_root,
         'site_origin': common.site_origin(),
+        'app_name': 'Plainly',
     }
 
 
@@ -150,6 +151,7 @@ def add_cache_headers(response):
 # bytes, and mtime=0 keeps those bytes — and so the ETag — stable. Also wraps
 # the app with PrefixMiddleware and sets the asset_v Jinja global.
 install_web_basics(app, 'SUMMRA_STATIC_DIR_OVERRIDE')
+install_shared_ui(app)
 
 
 # Error handlers

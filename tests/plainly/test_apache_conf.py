@@ -46,3 +46,10 @@ def test_lookalike_paths_are_not_redirected():
     rendered = _render('/plainly')
     assert _target(rendered, '/summrabooks/x') is None
     assert _target(rendered, '/plainly/books/moby-dick') is None
+
+
+def test_static_directory_follows_symlinks():
+    """plainly/frontend/static/shared is a symlink into shared/static."""
+    m = re.search(r'<Directory [^>]*static>(.*?)</Directory>', CONF.read_text(), re.S)
+    assert m, 'no static <Directory> block'
+    assert re.search(r'Options\s+-Indexes\s+\+FollowSymLinks', m.group(1))
