@@ -9,11 +9,8 @@ attributes rather than imported back from here).
 """
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
-from pathlib import Path
 import os
 import logging
-import gzip
-import zlib
 
 # Handle both direct execution (`python backend/app.py`, dev) and package
 # import (gunicorn's `backend.app_prod:app`, prod) — `backend` is installed
@@ -29,6 +26,7 @@ except ImportError:
     from backend.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
 from shared.auth import user_models, whoami
+from shared.web import install_web_basics
 from shared.progress import routes as progress_routes
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
@@ -41,33 +39,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class PrefixMiddleware:
-    """WSGI middleware letting this app be reverse-proxied under a URL prefix
-    (e.g. Apache's `ProxyPass /summrabook/ http://127.0.0.1:5001/`, which strips
-    the prefix before forwarding to the backend). Reads X-Forwarded-Prefix (set
-    by the proxy) and applies it as SCRIPT_NAME, so url_for() and
-    request.script_root automatically produce correctly-prefixed URLs
-    everywhere. No effect when the header is absent (root deployment, local dev).
-    """
-
-    def __init__(self, wsgi_app):
-        self.wsgi_app = wsgi_app
-
-    def __call__(self, environ, start_response):
-        prefix = environ.get('HTTP_X_FORWARDED_PREFIX', '')
-        if prefix:
-            environ['SCRIPT_NAME'] = prefix
-            path_info = environ.get('PATH_INFO', '')
-            if path_info.startswith(prefix):
-                environ['PATH_INFO'] = path_info[len(prefix):] or '/'
-        return self.wsgi_app(environ, start_response)
-
-
 # Create Flask app
 app = Flask(__name__,
             static_folder='../frontend/static',
             template_folder='../frontend/templates')
-app.wsgi_app = PrefixMiddleware(app.wsgi_app)
 
 # No SECRET_KEY / session cookie config needed: trusted_header mode reads
 # an already-verified identity from a header on every request, it doesn't
@@ -136,57 +111,6 @@ def inject_environment():
     }
 
 
-# Cache-busting helper for static assets.
-#
-# Browsers cache CSS/JS aggressively. If a deploy ships a CSS that's
-# incompatible with the existing HTML/JS, returning users will serve the new
-# HTML over old cached CSS until either the cache expires or the user clears
-# site data. asset_v('css/foo.css') returns '?v=<content-hash>' so the URL
-# changes whenever the file's *content* changes, forcing a cache miss on the
-# new URL.
-#
-# Content hash, not mtime: mtime is preserved or reset inconsistently by
-# different deploy paths (git checkout, rsync, a straight file copy), so it
-# can fail to change even when content did, or change with no content
-# change at all — either way defeating the point of a cache-busting query
-# string. A hash of the actual bytes is correct regardless of how the file
-# got onto disk. No mtime-keyed cache here on purpose: an earlier version
-# cached the hash keyed by mtime and only recomputed on a mtime change —
-# which reintroduced the exact bug this function exists to avoid (same
-# mtime, different content, due to a deploy tool that doesn't bump it, would
-# silently serve a stale cached hash). Every static asset here is small
-# (KB-scale CSS/JS), so hashing on every call is cheap enough not to need
-# caching at all.
-def _resolve_static_path(filename: str):
-    """Return the on-disk path of a static asset, honoring a test override."""
-    override = os.environ.get('SUMMRA_STATIC_DIR_OVERRIDE')
-    if override:
-        return Path(override) / filename
-    static_folder = app.static_folder
-    if not static_folder:
-        return None
-    return Path(static_folder) / filename
-
-
-def asset_v(filename: str) -> str:
-    """Return '?v=<content-hash>' for an existing static asset, or '' if missing.
-
-    Composed in templates as:
-        href="{{ url_for('static', filename='css/style.css') }}{{ asset_v('css/style.css') }}"
-    """
-    path = _resolve_static_path(filename)
-    if not path or not path.exists():
-        return ''
-    try:
-        content = path.read_bytes()
-    except OSError:
-        return ''
-    return f'?v={zlib.crc32(content)}'
-
-
-app.jinja_env.globals['asset_v'] = asset_v
-
-
 # HTTP Caching Headers
 @app.after_request
 def add_cache_headers(response):
@@ -227,29 +151,11 @@ def add_cache_headers(response):
     return response
 
 
-# Registered after add_cache_headers so it runs before it (Flask runs
+# Registered after add_cache_headers so gzip runs before it (Flask runs
 # after_request hooks in reverse): the ETag is then computed over the gzipped
-# bytes, and mtime=0 keeps those bytes — and so the ETag — stable.
-@app.after_request
-def gzip_response(response):
-    """Gzip HTML/JSON. Prod's Apache front end compresses the static files it
-    serves itself but passes gunicorn's responses through uncompressed."""
-    if (
-        response.status_code != 200
-        or response.direct_passthrough
-        or response.is_streamed
-        or 'Content-Encoding' in response.headers
-        or response.mimetype not in ('text/html', 'application/json')
-        or 'gzip' not in request.headers.get('Accept-Encoding', '').lower()
-    ):
-        return response
-    data = response.get_data()
-    if len(data) < 1024:
-        return response
-    response.set_data(gzip.compress(data, compresslevel=6, mtime=0))
-    response.headers['Content-Encoding'] = 'gzip'
-    response.vary.add('Accept-Encoding')
-    return response
+# bytes, and mtime=0 keeps those bytes — and so the ETag — stable. Also wraps
+# the app with PrefixMiddleware and sets the asset_v Jinja global.
+install_web_basics(app)
 
 
 # Error handlers

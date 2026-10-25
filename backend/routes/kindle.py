@@ -20,7 +20,7 @@ from markupsafe import Markup, escape
 
 from backend import models
 from shared.progress import routes as progress_routes
-from backend.kindle import is_kindle_user_agent
+from shared.kindle import is_kindle_user_agent
 from backend.routes import common
 from backend.routes.pages import _cover_base
 
