@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-25: Distill phase 2 — format, import, converter (in progress)
+
+- Task 1: `distill/book_format.py` (`load_book`, `validate_book`, `block_text`, `iter_chapters`, `FORMAT_VERSION`, `BLOCK_TYPES`). Errors carry the block path, e.g. `parts[1].chapters[3].blocks[2]: ...`. Tests in `tests/distill/test_book_format.py` (15) failed first with `ModuleNotFoundError`.
+
 ## 2026-10-24: Distill phase 1 — repo split (complete, deployed)
 
 Splitting the repo into `shared/`, `plainly/` and `distill/` with Plainly unchanged. Plan and design: see the Distill design and phase 1 plan commit.
