@@ -400,3 +400,30 @@ def test_other_heading_only_intro_is_kept_as_h_block_in_first_chapter(tmp_path):
     assert part['chapters'][0]['blocks'][:2] == [{'type': 'h', 'text': 'Cue: make the cues visible'},
                                                 {'type': 'p', 'text': 'Body.'}]
     assert report.dropped == []
+
+
+def test_heading_only_chapter_after_heading_only_intro_is_reported_empty(tmp_path):
+    buttons = '<button class="tab-btn" onclick="switchTab(\'p1\')">Part I</button>'
+    html = _page(('p1', '<section class="part-intro"><h2>Other heading</h2></section><h3>Ch</h3>'), buttons=buttons)
+    report = conv.convert_page(html, 'ho', tmp_path, _no_fetch)
+
+    assert report.empty_chapters == ['Part I / Ch']
+    assert report.flagged
+
+
+def test_invalid_output_is_flagged_with_errors_in_reports(tmp_path):
+    html = (FIXTURES / 'page_a.html').read_text(encoding='utf-8')
+    report = conv.convert_page(html, 'Bad_Slug', tmp_path, _no_fetch)
+
+    assert report.flagged
+    assert any(e.startswith('slug:') for e in report.errors)
+
+    conv._write_reports(tmp_path, [report], [])
+    assert 'slug:' in (tmp_path / 'report.md').read_text(encoding='utf-8')
+    assert json.loads((tmp_path / 'report.json').read_text(encoding='utf-8'))['pages'][0]['errors'] == report.errors
+
+
+def test_valid_output_has_no_errors(tmp_path):
+    report, _ = _convert('page_a.html', tmp_path)
+
+    assert report.errors == []

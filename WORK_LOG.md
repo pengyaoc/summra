@@ -2,6 +2,8 @@
 
 ## 2026-10-25: Distill phase 2 — format, import, converter (complete)
 
+- Final-review fixes: CI installs `distill/requirements-tools.txt` (bs4 tests no longer skipped), `CJK_RE` public in `book_format`, converter runs `validate_book` and flags/reports `errors`, `list_books` ordered by title (case-insensitive, id tiebreak), heading-only chapters reported empty before part headings are inserted, `distill/requirements.txt` (Pillow).
+
 - Task 5 (data, not committed): converted all 54 vault summary pages (final run `data/distill_import/run5`, after converter fix rounds 1–2: notes tabs → sources, nested worklogs skipped, lost captions recorded in `dropped`, part subtitle headings kept). 54/54 validate. Flagged 4, accepted: cell-song, guns-germs-and-steel, silent-spring, winning-jack-welch each lose 1–2 SVG/unfetchable images (captions recorded in the report). The two *Abundance* pages are different books (Diamandis & Kotler; Klein & Thompson) and both are imported. Hand fixes in the run5 `book.json` before import: 18 authors the converter guessed wrong or left blank (e.g. silent-spring was "Silent Spring", Klein lacked Thompson) and 3 doubled "Introduction — Introduction" chapter titles. Imported all 54 into `data/distill.db` with `ensure_reader_content` for each: 0 failures; the 4 books imported earlier kept ids 1–4. DB size 154.6 MB (check VM disk before phase 4 push). pytest **912 passed** at `74253b6`.
 
 - Task 1: `distill/book_format.py` (`load_book`, `validate_book`, `block_text`, `iter_chapters`, `FORMAT_VERSION`, `BLOCK_TYPES`). Errors carry the block path, e.g. `parts[1].chapters[3].blocks[2]: ...`. Tests in `tests/distill/test_book_format.py` (15) failed first with `ModuleNotFoundError`.

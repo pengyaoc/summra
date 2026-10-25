@@ -141,7 +141,7 @@ class DistillDatabase(ReaderIndexMixin):
         conn = self.get_connection()
         try:
             return [self._book_dict(r) for r in conn.execute(
-                f'SELECT * FROM books {where} ORDER BY imported_at DESC, id DESC', params)]
+                f'SELECT * FROM books {where} ORDER BY title COLLATE NOCASE, id', params)]
         finally:
             conn.close()
 

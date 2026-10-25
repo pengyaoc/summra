@@ -154,3 +154,12 @@ def test_deleting_book_cascades(db, sample_book, write_book):
     assert conn.execute('SELECT COUNT(*) FROM chapters').fetchone()[0] == 0
     assert conn.execute('SELECT COUNT(*) FROM images').fetchone()[0] == 0
     conn.close()
+
+
+def test_list_books_orders_by_title_case_insensitive_then_id(db, sample_book, write_book):
+    ids = {}
+    for slug, title in [('b1', 'banana'), ('a1', 'Apple'), ('c1', 'cherry'), ('b2', 'Banana')]:
+        sample_book.update(slug=slug, title=title)
+        ids[slug] = db.import_book(write_book(sample_book))
+
+    assert [b['id'] for b in db.list_books()] == [ids['a1'], ids['b1'], ids['b2'], ids['c1']]

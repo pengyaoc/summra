@@ -19,7 +19,7 @@ _HTML_RE = re.compile(r'<[A-Za-z/!]')
 _LINK_RE = re.compile(r'\[[^\]]*\]\([^)]*\)')
 _IMAGE_FORMATS = {'.jpg': 'JPEG', '.png': 'PNG'}
 _IMAGE_SUFFIXES = frozenset(_IMAGE_FORMATS)
-_CJK_RE = re.compile(r'[一-鿿]')
+CJK_RE = re.compile(r'[一-鿿]')
 # Must match ReaderIndexMixin._reader_word_count in shared/reader/index.py.
 _WORD_RE = re.compile(r"\b[\w’'-]+\b")
 
@@ -38,7 +38,7 @@ def list_images(folder: Path) -> list:
 
 def word_count(text: str) -> int:
     """Each CJK character counts one; other runs of word characters count one each."""
-    return len(_CJK_RE.findall(text)) + len(_WORD_RE.findall(_CJK_RE.sub(' ', text)))
+    return len(CJK_RE.findall(text)) + len(_WORD_RE.findall(CJK_RE.sub(' ', text)))
 
 
 def _strip_markup(text: str) -> str:

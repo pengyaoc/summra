@@ -25,7 +25,7 @@ from typing import Callable, Optional
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 from PIL import Image
 
-from distill.book_format import FORMAT_VERSION, block_text, word_count
+from distill.book_format import CJK_RE, FORMAT_VERSION, block_text, validate_book, word_count
 
 MAX_WIDTH = 1600
 THUMB_WIDTH = 1280
@@ -46,7 +46,6 @@ _LOSSY_TAGS = frozenset({'svg', 'iframe', 'canvas', 'video', 'audio', 'object', 
 _SOURCES_LABEL_RE = re.compile(r'sources|notes|来源', re.I)
 _KEYPOINT_LABEL_RE = re.compile(r'key\s*points?|要点|关键', re.I)
 _KEYPOINT_HEADING_RE = re.compile(r'^(key\s*points?|要点|关键要点)\s*[:：]?$', re.I)
-_CJK_RE = re.compile(r'[一-鿿]')
 _HTML_RE = re.compile(r'<(?=[A-Za-z/!])')
 _LINK_RE = re.compile(r'\[([^\]]*)\]\([^)]*\)')
 _TITLE_SUFFIX_RE = re.compile(r'\s*[—–-]+\s*(Reading Companion|Book Summary|Chapter Summaries)\s*$', re.I)
@@ -63,6 +62,7 @@ class PageReport:
     images_failed: list = field(default_factory=list)
     dropped: list = field(default_factory=list)
     empty_chapters: list = field(default_factory=list)
+    errors: list = field(default_factory=list)
     flagged: bool = False
     author: Optional[str] = None
     lang: str = 'en'
@@ -511,7 +511,7 @@ def _text_stats(blocks_lists) -> float:
     for blocks in blocks_lists:
         for block in blocks:
             text = block_text(block)
-            cjk += len(_CJK_RE.findall(text))
+            cjk += len(CJK_RE.findall(text))
             total += len(re.sub(r'\s', '', text))
     return cjk / total if total else 0.0
 
@@ -588,7 +588,9 @@ def convert_page(html: str, slug: str, out_dir: Path, fetch: Callable[[str], byt
             'lang': report.lang, 'cover': cover, 'overview': overview, 'parts': parts, 'sources': sources}
     (folder / 'book.json').write_text(json.dumps(book, ensure_ascii=False, indent=1), encoding='utf-8')
     report.dropped = sorted(set(report.dropped))
-    report.flagged = bool(report.chapters == 0 or report.dropped or report.empty_chapters or report.images_failed)
+    report.errors = validate_book(book, folder)
+    report.flagged = bool(report.chapters == 0 or report.dropped or report.empty_chapters or report.images_failed
+                          or report.errors)
     return report
 
 
@@ -620,6 +622,7 @@ def _build_part(part_title: str, events: list, report: PageReport) -> dict:
             chapters[-1]['blocks'].append(payload)
         else:
             intro.append(payload)
+    empty = [c['title'] for c in chapters if not c['blocks']]  # before part headings are added to chapters[0]
     kept = []
     if intro and all(b['type'] == 'h' for b in intro):
         part_title, heading_blocks = _apply_part_headings(part_title, intro)
@@ -631,8 +634,7 @@ def _build_part(part_title: str, events: list, report: PageReport) -> dict:
     for chapter in chapters:
         if chapter['blocks']:
             kept.append(chapter)
-        else:
-            report.empty_chapters.append(f'{part_title} / {chapter["title"]}')
+    report.empty_chapters += [f'{part_title} / {title}' for title in empty]
     return {'title': part_title, 'chapters': kept}
 
 
@@ -688,7 +690,7 @@ def _write_reports(out: Path, reports: list, duplicates: list) -> None:
         lines.append(f'- **{r.slug}**: chapters={r.chapters}' + ''.join(
             f'; {label}={value}' for label, value in (
                 ('dropped', r.dropped), ('empty_chapters', r.empty_chapters),
-                ('images_failed', r.images_failed), ('error', r.error)) if value))
+                ('errors', r.errors), ('images_failed', r.images_failed), ('error', r.error)) if value))
     lines += ['', '## Likely duplicates', '']
     lines += [f'- {", ".join(group)}' for group in duplicates] or ['- none']
     (out / 'report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
