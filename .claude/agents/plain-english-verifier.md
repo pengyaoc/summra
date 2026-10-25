@@ -29,6 +29,6 @@ Edit only the JSON files in `$DIR/out/chN/` that hold your range. Do not touch t
 
 **Fixing.** Fix real problems by editing the JSON: one line per paragraph, the same count, each ending with . ! ? or a closing quote/brace after one. Leave correct paragraphs alone; style preferences are not problems.
 
-**Finish.** Run `PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py check --book-id <id> --dir $DIR --chapter N`.
+**Finish.** Run `venv/bin/python -m plainly.scripts.content.passage_rewrite check --book-id <id> --dir $DIR --chapter N`.
 
 **Report in at most 8 lines:** the pairs reviewed, the number fixed, one line per fix ("P<n>: problem → change"), anything unresolved, and the gate line.

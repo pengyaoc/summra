@@ -39,12 +39,12 @@ Click "Plain Text UTF-8" to download the .txt file, then move it to `data/books/
 
 **For a single book:**
 ```bash
-python scripts/content/generate_summaries.py data/books/pride_and_prejudice.txt
+python -m plainly.scripts.content.generate_summaries data/books/pride_and_prejudice.txt
 ```
 
 **For all books in the directory:**
 ```bash
-python scripts/content/generate_summaries.py data/books/ --batch
+python -m plainly.scripts.content.generate_summaries data/books/ --batch
 ```
 
 **Expected time:**
@@ -75,7 +75,7 @@ Navigate to: http://localhost:5000
 ### Generate Summaries with Custom Metadata
 
 ```bash
-python scripts/content/generate_summaries.py data/books/book.txt \
+python -m plainly.scripts.content.generate_summaries data/books/book.txt \
     --title "The Great Gatsby" \
     --author "F. Scott Fitzgerald"
 ```
@@ -113,7 +113,7 @@ curl -o alice.txt https://www.gutenberg.org/files/11/11-0.txt
 cd ../..
 
 # 4. Generate summaries
-python scripts/content/generate_summaries.py data/books/alice.txt \
+python -m plainly.scripts.content.generate_summaries data/books/alice.txt \
     --title "Alice's Adventures in Wonderland" \
     --author "Lewis Carroll"
 
@@ -138,14 +138,14 @@ If you're processing many books:
 
 ```bash
 # Process books one at a time with pauses
-python scripts/content/generate_summaries.py data/books/book1.txt
+python -m plainly.scripts.content.generate_summaries data/books/book1.txt
 # Wait a few minutes
-python scripts/content/generate_summaries.py data/books/book2.txt
+python -m plainly.scripts.content.generate_summaries data/books/book2.txt
 ```
 
 Or just use batch mode and let it handle the rate limiting:
 ```bash
-python scripts/content/generate_summaries.py data/books/ --batch
+python -m plainly.scripts.content.generate_summaries data/books/ --batch
 ```
 
 ### Customizing Summary Length

@@ -10,7 +10,7 @@ from flask import Flask, request
 
 class PrefixMiddleware:
     """WSGI middleware letting this app be reverse-proxied under a URL prefix
-    (e.g. Apache's `ProxyPass /summrabook/ http://127.0.0.1:5001/`, which strips
+    (e.g. Apache's `ProxyPass /myapp/ http://127.0.0.1:5001/`, which strips
     the prefix before forwarding to the backend). Reads X-Forwarded-Prefix (set
     by the proxy) and applies it as SCRIPT_NAME, so url_for() and
     request.script_root automatically produce correctly-prefixed URLs
@@ -51,8 +51,11 @@ def gzip_response(response):
     return response
 
 
-def make_asset_v(app: Flask, static_dir_override_env: str = 'SUMMRA_STATIC_DIR_OVERRIDE'):
+def make_asset_v(app: Flask, static_dir_override_env: str):
     """Build the `asset_v` template helper for `app`.
+
+    `static_dir_override_env` names an env var that, when set, points asset
+    lookups at another directory (used by tests and deploys).
 
     asset_v('css/foo.css') returns '?v=<content-hash>' for an existing static
     asset, or '' if missing. Composed in templates as:
@@ -85,7 +88,7 @@ def make_asset_v(app: Flask, static_dir_override_env: str = 'SUMMRA_STATIC_DIR_O
     return asset_v
 
 
-def install_web_basics(app: Flask, static_dir_override_env: str = 'SUMMRA_STATIC_DIR_OVERRIDE') -> None:
+def install_web_basics(app: Flask, static_dir_override_env: str) -> None:
     """Wrap `app` with PrefixMiddleware, register gzip as an after_request
     hook and set the `asset_v` Jinja global.
 

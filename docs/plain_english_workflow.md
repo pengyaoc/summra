@@ -33,8 +33,8 @@ Steps 2, 3, 4 are idempotent and free. Step 5 is mechanical for the common patte
 ## Step 1 — Generate the plain-English version
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --all-chapters --dry-run
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --all-chapters
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --all-chapters --dry-run
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --all-chapters
 ```
 
 ### Rules
@@ -42,7 +42,7 @@ PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --
 - **Always dry-run first** to see batch count and per-batch char sizes. The smart batcher caps each batch at 60K input chars and 10 chapters per batch — large chapters land solo.
 - **Always start with `gemini-3.1-flash-lite`** (the default). Cheapest, fastest, handles 90%+ of chapters cleanly. Don't escalate preemptively.
 - **Escalate to `--model gemini-3.5-flash`** for individual chapters that come back truncated or summary-shaped (detected in step 4). Confirmed to recover full output where flash-lite gave up.
-- **The prompt instructs Gemini to keep the chapter title as the first paragraph** (`scripts/content/generate_modern_english.py:109-110`). Older runs predating that prompt fix often dropped titles — step 5a fixes those mechanically.
+- **The prompt instructs Gemini to keep the chapter title as the first paragraph** (`plainly/scripts/content/generate_modern_english.py:109-110`). Older runs predating that prompt fix often dropped titles — step 5a fixes those mechanically.
 
 ### Cost discipline (`MEMORY.md → feedback_llm_cost.md`)
 
@@ -74,9 +74,9 @@ The output cap isn't usually the bottleneck. Truncation happens because flash-li
 ## Step 2 — Reformat hard-wrapped paragraphs
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id> --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id>
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id> --column modern_english_text
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id <id> --dry-run
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id <id>
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id <id> --column modern_english_text
 ```
 
 ### Why this matters
@@ -106,8 +106,8 @@ Pure DB rewrite. No LLM calls. Idempotent.
 ## Step 3 — Strip decorative section dividers
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id <id> --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id <id>
+venv/bin/python -m plainly.scripts.audits.strip_decorative_dividers --book-id <id> --dry-run
+venv/bin/python -m plainly.scripts.audits.strip_decorative_dividers --book-id <id>
 ```
 
 ### Why this matters
@@ -133,8 +133,8 @@ Removes any paragraph that is entirely whitespace + decorative chars (`* - . …
 For illustrated editions (Little Women in particular), `chapter_text` is polluted with illustration captions interleaved as paragraphs (`"Tail-piece"`, `"The procession set out"`, `"List of Illustrations"`). Run this immediately after `strip_decorative_dividers`:
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_illustration_captions.py --book-id <id> --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_illustration_captions.py --book-id <id>
+venv/bin/python -m plainly.scripts.audits.strip_illustration_captions --book-id <id> --dry-run
+venv/bin/python -m plainly.scripts.audits.strip_illustration_captions --book-id <id>
 ```
 
 The script strips (from `chapter_text` only):
@@ -165,7 +165,7 @@ Earlier audits incorrectly flagged chapters ending in `”` (right smart quote) 
 ### Quick per-book audit snippet
 
 ```sh
-PYTHONPATH=backend venv/bin/python3 -c "
+venv/bin/python3 -c "
 import sqlite3
 db = sqlite3.connect('data/database.db')
 def c(t): return len(t.strip().split(chr(10)*2)) if t and t.strip() else 0
@@ -291,9 +291,9 @@ Examples:
 Dispatch a **Sonnet** subagent (NOT Haiku — see below) per chapter:
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --inspect --snippet 200
-PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --split "5:200,7:100" --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --split "5:200,7:100"
+venv/bin/python -m plainly.scripts.audits.split_modern_paragraphs --book-id <id> --chapter-number <n> --inspect --snippet 200
+venv/bin/python -m plainly.scripts.audits.split_modern_paragraphs --book-id <id> --chapter-number <n> --split "5:200,7:100" --dry-run
+venv/bin/python -m plainly.scripts.audits.split_modern_paragraphs --book-id <id> --chapter-number <n> --split "5:200,7:100"
 ```
 
 Subagent prompt must include:
@@ -332,11 +332,11 @@ When step 4 audit flags a chapter as truncated, summary-shaped, or has a massive
 
 ```sh
 # First retry: re-run with default flash-lite (it's non-deterministic at temperature 0.3)
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N,M" --dry-run
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N,M"
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --chapters "N,M" --dry-run
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --chapters "N,M"
 
 # If still truncated/summarized, escalate just that chapter
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N" --model gemini-3.5-flash
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --chapters "N" --model gemini-3.5-flash
 ```
 
 ### Failure modes and remediation
@@ -357,11 +357,11 @@ After regenerating any chapter, return to step 2 (reformat) → step 3 (strip) �
 
 | Script | Purpose | Tests |
 |---|---|---|
-| `scripts/content/generate_modern_english.py` | Calls Gemini; writes to `chapters.modern_english_text` and logs | (integration) |
-| `scripts/audits/reformat_paragraphs.py` | Hard-wrap → `\n\n`, strip title prefix. Works on either column. | `tests/test_reformat_paragraphs.py` |
-| `scripts/audits/strip_decorative_dividers.py` | Removes `* * *`, `---`, etc. divider paragraphs from both columns | `tests/test_strip_decorative_dividers.py` |
-| `scripts/audits/strip_illustration_captions.py` | Removes illustration captions (short, no terminal punct, no opening quote), front-matter labels (`Tail-piece`, `Contents`, etc.), and trailing transcriber/publisher noise from `chapter_text`. Run BEFORE first-pass generation on illustrated editions. | (none yet — add when used in anger) |
-| `scripts/audits/split_modern_paragraphs.py` | Manual `--split` / `--merge` tool for surgical alignment via Sonnet subagent | `tests/test_split_modern_paragraphs.py` |
+| `plainly/scripts/content/generate_modern_english.py` | Calls Gemini; writes to `chapters.modern_english_text` and logs | (integration) |
+| `plainly/scripts/audits/reformat_paragraphs.py` | Hard-wrap → `\n\n`, strip title prefix. Works on either column. | `tests/test_reformat_paragraphs.py` |
+| `plainly/scripts/audits/strip_decorative_dividers.py` | Removes `* * *`, `---`, etc. divider paragraphs from both columns | `tests/test_strip_decorative_dividers.py` |
+| `plainly/scripts/audits/strip_illustration_captions.py` | Removes illustration captions (short, no terminal punct, no opening quote), front-matter labels (`Tail-piece`, `Contents`, etc.), and trailing transcriber/publisher noise from `chapter_text`. Run BEFORE first-pass generation on illustrated editions. | (none yet — add when used in anger) |
+| `plainly/scripts/audits/split_modern_paragraphs.py` | Manual `--split` / `--merge` tool for surgical alignment via Sonnet subagent | `tests/test_split_modern_paragraphs.py` |
 
 All scripts:
 - Take `--book-id`, support `--dry-run`.
@@ -518,7 +518,7 @@ Books like Little Women (illustrated edition) interleave illustration captions a
 
 **Detection pattern**: short paragraph (<100 chars), doesn't end with terminal punctuation (`.!?")`), doesn't start with an opening quote (real dialogue), doesn't start with lowercase. Plus known front-matter labels (`Contents`, `Preface`, `Tail-piece`, `List of Illustrations`, `Part First`, `Part Second`).
 
-Use `scripts/audits/strip_illustration_captions.py --book-id N --dry-run` BEFORE first-pass `generate_modern_english.py`. Idempotent. Safer to run on every illustrated edition.
+Use `plainly/scripts/audits/strip_illustration_captions.py --book-id N --dry-run` BEFORE first-pass `generate_modern_english.py`. Idempotent. Safer to run on every illustrated edition.
 
 ### 14. Trailing publisher boilerplate can be hundreds of paragraphs
 
@@ -735,14 +735,14 @@ Confirmed again on book 83 (Three Musketeers, run parallel with book 67): batch 
 **Recovery** — `kill $PID`, query the DB for missing chapters, resume with explicit `--chapters N,M,...`:
 
 ```sh
-PYTHONPATH=backend venv/bin/python3 -c "
+venv/bin/python3 -c "
 import sqlite3
 db = sqlite3.connect('data/database.db')
 missing = [r[0] for r in db.execute(\"SELECT chapter_number FROM chapters WHERE book_id=BOOK AND (modern_english_text IS NULL OR TRIM(modern_english_text) = '') ORDER BY chapter_number\")]
 print(','.join(str(n) for n in missing))
 "
 # Then:
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id BOOK --chapters "N,M,O,..."
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id BOOK --chapters "N,M,O,..."
 ```
 
 Per-chapter writes commit immediately on save (no buffer flush dependency), so a kill mid-batch loses at most 1 batch's worth of work. The resume is clean.

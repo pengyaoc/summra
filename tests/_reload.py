@@ -1,5 +1,7 @@
 import sys
 
+reloaded = False  # set when a test purged; conftest purges again on teardown
+
 
 def purge_app_modules():
     """Drop the Plainly app and the shared modules it wires together from
@@ -12,6 +14,8 @@ def purge_app_modules():
     plainly.app_prod stays: it registers routes on the app singleton
     at import, and re-importing it after a request raises Flask's setup error.
     """
+    global reloaded
+    reloaded = True
     for name in [m for m in sys.modules
                  if ((m == 'plainly' or m.startswith('plainly.'))
                      and m != 'plainly.app_prod'

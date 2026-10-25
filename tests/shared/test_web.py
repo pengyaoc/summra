@@ -4,7 +4,7 @@ from shared.web import install_web_basics
 
 def _app():
     app = Flask(__name__)
-    install_web_basics(app)
+    install_web_basics(app, "X_STATIC_OVERRIDE")
     app.add_url_rule('/', 'i', lambda: 'x' * 2000)
     app.add_url_rule('/where', 'w', lambda: __import__('flask').request.script_root)
     return app

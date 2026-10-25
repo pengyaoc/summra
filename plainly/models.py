@@ -420,6 +420,36 @@ class Database(ReaderIndexMixin):
         """Get book by ID with author metadata"""
         return self._get_book_with_author_by('id', book_id)
 
+    def library_books(self, book_ids: List[int]) -> Dict[int, Dict]:
+        """Card fields for the given books, keyed by id (shared Library route hook)."""
+        placeholders = ', '.join('?' for _ in book_ids)
+        conn = self.get_connection()
+        try:
+            return {
+                row['id']: dict(row)
+                for row in conn.execute(
+                    f'''SELECT id, slug, title, author, cover_image_url FROM books WHERE id IN ({placeholders})''',
+                    list(book_ids),
+                ).fetchall()
+            }
+        finally:
+            conn.close()
+
+    def chapter_titles(self, chapter_ids: List[int]) -> Dict[int, Dict]:
+        """Chapter number and title for the given chapters, keyed by id (shared Library route hook)."""
+        placeholders = ', '.join('?' for _ in chapter_ids)
+        conn = self.get_connection()
+        try:
+            return {
+                row['id']: dict(row)
+                for row in conn.execute(
+                    f'''SELECT id, chapter_number, chapter_title FROM chapters WHERE id IN ({placeholders})''',
+                    list(chapter_ids),
+                ).fetchall()
+            }
+        finally:
+            conn.close()
+
     def get_book_by_filename(self, filename: str) -> Optional[Dict]:
         """Get book by filename"""
         conn = self.get_connection()
@@ -1194,7 +1224,7 @@ class Database(ReaderIndexMixin):
 
         if row:
             # Verify file exists on disk
-            audio_path = config.BASE_DIR / 'plainly' / 'frontend' / 'static' / row['audio_path']
+            audio_path = config.STATIC_DIR / row['audio_path']
             if audio_path.exists():
                 conn.close()
                 return True
@@ -1257,7 +1287,7 @@ class Database(ReaderIndexMixin):
 
         if row:
             # Verify file exists on disk
-            audio_path = config.BASE_DIR / 'plainly' / 'frontend' / 'static' / row['audio_path']
+            audio_path = config.STATIC_DIR / row['audio_path']
             if audio_path.exists():
                 conn.close()
                 return True

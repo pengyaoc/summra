@@ -55,6 +55,17 @@ def cleanup_test_artifacts():
                     shutil.rmtree(item)
 
 
+@pytest.fixture(autouse=True)
+def purge_reloaded_app():
+    """A test that reloaded the app (tests/_reload.py) leaves it cached with its
+    patched config; purge on teardown so later tests import a clean one."""
+    import _reload
+    yield
+    if _reload.reloaded:
+        _reload.purge_app_modules()
+        _reload.reloaded = False
+
+
 @pytest.fixture
 def test_db_path():
     """

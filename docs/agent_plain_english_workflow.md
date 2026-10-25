@@ -15,7 +15,7 @@ This is an alternative to Step 1 and Step 6 of `docs/plain_english_workflow.md` 
 
 ## Why it works
 
-- **Same writing rules as Gemini.** The export step builds each prompt with `ModernEnglishGenerator.build_single_chapter_prompt()` from `scripts/content/generate_modern_english.py`. There is one copy of the rules (8th-grade level, keep every sentence, keep names, exact paragraph count). Change them there and both paths change.
+- **Same writing rules as Gemini.** The export step builds each prompt with `ModernEnglishGenerator.build_single_chapter_prompt()` from `plainly/scripts/content/generate_modern_english.py`. There is one copy of the rules (8th-grade level, keep every sentence, keep names, exact paragraph count). Change them there and both paths change.
 - **Numbered paragraphs, small chunks.** Each original paragraph is tagged `[P12]`, and chapters are cut into chunks of about 12K characters. The agent writes one JSON file per chunk: `{"start": 12, "paragraphs": [...]}`. Alignment is checked by position, so a merged or skipped paragraph cannot hide.
 - **A mechanical gate before anything reaches the database.** `passage_rewrite.py check` checks, per chapter:
   - the paragraph count is exact;
@@ -36,10 +36,10 @@ Set `BOOK=<id>` and `DIR=data/log/agent_plain_english/book$BOOK` (gitignored). B
 The reader pairs paragraph *i* of the original with paragraph *i* of Plain English, so non-text paragraphs must leave the original first.
 
 ```sh
-PYTHONPATH=backend:. venv/bin/python scripts/audits/reformat_paragraphs.py --book-id $BOOK --dry-run      # single \n → \n\n
-PYTHONPATH=backend:. venv/bin/python scripts/audits/strip_footnotes.py --book-id $BOOK --dry-run          # [12] markers + trailing "Footnotes" block
-PYTHONPATH=backend:. venv/bin/python scripts/audits/strip_illustration_captions.py --book-id $BOOK --dry-run [--tags-only]
-PYTHONPATH=backend:. venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id $BOOK --dry-run
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id $BOOK --dry-run      # single \n → \n\n
+venv/bin/python -m plainly.scripts.audits.strip_footnotes --book-id $BOOK --dry-run          # [12] markers + trailing "Footnotes" block
+venv/bin/python -m plainly.scripts.audits.strip_illustration_captions --book-id $BOOK --dry-run [--tags-only]
+venv/bin/python -m plainly.scripts.audits.strip_decorative_dividers --book-id $BOOK --dry-run
 ```
 
 Order matters: reformat first (the other scripts work on `\n\n` paragraphs), and strip footnotes before captions (`ARGUMENT.[40]` loses its marker and is then a normal heading).
@@ -53,7 +53,7 @@ Then check paragraph sizes. A paragraph over ~6K characters is fine but worth a 
 ### 2. Export the prompts
 
 ```sh
-PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py export --book-id $BOOK --dir $DIR
+venv/bin/python -m plainly.scripts.content.passage_rewrite export --book-id $BOOK --dir $DIR
 ```
 
 Writes `$DIR/in/RULES.md` once per book: the Gemini generator's rules plus the agent output rules. It also writes `$DIR/in/ch<N>/<start>.md`, one short file per chunk: the chapter title, the numbered paragraphs, and the absolute path of the JSON to write in `$DIR/out/ch<N>/`. Agents read RULES.md once, not once per chunk. Before this split, the repeated rules were 39% of all prompt text on Wealth of Nations.
@@ -84,7 +84,7 @@ Agents that own only part of a chapter skip the gate, because it fails until the
 ### 4. Gate the whole book
 
 ```sh
-PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py check --book-id $BOOK --dir $DIR
+venv/bin/python -m plainly.scripts.content.passage_rewrite check --book-id $BOOK --dir $DIR
 ```
 
 Spot-check 3–4 pairs from the first chapter that finishes before launching the rest. If the brief has a problem, it is cheaper to find it after one chapter than after 25.
@@ -92,7 +92,7 @@ Spot-check 3–4 pairs from the first chapter that finishes before launching the
 ### 5. Fresh-agent verification (one per chapter, background)
 
 ```sh
-PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py review --book-id $BOOK --dir $DIR
+venv/bin/python -m plainly.scripts.content.passage_rewrite review --book-id $BOOK --dir $DIR
 ```
 
 This writes `$DIR/review/ch<N>.md`: each original paragraph next to its Plain English, with the length ratio. Regenerate it after any writer finishes late. Then launch **new** verifiers using the host-specific model above: GPT 6.1 Sol at medium effort under Codex, or the `plain-english-verifier` agent type (`.claude/agents/plain-english-verifier.md`) under Claude. Never ask the writer to check its own work; a fresh context reads the original without the writer's assumptions.
@@ -106,8 +106,8 @@ The assignment names the run dir, book id, chapter, paragraph range and the writ
 ### 6. Apply and audit
 
 ```sh
-PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py apply --book-id $BOOK --dir $DIR --dry-run
-PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py apply --book-id $BOOK --dir $DIR
+venv/bin/python -m plainly.scripts.content.passage_rewrite apply --book-id $BOOK --dir $DIR --dry-run
+venv/bin/python -m plainly.scripts.content.passage_rewrite apply --book-id $BOOK --dir $DIR
 ```
 
 Then run the CLAUDE.md Step 4 audit snippet. Every chapter must be EXACT with a ratio of 50–110%.

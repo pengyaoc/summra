@@ -149,7 +149,7 @@ def add_cache_headers(response):
 # after_request hooks in reverse): the ETag is then computed over the gzipped
 # bytes, and mtime=0 keeps those bytes — and so the ETag — stable. Also wraps
 # the app with PrefixMiddleware and sets the asset_v Jinja global.
-install_web_basics(app)
+install_web_basics(app, 'SUMMRA_STATIC_DIR_OVERRIDE')
 
 
 # Error handlers

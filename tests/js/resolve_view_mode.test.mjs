@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const sourcePath = join(here, "..", "..", "frontend", "static", "js", "view_mode.js");
+const sourcePath = join(here, "..", "..", "plainly", "frontend", "static", "js", "view_mode.js");
 const source = readFileSync(sourcePath, "utf8");
 
 const sandbox = { window: {} };
@@ -157,7 +157,7 @@ test("saved 'side-by-side' but no modern available → original", () => {
 });
 
 test("continuous reader restores each mode's latest in-session marker", async () => {
-    const readerSourcePath = join(here, "..", "..", "frontend", "static", "js", "reader.js");
+    const readerSourcePath = join(here, "..", "..", "plainly", "frontend", "static", "js", "reader.js");
     const readerSource = readFileSync(readerSourcePath, "utf8")
         .replace("export const readerMixin =", "const readerMixin =");
     const queued = [];

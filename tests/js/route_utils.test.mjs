@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const sourcePath = join(here, "..", "..", "frontend", "static", "js", "route_utils.js");
+const sourcePath = join(here, "..", "..", "plainly", "frontend", "static", "js", "route_utils.js");
 const source = readFileSync(sourcePath, "utf8");
 
 function loadWithLocation(pathname, basePath) {

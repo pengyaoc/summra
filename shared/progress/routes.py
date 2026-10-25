@@ -6,7 +6,8 @@ the app. `content_db` is duck-typed; the surface used here is:
     get_book(book_id)
     resolve_reader_marker(book_id, marker)
     get_reader_manifest(book_id)
-    get_connection()  # sqlite3 connection, closed by the caller
+    library_books(book_ids)      # {book_id: {id, slug, title, author, cover_image_url}}
+    chapter_titles(chapter_ids)  # {chapter_id: {id, chapter_number, chapter_title}}
 """
 
 import logging
@@ -97,32 +98,13 @@ def library_cards(user_id):
         return {'continue_reading': [], 'finished': []}
 
     ids = [state['book_id'] for state in states]
-    placeholders = ', '.join('?' for _ in ids)
-    conn = content_db.get_connection()
-    try:
-        books = {
-            row['id']: dict(row)
-            for row in conn.execute(
-                f'''SELECT id, slug, title, author, cover_image_url FROM books WHERE id IN ({placeholders})''', ids
-            ).fetchall()
-        }
-        chapter_ids = {
-            state['last_mode_state']['current_marker']['chapter_id']
-            for state in states
-            if state.get('last_mode_state') and state['last_mode_state'].get('current_marker')
-        }
-        chapters = {}
-        if chapter_ids:
-            chapter_placeholders = ', '.join('?' for _ in chapter_ids)
-            chapters = {
-                row['id']: dict(row)
-                for row in conn.execute(
-                    f'''SELECT id, chapter_number, chapter_title FROM chapters WHERE id IN ({chapter_placeholders})''',
-                    list(chapter_ids),
-                ).fetchall()
-            }
-    finally:
-        conn.close()
+    books = content_db.library_books(ids)
+    chapter_ids = {
+        state['last_mode_state']['current_marker']['chapter_id']
+        for state in states
+        if state.get('last_mode_state') and state['last_mode_state'].get('current_marker')
+    }
+    chapters = content_db.chapter_titles(list(chapter_ids)) if chapter_ids else {}
 
     cards = {'continue_reading': [], 'finished': []}
     for state in states:

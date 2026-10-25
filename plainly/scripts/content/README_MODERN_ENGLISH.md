@@ -33,19 +33,19 @@ GOOGLE_API_KEY = "your-api-key-here"
 
 ```bash
 # Generate modern English for a single chapter
-python scripts/content/generate_modern_english.py --book-id 1 --chapter 5
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapter 5
 
 # Generate for multiple chapters (comma-separated)
-python scripts/content/generate_modern_english.py --book-id 1 --chapters "1,2,3,4,5"
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapters "1,2,3,4,5"
 
 # Generate for all chapters in a book
-python scripts/content/generate_modern_english.py --book-id 1 --all-chapters
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --all-chapters
 
 # Dry run (preview prompt without making API calls)
-python scripts/content/generate_modern_english.py --book-id 1 --chapter 5 --dry-run
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapter 5 --dry-run
 
 # Use a specific Gemini model
-python scripts/content/generate_modern_english.py --book-id 1 --chapter 5 --model gemini-2.0-flash-exp
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapter 5 --model gemini-2.0-flash-exp
 ```
 
 ### Options
@@ -176,16 +176,16 @@ The script performs automatic validation:
 
 ```bash
 # Step 1: Preview the prompt for chapter 1 (dry run)
-python scripts/content/generate_modern_english.py --book-id 1 --chapter 1 --dry-run
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapter 1 --dry-run
 
 # Step 2: Generate the translation
-python scripts/content/generate_modern_english.py --book-id 1 --chapter 1
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapter 1
 
 # Step 3: Review the output
 cat output/modern_english/book_1_chapter_1_modern.txt
 
 # Step 4: Process remaining chapters in batch
-python scripts/content/generate_modern_english.py --book-id 1 --chapters "2,3,4,5"
+python -m plainly.scripts.content.generate_modern_english --book-id 1 --chapters "2,3,4,5"
 ```
 
 ## Future Enhancements
@@ -223,7 +223,7 @@ Create a side-by-side comparison view:
 Ensure the chapter was processed with the full text extraction enabled. Run:
 
 ```bash
-python scripts/content/generate_summaries.py data/books/your_book.txt
+python -m plainly.scripts.content.generate_summaries data/books/your_book.txt
 ```
 
 This will populate the `chapter_text` field.

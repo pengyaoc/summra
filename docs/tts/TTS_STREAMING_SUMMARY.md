@@ -4,7 +4,7 @@
 
 ### 1. ✅ Medium Summary Line Break Fix
 - **Database**: Removed `***\n\n` from Alice's Wonderland medium summary
-- **Script**: Added regex pattern `^\*+\s*\n*` in `scripts/content/generate_summaries.py:117-118`
+- **Script**: Added regex pattern `^\*+\s*\n*` in `plainly/scripts/content/generate_summaries.py:117-118`
 - **Result**: Medium summaries now start cleanly without line breaks
 
 ### 2. ✅ Comprehensive Summary Overview Collapsible
@@ -126,7 +126,7 @@ python tests/test_tts_streaming.py
 backend/app.py:153-245          - TTS streaming endpoint
 backend/tts_handler.py:84-111   - Chunk generation method
 frontend/static/js/app.js:278-409 - Streaming playback
-scripts/content/generate_summaries.py:117-118 - Line break cleanup
+plainly/scripts/content/generate_summaries.py:117-118 - Line break cleanup
 tests/test_tts_streaming.py     - Test suite
 ```
 

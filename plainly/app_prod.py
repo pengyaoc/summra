@@ -31,7 +31,7 @@ def generate_tts():
         # Check for cached audio using shared utility function
         from plainly import tts_utils
 
-        cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.BASE_DIR)
+        cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.STATIC_DIR)
         if cached_audio:
             logger.info(f"Using cached audio: {cached_audio['provider']}")
             return jsonify({

@@ -11,7 +11,7 @@ Summra is a complete web application for generating and reading AI-powered summa
 - **TTS Handler** (`backend/tts_handler.py`) - Text-to-speech generation using VITS open-source model
 
 ### 2. Summary Generation Script (Python)
-- **Main Script** (`scripts/content/generate_summaries.py`) - Standalone tool to process books and generate summaries (1700+ lines)
+- **Main Script** (`plainly/scripts/content/generate_summaries.py`) - Standalone tool to process books and generate summaries (1700+ lines)
 - **Advanced Features:**
   - **Sophisticated Chapter Detection** - Handles Roman numerals, Arabic numerals, nested structures (BOOK/VOLUME/ACT + Chapters)
   - **Project Gutenberg Integration** - Automatic header/footer removal, metadata extraction, cover image downloading
@@ -372,31 +372,31 @@ summra/
 ### Basic Usage
 ```bash
 # Generate all summaries for a book
-python scripts/content/generate_summaries.py data/books/book.txt
+python -m plainly.scripts.content.generate_summaries data/books/book.txt
 
 # With metadata
-python scripts/content/generate_summaries.py book.txt --title "Title" --author "Author"
+python -m plainly.scripts.content.generate_summaries book.txt --title "Title" --author "Author"
 
 # Batch process directory
-python scripts/content/generate_summaries.py data/books/ --batch
+python -m plainly.scripts.content.generate_summaries data/books/ --batch
 ```
 
 ### Testing & Debugging
 ```bash
 # Dry run (preview chapter detection, no API calls)
-python scripts/content/generate_summaries.py book.txt --dry-run
+python -m plainly.scripts.content.generate_summaries book.txt --dry-run
 
 # Partial run (concise + medium + first 3 chapters only)
-python scripts/content/generate_summaries.py book.txt --partial-run
+python -m plainly.scripts.content.generate_summaries book.txt --partial-run
 ```
 
 ### Chapter Regeneration
 ```bash
 # Regenerate specific chapters
-python scripts/content/generate_summaries.py book.txt --regenerate-chapters "12,13,15"
+python -m plainly.scripts.content.generate_summaries book.txt --regenerate-chapters "12,13,15"
 
 # Regenerate with bulk mode (processes in batches)
-python scripts/content/generate_summaries.py book.txt --regenerate-chapters "1,2,3,4,5"
+python -m plainly.scripts.content.generate_summaries book.txt --regenerate-chapters "1,2,3,4,5"
 ```
 
 ## Configuration Options
@@ -463,18 +463,18 @@ FLASK_DEBUG = True
 3. **Generate Summaries:**
    ```bash
    # Single book
-   python scripts/content/generate_summaries.py data/books/book.txt
+   python -m plainly.scripts.content.generate_summaries data/books/book.txt
 
    # Batch process
-   python scripts/content/generate_summaries.py data/books/ --batch
+   python -m plainly.scripts.content.generate_summaries data/books/ --batch
 
    # Regenerate specific chapters
-   python scripts/content/generate_summaries.py data/books/book.txt --regenerate-chapters "12,13"
+   python -m plainly.scripts.content.generate_summaries data/books/book.txt --regenerate-chapters "12,13"
    ```
 
 4. **Start Server:**
    ```bash
-   python backend/app.py
+   python plainly/app.py
    ```
 
 5. **Browse & Read:**
@@ -678,12 +678,12 @@ sqlite> SELECT id, title, chapter_number FROM chapters WHERE book_id = 11;
 - Monitor API usage and costs (Gemini dashboard)
 - Clear old audio files if disk space is limited: `rm frontend/static/audio/*`
 - Backup database: `cp data/database.db data/database.backup.db`
-- Update dependencies: `pip install --upgrade -r backend/requirements.txt`
+- Update dependencies: `pip install --upgrade -r plainly/requirements.txt`
 
 ### Update Summary Quality
 ```bash
 # Regenerate chapters with improved prompts
-python scripts/content/generate_summaries.py book.txt --regenerate-chapters "1,2,3"
+python -m plainly.scripts.content.generate_summaries book.txt --regenerate-chapters "1,2,3"
 ```
 
 ## Success Metrics
