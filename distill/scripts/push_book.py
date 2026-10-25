@@ -7,18 +7,14 @@ import sys
 from pathlib import Path
 
 from distill import config
-from distill.book_format import block_text, iter_chapters, load_book, validate_book
+from distill.book_format import block_text, iter_chapters, list_images, load_book, validate_book, word_count
 from distill.models import DistillDatabase
-
-_IMAGE_SUFFIXES = {'.jpg', '.png'}
 
 
 def _print_summary(book: dict, folder: Path) -> None:
     chapters = iter_chapters(book)
-    words = sum(len(block_text(block).split()) for _, _, blocks in chapters for block in blocks)
-    images_dir = folder / 'images'
-    images = [p for p in images_dir.glob('*')
-              if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES] if images_dir.is_dir() else []
+    words = sum(word_count(block_text(block)) for _, _, blocks in chapters for block in blocks)
+    images = list_images(folder)
     print(f'Title: {book["title"]}')
     print(f'Chapters: {len(chapters)}')
     print(f'Words: {words}')

@@ -18,10 +18,27 @@ _LANG_RE = re.compile(r'^[a-z]{2}$')
 _HTML_RE = re.compile(r'<[A-Za-z/!]')
 _LINK_RE = re.compile(r'\[[^\]]*\]\([^)]*\)')
 _IMAGE_FORMATS = {'.jpg': 'JPEG', '.png': 'PNG'}
+_IMAGE_SUFFIXES = frozenset(_IMAGE_FORMATS)
+_CJK_RE = re.compile(r'[一-鿿]')
+# Must match ReaderIndexMixin._reader_word_count in shared/reader/index.py.
+_WORD_RE = re.compile(r"\b[\w’'-]+\b")
 
 
 def load_book(folder: Path) -> dict:
     return json.loads((Path(folder) / 'book.json').read_text(encoding='utf-8'))
+
+
+def list_images(folder: Path) -> list:
+    """Sorted image files under folder/images (jpg and png only)."""
+    images_dir = Path(folder) / 'images'
+    if not images_dir.is_dir():
+        return []
+    return sorted(p for p in images_dir.iterdir() if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES)
+
+
+def word_count(text: str) -> int:
+    """Each CJK character counts one; other runs of word characters count one each."""
+    return len(_CJK_RE.findall(text)) + len(_WORD_RE.findall(_CJK_RE.sub(' ', text)))
 
 
 def _strip_markup(text: str) -> str:

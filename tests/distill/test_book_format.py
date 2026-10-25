@@ -119,3 +119,26 @@ def test_iter_chapters_overview_first():
     assert chapters[1][:2] == (None, '1. First')
     book['overview'] = []
     assert bf.iter_chapters(book)[0][1] == '1. First'
+
+
+def test_word_count_counts_cjk_characters_and_words():
+    assert bf.word_count('你好，世界。') == 4
+    assert bf.word_count('全球通史 is great') == 4 + 2
+    assert bf.word_count("don't stop-start") == 2
+
+
+def test_word_count_empty_text():
+    assert bf.word_count('') == 0
+
+
+def test_list_images_returns_sorted_jpg_and_png_files(tmp_path):
+    (tmp_path / 'images').mkdir()
+    for name in ('b.png', 'a.jpg', 'notes.txt', 'c.gif'):
+        (tmp_path / 'images' / name).write_bytes(b'x')
+    (tmp_path / 'images' / 'dir.jpg').mkdir()
+
+    assert [p.name for p in bf.list_images(tmp_path)] == ['a.jpg', 'b.png']
+
+
+def test_list_images_without_images_dir_is_empty(tmp_path):
+    assert bf.list_images(tmp_path) == []

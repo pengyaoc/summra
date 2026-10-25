@@ -5,17 +5,15 @@ stored as JSON; the reader's only mode is 'summary', one unit per block.
 """
 import hashlib
 import json
-import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from distill import config
-from distill.book_format import block_text, iter_chapters, load_book, validate_book
+from distill.book_format import block_text, iter_chapters, list_images, load_book, validate_book, word_count
 from shared.reader.index import ReaderIndexMixin, create_reader_tables
 
-_CJK_RE = re.compile(r'[一-鿿]')
 _IMAGE_MIMES = {'.jpg': 'image/jpeg', '.png': 'image/png'}
 
 
@@ -89,10 +87,7 @@ class DistillDatabase(ReaderIndexMixin):
         checksum = hashlib.sha256(json.dumps(
             [book['title'], book.get('author'), chapters], ensure_ascii=False, sort_keys=True,
         ).encode('utf-8')).hexdigest()
-        images_dir = folder / 'images'
-        images = [(p.name, _IMAGE_MIMES[p.suffix.lower()], p.read_bytes())
-                  for p in sorted(images_dir.glob('*'))
-                  if p.suffix.lower() in _IMAGE_MIMES] if images_dir.is_dir() else []
+        images = [(p.name, _IMAGE_MIMES[p.suffix.lower()], p.read_bytes()) for p in list_images(folder)]
 
         conn = self.get_connection()
         try:
@@ -222,10 +217,7 @@ class DistillDatabase(ReaderIndexMixin):
 
     @staticmethod
     def _reader_word_count(text: str) -> int:
-        visible = DistillDatabase._unit_visible_text(text)
-        if _CJK_RE.search(visible):
-            return len(_CJK_RE.findall(visible)) + len(re.findall(r'\b\w+\b', _CJK_RE.sub(' ', visible)))
-        return ReaderIndexMixin._reader_word_count(visible)
+        return word_count(DistillDatabase._unit_visible_text(text))
 
     @staticmethod
     def _reader_normalize_quote(text: str) -> str:
