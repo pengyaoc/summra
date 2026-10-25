@@ -134,23 +134,26 @@ class DistillDatabase(ReaderIndexMixin):
         return {
             'id': row['id'], 'slug': row['slug'], 'title': row['title'], 'author': row['author'],
             'lang': row['lang'], 'sources': json.loads(row['sources'] or '[]'),
-            'cover_image_id': row['cover_image_id'], 'imported_at': row['imported_at'],
+            'cover_image_id': row['cover_image_id'], 'cover_image': row['cover_image'],
+            'imported_at': row['imported_at'],
         }
 
     def _fetch_books(self, where: str, params: tuple) -> List[Dict]:
         conn = self.get_connection()
         try:
             return [self._book_dict(r) for r in conn.execute(
-                f'SELECT * FROM books {where} ORDER BY title COLLATE NOCASE, id', params)]
+                f'SELECT books.*, images.name AS cover_image FROM books '
+                f'LEFT JOIN images ON images.id = books.cover_image_id '
+                f'{where} ORDER BY books.title COLLATE NOCASE, books.id', params)]
         finally:
             conn.close()
 
     def get_book(self, book_id: int) -> Optional[Dict]:
-        rows = self._fetch_books('WHERE id = ?', (book_id,))
+        rows = self._fetch_books('WHERE books.id = ?', (book_id,))
         return rows[0] if rows else None
 
     def get_book_by_slug(self, slug: str) -> Optional[Dict]:
-        rows = self._fetch_books('WHERE slug = ?', (slug,))
+        rows = self._fetch_books('WHERE books.slug = ?', (slug,))
         return rows[0] if rows else None
 
     def list_books(self) -> List[Dict]:

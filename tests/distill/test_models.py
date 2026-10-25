@@ -163,3 +163,12 @@ def test_list_books_orders_by_title_case_insensitive_then_id(db, sample_book, wr
         ids[slug] = db.import_book(write_book(sample_book))
 
     assert [b['id'] for b in db.list_books()] == [ids['a1'], ids['b1'], ids['b2'], ids['c1']]
+
+
+def test_get_book_cover_image_name(db, sample_book, write_book):
+    book_id = db.import_book(write_book(sample_book))
+    assert db.get_book(book_id)["cover_image"] == "cover.jpg"
+    assert db.list_books()[0]["cover_image"] == "cover.jpg"
+
+    del sample_book["cover"]
+    assert db.get_book(db.import_book(write_book(sample_book)))["cover_image"] is None
