@@ -77,7 +77,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
    - Task 3 node tests cover these cases:
      - the selector shows only modes that are both configured and available in the manifest
      - a mode the manifest offers but config omits is never chosen
-     - the selector is hidden when the app configures fewer than two modes (Distill); a Plainly book with fewer than two available modes keeps today's selector
+     - the selector is hidden when fewer than two modes are available for the book, in any app (owner-approved visible change for Plainly)
      - a saved `last_mode` outside config falls through to `default_modes`
    - Task 2 adds a config validation test.
 4. **A feature disabled in config while its DOM or API is still reachable.**
@@ -291,7 +291,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 | `enforceContinuousReaderViewport` | `reader.mode !== 'side_by_side'`; fallback is `'plain'` if available, else `'original'` | `readerMode(reader.mode).min_width`; fallback is the first available entry of `narrow_fallback`, else its last entry. The status copy is `${label} is available on screens ${min_width}px wide or larger.` |
 | `renderContinuousSegments` | `reader.mode === 'side_by_side'`; `members.original`/`.plain`; header copy and gap copy "Original" / "Plain English"; single-mode gap copy "Plain English unavailable for this section." | `readerLayout(mode) === 'side_by_side'`; `mode.members[i].id`; each member's `label` and `cell_class`; single-mode gap copy `${mode.label} unavailable for this section.` |
 | `findContinuousPageForMarker`, `continuousMarkerOffset` | `.side-by-side-cell.original` | `.side-by-side-cell.${members[0].cell_class}` |
-| `setupContinuousReaderChrome`, the selector | always unhides `#reader-mode-settings`; "Side-by-Side is unavailable for this book." / "… 1024px …" | hides `#reader-mode-settings` when `READER_CONFIG.modes.length < 2` (an app-level setting, so Plainly is unchanged for every book), otherwise as today. The help copy comes from the first mode with `min_width`: `${label} is unavailable for this book.` / `${label} is available on screens ${min_width}px wide or larger.` |
+| `setupContinuousReaderChrome`, the selector | always unhides `#reader-mode-settings`; "Side-by-Side is unavailable for this book." / "… 1024px …" | hides `#reader-mode-settings` when `readerAvailableModes(manifest).length < 2` (owner-approved 2026-10-25: "Plainly can also hide selector if there is only one mode"), otherwise as today. The help copy comes from the first mode with `min_width`: `${label} is unavailable for this book.` / `${label} is available on screens ${min_width}px wide or larger.` |
 | `continuousIllustrationHtml` | n/a | first line: `if (!readerConfig().features.illustrations) return '';` |
 | `pagination.js`, `showPageTurnHintOnce` | n/a | first line: return when `!features.page_turn_hint` |
 | `pagination.js`, `calculatePages`, the regular block selector | fixed list | the fixed list plus `config.extra_page_blocks` when non-empty |
@@ -306,8 +306,8 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
     - `test_available_modes_intersect_config_and_manifest`: config `[summary]` with a manifest offering `original` gives `['summary']`.
     - `test_default_mode_follows_config_preference`: Plainly's config with `plain` unavailable gives `original`.
     - `test_saved_mode_outside_config_falls_through`
-    - `test_selector_hidden_when_one_mode_configured`
-    - `test_selector_shown_for_plainly_book_with_one_available_mode`
+    - `test_selector_hidden_with_one_available_mode`
+    - `test_selector_shown_with_two_available_modes`
     - `test_side_by_side_min_width_from_config`
     - `test_narrow_fallback_first_available`
     - `test_gap_copy_uses_mode_label`
@@ -319,7 +319,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
     - the moved test
 - [ ] **Step 2: Run them and confirm they fail.** Command: `node --test tests/js/ && venv/bin/pytest tests/shared/test_shared_js.py -v`.
 - [ ] **Step 3: Move, wire and parameterise exactly the rows above.** Then run `npm run build`.
-- [ ] **Step 4: Verify.** Node tests, pytest, `build:check`, `MODE=compare`, the goldens and the Plainly e2e set all pass. Plainly shows no visible change for any book.
+- [ ] **Step 4: Verify.** Node tests, pytest, `build:check`, `MODE=compare`, the goldens and the Plainly e2e set all pass. Count Plainly books in `data/database.db` with fewer than two available modes and put the count in the commit body: the selector now hides for them (the one owner-approved visible change). If an e2e script asserts the selector on such a book, that assertion encodes the old behaviour: report it to the controller instead of editing it.
 - [ ] **Step 5: Commit** "Extract web reader into config-driven shared platform; Plainly plugs in".
 
 ### Task 4: Shared reader CSS and config-rendered templates (Plainly moves onto them)
