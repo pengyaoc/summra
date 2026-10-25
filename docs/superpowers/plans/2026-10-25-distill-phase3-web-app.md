@@ -13,8 +13,8 @@
 
   Plainly's four modes and its side-by-side layout become entries in Plainly's config instead of literals in code.
 - **The reader logic stays Plainly's code, moved as it is.** `pagination.js` and `settings.js` move whole, along with the continuous-reader half of `reader.js`. Where they name a specific mode or a Plainly constant, only the input changes, to a config lookup. The control flow is untouched. Generic layout code keyed by CSS class (`chapter-side-by-side`, `.side-by-side-row`) stays as it is.
-- **Each app plugs in with its config and two JS hooks:** the unit renderer and the back target. Everything else has a platform default (see "Plug-in surface").
-- **Distill bends its data to fit the reader.** Segment units carry the block's server-rendered HTML. One Python renderer (`distill/render.py`) produces that HTML for the web reader and for Kindle.
+- **Each app plugs in with its config and two JS hooks:** the unit classifier (text to block) and the back target. Everything else has a platform default (see "Plug-in surface").
+- **One render vocabulary, owned by shared.** Every unit is classified into a block from one shared vocabulary (Distill's eight types plus `verse` and `li`) and rendered by shared code: `blocks.js` on the web, `shared/reader/blocks.py` on Kindle, held to identical output by a parity test. Differences between apps are config (`inline`, `image_base`), not forks. Distill units stay plain block JSON.
 - **Serving.** Shared static files are reached through a committed `static/shared` symlink in each app, served at `/static/shared/...` under each app's prefix. esbuild bundles them into Plainly's `app.min.js`. Shared templates sit under `shared/templates/shared/` and reach each app through a `ChoiceLoader`. Both are done in Task 1.
 
 **Tech Stack:** Python 3.11, Flask, Jinja2, SQLite, vanilla ES modules (esbuild bundle for Plainly only), ES5 for Kindle, pytest, Playwright (`tests/e2e/*.mjs`), `node --test`.
@@ -34,16 +34,17 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 - Kindle page handlers, registered through `register_kindle_pages(bp, handlers, config)`. Only when `config.features.kindle` is on.
 
 **JS hooks**, on the host class passed to `applyReaderPlatform(Host)`:
-- `continuousReaderBlock(text) -> {tag, className, content}`: renders one unit's body.
+- `classifyUnit(unitText) -> block`: turns one unit's stored text into a block of the shared render vocabulary (Task 6). The shared `blocks.js` renders it, so hosts no longer produce HTML. Plainly's classifier is its existing heuristics; Distill's is `JSON.parse`.
 - `selectBook(book)`: where the reader's back button goes.
 
 **Platform defaults**, applied only when the host lacks them:
 - `showOnlySections()` (no-op)
 - `initReaderPlatform()`, which sets `apiBase` from `withBasePath(config.api_base)` and `pagination` from `createPaginationState()`
+- `continuousReaderBlock(text)`, which is no longer a hook. It comes from `blocksMixin`: `renderBlock(classifyUnit(text), {inline: config.inline, imageBase: config.image_base})`.
 
 ## Global Constraints
 
-- **Plainly behaviour must not change.** Before and after every task in Tasks 2–5:
+- **Plainly behaviour must not change.** Before and after every task in Tasks 2–6:
   - the full pytest suite is green (924 passed after Task 1)
   - `npm run build:check` passes
   - the Plainly e2e set is green: `smoke`, `kindle_mode`, `reader_progress`, `reader_themes`, `reader_last_line_visible`, `reader_opens_at_chapter`, `reader_segments_fast_open`, `reader_illustrations`, `reader_font_figtree`, `reader_nav_mouse`, `sxs_row_split`, `text_size_adjust`, `redesign_home`, `redesign_reader`
@@ -86,7 +87,8 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
    - Task 5: with `kindle=False`, a Kindle user agent gets the web page and `/api/kindle/progress` returns 404.
    - Task 4: the template renders no section for a disabled control.
 5. **Distill blocks in the paginated reader.**
-   - Rendered DOM text must equal `block_text`, or quote recovery breaks. Task 6 checks every block type including CJK; Task 8's e2e checks that a reload restores the same anchor.
+   - Rendered DOM text must equal `block_text`, or quote recovery breaks. Task 6 checks this in the shared renderer's tests (`test_blocks.py`, every type including CJK, plus JS↔Python parity); Task 8's e2e checks that a reload restores the same anchor.
+   - Moving Plainly onto the block renderer must not change its markup. The Task 6 characterization golden, recorded before the change, is compared in a real browser with and without marked.
    - Tables and figures taller than a page: Task 8's e2e asserts no anchored block overflows its page, except a scrolling table. Task 9's e2e asserts no `tr` or `figure` spans two Kindle columns.
 
 ---
@@ -94,12 +96,12 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 ## File map
 
 **shared/** (new unless noted)
-- **`reader/`:** `modes.py`, `config.py`, `platform.py`, `routes.py`; `index.py` (modify)
+- **`reader/`:** `modes.py`, `config.py`, `platform.py`, `routes.py`, `blocks.py`; `index.py` (modify)
 - **`auth/user_models.py`** (modify): `VALID_MODES` comes from `modes.py`
 - **`static/js/`:**
   - `base_path.js`, `reader_utils.js`
   - `pagination.js`, `settings.js` (moved)
-  - `continuous_reader.js`, `reader_state.js`
+  - `continuous_reader.js`, `reader_state.js`, `blocks.js`
   - `platform.js`
   - `kindle.js` (moved)
 - **`static/css/`:** `base.css`, `reader.css`, `kindle.css` (moved). Plus `static/fonts/` (moved).
@@ -117,16 +119,17 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 - `routes/books.py`, `routes/kindle.py`, `app_base.py`
 
 **distill/** (new unless noted)
-- Python: `reader_config.py`, `render.py`, `app_base.py`, `app.py`, `app_prod.py`, `routes.py`, `kindle_routes.py`
+- Python: `reader_config.py`, `app_base.py`, `app.py`, `app_prod.py`, `routes.py`, `kindle_routes.py`
 - Templates: `{base,library,book,reader,not_found}.html` and `kindle/{library,book,reader}.html`
 - Static: `static/shared` (symlink), `static/css/{distill,distill_kindle}.css`, `static/js/distill_reader.js`
-- Modify: `config.py`, `models.py`
+- Modify: `config.py`, `models.py` (only `get_book` gains `cover_image`), `book_format.py` (re-exports `block_text`)
 
 **tests/**
-- `shared/`: `test_reader_config.py`, `test_reader_routes.py`, `test_shared_js.py`, `test_kindle_shared.py`
-- `distill/`: `test_render.py`, `test_app.py`, `test_pages.py`, `test_kindle.py`
-- `js/`: `base_path.test.mjs`, `mixins_disjoint.test.mjs`, `reader_modes.test.mjs`
-- `e2e/`: `distill.mjs`
+- `shared/`: `test_reader_config.py`, `test_reader_routes.py`, `test_shared_js.py`, `test_kindle_shared.py`, `test_blocks.py`, `test_block_parity.py`
+- `distill/`: `test_app.py`, `test_pages.py`, `test_kindle.py`
+- `js/`: `base_path.test.mjs`, `mixins_disjoint.test.mjs`, `reader_modes.test.mjs`, `blocks.test.mjs`
+- `e2e/`: `distill.mjs`, `reader_blocks_characterization.mjs`
+- `fixtures/reader_blocks/`: `plainly_units.json`, `plainly_golden.json`, `blocks.json`
 
 ---
 
@@ -271,7 +274,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 - Modify `plainly/frontend/static/js/`:
   - **`app.js`:** imports `../shared/js/platform.js` and calls `applyReaderPlatform(SummraApp)` before the remaining `Object.assign` calls (breadcrumbs, audio, reader). Its constructor keeps `this.apiBase` and uses `createPaginationState()`.
   - **`reader.js`:**
-    - Keeps the legacy chapter and medium pages, `renderLibraryCards`, `showLibrary`, `markReaderBookUnfinished`, `loadContinuousAbout`, `formatContinuousReaderText` and `continuousReaderBlock`. `continuousReaderBlock` is a hook.
+    - Keeps the legacy chapter and medium pages, `renderLibraryCards`, `showLibrary`, `markReaderBookUnfinished`, `loadContinuousAbout`, `formatContinuousReaderText` and `continuousReaderBlock`. `continuousReaderBlock` is a hook until Task 6, which replaces it with `classifyUnit`.
     - `LIBRARY_MODE_LABELS` becomes a lookup of `library_label` in `readerConfig()`, defaulting to `default_modes[0]`.
   - **`auth.js`:** keeps the modal UI. `window.authModule = { ...window.readerState, initAuth, trackChapterView, trackPageChange, onChapterComplete }`.
   - **`route_utils.js`** loses the base-path functions. Then rebuild `app.min.js`.
@@ -400,47 +403,114 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
   - `node kindle_mode.mjs` passes on :5002.
 - [ ] **Step 5: Commit** "Extract config-driven Kindle pages, progress and assets into shared.kindle".
 
-### Task 6: Distill block renderer, the one renderer for web and Kindle
+### Task 6: Shared block renderer (JS and Python); Plainly's hook becomes a classifier
+
+This task changes Plainly's reader path, so every Plainly-unchanged check in Global Constraints applies to it.
 
 **Files:**
-- Create: `distill/render.py`, `tests/distill/test_render.py`
-- Modify `distill/models.py`:
-  - `_reader_chapter_units`
-  - `_reader_source_checksum`
-  - `get_book`, which gains `cover_image`
+- Create:
+  - `shared/static/js/blocks.js`
+  - `shared/reader/blocks.py`
+  - `tests/fixtures/reader_blocks/plainly_units.json`
+  - `tests/fixtures/reader_blocks/plainly_golden.json`
+  - `tests/fixtures/reader_blocks/blocks.json`
+  - `tests/e2e/reader_blocks_characterization.mjs`
+  - `tests/js/blocks.test.mjs`
+  - `tests/shared/test_blocks.py`
+  - `tests/shared/test_block_parity.py`
+- Modify:
+  - `shared/static/js/platform.js`: also applies `blocksMixin`.
+  - `shared/static/js/continuous_reader.js`: header comment only.
+  - `shared/reader/config.py`: `inline` and `image_base` fields.
+  - `plainly/reader_config.py`: `inline='markdown'`.
+  - `plainly/frontend/static/js/reader.js`: `continuousReaderBlock` and `formatContinuousReaderText` are replaced by `classifyUnit`.
+  - `distill/book_format.py`: `block_text` is re-exported from `shared.reader.blocks`. The validator and format v1 are unchanged.
+  - `app.min.js` is rebuilt.
 
 **Interfaces:**
-- `RENDER_VERSION = 1`.
-- `inline(text) -> Markup`: escape, then `**x**` → `<strong>`, `*x*` → `<em>`.
-- `render_block(block) -> tuple[str, str, Markup]`, returning `(tag, class, inner)`:
-  - `p` → `('p', '', …)`
-  - `h` → `('h3', 'reader-section-heading', …)`
-  - `quote` → `('blockquote', 'reader-quote', …)`
-  - `ul`/`ol` → `('ul'|'ol', 'reader-list', '<li>…</li>\n<li>…</li>')`
-  - `keypoints` → `('ul', 'reader-keypoints', …)`. The label is CSS `::before` by `:lang()`, never DOM text.
-  - `table` → `('table', 'reader-table', '<thead><tr><th>…</th> <th>…</th></tr></thead> <tbody><tr><td>…</td> …</tr>\n…</tbody>')`
-  - `image` → `('figure', 'reader-figure', '<img src="images/<quoted name>" alt=""> <figcaption>…</figcaption>')`. The figcaption is left out when there is no caption. The `src` is relative and resolves against `/books/<slug>/read`.
-- `block_element(block, index) -> Markup`: `<tag class="…" data-i="index">inner</tag>`, used by Kindle.
-- `DistillDatabase`:
-  - units become `json.dumps({**block, '_render': [tag, cls, str(inner)]}, ensure_ascii=False, sort_keys=True)`
-  - the checksum hashes in `RENDER_VERSION`
-  - `get_book` adds `cover_image: Optional[str]`
+- **Render vocabulary, owned by `shared`.** Distill's eight types plus two that Plainly needs. Distill format v1 is a subset and its validator does not change.
 
-- [ ] **Step 1: Write the failing tests.**
-  - `test_dom_text_matches_block_text`, parametrised over every type in `SAMPLE_BOOK`, plus CJK `p`, a CJK table and keypoints with markup. Strip tags, unescape and normalise; the result must equal `ReaderIndexMixin._reader_normalize_quote(block_text(block))`.
-  - `test_inner_has_no_paginated_block_elements`
-  - `test_inline_escapes_html_then_applies_markup`
-  - `test_image_src_is_relative_and_quoted`
-  - `test_block_element_sets_data_i`
-  - `test_units_carry_render_and_counts_unchanged`
-  - `test_render_version_changes_checksum`
-  - `test_get_book_cover_image_name`
-- [ ] **Step 2: Run them and confirm they fail. Step 3: Implement. Step 4: Run the full suite** (with the phase 2 `test_models.py`). **Step 5: Commit** "Add Distill block renderer and render-carrying reader units".
+  | type | fields | `(tag, className)` | content |
+  |---|---|---|---|
+  | `p` | `text` | `('p', '')` | inline(text) |
+  | `h` | `text` | `('h3', 'reader-section-heading')` | inline(text) |
+  | `verse` | `lines` | `('p', 'reader-verse')` | lines joined with `<br>\n`, each passed through inline |
+  | `li` | `text` | `('p', 'reader-list-item')` | inline(text). This is a single-paragraph list item; the classifier keeps any "• " prefix in `text`. |
+  | `quote` | `text` | `('blockquote', 'reader-quote')` | inline(text) |
+  | `ul`/`ol` | `items` | `('ul'\|'ol', 'reader-list')` | `<li>…</li>` joined with `\n` |
+  | `keypoints` | `items` | `('ul', 'reader-keypoints')` | as `ul`. The label is CSS `::before`, never DOM text. |
+  | `table` | `header`, `rows` | `('table', 'reader-table')` | `<thead><tr><th>…</th> <th>…</th></tr></thead> <tbody><tr><td>…</td> …</tr>\n…</tbody>` |
+  | `image` | `src`, `caption?` | `('figure', 'reader-figure')` | `<img src="{image_base}{quoted src}" alt="">`, then ` <figcaption>…</figcaption>` when there is a caption |
+
+  Content never contains an element the paginator selects as a block, except a list's own `<li>`.
+- **`ReaderConfig` gains two fields:**
+  - `inline: str = 'markdown'`, one of `{'markdown', 'strict'}`:
+    - `'markdown'` is Plainly's current behaviour: `escapeText`, then `marked.parseInline` when the global `marked` exists, otherwise the current fallback regexes (`**`→strong, `*`→em, `_x_`→em).
+    - `'strict'` is Distill's format rule: `escapeText`, then `**x**`→`<strong>`, `*x*`→`<em>`.
+  - `image_base: str = ''`, a prefix for `image` blocks' `src`. Distill's `''` leaves `images/<name>` relative, which resolves against `/books/<slug>/read` to the image route.
+
+  Lightbox stays off for image blocks. Plainly's per-chapter illustration and its lightbox are unchanged (`features.illustrations`). Turning illustrations into an `image` block is possible later, but would change markup now.
+- **`shared/static/js/blocks.js`** has no imports. It exports:
+  - `escapeText(s)`, which escapes `&`, `<`, `>` and U+00A0 (`&nbsp;`). That is what the DOM-based `escapeHtml` produces for a text node; the characterization run proves it.
+  - `formatInline(text, inline)`
+  - `renderBlock(block, {inline, imageBase}) -> {tag, className, content}`. An unknown type renders as `p` with `block.text`, so it never throws.
+  - `blocksMixin = { continuousReaderBlock(text) { return renderBlock(this.classifyUnit(text), {inline: cfg.inline, imageBase: cfg.image_base}); } }`. The reader core keeps calling `continuousReaderBlock` unchanged.
+- **Plainly's hook `classifyUnit(text) -> block`.** It contains today's heuristics in today's order, returning blocks instead of HTML:
+  1. If the trimmed value contains `\n`: `{type: 'verse', lines: value.split('\n')}`.
+  2. If it is a heading by the existing regexes: `{type: 'h', text: value}`.
+  3. If it is a numbered item: `{type: 'li', text: value}`. If it is a bullet (not an asterisk divider): `{type: 'li', text: '• ' + rest}`.
+  4. Otherwise `{type: 'p', text: value}`.
+- **Distill's hook:** `classifyUnit(text) { return JSON.parse(text); }`. Distill units stay plain block JSON, so `distill/models.py`'s units are unchanged from phase 2. There is no `_render` field and no `RENDER_VERSION`: rendering happens client-side, from versioned assets.
+- **`shared/reader/blocks.py`:**
+  - `escape_text(s) -> str`, matching JS `escapeText`
+  - `format_inline(text) -> Markup`, implementing `'strict'` only. `'markdown'` needs marked, which exists only in the browser.
+  - `render_block(block, image_base='') -> tuple[str, str, Markup]`
+  - `block_element(block, index, image_base='') -> Markup`, giving `<tag class="…" data-i="index">content</tag>`
+  - `block_text(block) -> str`, moved from `distill/book_format.py` and extended with `verse`, which returns its lines joined by `\n`, and `li`
+
+- [ ] **Step 1: Write the characterization first, on today's code (red-green guard).**
+  - **`plainly_units.json`** covers every heuristic branch:
+    - plain text, `*em*`, `**strong**`, `_under_`, `snake_case_name`
+    - raw `<b>`, `&`, U+00A0 and quotes
+    - verse with markup on a line
+    - all-caps headings: ≤100 chars, with digits and punctuation, and >100 chars (which is a `p`)
+    - both "Original Transcriber's Notes" spellings
+    - `1. x`, `2) x`, `- x`, `* x`, `+ x`, `* * *`, `*em* first`
+
+    Add about 30 real units: the first segments of `pride-and-prejudice` (original and plain) and of a poetry book, taken from `data/database.db` with a one-off script. These are public-domain texts.
+  - **`reader_blocks_characterization.mjs`** opens the Plainly reader on :5002. It evaluates `window.summraApp.continuousReaderBlock(u)` for each unit, once with `marked` and once with `window.marked` deleted. `MODE=record` writes `plainly_golden.json`; `MODE=compare` exits 1 on any difference. Record the golden now, on unchanged code, and commit it with the fixtures.
+- [ ] **Step 2: Write the failing tests.**
+  - `blocks.test.mjs`:
+    - `renders_each_type` against `blocks.json`
+    - `unknown_type_falls_back_to_p`
+    - `strict_inline_escapes_then_marks_up`
+    - `image_base_prefixes_src`
+    - `plainly_classifier_matches_golden_without_marked`: imports Plainly's `readerMixin.classifyUnit` and `blocksMixin`, with `inline='markdown'` and no `marked`, and compares against the fallback half of `plainly_golden.json`
+  - `test_blocks.py`:
+    - `test_dom_text_matches_block_text`, over every type in `blocks.json` (CJK `p`, CJK table, keypoints with markup, a captionless image). Strip tags, unescape, collapse whitespace and lowercase; the result must equal `ReaderIndexMixin._reader_normalize_quote(block_text(block))`. This is quote recovery (Review Focus 5).
+    - `test_content_has_no_paginated_block_elements`
+    - `test_block_element_sets_data_i`
+    - `test_escape_matches_dom_text_escaping`
+    - `test_book_format_block_text_is_shared`
+  - `test_block_parity.py::test_js_and_python_render_identically`: runs Node over `blocks.json` with `inline='strict'` and asserts every `(tag, className, content)` equals Python's `render_block`. This covers all types except `markdown` inline, which is JS-only.
+- [ ] **Step 3: Run them and confirm they fail.** Command: `node --test tests/js/blocks.test.mjs && venv/bin/pytest tests/shared/test_blocks.py tests/shared/test_block_parity.py -v`.
+- [ ] **Step 4: Implement.** Move `formatContinuousReaderText`'s body into `formatInline('markdown')` unchanged. Replace Plainly's `continuousReaderBlock` with `classifyUnit`. Add the config fields and run `npm run build`.
+- [ ] **Step 5: Verify.**
+  - `MODE=compare node reader_blocks_characterization.mjs` reports no differences.
+  - The goldens are green.
+  - The `MODE=compare` style snapshot is equal.
+  - The full pytest suite and `node --test tests/js/` pass.
+  - `build:check` passes.
+  - The Plainly e2e set is green.
+- [ ] **Step 6: Commit** "Add shared block renderer; Plainly classifies units into blocks".
+
+**Kindle decision for Plainly.** Plainly's Kindle keeps its `kindle_inline` filter and `<p data-i>`, so its Kindle golden markup stays byte-identical. That Kindle path renders every paragraph as a plain `<p>` with em-only inline. Routing it through `classifyUnit` would change the markup: all-caps lines would become `h3`, lists would get `reader-list-item`, and verse would get `<br>`. A bare `p` with an em-only inline mode would match byte for byte, but it would add a third inline mode just to move a three-line filter. Distill's Kindle uses `shared.reader.blocks`.
 
 ### Task 7: Distill app core: config, factory, sign-in, allow-list and images
 
 **Files:**
 - Create: `distill/reader_config.py`, `distill/app_base.py`, `distill/app.py`, `distill/app_prod.py`, `distill/routes.py`, `distill/static/shared` (symlink to `../../shared/static`), `tests/distill/test_app.py`
+- Modify `distill/models.py`: `get_book` returns `cover_image: Optional[str]`, the image name of `cover_image_id`. Test: `test_get_book_cover_image_name`.
 - Modify `distill/config.py`:
   - env overrides `DISTILL_DB` and `DISTILL_USER_DB`
   - `PORT = int(os.environ.get('PORT', 5003))`
@@ -452,6 +522,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
   - `features=ReaderFeatures(progress=True, illustrations=False, page_turn_hint=True, kindle=True)`
   - `kindle=KindleOptions((('summary', 'Summary'),), 'summary')`
   - `extra_page_blocks='table, figure.reader-figure'`
+  - `inline='strict'`, `image_base=''`
   - `hint_keys=frozenset({'reader_swipe_mobile', 'reader_nav_desktop'})`, the keys `pagination.js` uses
 - `create_app(content_db=None, user_db=None, auth_config=None) -> Flask`:
   - `install_web_basics(app, 'DISTILL_STATIC_DIR_OVERRIDE')` and `install_shared_ui(app)`
@@ -500,7 +571,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
   - `progress_label` plus the percentage when the book is in progress
   - "Continue reading" or "Start reading"
   - the table of contents grouped by `part_title`, with the Overview first; links are `read?chapter=<chapter_id>`
-  - sources rendered with `render_block`
+  - sources rendered with `shared.reader.blocks.block_element`
 
   Unknown slug → 404 `not_found.html`.
 - **`GET /books/<slug>/read` → `reader.html`.** It has:
@@ -517,7 +588,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
   ```js
   import { applyReaderPlatform } from '../shared/js/platform.js';
   class DistillReader {
-      continuousReaderBlock(text) { const [tag, className, content] = JSON.parse(text)._render; return { tag, className, content }; }
+      classifyUnit(text) { return JSON.parse(text); }
       selectBook(book) { location.assign(withBasePath(`/books/${book.slug}`)); }
   }
   applyReaderPlatform(DistillReader);
@@ -565,7 +636,7 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 - `book_page(slug)`: part headings (`li.part`) and chapter links `read?ch=<ordinal>`, paginated at `CONTENTS_PAGE_SIZE = 8`, with Continue and "You are here" from `saved_marker(..., modes=('summary',))`.
 - `reader_page(slug)`:
   - Picks the chapter from `?ch=`, otherwise the saved chapter, otherwise ordinal 0, and starts at the saved index.
-  - Extends `shared/kindle/reader_base.html`, with `flow_body` = `block_element(b, i)` for each block and `text_urls={'summary': …}`, so the Text row is hidden by config.
+  - Extends `shared/kindle/reader_base.html`, with `flow_body` = `shared.reader.blocks.block_element(b, i, DISTILL_READER.image_base)` for each block and `text_urls={'summary': …}`, so the Text row is hidden by config.
   - Sets `data-text="summary"`, with the char counts from `block_text`, and `lang` on `<html>`.
 - `POST /api/kindle/progress`: the payload is `{book_id, ch (ordinal), p, text, forward, seconds, finished}`.
   - `text` must be in `DISTILL_READER.kindle.text_modes`.
@@ -611,17 +682,18 @@ Phase 2 is done (`distill/models.py`, `distill/book_format.py`). Local `data/dis
 - [ ] **Step 2: ERD, "Reader platform".** Cover:
   - **Config fields:** every `ReaderConfig`, `ReaderMode`, `ReaderMember`, `ReaderFeatures`, `ReaderSettings` and `KindleOptions` field and what it drives (templates, blueprint, JS, Kindle).
   - **The mode registry:** `ALL_MODES` as storage vocabulary, pinned to the schema `CHECK`s.
-  - **Plug-in surface:** the two JS hooks and the platform defaults.
+  - **Plug-in surface:** the two JS hooks (`classifyUnit`, `selectBook`) and the platform defaults.
+  - **Render vocabulary:** the block types table from Task 6, the `inline` modes, `image_base`, the JS↔Python parity rule, and why Plainly's Kindle keeps `kindle_inline`. Also note the possible later step of turning Plainly's chapter illustration into an `image` block.
   - **Serving:** the symlink scheme, with the Apache `+FollowSymLinks` requirement (Plainly's next deploy must reinstall `deploy/apache/summra.conf`), and esbuild bundling.
   - **"Adding a third app":**
     1. Write the content DB with the `ReaderIndexMixin` and library hooks.
     2. Declare a `ReaderConfig` with a unique `cache_db_name`.
     3. Call `install_reader_platform`.
     4. Add the `static/shared` symlink.
-    5. Write the host class with the two hooks.
+    5. Write the host class with `classifyUnit` and `selectBook`, so units map onto the shared vocabulary.
     6. Add the Kindle handlers, if Kindle is enabled.
     7. Add an e2e script.
   - **The Plainly-only reader code left in shared:** the legacy chapter-page branches in `pagination.js` and `settings.js`.
-- [ ] **Step 3: ERD, "Distill app".** Cover routes, auth env, the two DBs, the renderer, `_render` units and `RENDER_VERSION`. Include this note: **re-import keeps chapter ids by ordinal, so a chapter inserted mid-book shifts content under existing ids.** Quote recovery runs only within the marker's chapter.
+- [ ] **Step 3: ERD, "Distill app".** Cover routes, auth env, the two DBs, units as plain block JSON (rendered client-side by `blocks.js` and on Kindle by `shared.reader.blocks`), and the image route. Include this note: **re-import keeps chapter ids by ordinal, so a chapter inserted mid-book shifts content under existing ids.** Quote recovery runs only within the marker's chapter.
 - [ ] **Step 4: WORK_LOG.** Add the phase 3 summary, the final pytest count, the e2e scripts run and the single-mode-book count from Task 3.
 - [ ] **Step 5: Run the full verification once more, then commit** "Document the reader platform and Distill web app".
