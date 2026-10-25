@@ -168,3 +168,14 @@ def test_migration_continues_version_numbers_from_old_tables(test_db_path):
     db = models.Database(db_path=test_db_path)
     assert db.get_reader_manifest(book_id)['content_version'] == 4
     assert 'reader_content_version' not in _tables(db)
+
+
+def test_source_checksum_is_stable_for_fixture_book(db):
+    # Saved reading positions are tied to source_checksum; moving the reader
+    # index into shared/ must not change it for existing books.
+    book_id = db.add_book(title='Pinned', author='A', filename='pinned.txt', full_text='ignored text')
+    db.add_chapter(book_id, 1, 'One', 'Summary one.', 'First paragraph.\nSecond paragraph.',
+                   modern_english_text='First plain.\nSecond plain.')
+    db.add_chapter(book_id, 2, 'Two', 'Summary two.', 'Third paragraph.', modern_english_text='Third plain.')
+    version = db.ensure_reader_content(book_id)
+    assert version['source_checksum'] == 'b6a1f7374cb20c818f4534ef272287bef3bcd6c11189f4eeee3c0551a29bc7dc'
