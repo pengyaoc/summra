@@ -49,7 +49,7 @@ def client(test_db_path, monkeypatch):
     monkeypatch.setattr(common, 'db', db)
     # Reading progress goes to a throwaway user DB; signed out unless a test
     # signs in (the auth boundary is kindle._signed_in_user_id).
-    from backend import progress_routes
+    from shared.progress import routes as progress_routes
     from shared.auth import user_models
     from backend.routes import kindle
     users = user_models.UserDatabase(test_db_path.with_name(test_db_path.stem + '_users.db'))

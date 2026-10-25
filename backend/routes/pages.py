@@ -8,7 +8,7 @@ import time
 
 from flask import Blueprint, g, redirect, render_template, request
 
-from backend import progress_routes
+from shared.progress import routes as progress_routes
 from backend.routes import common
 from backend.study_cues import split_sentences
 

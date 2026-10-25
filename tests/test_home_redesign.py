@@ -213,7 +213,7 @@ def _continue_section(body):
 def test_continue_reading_is_in_the_first_html_for_a_reader_with_progress(client, monkeypatch):
     from backend import app_base
     from backend.routes import pages
-    from backend.routes.pages import progress_routes  # the module pages.py uses (another test reloads it)
+    from shared.progress import routes as progress_routes  # the module pages.py uses (another test reloads it)
     monkeypatch.setattr(pages, '_signed_in_user_id', lambda: 7)  # auth boundary: a signed-in reader
     book_id = app_base.db.get_book_by_slug('pride-and-prejudice')['id']
     monkeypatch.setattr(progress_routes, 'content_db', app_base.db)
@@ -231,7 +231,7 @@ def test_continue_reading_is_in_the_first_html_for_a_reader_with_progress(client
 def test_continue_card_without_progress_says_just_started(client, monkeypatch):
     from backend import app_base
     from backend.routes import pages
-    from backend.routes.pages import progress_routes
+    from shared.progress import routes as progress_routes
     monkeypatch.setattr(pages, '_signed_in_user_id', lambda: 7)
     book_id = app_base.db.get_book_by_slug('pride-and-prejudice')['id']
     monkeypatch.setattr(progress_routes, 'content_db', app_base.db)
@@ -247,7 +247,7 @@ def test_continue_card_without_progress_says_just_started(client, monkeypatch):
 
 def test_continue_reading_absent_without_progress(client, monkeypatch):
     from backend import app_base
-    from backend.routes.pages import progress_routes
+    from shared.progress import routes as progress_routes
     monkeypatch.setattr(progress_routes, 'content_db', app_base.db)
     monkeypatch.setattr(progress_routes, 'user_db', _StubUserDb([]))
     classes, inner = _continue_section(client.get('/').get_data(as_text=True)).groups()

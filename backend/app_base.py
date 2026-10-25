@@ -22,15 +22,14 @@ import zlib
 try:
     from . import config
     from . import models
-    from . import progress_routes
     from .routes import common, pages, books, taxonomy, authors, blog, system, kindle
 except ImportError:
     from backend import config
     from backend import models
-    from backend import progress_routes
     from backend.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
 from shared.auth import user_models, whoami
+from shared.progress import routes as progress_routes
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
 from shared.auth.pchauth.flask_adapter import init_pchauth

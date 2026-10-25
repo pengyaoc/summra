@@ -1,4 +1,13 @@
-"""Continuous-reader progress and Library API routes."""
+"""Continuous-reader progress and Library API routes.
+
+`user_db` (shared.auth.user_models.UserDatabase) and `content_db` are set by
+the app. `content_db` is duck-typed; the surface used here is:
+
+    get_book(book_id)
+    resolve_reader_marker(book_id, marker)
+    get_reader_manifest(book_id)
+    get_connection()  # sqlite3 connection, closed by the caller
+"""
 
 import logging
 
