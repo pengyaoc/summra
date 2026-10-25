@@ -14,7 +14,8 @@ GOLDEN = Path(__file__).parent / 'golden'
 
 
 def _squash(html):
-    return re.sub(r'\s+', ' ', html).strip()
+    # Asset cache-busting hashes change with file content, not structure.
+    return re.sub(r'\s+', ' ', re.sub(r'\?v=\d+', '?v=N', html)).strip()
 
 
 def _shell(html):

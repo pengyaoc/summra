@@ -22,7 +22,11 @@ const SELECTORS = [
   '.continuous-reader-chrome', '.reader-toolbar-btn', '.continuous-reader-content',
   '.pagination-page-container', '.pagination-page-container p', '.reader-chapter-heading',
   '.continuous-reader-footer', '#reader-progress-fill', '.reading-settings-panel',
-  '.font-choice', '.size-btn', '.theme-choice', '.reader-panel', '.library-card',
+  '.font-choice', '.size-btn', '.theme-choice', '.reader-panel',
+];
+// The book card only renders on the home page, so it is measured there.
+const HOME_SELECTORS = [
+  '.library-card', '.library-card-cover-frame', '.library-card-body', '.library-card-meta', '.library-card-author',
 ];
 const PROPS = [
   'font-family', 'font-size', 'font-weight', 'line-height', 'color', 'background-color',
@@ -53,7 +57,7 @@ for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
     await page.evaluate(() => {
       document.querySelectorAll('.reading-settings-panel.hidden, .reader-panel.hidden').forEach((e) => e.classList.remove('hidden'));
     });
-    result[`${vpName}-${theme}`] = await page.evaluate(({ selectors, props }) => {
+    const measure = ({ selectors, props }) => {
       const out = {};
       for (const sel of selectors) {
         const el = document.querySelector(sel);
@@ -62,7 +66,16 @@ for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
         out[sel] = Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)]));
       }
       return out;
-    }, { selectors: SELECTORS, props: PROPS });
+    };
+    result[`${vpName}-${theme}`] = await page.evaluate(measure, { selectors: SELECTORS, props: PROPS });
+    // Fresh context, no auth mock: the signed-out home only shows the cards then.
+    const homeCtx = await browser.newContext({ viewport });
+    await homeCtx.addInitScript((t) => { try { localStorage.setItem('reading_theme', t); } catch (_) {} }, theme);
+    const home = await homeCtx.newPage();
+    await home.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await home.waitForSelector('.library-card', { state: 'visible' });
+    result[`${vpName}-${theme}-home`] = await home.evaluate(measure, { selectors: HOME_SELECTORS, props: PROPS });
+    await homeCtx.close();
     await ctx.close();
   }
 }
@@ -72,6 +85,8 @@ if (MODE === 'record') {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(result, null, 2));
   const found = Object.values(result).flatMap((v) => Object.values(v)).filter(Boolean).length;
+  const missingCard = Object.entries(result).filter(([k, v]) => k.endsWith('-home') && !v['.library-card']);
+  if (missingCard.length) { console.log('library-card not found on home'); process.exit(1); }
   console.log(`recorded ${Object.keys(result).length} variants, ${found} measured elements -> ${FILE}`);
   process.exit(0);
 }
@@ -79,7 +94,7 @@ if (MODE === 'record') {
 const before = JSON.parse(fs.readFileSync(FILE, 'utf8'));
 const diffs = [];
 for (const variant of Object.keys(before)) {
-  for (const sel of SELECTORS) {
+  for (const sel of variant.endsWith('-home') ? HOME_SELECTORS : SELECTORS) {
     const a = before[variant]?.[sel];
     const b = result[variant]?.[sel];
     if (JSON.stringify(a) === JSON.stringify(b)) continue;
