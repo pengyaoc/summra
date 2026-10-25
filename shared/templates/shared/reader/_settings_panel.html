@@ -1,0 +1,60 @@
+{# Reading settings panel. Reads only `reader_config`: the mode selector
+   shows when more than one mode is configured; fonts, text size and themes
+   come from reader_config.settings. #}
+{% set settings = reader_config.settings %}
+            <div class="reading-settings-panel hidden" id="reading-settings-panel">
+                <div class="reading-settings-header">
+                    <h3>Reading settings</h3>
+                    <button class="reading-settings-close" id="reading-settings-close">✕</button>
+                </div>
+{% if reader_config.modes|length > 1 %}
+
+                <div class="reading-settings-section reader-mode-settings hidden" id="reader-mode-settings">
+                    <h4>Reading mode</h4>
+                    <div class="reader-mode-choices" role="group" aria-label="Reading mode">
+{% for mode in reader_config.modes %}
+                        <button type="button" data-reader-settings-mode="{{ mode.id }}">{{ mode.label }}</button>
+{% endfor %}
+                    </div>
+                    <p class="reader-mode-help" id="reader-mode-help"></p>
+                </div>
+{% endif %}
+
+                <div class="reading-settings-section">
+                    <h4>Font</h4>
+                    <div class="font-choices">
+{% for font_id, font_label in settings.fonts %}
+                        <button class="font-choice{% if font_id == settings.font_default %} active{% endif %}" data-font="{{ font_id }}">Aa</button>
+{% endfor %}
+                    </div>
+                    <div class="font-labels">
+{% for font_id, font_label in settings.fonts %}
+                        <span>{{ font_label }}</span>
+{% endfor %}
+                    </div>
+                </div>
+
+                <div class="reading-settings-section">
+                    <h4>Text size</h4>
+                    <div class="size-control">
+                        <button class="size-btn" id="decrease-size">A-</button>
+                        <div class="size-slider-container">
+                            <input type="range" min="{{ settings.size_min }}" max="{{ settings.size_max }}" value="{{ settings.size_default }}" step="1" id="font-size-slider" class="size-slider">
+                        </div>
+                        <button class="size-btn" id="increase-size">A+</button>
+                    </div>
+                    <div class="size-value" id="size-value">{{ settings.size_default }}px</div>
+                </div>
+
+                <div class="reading-settings-section">
+                    <h4>Theme</h4>
+                    <div class="theme-choices">
+{% for theme_id, theme_label in settings.themes %}
+                        <button class="theme-choice{% if theme_id == settings.theme_default %} active{% endif %}" data-theme="{{ theme_id }}">
+                            <div class="theme-preview theme-preview-{{ theme_id }}"></div>
+                            <span>{{ theme_label }}</span>
+                        </button>
+{% endfor %}
+                    </div>
+                </div>
+            </div>

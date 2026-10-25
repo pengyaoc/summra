@@ -138,7 +138,7 @@ Seven page-controller methods (`showCategoryDetail`, `showAllCategories`, `showA
 `finishPageTransition(breadcrumbKey, scrollPageKey, restoreScroll, title)` helper (in `app.js`) for
 their common tail (update breadcrumbs → restore scroll or jump to top → set page title).
 
-**CSS tokens** (`plainly/frontend/static/css/style.css`, `:root`): ~30 custom properties for colors reused
+**CSS tokens** (`shared/static/css/base.css`, `:root`): ~30 custom properties for colors reused
 across multiple selectors — added incrementally by checking every call site's selector before
 tokenizing two colors together, specifically to avoid merging colors that coincidentally share a
 hex value but mean different things (e.g. the dark chapter-reading theme's text color vs. the
@@ -5875,7 +5875,7 @@ setupReadingSettings() {
 
 1. **Georgia** (Default) - Classic serif font, traditional book feel
 2. **System** - Native system font stack, familiar to user's OS
-3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `plainly/frontend/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `style.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`. Pagination measures text, so `loadContinuousReaderAt()` awaits `document.fonts.load()` for the content's computed font before rendering. Otherwise Figtree loads after the pages are cut, the text re-wraps, and each page's last line falls under the footer (`tests/e2e/reader_last_line_visible.mjs`)
+3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `shared/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `shared/static/css/base.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`. Pagination measures text, so `loadContinuousReaderAt()` awaits `document.fonts.load()` for the content's computed font before rendering. Otherwise Figtree loads after the pages are cut, the text re-wraps, and each page's last line falls under the footer (`tests/e2e/reader_last_line_visible.mjs`)
 
 **CSS Data Attribute Pattern:**
 
@@ -10581,3 +10581,8 @@ retired version, and grew the database to 0.8–1.2GB.
   `books`/`chapters`/`book_sections`, and keeps the old-table migration. Tests:
   `tests/shared/test_reader_index.py` (a fake host with no Plainly tables) and the pinned
   `test_source_checksum_is_stable_for_fixture_book`.
+
+
+### Shared reader CSS and templates
+
+`shared/static/css/base.css` (font faces, reset, tokens) loads before an app's `style.css`; `shared/static/css/reader.css` (settings panel, pagination system, continuous reader) loads after it. Apps serve them at `/static/shared/css/...` through the `static/shared` symlink. `shared/templates/shared/reader/_continuous_reader.html` and `_settings_panel.html`, and the macro `shared/templates/shared/_library_card.html`, render from `reader_config` (mode selector only when more than one mode is configured; fonts, size range and themes from `reader_config.settings`).

@@ -151,3 +151,47 @@ def test_registry_matches_schema_checks(tmp_path):
     for conn, table in ((content, 'reader_unit'), (user, 'mode_reading_state'), (user, 'progress_mutation')):
         sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = ?", (table,)).fetchone()[0]
         assert re.search(r"CHECK\(mode IN \(([^)]*)\)\)", sql).group(1) == expected, table
+
+
+def _render(template_source, config, **context):
+    from flask import Flask, render_template_string
+    from shared.web import install_shared_ui
+    app = Flask(__name__)
+    install_shared_ui(app)
+    with app.test_request_context():
+        return render_template_string(template_source, reader_config=config, **context)
+
+
+def test_settings_panel_single_mode_renders_no_selector():
+    html = _render("{% include 'shared/reader/_settings_panel.html' %}", make(modes=(ReaderMode('original', 'Original'),)))
+    assert 'reader-mode-settings' not in html and 'data-reader-settings-mode' not in html
+    html = _render("{% include 'shared/reader/_settings_panel.html' %}", make())
+    assert html.count('data-reader-settings-mode=') == 2
+    assert '>Summary</button>' in html and '>Original</button>' in html
+
+
+def test_settings_panel_renders_configured_fonts_and_size_range():
+    from shared.reader.config import ReaderSettings
+    settings = ReaderSettings((('serif', 'Book Serif'), ('mono', 'Mono')), 'mono', 10, 30, 18,
+                              (('light', 'Light'),), 'light')
+    html = _render("{% include 'shared/reader/_settings_panel.html' %}", make(settings=settings))
+    assert html.count('<button class="font-choice') == 2
+    assert 'class="font-choice active" data-font="mono"' in html
+    assert 'class="font-choice" data-font="serif"' in html
+    assert '<span>Book Serif</span>' in html
+    assert 'min="10" max="30" value="18"' in html
+    assert '>18px</div>' in html
+    assert html.count('<button class="theme-choice') == 1
+
+
+def test_library_card_hides_mode_label_for_single_mode_app():
+    src = ("{% from 'shared/_library_card.html' import library_card with context %}"
+           "{% set cover %}<i>cover</i>{% endset %}{{ library_card(book, cover) }}")
+    book = {'id': 7, 'title': 'T', 'author': 'A', 'furthest_percentage': 40, 'last_mode': 'original'}
+    single = _render(src, make(modes=(ReaderMode('original', 'Original'),)), book=book)
+    assert 'Beginning' in single and ' · ' not in single
+    assert '<i>cover</i>' in single and 'data-library-read="7"' in single
+    multi = _render(src, make(), book=book)
+    assert 'Beginning · Original' in multi
+    linked = _render(src.replace("book, cover)", "book, cover, read_href='/r/7')"), make(), book=book)
+    assert '<a class="library-read-action" href="/r/7">' in linked and 'data-library-read' not in linked
