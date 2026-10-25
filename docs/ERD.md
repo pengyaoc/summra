@@ -10545,3 +10545,13 @@ retired version, and grew the database to 0.8–1.2GB.
 - Size: local DB 746MB → 159MB after `VACUUM` (`chapters` 132MB, `reader_unit` plus its index 32MB).
   Compiling all 90 books takes about 7s.
 - Tests: `tests/test_reader_storage.py` (10).
+- Code location (2026-10-24, Distill phase 1): the index lives in `shared/reader/index.py` —
+  `create_reader_tables(cursor)` (the two tables and the index) and `ReaderIndexMixin` (compile,
+  manifest, segment, resolve/recover/map marker, the splitter/ID helpers and the `_READER_*`
+  constants). It holds no Plainly SQL; the host class supplies hooks: `get_connection`, `get_book`,
+  `_reader_load_book` (`{'id', 'verse'}`), `_reader_load_chapters`, `_reader_chapter_units`,
+  `_reader_plain_coverage`, `_reader_source_checksum` and `_reader_structure` (manifest parts and
+  chapters). Plainly's `Database(ReaderIndexMixin)` in `backend/models.py` implements them over
+  `books`/`chapters`/`book_sections`, and keeps the old-table migration. Tests:
+  `tests/shared/test_reader_index.py` (a fake host with no Plainly tables) and the pinned
+  `test_source_checksum_is_stable_for_fixture_book`.
