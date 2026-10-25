@@ -47,7 +47,7 @@ fi
 # Create necessary directories
 echo ""
 echo "Creating data directories..."
-mkdir -p data/books data/summaries frontend/static/audio
+mkdir -p data/books data/summaries plainly/frontend/static/audio
 
 echo ""
 echo "================================"
@@ -57,7 +57,7 @@ echo ""
 echo "Next steps:"
 echo "1. Edit .env and add your GEMINI_API_KEY"
 echo "2. Place book .txt files in data/books/"
-echo "3. Generate summaries: python scripts/content/generate_summaries.py data/books/your_book.txt"
+echo "3. Generate summaries: python -m plainly.scripts.content.generate_summaries data/books/your_book.txt"
 echo "4. Start the server: python plainly/app.py"
 echo "5. Open http://localhost:5000 in your browser"
 echo ""

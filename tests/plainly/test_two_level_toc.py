@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 def test_treasure_island_two_level_structure():

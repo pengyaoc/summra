@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 # Create Flask app
 app = Flask(__name__,
-            static_folder='../frontend/static',
-            template_folder='../frontend/templates')
+            static_folder='frontend/static',
+            template_folder='frontend/templates')
 
 # No SECRET_KEY / session cookie config needed: trusted_header mode reads
 # an already-verified identity from a header on every request, it doesn't

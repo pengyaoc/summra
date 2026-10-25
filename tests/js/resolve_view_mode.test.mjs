@@ -1,6 +1,6 @@
 // Unit tests for reader mode selection and mode-specific progress.
 //
-// Loads the exact same file the browser loads (frontend/static/js/view_mode.js)
+// Loads the exact same file the browser loads (plainly/frontend/static/js/view_mode.js)
 // inside a stub-window context, so production and tests stay in sync.
 //
 // Run: node --test tests/js/resolve_view_mode.test.mjs

@@ -9,18 +9,18 @@ description = "Read the classics in plain English"
 requires-python = ">=3.11"
 # Runtime dependencies stay in plainly/requirements.txt / requirements-prod.txt
 # (installed separately) — this project file exists to make `plainly` and
-# `scripts` importable as real packages via `pip install -e .`, replacing the
+# `plainly.scripts` importable as real packages via `pip install -e .`, replacing the
 # sys.path hacks and try/except ImportError shims that used to be needed for
 # every script and test to find `config`, `models`, and sibling scripts.
 dependencies = []
 
 [tool.setuptools.packages.find]
-include = ["plainly*", "scripts*", "shared*", "distill*"]
+include = ["plainly*", "shared*", "distill*"]
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-exclude = ["scripts/archive", "venv", "data"]
+exclude = ["plainly/scripts/archive", "venv", "data"]
 
 [tool.ruff.lint]
 # Start permissive — this repo has no lint history. Tighten incrementally

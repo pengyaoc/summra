@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestGutenbergIntegration:

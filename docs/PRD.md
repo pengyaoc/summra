@@ -116,14 +116,14 @@ Users can listen to any summary using high-quality text-to-speech conversion, en
 
 **Audio Generation:**
 - **Technology:** Google Gemini 2.5 Flash TTS API (the original local Coqui/VITS handler was removed)
-- **Voice:** Configurable in `backend/config.py` — `GEMINI_TTS_VOICE` (default: `Kore`; options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
+- **Voice:** Configurable in `plainly/config.py` — `GEMINI_TTS_VOICE` (default: `Kore`; options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
 - **Quality:** 24 kHz WAV (Gemini default), stitched from chunked requests
 - **Format:** Standard HTML5 audio playback
-- **Caching:** Generated audio is cached on disk under `frontend/static/audio/` and reused indefinitely
+- **Caching:** Generated audio is cached on disk under `plainly/frontend/static/audio/` and reused indefinitely
 - **Dev vs prod split:**
-  - Dev (`backend/app.py`) generates audio on demand via the Gemini API
-  - Prod (`backend/app_prod.py`) only **serves** pre-generated audio — TTS generation is disabled to keep the production VM small
-  - Bulk pre-generation lives in `scripts/audio/` (`batch_generate_concise_audio.py`, `batch_generate_medium_audio.py`, `generate_gemini_audio_batch_offline.py`)
+  - Dev (`plainly/app.py`) generates audio on demand via the Gemini API
+  - Prod (`plainly/app_prod.py`) only **serves** pre-generated audio — TTS generation is disabled to keep the production VM small
+  - Bulk pre-generation lives in `plainly/scripts/audio/` (`batch_generate_concise_audio.py`, `batch_generate_medium_audio.py`, `generate_gemini_audio_batch_offline.py`)
 - **Limit:** Long inputs are chunked (~900 words per request) and the WAVs are stitched together
 
 **Playback Controls:**
@@ -534,7 +534,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - **Options:**
   1. **Georgia** (default) - Classic serif font, traditional book feel
   2. **System** - Native system font stack, familiar to user's OS
-  3. **Figtree** - Modern sans-serif, clean and readable. Bundled web font (`frontend/static/fonts/`), so it looks the same on every device. Replaced Open Sans on 2026-10-17; a saved Open Sans choice opens as Figtree
+  3. **Figtree** - Modern sans-serif, clean and readable. Bundled web font (`plainly/frontend/static/fonts/`), so it looks the same on every device. Replaced Open Sans on 2026-10-17; a saved Open Sans choice opens as Figtree
 - **UI:** Radio-style buttons with font preview ("Aa")
 - **Labels:** Font names displayed below preview buttons
 - **Application:** Applies to chapter summaries, chapter full text, and medium summaries
@@ -651,9 +651,9 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 
 ### 7. User Authentication & Reading Progress (Added 2025-12-20; **rebuilt 2026-09-06 on `pchauth`/trusted-header, no app-level login**)
 
-**Status:** `FEATURE_AUTH = True` by default (`backend/config.py`) — the progress-tracking and whoami blueprints are always registered on this deployment. What varies per host is `SUMMRA_AUTH_MODE` (`off` / `optional` / `required`, read from `SUMMRA_AUTH_MODE` env — unset means `off`, matching pre-pchauth no-login behavior for local dev/test). Production (`wordpress-2-vm`) runs `optional` with `SUMMRA_ALLOWED_EMAILS` set.
+**Status:** `FEATURE_AUTH = True` by default (`plainly/config.py`) — the progress-tracking and whoami blueprints are always registered on this deployment. What varies per host is `SUMMRA_AUTH_MODE` (`off` / `optional` / `required`, read from `SUMMRA_AUTH_MODE` env — unset means `off`, matching pre-pchauth no-login behavior for local dev/test). Production (`wordpress-2-vm`) runs `optional` with `SUMMRA_ALLOWED_EMAILS` set.
 
-> **Superseded (2026-09-06):** everything below this note through §7a as originally written — username/password registration, SHA-256+salt hashing, a Login/Register account modal, `/api/auth/register`, `/api/auth/login`, `backend/auth_routes.py`/`auth_utils.py` — **no longer exists**. There is no registration or login *form* anywhere in this app. Full incident/design history: `WORK_LOG.md`, 2026-09-05/09-06 entries; design spec in the `pchauth` repo's `docs/superpowers/specs/2026-09-05-consolidated-login-design.md`.
+> **Superseded (2026-09-06):** everything below this note through §7a as originally written — username/password registration, SHA-256+salt hashing, a Login/Register account modal, `/api/auth/register`, `/api/auth/login`, `shared/auth/`/`auth_utils.py` — **no longer exists**. There is no registration or login *form* anywhere in this app. Full incident/design history: `WORK_LOG.md`, 2026-09-05/09-06 entries; design spec in the `pchauth` repo's `docs/superpowers/specs/2026-09-05-consolidated-login-design.md`.
 
 **Feature Description:**
 Reading-progress tracking that persists across devices *for a signed-in visitor*, where "signed in" is decided entirely outside this app: a shared Apache reverse-proxy vhost on `wordpress-2-vm` runs `mod_auth_openidc` against Google, and — when a session already exists (e.g. because you signed in at `pengyaochen.com/pages`) — forwards a trusted `X-Remote-Email` header to this app on every request. This app never runs an OAuth flow, never asks for a password, and offers no sign-in button of its own (see 2026-09-06 UI decision below). Anonymous visitors read fine; their progress just stays local to the device instead of syncing.
@@ -670,7 +670,7 @@ Reading-progress tracking that persists across devices *for a signed-in visitor*
 - **Source of truth:** `X-Remote-Email`, set by the shared Apache vhost's `mod_auth_openidc` (`AuthType openid-connect`, `Require valid-user`, `OIDCUnAuthAction pass` so anonymous requests still reach the app). This app trusts the header unconditionally — it only works because gunicorn binds `127.0.0.1` and is reachable *only* through that Apache proxy.
 - **Allowlist:** `pchauth.core.is_allowed()` checks the header's email against `SUMMRA_ALLOWED_EMAILS` (comma-separated, `service.env`) and fails closed — an empty allowlist in a non-`off` mode refuses to start.
 - **Per-request resolution (`pchauth/flask_adapter.py`'s `init_pchauth`, a `before_request` hook):** no header + `optional` → anonymous (`g.user_id = None`, request proceeds); no header + `required` → 401; header present but not allowlisted → 403; header present and allowlisted → `user_db.upsert_user_by_email()` creates/updates the row and sets `g.user_id`.
-- **`GET /api/auth/check`** (`backend/whoami.py`): the frontend's only sign-in-state probe — `{"authenticated": false}` for anonymous, else `{"authenticated": true, "user": {...}}`. No `/api/auth/login`, `/api/auth/register`, or `/api/auth/logout` exist; "logging out" is the shared gateway's own logout, not something this app can do.
+- **`GET /api/auth/check`** (`shared/auth/whoami.py`): the frontend's only sign-in-state probe — `{"authenticated": false}` for anonymous, else `{"authenticated": true, "user": {...}}`. No `/api/auth/login`, `/api/auth/register`, or `/api/auth/logout` exist; "logging out" is the shared gateway's own logout, not something this app can do.
 - **Account button (`#user-account-btn`, header):** hidden by default (`.hidden` utility class — the bare `hidden` HTML attribute doesn't work here since `.header-nav-btn`'s own `display: flex` author style wins the cascade over the UA stylesheet's `[hidden]` default; see `WORK_LOG.md`, 2026-09-06 final entry). `auth.js`'s `updateAuthUI()` removes `.hidden` only once `/api/auth/check` confirms a real signed-in user; an anonymous visitor never sees it at all — there's no sign-in action to offer them, so a visible dead-end button was judged worse than no button.
 - **Sign-in links (2026-10-18):** a signed-out visitor gets a quiet "sign in" link at the bottom of the footer (`#footer-signin-link`) and, on phones (≤600px), a "Sign in" link in the header (`#header-signin-link`), because the footer is a long scroll away on a phone and the reader has no footer. Both are hidden once signed in; `auth.js`'s `updateAuthUI()` sets their href and visibility.
 - **Account modal, signed-out view:** no CTA. Just "Reading Progress — Saved on this device." — the shared-gateway sign-in path is deliberately not named anywhere in the UI (it should stay unadvertised, not something a curious visitor discovers by inspecting the page).
@@ -1269,7 +1269,7 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
 - **User Privacy:** Cookie consent banner (GDPR/CCPA compliance)
 
 **Files Modified:**
-- `frontend/templates/index.html:4-12` - Google Analytics script tag
+- `plainly/frontend/templates/index.html:4-12` - Google Analytics script tag
 
 ### 12. Kindle E-ink Mode (Added 2026-10-19)
 
@@ -1529,8 +1529,8 @@ Google Analytics 4 (GA4) tracking installed site-wide to measure user engagement
   - Handles edge cases: em-dashes, quoted text, punctuation
   - Result: Professional, consistent presentation across all 80 books
 - **Implementation:**
-  - `normalize_chapter_title()` function in `scripts/content/generate_summaries.py`
-  - Backfill script: `scripts/backfills/backfill_chapter_title_case.py`
+  - `normalize_chapter_title()` function in `plainly/scripts/content/generate_summaries.py`
+  - Backfill script: `plainly/scripts/backfills/backfill_chapter_title_case.py`
   - 1,013 titles updated out of 2,965 total chapters
 
 ## Design Principles
@@ -1611,7 +1611,7 @@ Full design spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`.
 
 ### Technical Stack
 - **Frontend:** Vanilla HTML/CSS/JavaScript (single-page app, hash routing), installable PWA (no offline support)
-- **Backend:** Python Flask (`backend/app_base.py` for shared routes, `app.py` for dev, `app_prod.py` for prod)
+- **Backend:** Python Flask (`plainly/app_base.py` for shared routes, `app.py` for dev, `app_prod.py` for prod)
 - **Databases:** SQLite — `data/database.db` for content, `summra.db` (project root) for users + reading progress
 - **Summary / metadata / illustration generation:** Google Gemini (3.5 Flash + fallbacks; 2.5 Flash Image / batch for chapter illustrations)
 - **Modern-English rewrite:** Google Gemini 3.1 Flash-Lite (`PLAIN_TEXT_MODEL`)
@@ -1644,7 +1644,7 @@ Full design spec: `docs/superpowers/specs/2026-10-12-site-redesign-design.md`.
 - **Modern English Rewrite (Plain English):** Sentence-by-sentence rewrite of the original chapter text into contemporary English, viewable side-by-side with the original
 - **TTS:** Text-to-Speech conversion to audio (Google Gemini 2.5 Flash TTS)
 - **Project Gutenberg:** Digital library of public domain books
-- **Feature flag:** A boolean in `backend/config.py` that gates an entire subsystem (e.g. `FEATURE_AUTH`, `FEATURE_BLOG`)
+- **Feature flag:** A boolean in `plainly/config.py` that gates an entire subsystem (e.g. `FEATURE_AUTH`, `FEATURE_BLOG`)
 
 ### References
 - Project Gutenberg: https://www.gutenberg.org/
@@ -1836,14 +1836,14 @@ The Discover page features multiple curated carousels to help users find books b
 *Books You Can Read in a Day Carousel (Added 2025-12-14):*
 - Backend filter: Books with `word_count < 50000`
 - Carousel ID: 'quick-reads'
-- Location: `backend/app_base.py:1051-1110`
+- Location: `plainly/app_base.py:1051-1110`
 - Returns 17 books ranging from 20,714 to 48,500 words
 - Average reading time: 2-3 hours
 
 *Other Carousels:*
 - Backend endpoint: `/api/discover/carousels`
 - Dynamic filtering based on CEFR level, audio availability, categories, and authors
-- Location: `backend/app_base.py:1020-1138`
+- Location: `plainly/app_base.py:1020-1138`
 
 **User Benefits:**
 - Multiple discovery paths for different user needs
@@ -1904,7 +1904,7 @@ Blog posts feature visually engaging header images automatically sourced from Un
 - **Fallback:** No image shown if header_image_url is null
 
 #### Image Assignment Script
-- **Script:** `scripts/blog/assign_blog_header_images.py`
+- **Script:** `plainly/scripts/blog/assign_blog_header_images.py`
 - **Automated:** Run manually when new blog posts are added
 - **Search Strategy:** Keyword mapping for relevant results
   - Example: "british" → "british library books vintage"
@@ -2191,7 +2191,7 @@ Plainly can be installed to a device's home screen for a native, browser-chrome-
 - Opens in full-screen mode (no browser UI)
 
 **How:**
-- Web App Manifest (`frontend/templates/manifest.json`, served at `/manifest.json`) defines app metadata
+- Web App Manifest (`plainly/frontend/templates/manifest.json`, served at `/manifest.json`) defines app metadata
 - Android: Automatic install prompt (`beforeinstallprompt`)
 - iOS: Custom install instructions banner (`#ios-install-banner`)
 
@@ -2206,13 +2206,13 @@ Plainly can be installed to a device's home screen for a native, browser-chrome-
 ### Technical Implementation
 
 **Files:**
-- `frontend/templates/manifest.json` - Web app manifest (Jinja-rendered for `base_path`/asset versioning)
-- `frontend/templates/index.html` - Manifest link, iOS meta tags, install banner
-- `frontend/static/js/app.js` - `setupInstallPrompt()` (iOS banner + Android `beforeinstallprompt`)
-- `frontend/static/css/style.css` - iOS banner styles
+- `plainly/frontend/templates/manifest.json` - Web app manifest (Jinja-rendered for `base_path`/asset versioning)
+- `plainly/frontend/templates/index.html` - Manifest link, iOS meta tags, install banner
+- `plainly/frontend/static/js/app.js` - `setupInstallPrompt()` (iOS banner + Android `beforeinstallprompt`)
+- `plainly/frontend/static/css/style.css` - iOS banner styles
 
 **Flask Route:**
-- `/manifest.json` - Serves the manifest with correct content type (`backend/routes/system.py`)
+- `/manifest.json` - Serves the manifest with correct content type (`plainly/routes/system.py`)
 
 ---
 
@@ -2242,8 +2242,8 @@ This is not a summary. The rewrite is the same scene, chapter by chapter, senten
 - Generated independently from the chapter summary; books can have summaries without modern English, or vice versa
 
 **Generation:**
-- Script: `scripts/content/generate_modern_english.py`
-- Model: `PLAIN_TEXT_MODEL` in `backend/config.py` (currently `gemini-3.1-flash-lite`)
+- Script: `plainly/scripts/content/generate_modern_english.py`
+- Model: `PLAIN_TEXT_MODEL` in `plainly/config.py` (currently `gemini-3.1-flash-lite`)
 - Per-chapter prompt; output is plain text matching paragraph structure of the original
 - Subject to the same Gemini rate limiter as summary generation
 
@@ -2263,7 +2263,7 @@ This is not a summary. The rewrite is the same scene, chapter by chapter, senten
 ### Acceptance Criteria
 
 - [✅] `modern_english_text` column present in `chapters` table
-- [✅] `scripts/content/generate_modern_english.py` generates and persists rewrites
+- [✅] `plainly/scripts/content/generate_modern_english.py` generates and persists rewrites
 - [✅] Chapter API (`GET /api/books/<id>/chapters/<n>`) returns `modern_english_text` when present
 - [✅] Frontend offers Original / Modern / Side-by-Side view modes
 - [✅] Side-by-Side view paragraph-aligns the two columns
@@ -2284,7 +2284,7 @@ This is not a summary. The rewrite is the same scene, chapter by chapter, senten
 ## 15. Editorial Blog (Feature-Flagged)
 
 **Feature Owner:** Content Team
-**Status:** Implemented but **dark by default** — gated behind `FEATURE_BLOG` in `backend/config.py` (default `False`)
+**Status:** Implemented but **dark by default** — gated behind `FEATURE_BLOG` in `plainly/config.py` (default `False`)
 
 ### Overview
 
@@ -2298,7 +2298,7 @@ A long-form editorial blog for essays, book deep-dives, and topical pieces (e.g.
   - `GET /api/blog` — JSON list
   - `GET /api/blog/<slug>` — JSON post
 - **Storage:** `blog_posts(id, slug UNIQUE, title, content, excerpt, author, published_date, updated_date, header_image_url, created_at)`
-- **Header images:** Unsplash API via `scripts/blog/assign_blog_header_images.py` (requires `UNSPLASH_ACCESS_KEY` env var). Search terms are mapped per blog topic (e.g. "british" → "british library books vintage")
+- **Header images:** Unsplash API via `plainly/scripts/blog/assign_blog_header_images.py` (requires `UNSPLASH_ACCESS_KEY` env var). Search terms are mapped per blog topic (e.g. "british" → "british library books vintage")
 - **Sitemap integration:** When `FEATURE_BLOG=True`, blog URLs are included in `sitemap.xml`
 - **Frontend:** Server-rendered HTML pages, not part of the SPA shell
 
@@ -2321,7 +2321,7 @@ A long-form editorial blog for essays, book deep-dives, and topical pieces (e.g.
 
 ## Feature Flag Bundle
 
-The following subsystems are **implemented in code but dark by default**, gated by flags in `backend/config.py`. The flags exist so the production deployment can stay focused on the core reading experience while heavier or less-polished subsystems are wired through but inert.
+The following subsystems are **implemented in code but dark by default**, gated by flags in `plainly/config.py`. The flags exist so the production deployment can stay focused on the core reading experience while heavier or less-polished subsystems are wired through but inert.
 
 | Flag | Default | What it gates |
 |------|---------|---------------|

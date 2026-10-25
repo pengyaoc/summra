@@ -12,7 +12,7 @@ Same fix benefits any book that uses "TABLE OF CONTENTS" or "LIST OF CHAPTERS".
 
 import pytest
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 @pytest.fixture

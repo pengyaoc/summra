@@ -1,0 +1,173 @@
+/* Kindle e-ink mode (plainly/routes/kindle.py).
+   E-ink rules: pure black on white, no grays for text, no shadows, gradients,
+   transitions or animation (each repaint ghosts), big tap targets, and no
+   scrolling in the reader: kindle.js turns the chapter into pages. Old
+   Kindle browsers are WebKit 531, so stick to CSS 2.1 plus -webkit- columns. */
+
+html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+body {
+  font-family: Bookerly, "Amazon Ember", Georgia, "Palatino Linotype", Palatino, serif;
+  font-size: 20px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+* { -webkit-transition: none !important; transition: none !important; -webkit-animation: none !important; animation: none !important; }
+a { color: #000; }
+h1, h2 { font-weight: bold; line-height: 1.2; }
+
+/* ---- UI pages (library, book, 404) ---- */
+.page { padding: 0 24px 24px; }
+.masthead {
+  border-bottom: 3px solid #000;
+  padding: 16px 0 10px;
+  overflow: hidden;
+}
+.wordmark { float: left; font-size: 30px; font-weight: bold; text-decoration: none; letter-spacing: 0.5px; }
+.mast-link { float: right; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; font-size: 18px; line-height: 40px; text-decoration: none; }
+.tagline { margin: 10px 0 18px; font-style: italic; }
+
+.btn {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  padding: 0 16px;
+  margin: 0 8px 8px 0;
+  border: 2px solid #000;
+  border-radius: 6px;
+  background: #fff;
+  color: #000;
+  font-family: "Amazon Ember", Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn.primary, .btn.on { background: #000; color: #fff; }
+.btn.off { border-style: dotted; color: #000; opacity: 0.4; }
+.btn.big { font-size: 22px; font-weight: bold; }
+button.btn { -webkit-appearance: none; }
+
+.continue {
+  display: block;
+  border: 3px solid #000;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 0 0 18px;
+  text-decoration: none;
+}
+.continue .label { display: block; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; font-size: 15px; text-transform: uppercase; letter-spacing: 1px; }
+.continue .title { display: block; font-size: 24px; font-weight: bold; }
+.continue .author { display: block; }
+
+.search { margin: 0 0 14px; overflow: hidden; }
+.search input[type=text] {
+  width: 60%;
+  height: 44px;
+  padding: 0 10px;
+  margin: 0 8px 0 0;
+  border: 2px solid #000;
+  border-radius: 6px;
+  font-size: 18px;
+  font-family: inherit;
+  vertical-align: top;
+  -webkit-appearance: none;
+}
+.search .btn { margin: 0; vertical-align: top; }
+
+.tabs { border-bottom: 2px solid #000; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; }
+.tab { display: inline-block; padding: 10px 14px; margin-right: 4px; font-size: 18px; text-decoration: none; }
+.tab.on { border-bottom: 5px solid #000; font-weight: bold; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { border-bottom: 1px solid #000; }
+.list a { display: block; padding: 9px 0; min-height: 44px; text-decoration: none; }
+.list .title { display: block; font-size: 21px; font-weight: bold; }
+.list .author { display: block; font-size: 17px; font-style: italic; }
+.list .empty { padding: 16px 0; font-style: italic; }
+
+.pager { margin: 18px 0 0; text-align: center; }
+.pager .btn { margin: 0; }
+.pager-count { display: inline-block; padding: 0 14px; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; }
+.fineprint { margin-top: 24px; text-align: center; font-size: 16px; }
+
+.book-head { overflow: hidden; margin: 18px 0 8px; }
+.cover { float: left; width: 130px; margin: 0 18px 8px 0; border: 1px solid #000; }
+.book-meta { overflow: hidden; }
+.book-meta h1 { margin: 0 0 6px; font-size: 28px; }
+.book-meta .author { margin: 0 0 14px; font-style: italic; }
+.section { font-size: 20px; margin: 18px 0 0; padding-bottom: 6px; border-bottom: 3px solid #000; text-transform: uppercase; letter-spacing: 1px; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; }
+
+/* ---- Reader ---- */
+.reader { margin: 0; }
+.runhead, .runfoot {
+  font-family: "Amazon Ember", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 10px 36px 0;
+  height: 26px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.runhead { text-align: center; }
+.runfoot { padding: 0 36px 10px; height: 26px; }
+#left { float: left; }
+#right { float: right; }
+
+#viewport { margin: 0 36px; }
+.flow {
+  text-align: justify;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+.flow p { margin: 0; text-indent: 1.5em; orphans: 2; widows: 2; }
+.flow .chapter-title + p, .flow .notice + p { text-indent: 0; }
+.chapter-title {
+  font-size: 1.5em;
+  text-align: center;
+  margin: 1.2em 0 1.4em;
+  -webkit-column-break-after: avoid;
+  break-after: avoid;
+}
+.flow .notice { text-indent: 0; font-style: italic; border: 1px solid #000; padding: 8px 12px; margin: 0 0 1em; font-size: 0.85em; text-align: left; }
+.verse { text-align: left; }
+.verse p { text-indent: 0; white-space: pre-line; margin: 0 0 1em; }
+.chapter-end { text-align: center; padding: 2em 0 1em; -webkit-column-break-inside: avoid; break-inside: avoid; }
+.end-mark { font-size: 1.4em; text-indent: 0 !important; margin: 0 0 1em !important; }
+
+/* Reading font sizes (kfs cookie). */
+.fs-1 .flow { font-size: 16px; line-height: 1.5; }
+.fs-2 .flow { font-size: 18px; line-height: 1.5; }
+.fs-3 .flow { font-size: 21px; line-height: 1.55; }
+.fs-4 .flow { font-size: 25px; line-height: 1.55; }
+.fs-5 .flow { font-size: 30px; line-height: 1.5; }
+
+/* Paginated once kindle.js runs: the page never scrolls. */
+.js.reading, .js.reading body { height: 100%; overflow: hidden; }
+.js #viewport { position: relative; overflow: hidden; }
+.js .flow { position: absolute; top: 0; left: 0; }
+
+/* Without JavaScript the chapter scrolls and the menu sits below it. */
+.menu { font-family: "Amazon Ember", Helvetica, Arial, sans-serif; padding: 12px 36px; border-top: 3px solid #000; }
+.js .menu-top, .js .menu-bottom { position: fixed; left: 0; right: 0; background: #fff; padding: 12px 24px 4px; }
+.js .menu { padding: 0; border: 0; }
+.js .menu-top { top: 0; border-bottom: 3px solid #000; }
+.js .menu-bottom { bottom: 0; border-top: 3px solid #000; }
+.js .menu.hidden { display: none; }
+#close { float: right; margin-right: 0; }
+.row { margin: 0 0 4px; }
+.row-label { display: inline-block; width: 60px; font-size: 16px; }
+.menu-pos { margin: 4px 0 8px; font-size: 16px; }
+#close { display: none; }
+.js #close { display: inline-block; }
+.account { margin: 22px 0 0; font-size: 17px; text-align: center; }
+.account .btn { margin: 0 6px 0 0; }
+
+/* Reading now: books in progress with a progress bar (solid black fill). */
+section.reading { margin: 0 0 18px; }
+section.reading .section { margin-top: 0; }
+.list .progress { display: block; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; font-size: 16px; margin: 2px 0 6px; }
+.bar { display: block; height: 8px; border: 2px solid #000; border-radius: 5px; overflow: hidden; }
+.bar span { display: block; height: 8px; background: #000; }
+.see-all { margin: 10px 0 0; text-align: right; }
+.see-all .btn { margin: 0; }

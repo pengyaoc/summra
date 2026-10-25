@@ -1,7 +1,7 @@
 """Book metadata (genres, audience, school lists, reading levels).
 
-`scripts/content/book_metadata.json` is the reviewed, sourced record —
-built by scripts/content/build_book_metadata.py from the Sonnet audits and
+`plainly/scripts/content/book_metadata.json` is the reviewed, sourced record —
+built by plainly/scripts/content/build_book_metadata.py from the Sonnet audits and
 published reading levels — and `apply_book_metadata.py` writes it into a
 database (local or the prod VM) idempotently.
 """
@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 
 from plainly import models
-from scripts.content.apply_book_metadata import apply_metadata
+from plainly.scripts.content.apply_book_metadata import apply_metadata
 
-METADATA = Path(__file__).resolve().parents[2] / 'scripts' / 'content' / 'book_metadata.json'
+METADATA = Path(__file__).resolve().parents[2] / 'plainly' / 'scripts' / 'content' / 'book_metadata.json'
 
 
 @pytest.fixture(scope='module')

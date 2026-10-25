@@ -15,13 +15,13 @@ from unittest.mock import Mock, patch, MagicMock
 
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestDetectBookStructure:
     """Test _detect_book_structure() helper method."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_two_level_structure_body_scan(self, mock_genai):
         """Test detection of 2-layer structure via body scanning (Ulysses-style)."""
         generator = SummaryGenerator("test_api_key")
@@ -82,7 +82,7 @@ More text.
         # Verify first section is PART type
         assert toc_structure[0]['type'] == 'PART'
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_two_level_structure_toc_fallback(self, mock_genai):
         """Test fallback to TOC-based detection when body scan fails."""
         generator = SummaryGenerator("test_api_key")
@@ -121,7 +121,7 @@ Final content.
         assert toc_structure is not None
         assert len(toc_structure) == 2
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_single_level_structure(self, mock_genai):
         """Test single-level structure (no PART/BOOK/ACT markers)."""
         generator = SummaryGenerator("test_api_key")
@@ -142,7 +142,7 @@ More content.
         # Should return None for single-level structure
         assert toc_structure is None
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_invalid_toc_structure_passed_through(self, mock_genai):
         """Test that TOC structures are returned without type validation (validation disabled)."""
         generator = SummaryGenerator("test_api_key")
@@ -166,7 +166,7 @@ More content.
 class TestRegenerateModeChapterFiltering:
     """Test chapter filtering in regenerate mode."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_filter_requested_chapters(self, mock_genai):
         """Test that only requested chapters are processed in regenerate mode."""
         generator = SummaryGenerator("test_api_key")
@@ -214,7 +214,7 @@ Summary 2
         assert chapter_summaries[0]['chapter_number'] == 2
         assert chapter_summaries[1]['chapter_number'] == 3
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_error_on_missing_chapters(self, mock_genai):
         """Test that error is returned when requested chapters don't exist."""
         generator = SummaryGenerator("test_api_key")
@@ -246,7 +246,7 @@ Summary 2
 class TestRegenerateModeConsecutiveValidation:
     """Test consecutive chapter validation in regenerate mode."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_consecutive_chapters_accepted(self, mock_genai):
         """Test that consecutive chapters pass validation (2,3,4)."""
         generator = SummaryGenerator("test_api_key")
@@ -296,7 +296,7 @@ Summary 4
         # Should successfully process all 3 chapters
         assert len(chapter_summaries) == 3
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_single_chapter_skips_validation(self, mock_genai):
         """Test that single chapter skips consecutive validation entirely."""
         generator = SummaryGenerator("test_api_key")
@@ -339,7 +339,7 @@ Summary 5
 class TestRegenerateModeEarlyReturn:
     """Test early return behavior in regenerate mode."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_early_return_after_regeneration(self, mock_genai):
         """Test that regenerate mode returns early without processing short chapters."""
         generator = SummaryGenerator("test_api_key")
@@ -383,7 +383,7 @@ Summary 1
 class TestRegenerateModeContextLoading:
     """Test medium summary context loading in regenerate mode."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_load_medium_summary_from_database(self, mock_genai):
         """Test that regenerate mode loads medium summary from database for context."""
         generator = SummaryGenerator("test_api_key")

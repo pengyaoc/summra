@@ -41,9 +41,9 @@ Thumbs.db
 *.sqlite3
 
 # Audio files (too large for git)
-# frontend/static/audio/*.wav
-# frontend/static/audio/*.mp3
-# frontend/static/tts/*.wav
+# plainly/frontend/static/audio/*.wav
+# plainly/frontend/static/audio/*.mp3
+# plainly/frontend/static/tts/*.wav
 
 # Data directory - ignore all files but keep structure
 data/**/*

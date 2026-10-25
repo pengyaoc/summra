@@ -216,7 +216,7 @@ def check_cached_audio(audio_id: str, tts_output_dir: Path, base_dir: Path) -> O
     # Priority 1: Check for Opus (compressed, optimized for speech)
     opus_path = tts_output_dir / f"{audio_id}_gemini.opus"
     if opus_path.exists():
-        relative_path = str(opus_path.relative_to(base_dir / 'frontend' / 'static'))
+        relative_path = str(opus_path.relative_to(base_dir / 'plainly' / 'frontend' / 'static'))
         return {
             'audio_url': f'/static/{relative_path}',
             'provider': 'gemini-opus',
@@ -226,7 +226,7 @@ def check_cached_audio(audio_id: str, tts_output_dir: Path, base_dir: Path) -> O
     # Priority 2: Check for Gemini TTS WAV (pre-generated offline, fallback)
     gemini_path = tts_output_dir / f"{audio_id}_gemini.wav"
     if gemini_path.exists():
-        relative_path = str(gemini_path.relative_to(base_dir / 'frontend' / 'static'))
+        relative_path = str(gemini_path.relative_to(base_dir / 'plainly' / 'frontend' / 'static'))
         return {
             'audio_url': f'/static/{relative_path}',
             'provider': 'gemini',
@@ -236,7 +236,7 @@ def check_cached_audio(audio_id: str, tts_output_dir: Path, base_dir: Path) -> O
     # Priority 3: Check for VITS TTS (previously generated)
     vits_path = tts_output_dir / f"{audio_id}_vits.wav"
     if vits_path.exists():
-        relative_path = str(vits_path.relative_to(base_dir / 'frontend' / 'static'))
+        relative_path = str(vits_path.relative_to(base_dir / 'plainly' / 'frontend' / 'static'))
         return {
             'audio_url': f'/static/{relative_path}',
             'provider': 'vits',
@@ -246,7 +246,7 @@ def check_cached_audio(audio_id: str, tts_output_dir: Path, base_dir: Path) -> O
     # Priority 4: Check for legacy concatenated audio (backward compatibility)
     legacy_path = tts_output_dir / f"{audio_id}_complete.wav"
     if legacy_path.exists():
-        relative_path = str(legacy_path.relative_to(base_dir / 'frontend' / 'static'))
+        relative_path = str(legacy_path.relative_to(base_dir / 'plainly' / 'frontend' / 'static'))
         return {
             'audio_url': f'/static/{relative_path}',
             'provider': 'vits_legacy',

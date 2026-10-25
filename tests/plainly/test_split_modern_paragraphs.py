@@ -1,4 +1,4 @@
-"""Tests for scripts/audits/split_modern_paragraphs.py — paragraph alignment tool."""
+"""Tests for plainly/scripts/audits/split_modern_paragraphs.py — paragraph alignment tool."""
 import sqlite3
 import sys
 from pathlib import Path
@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.audits import split_modern_paragraphs as smp
-from scripts.audits.split_modern_paragraphs import (
+from plainly.scripts.audits import split_modern_paragraphs as smp
+from plainly.scripts.audits.split_modern_paragraphs import (
     apply_splits_and_merges,
     parse_splits,
     parse_merges,

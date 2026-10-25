@@ -1,8 +1,8 @@
-"""Tests for scripts/lib/text.py — the shared chapter-title normalization
+"""Tests for plainly/scripts/lib/text.py — the shared chapter-title normalization
 extracted from generate_summaries.py's SummaryGenerator.normalize_chapter_title
 (a pure function with no dependency on SummaryGenerator's state).
 """
-from scripts.lib.text import (
+from plainly.scripts.lib.text import (
     normalize_chapter_title,
     fix_roman_numerals_in_text,
     normalize_book_title,
@@ -62,7 +62,7 @@ def test_normalize_book_title_empty():
 def test_normalize_book_title_matches_migrate_book_titles_delegate():
     """migrate_book_titles.py must delegate to this shared function, not
     maintain its own byte-identical parallel copy."""
-    from scripts.migrations.migrate_book_titles import normalize_book_title as delegate
+    from plainly.scripts.migrations.migrate_book_titles import normalize_book_title as delegate
 
     samples = ["jane eyre: an autobiography", "MOBY DICK; Or, The Whale", "the great gatsby"]
     for title in samples:
@@ -72,7 +72,7 @@ def test_normalize_book_title_matches_migrate_book_titles_delegate():
 def test_normalize_chapter_title_matches_generate_summaries_delegate():
     """generate_summaries.SummaryGenerator.normalize_chapter_title must delegate
     to this shared function, not maintain its own parallel copy."""
-    from scripts.content.generate_summaries import SummaryGenerator
+    from plainly.scripts.content.generate_summaries import SummaryGenerator
 
     gen = SummaryGenerator.__new__(SummaryGenerator)  # skip __init__ (no API key needed)
     samples = [
@@ -87,7 +87,7 @@ def test_normalize_chapter_title_matches_generate_summaries_delegate():
 
 
 def test_normalize_book_title_matches_generate_summaries_module_delegate():
-    from scripts.content.generate_summaries import normalize_book_title as module_delegate
+    from plainly.scripts.content.generate_summaries import normalize_book_title as module_delegate
 
     samples = ["jane eyre: an autobiography", "MOBY DICK; Or, The Whale"]
     for title in samples:

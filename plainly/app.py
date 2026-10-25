@@ -157,7 +157,7 @@ def generate_tts():
                 chunk_hash = hashlib.md5(f"{text[:50]}_{i}".encode()).hexdigest()
                 audio_path = config.TTS_OUTPUT_DIR / f"chunk_{chunk_hash}.wav"
                 chunk_file_paths.append(str(audio_path))
-                relative_path = str(audio_path.relative_to(config.BASE_DIR / 'frontend' / 'static'))
+                relative_path = str(audio_path.relative_to(config.BASE_DIR / 'plainly' / 'frontend' / 'static'))
                 audio_urls.append(request.script_root + f'/static/{relative_path}')
 
             # Track chunk files for cleanup if user stops playback
@@ -178,7 +178,7 @@ def generate_tts():
 
             if audio_path:
                 # Return relative path for frontend
-                relative_path = str(Path(audio_path).relative_to(config.BASE_DIR / 'frontend' / 'static'))
+                relative_path = str(Path(audio_path).relative_to(config.BASE_DIR / 'plainly' / 'frontend' / 'static'))
                 return jsonify({
                     'success': True,
                     'audio_url': request.script_root + f'/static/{relative_path}',

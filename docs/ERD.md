@@ -25,63 +25,89 @@ This document provides in-depth technical documentation for the Summra project, 
 
 ## Brand name
 
-The user-facing name is **Plainly** (renamed from "Summra" on 2026-10-18). Only text a reader sees changed: page titles and meta tags (`backend/routes/*.py`, `index.html`, JS `updatePageTitle` calls), the header logo and footer, `manifest.json`, `robots.txt`, the audio player's album name, and the blog's default author (`'Plainly Team'`). These deliberately keep the old name: the `SummraApp` class and `window.summraApp`, `SUMMRA_*` env vars, `summra.db`, deploy/systemd/Apache file names, the repo name and the production domain. The production URL moved from `pengyaochen.com/summrabook` to `pengyaochen.com/plainly` the same day: the host vhost now has `Define SUMMRA_PREFIX /plainly`, and `deploy/apache/summra.conf` 301s `/summrabook(/...)` to the same path under the new prefix, keeping the query string (`tests/test_apache_conf.py`). The app itself is prefix-agnostic (it reads `X-Forwarded-Prefix`). `tests/test_brand_name.py` fails if a quoted "Summra" string comes back in the JS, the routes or `app.min.js`.
+The user-facing name is **Plainly** (renamed from "Summra" on 2026-10-18). Only text a reader sees changed: page titles and meta tags (`plainly/routes/*.py`, `index.html`, JS `updatePageTitle` calls), the header logo and footer, `manifest.json`, `robots.txt`, the audio player's album name, and the blog's default author (`'Plainly Team'`). These deliberately keep the old name: the `SummraApp` class and `window.summraApp`, `SUMMRA_*` env vars, `summra.db`, deploy/systemd/Apache file names, the repo name and the production domain. The production URL moved from `pengyaochen.com/summrabook` to `pengyaochen.com/plainly` the same day: the host vhost now has `Define SUMMRA_PREFIX /plainly`, and `deploy/apache/summra.conf` 301s `/summrabook(/...)` to the same path under the new prefix, keeping the query string (`tests/test_apache_conf.py`). The app itself is prefix-agnostic (it reads `X-Forwarded-Prefix`). `tests/test_brand_name.py` fails if a quoted "Summra" string comes back in the JS, the routes or `app.min.js`.
+
+## Repository layout (post repo split, 2026-10-24)
+
+```text
+shared/                  Code both apps use (must not import plainly/ or distill/)
+  auth/                  pchauth (trusted-header identity), user_models.py, whoami.py
+  progress/routes.py     Reading-progress blueprint
+  reader/index.py        Continuous-reader index mixin
+  web.py, kindle.py      Prefix middleware, gzip, asset versioning; Kindle detection
+plainly/                 The Plainly app (package `plainly`)
+  app_base.py, app.py, app_prod.py, config.py, models.py, routes/, tts_utils.py, ...
+  frontend/              Flask static_folder / template_folder (relative to plainly/)
+    static/              css/, js/ (app.min.js is built), covers/, illustrations/, audio/
+    templates/
+  scripts/               Ingestion, audits, audio, images (run as `python -m plainly.scripts.<group>.<name>`)
+distill/                 Second app (placeholder)
+tests/{shared,plainly}/  Tests mirror the package layout; tests/e2e is the Playwright harness
+```
+
+`plainly.config.BASE_DIR` is the repository root, so `data/` stays at the top level while
+`COVERS_DIR`, `ILLUSTRATIONS_DIR` and `TTS_OUTPUT_DIR` live under `plainly/frontend/static/`.
+Scripts compute repo-relative paths from `Path(__file__)` with one extra `.parent` level
+(`plainly/scripts/<group>/x.py` is four levels below the root). The production Apache `Alias` and
+nginx `alias` point at `/opt/summra/plainly/frontend/static/`, and the esbuild paths in
+`package.json` use the same prefix. `tests/test_layering_names.py` fails if any file still refers
+to the old top-level `backend`, `scripts` or `frontend/static` locations.
 
 ## Backend Module Map
 
 *Last restructured 2026-09-05 — see `WORK_LOG.md` Phases 1/3/5 for the history of this split.*
 
-The project is installed as an editable package (`pyproject.toml`, `pip install -e .`) so `backend`
-and `scripts` are real importable packages — this replaced the `sys.path` hacks and
+The project is installed as an editable package (`pyproject.toml`, `pip install -e .`) so `plainly`, `shared`
+and `plainly.scripts` are real importable packages — this replaced the `sys.path` hacks and
 `try/except ImportError` shims that every script and test previously needed just to find `config`,
 `models`, and sibling scripts. `tests/conftest.py` no longer manipulates `sys.path` at all.
 
 The Flask app itself is split into a shared base module + two entry points so the production VM can
 run a slimmer version without the TTS dependencies. `app_base.py` is now an **app-factory only** —
-every route lives in its own blueprint under `backend/routes/`:
+every route lives in its own blueprint under `plainly/routes/`:
 
 | File | Role |
 |------|------|
-| `backend/app_base.py` | **App factory.** Creates the Flask app, configures CORS, imports and registers every blueprint below (conditionally, for auth/blog, behind feature flags) and wires up `pchauth`'s `before_request` hook when `FEATURE_AUTH` is on. No session config — trusted-header identity needs none. Both entry points import `app` from here. Global error handler + `asset_v()` content-hash cache-busting live here too. |
-| `backend/routes/common.py` | Shared `db`/`config` module attributes (set by `app_base.py` after creating them, to avoid a circular import back into `app_base`) plus route-agnostic helpers: `site_origin()`, `author_name_to_slug()`/`slug_to_author_name()`, `build_breadcrumbs()`, `breadcrumbs_to_schema()`. |
-| `backend/routes/system.py` | robots.txt, sitemap.xml, manifest.json. |
-| `backend/routes/pages.py` | Server-rendered page routes (SSR shell for each page type). |
-| `backend/routes/books.py` | Book detail, chapter detail, and book-related JSON API endpoints. |
-| `backend/routes/taxonomy.py` | Category and related-books JSON API endpoints. |
-| `backend/routes/discover.py` | Discover-page carousel JSON API endpoint. |
-| `backend/routes/authors.py` | Author detail page + JSON API endpoints. |
-| `backend/routes/blog.py` | Blog index/post pages + JSON API. Registered only when `FEATURE_BLOG` is on. |
-| `backend/pchauth/` | Trusted-header identity package (`core.py`, `config.py`, `trusted_header.py`, `flask_adapter.py`) — see the User Authentication section below. Replaced `backend/auth_routes.py`/`auth_utils.py` (deleted 2026-09-06). |
-| `backend/whoami.py` | `GET /api/auth/check` — the frontend's only sign-in-state probe. Replaced `auth_routes.py`'s register/login/logout/me endpoints, all of which are gone. |
-| `backend/app.py` | **Dev entry point.** Adds `POST /api/tts/generate` that calls `GeminiTTSHandler` to generate audio on demand (and `POST /api/tts/stop` to abort + clean up chunks), plus an admin chapter-edit route. Sets `IS_DEVELOPMENT = True`. Run with `python backend/app.py` — binds `:5001`. |
-| `backend/app_prod.py` | **Prod entry point.** Replaces `POST /api/tts/generate` with a pre-generated-only lookup (no live generation). Adds `/health`. Served by Gunicorn behind Nginx in production. |
-| `backend/config.py` | Single source of truth for paths, models, rate limits, summary configs, feature flags. |
-| `backend/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection via a versioned `_COLUMN_MIGRATIONS` list (replaced 18 copy-pasted `try/except OperationalError` blocks). |
-| `backend/user_models.py` | User database layer (`data/summra.db`, per `config.USER_DATABASE_PATH`) — users (keyed by email, no credential), reading_progress, chapter_completion. No password hashing, no sessions — identity is upserted by email from the trusted header on each request. |
-| `backend/progress_routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete), gated by pchauth's `@login_required`. Conditionally registered behind `FEATURE_AUTH`. |
-| `backend/gemini_tts_handler.py` | Gemini 2.5 Flash TTS client + per-key rate limiter (`GEMINI_TTS_MAX_REQUESTS_PER_MINUTE`, `…_TOKENS_PER_MINUTE`). Owns voice selection, chunking, retries. |
-| `backend/tts_utils.py` | Provider-agnostic helpers: `clean_text_for_speech`, chunk-by-words, WAV stitching, on-disk cache lookup. Cache lookup probes Opus → Gemini WAV → legacy `*_vits.wav` → legacy `*_complete.wav` so older audio still resolves. |
+| `plainly/app_base.py` | **App factory.** Creates the Flask app, configures CORS, imports and registers every blueprint below (conditionally, for auth/blog, behind feature flags) and wires up `pchauth`'s `before_request` hook when `FEATURE_AUTH` is on. No session config — trusted-header identity needs none. Both entry points import `app` from here. Global error handler + `asset_v()` content-hash cache-busting live here too. |
+| `plainly/routes/common.py` | Shared `db`/`config` module attributes (set by `app_base.py` after creating them, to avoid a circular import back into `app_base`) plus route-agnostic helpers: `site_origin()`, `author_name_to_slug()`/`slug_to_author_name()`, `build_breadcrumbs()`, `breadcrumbs_to_schema()`. |
+| `plainly/routes/system.py` | robots.txt, sitemap.xml, manifest.json. |
+| `plainly/routes/pages.py` | Server-rendered page routes (SSR shell for each page type). |
+| `plainly/routes/books.py` | Book detail, chapter detail, and book-related JSON API endpoints. |
+| `plainly/routes/taxonomy.py` | Category and related-books JSON API endpoints. |
+| `plainly/routes/discover.py` | Discover-page carousel JSON API endpoint. |
+| `plainly/routes/authors.py` | Author detail page + JSON API endpoints. |
+| `plainly/routes/blog.py` | Blog index/post pages + JSON API. Registered only when `FEATURE_BLOG` is on. |
+| `shared/auth/pchauth/` | Trusted-header identity package (`core.py`, `config.py`, `trusted_header.py`, `flask_adapter.py`) — see the User Authentication section below. Replaced `shared/auth/`/`auth_utils.py` (deleted 2026-09-06). |
+| `shared/auth/whoami.py` | `GET /api/auth/check` — the frontend's only sign-in-state probe. Replaced `auth_routes.py`'s register/login/logout/me endpoints, all of which are gone. |
+| `plainly/app.py` | **Dev entry point.** Adds `POST /api/tts/generate` that calls `GeminiTTSHandler` to generate audio on demand (and `POST /api/tts/stop` to abort + clean up chunks), plus an admin chapter-edit route. Sets `IS_DEVELOPMENT = True`. Run with `python plainly/app.py` — binds `:5001`. |
+| `plainly/app_prod.py` | **Prod entry point.** Replaces `POST /api/tts/generate` with a pre-generated-only lookup (no live generation). Adds `/health`. Served by Gunicorn behind Nginx in production. |
+| `plainly/config.py` | Single source of truth for paths, models, rate limits, summary configs, feature flags. |
+| `plainly/models.py` | Content database layer (`data/database.db`) — books, summaries, chapters, sections, authors, categories, blog posts, audio files, similar books. Tables auto-created on first connection via a versioned `_COLUMN_MIGRATIONS` list (replaced 18 copy-pasted `try/except OperationalError` blocks). |
+| `shared/auth/user_models.py` | User database layer (`data/summra.db`, per `config.USER_DATABASE_PATH`) — users (keyed by email, no credential), reading_progress, chapter_completion. No password hashing, no sessions — identity is upserted by email from the trusted header on each request. |
+| `shared/progress/routes.py` | Reading-progress blueprint (track / fetch progress, mark chapter complete), gated by pchauth's `@login_required`. Conditionally registered behind `FEATURE_AUTH`. |
+| `plainly/gemini_tts_handler.py` | Gemini 2.5 Flash TTS client + per-key rate limiter (`GEMINI_TTS_MAX_REQUESTS_PER_MINUTE`, `…_TOKENS_PER_MINUTE`). Owns voice selection, chunking, retries. |
+| `plainly/tts_utils.py` | Provider-agnostic helpers: `clean_text_for_speech`, chunk-by-words, WAV stitching, on-disk cache lookup. Cache lookup probes Opus → Gemini WAV → legacy `*_vits.wav` → legacy `*_complete.wav` so older audio still resolves. |
 
-**Feature flags** (`backend/config.py`):
+**Feature flags** (`plainly/config.py`):
 - `FEATURE_AUTH` (default `True` as of 2026-09-06) — gates whether pchauth's hook + the progress/whoami blueprints are registered at all. Whether identity actually resolves to anyone is a *separate* per-host setting, `SUMMRA_AUTH_MODE` (`off`/`optional`/`required`).
 - `FEATURE_BLOG` (default `False`) — gates `/blog`, `/blog/<slug>`, `/api/blog*`, and the blog entries in `sitemap.xml`.
 
 Both flags are injected into the SPA shell as `window.FEATURE_AUTH` / `window.FEATURE_BLOG` so the frontend can server-strip the gated buttons.
 
 **Two databases:**
-- `data/database.db` — content (books, summaries, chapters, etc.). Regeneratable from `data/books/` via `scripts/content/generate_summaries.py`.
+- `data/database.db` — content (books, summaries, chapters, etc.). Regeneratable from `data/books/` via `plainly/scripts/content/generate_summaries.py`.
 - `summra.db` (project root) — users, reading progress. Small, **irreplaceable**, separate so a content rebuild can't accidentally drop user data.
 
-**Scripts inventory** lives in `scripts/README.md` — every subfolder (`content/`, `audio/`, `images/`, `categorization/`, `migrations/`, `backfills/`, `audits/`, `book_fixes/`, `blog/`, `archive/`, `lib/`) is a real Python package, imported as `from scripts.content.generate_summaries import …` (the old bare `from generate_summaries import …` sys.path-hack style no longer works anywhere).
+**Scripts inventory** lives in `plainly/scripts/README.md` — every subfolder (`content/`, `audio/`, `images/`, `categorization/`, `migrations/`, `backfills/`, `audits/`, `book_fixes/`, `blog/`, `archive/`, `lib/`) is a real Python package, imported as `from scripts.content.generate_summaries import …` (the old bare `from generate_summaries import …` sys.path-hack style no longer works anywhere).
 
-**`scripts/lib/`** — shared library extracted out of the individual scripts (Phase 5), used across `scripts/`:
+**`plainly/scripts/lib/`** — shared library extracted out of the individual scripts (Phase 5), used across `scripts/`:
 | File | Role |
 |------|------|
-| `scripts/lib/db.py` | `get_connection(db_path=None)` — one sqlite3 connection helper backed by `config.DATABASE_PATH`, replacing 13 individually hardcoded DB paths. Callers pass their own module-level `DB_PATH` explicitly so test suites that `patch.object(module, "DB_PATH", tmp_path)` still work. |
-| `scripts/lib/llm.py` | `get_gemini_client(api_key=None)` — one Gemini client factory backed by `config.GEMINI_API_KEY`, replacing 6 duplicated `genai.Client(...)` construction sites. Raises `ValueError` fast on a missing key. |
-| `scripts/lib/text.py` | `normalize_chapter_title()`, `fix_roman_numerals_in_text()`, `normalize_book_title()` — pure text-normalization functions extracted from `generate_summaries.py` (one was a byte-identical duplicate in `migrate_book_titles.py`). |
+| `plainly/scripts/lib/db.py` | `get_connection(db_path=None)` — one sqlite3 connection helper backed by `config.DATABASE_PATH`, replacing 13 individually hardcoded DB paths. Callers pass their own module-level `DB_PATH` explicitly so test suites that `patch.object(module, "DB_PATH", tmp_path)` still work. |
+| `plainly/scripts/lib/llm.py` | `get_gemini_client(api_key=None)` — one Gemini client factory backed by `config.GEMINI_API_KEY`, replacing 6 duplicated `genai.Client(...)` construction sites. Raises `ValueError` fast on a missing key. |
+| `plainly/scripts/lib/text.py` | `normalize_chapter_title()`, `fix_roman_numerals_in_text()`, `normalize_book_title()` — pure text-normalization functions extracted from `generate_summaries.py` (one was a byte-identical duplicate in `migrate_book_titles.py`). |
 
-`generate_summaries.py` itself also had its self-contained pieces (`SummaryConstants`/`APIConstants`/etc., `RateLimiter`, batch-job-state persistence) extracted to `scripts/content/constants.py`, `rate_limiter.py`, `batch_state.py` respectively — re-exported under their original names so existing `from scripts.content.generate_summaries import X` call sites are unaffected. The `SummaryGenerator` class itself (~5,700 lines) has **not** been split further; that's the one large item left from the modularization effort (see `WORK_LOG.md`).
+`generate_summaries.py` itself also had its self-contained pieces (`SummaryConstants`/`APIConstants`/etc., `RateLimiter`, batch-job-state persistence) extracted to `plainly/scripts/content/constants.py`, `rate_limiter.py`, `batch_state.py` respectively — re-exported under their original names so existing `from scripts.content.generate_summaries import X` call sites are unaffected. The `SummaryGenerator` class itself (~5,700 lines) has **not** been split further; that's the one large item left from the modularization effort (see `WORK_LOG.md`).
 
 ---
 
@@ -97,22 +123,22 @@ only, every method still reads/writes `this.*` exactly as if it were still inlin
 
 | File | Methods |
 |------|---------|
-| `frontend/static/js/app.js` | The `SummraApp` class itself (routing, book/category/discover/blog page controllers, event setup) + the mixin imports/`Object.assign` calls. |
-| `frontend/static/js/pagination.js` | The page-based chapter-reading engine (21 methods) — largest subsystem. |
-| `frontend/static/js/settings.js` | Font/size/theme picker, sticky header, reading-progress (11 methods). |
-| `frontend/static/js/breadcrumbs.js` | Breadcrumb build/render/show/hide (4 methods). |
-| `frontend/static/js/audio.js` | Persistent audio player + TTS generation flow (14 methods). |
-| `frontend/static/js/reader.js` | Chapter-reading page controller — markdown/text rendering, the side-by-side view, view-mode switching, `showChapterDetail` (9 methods). |
-| `frontend/static/js/route_utils.js` | `summraBasePath()`/`withBasePath()`/route-parsing helpers, loaded early enough for `components/BlogIndex.js`/`BlogPost.js` to use them. |
-| `frontend/static/js/view_mode.js` | Pure `resolveInitialChapterViewMode()` helper (unit-tested), the original model this mixin pattern followed. |
-| `frontend/static/js/components/BlogIndex.js`, `BlogPost.js` | Standalone (non-mixin) blog components, `new BlogIndex(app)`/`new BlogPost(app)`. |
+| `plainly/frontend/static/js/app.js` | The `SummraApp` class itself (routing, book/category/discover/blog page controllers, event setup) + the mixin imports/`Object.assign` calls. |
+| `plainly/frontend/static/js/pagination.js` | The page-based chapter-reading engine (21 methods) — largest subsystem. |
+| `plainly/frontend/static/js/settings.js` | Font/size/theme picker, sticky header, reading-progress (11 methods). |
+| `plainly/frontend/static/js/breadcrumbs.js` | Breadcrumb build/render/show/hide (4 methods). |
+| `plainly/frontend/static/js/audio.js` | Persistent audio player + TTS generation flow (14 methods). |
+| `plainly/frontend/static/js/reader.js` | Chapter-reading page controller — markdown/text rendering, the side-by-side view, view-mode switching, `showChapterDetail` (9 methods). |
+| `plainly/frontend/static/js/route_utils.js` | `summraBasePath()`/`withBasePath()`/route-parsing helpers, loaded early enough for `components/BlogIndex.js`/`BlogPost.js` to use them. |
+| `plainly/frontend/static/js/view_mode.js` | Pure `resolveInitialChapterViewMode()` helper (unit-tested), the original model this mixin pattern followed. |
+| `plainly/frontend/static/js/components/BlogIndex.js`, `BlogPost.js` | Standalone (non-mixin) blog components, `new BlogIndex(app)`/`new BlogPost(app)`. |
 
 Seven page-controller methods (`showCategoryDetail`, `showAllCategories`, `showAllBooksGrid`,
 `showBlogIndex`, `showBlogPost`, `showAuthorDetail`, `showDiscoverPage`) share a
 `finishPageTransition(breadcrumbKey, scrollPageKey, restoreScroll, title)` helper (in `app.js`) for
 their common tail (update breadcrumbs → restore scroll or jump to top → set page title).
 
-**CSS tokens** (`frontend/static/css/style.css`, `:root`): ~30 custom properties for colors reused
+**CSS tokens** (`plainly/frontend/static/css/style.css`, `:root`): ~30 custom properties for colors reused
 across multiple selectors — added incrementally by checking every call site's selector before
 tokenizing two colors together, specifically to avoid merging colors that coincidentally share a
 hex value but mean different things (e.g. the dark chapter-reading theme's text color vs. the
@@ -128,7 +154,7 @@ names (`--primary-color`, `--secondary-color`, `--background-color`, …) are re
 tokens so un-migrated selectors pick up the new palette; each legacy alias is deleted once its last
 call site is migrated. The reader's dark/sepia themes keep their own tokens.
 
-**Study cues** (`backend/study_cues.py`, redesign phase 2): `level` (Easy / Moderate / Challenging
+**Study cues** (`plainly/study_cues.py`, redesign phase 2): `level` (Easy / Moderate / Challenging
 from the upper bound of `books.cefr_level`, else null) and `reading_minutes` (ceil(words / 230)) are
 added to book dicts by `add_book_cues()` in `Database.get_all_books`, `get_books_by_category` and
 `get_book`/`get_book_by_slug`, so `/api/books`, `/api/books/<id>` and the category/discover routes all
@@ -142,7 +168,7 @@ book listing (Books grid, category/discover carousels via `createCarousel`, auth
 also like"). It renders an `<a>` to `/books/<slug>` and uses `bookCoverHtml(book)` — a 2:3 cover
 box with the title in serif behind a lazy `<picture>` — which Library cards in `reader.js` reuse.
 Cover URL normalisation lives in `coverSources(url)`, shared with `getImageHtml`. Each card reads
-`level` and `reading_time` from the API (`format_reading_time` in `backend/study_cues.py`).
+`level` and `reading_time` from the API (`format_reading_time` in `plainly/study_cues.py`).
 
 **Routing** (redesign phase 6): every in-app link is a real `<a href>` handled only by the delegated
 click handler in `setupRouting()` (which skips modified/middle clicks and clicks another handler
@@ -155,11 +181,11 @@ Hero examples come from `pages.HERO_EXAMPLES` (slug, chapter): the first non-tit
 which takes the original's first sentence (`study_cues.split_sentences`) and every plain sentence
 that rewrites it — a rewrite may split one long sentence into several.
 
-**Book metadata** (2026-10-14): `scripts/content/build_book_metadata.py` turns the audit working files
-(`data/metadata_audit/`, gitignored) into the committed, sourced record `scripts/content/book_metadata.json`
+**Book metadata** (2026-10-14): `plainly/scripts/content/build_book_metadata.py` turns the audit working files
+(`data/metadata_audit/`, gitignored) into the committed, sourced record `plainly/scripts/content/book_metadata.json`
 (categories with BISAC codes, per-book categories / audience / LoC subjects / Common Core exemplars / ATOS
 reading level + AR interest level with source URLs, and `category_redirects` for retired categories).
-`scripts/content/apply_book_metadata.py [--db PATH] [--dry-run]` writes it idempotently: replaces
+`plainly/scripts/content/apply_book_metadata.py [--db PATH] [--dry-run]` writes it idempotently: replaces
 categories and `book_categories`, sets `books.audience`, `atos_level`, `interest_level`, `school_lists`
 (JSON), and records `category_redirects (old_id, new_id NULL = all categories)` so `/categories/<old id>`
 301-redirects. `study_cues.add_book_cues` derives `grade` / `grade_label` ("Grade 7", "College" ≥13) /
@@ -338,7 +364,7 @@ CREATE TABLE books (
 - `cover_source`: Tracks origin of cover ('custom' for uploaded, 'gutenberg' for auto-fetched)
 - **Naming convention**: Book covers use `{book_id}.{ext}` format (e.g., `1.png`, `2.jpg`)
 - **Large covers**: Originals >1.5MB stored in `data/cover_originals/` (gitignored), web versions resized to ~1MB
-- **Chapter illustrations**: Stored in hierarchical directory structure `frontend/static/illustrations/{book_id}/{chapter_num}.{ext}` (added 2025-12-01)
+- **Chapter illustrations**: Stored in hierarchical directory structure `plainly/frontend/static/illustrations/{book_id}/{chapter_num}.{ext}` (added 2025-12-01)
 
 **Indexes:**
 - Primary key on `id` (auto-indexed)
@@ -595,7 +621,7 @@ CREATE TABLE book_categories (
 
 #### Models Layer (models.py)
 
-The `Database` class in `backend/models.py` provides all CRUD operations:
+The `Database` class in `plainly/models.py` provides all CRUD operations:
 
 **Key Methods:**
 
@@ -637,17 +663,17 @@ def get_book_by_filename(self, filename) -> dict
 
 ## User Authentication & Progress Tracking (Added 2025-12-20; **auth rebuilt 2026-09-06 — see note**)
 
-> **Superseded 2026-09-06:** the username/password registration+login system originally documented in this section — `backend/auth_routes.py`, `backend/auth_utils.py`, SHA-256+salt password hashing, Flask server-side sessions — was deleted outright, not deprecated. Identity is now supplied entirely by a shared Apache reverse-proxy gateway via a trusted `X-Remote-Email` header (the `pchauth` package, `backend/pchauth/`). This app has never run its own OAuth flow and has no login form of any kind. Full history: `WORK_LOG.md` (2026-09-05/06 entries); design spec in the `pchauth` repo's `docs/superpowers/specs/2026-09-05-consolidated-login-design.md`.
+> **Superseded 2026-09-06:** the username/password registration+login system originally documented in this section — `shared/auth/`, `plainly/auth_utils.py`, SHA-256+salt password hashing, Flask server-side sessions — was deleted outright, not deprecated. Identity is now supplied entirely by a shared Apache reverse-proxy gateway via a trusted `X-Remote-Email` header (the `pchauth` package, `shared/auth/pchauth/`). This app has never run its own OAuth flow and has no login form of any kind. Full history: `WORK_LOG.md` (2026-09-05/06 entries); design spec in the `pchauth` repo's `docs/superpowers/specs/2026-09-05-consolidated-login-design.md`.
 
 ### Overview
 
 Reading-progress tracking stored in a separate database (`summra.db`), keyed by an identity this app never authenticates itself — it trusts whatever `X-Remote-Email` the Apache gateway in front of it supplies (or none, for an anonymous visitor). The app assumes an internet connection is always available; there is no offline-mode fallback for progress or identity.
 
-> **Note:** this section (Progress Tracking Flow / Frontend Integration below) predates the 2026-09-06 auth rebuild and the 2026-09-07 offline-support removal — some method names and localStorage keys described here no longer match `frontend/static/js/auth.js`. Needs a refresh; out of scope for the offline-removal pass that touched it.
+> **Note:** this section (Progress Tracking Flow / Frontend Integration below) predates the 2026-09-06 auth rebuild and the 2026-09-07 offline-support removal — some method names and localStorage keys described here no longer match `plainly/frontend/static/js/auth.js`. Needs a refresh; out of scope for the offline-removal pass that touched it.
 >
-> **Further update, 2026-09-07:** `frontend/static/js/auth.js` also dropped its IndexedDB-backed local mutation queue (`device_profile`, `local_book_state`, `local_mode_state`, `pending_mutation`, `cached_library` object stores) that let a device write and restore its own progress ahead of / without a server round-trip. Progress is now single-source-of-truth in `summra.db` (`mode_reading_state`/`book_reading_state`/`progress_mutation`, described below) — `queueReaderMutation` posts straight to `/api/progress/v2/mutations` and `getReaderState`/`getLibrary` always read from `/api/progress/v2/books/<id>` and `/api/library`, so progress still follows the reader across devices via the server DB, it's just no longer cached or trusted locally per device. `frontend/static/js/auth.js` still uses IndexedDB for one unrelated thing: `cached_manifest`/`cached_segment` object stores, a pure content cache (already-fetched chapter manifests/segments) so a mid-session network hiccup doesn't lose a page already loaded — not progress persistence.
+> **Further update, 2026-09-07:** `plainly/frontend/static/js/auth.js` also dropped its IndexedDB-backed local mutation queue (`device_profile`, `local_book_state`, `local_mode_state`, `pending_mutation`, `cached_library` object stores) that let a device write and restore its own progress ahead of / without a server round-trip. Progress is now single-source-of-truth in `summra.db` (`mode_reading_state`/`book_reading_state`/`progress_mutation`, described below) — `queueReaderMutation` posts straight to `/api/progress/v2/mutations` and `getReaderState`/`getLibrary` always read from `/api/progress/v2/books/<id>` and `/api/library`, so progress still follows the reader across devices via the server DB, it's just no longer cached or trusted locally per device. `plainly/frontend/static/js/auth.js` still uses IndexedDB for one unrelated thing: `cached_manifest`/`cached_segment` object stores, a pure content cache (already-fetched chapter manifests/segments) so a mid-session network hiccup doesn't lose a page already loaded — not progress persistence.
 
-### Identity: pchauth (`backend/pchauth/`)
+### Identity: pchauth (`shared/auth/pchauth/`)
 
 **Purpose:** framework-agnostic trusted-header identity resolution, shared with OpenReader (each app has its own copy of the same small package — no cross-repo dependency).
 
@@ -788,7 +814,7 @@ CREATE TABLE chapter_completion (
 
 ### UserDatabase Class
 
-**Location:** `backend/user_models.py`
+**Location:** `shared/auth/user_models.py`
 
 **Purpose:** Abstraction layer for all user and progress operations.
 
@@ -867,7 +893,7 @@ if (isLastPage) {
 ### Frontend Integration
 
 #### auth.js Module
-**Location:** `frontend/static/js/auth.js`
+**Location:** `plainly/frontend/static/js/auth.js`
 
 **Initialization:**
 ```javascript
@@ -886,7 +912,7 @@ No `login()`/`register()`/`logout()` — there's nothing for this module to call
 
 #### UI Integration Points
 
-**Header Account Button:** (`index.html`, `frontend/static/js/auth.js`'s `updateAuthUI()`)
+**Header Account Button:** (`index.html`, `plainly/frontend/static/js/auth.js`'s `updateAuthUI()`)
 ```html
 <button class="header-nav-btn user-account-btn hidden" id="user-account-btn">
     <span class="user-icon">👤</span>
@@ -946,7 +972,7 @@ The SEO architecture provides search engine optimization through breadcrumb navi
 
 ### Breadcrumb Navigation System
 
-**Location:** `backend/app_base.py:40-93`
+**Location:** `plainly/app_base.py:40-93`
 
 **Purpose:** Replace traditional back buttons with context-aware breadcrumb trails that show the user's current location in the site hierarchy.
 
@@ -997,11 +1023,11 @@ When selected from All Books page:
 Home → All Books → Pride and Prejudice
 ```
 
-This is tracked via `app.originCategory` in the frontend (`frontend/static/js/app.js:29`).
+This is tracked via `app.originCategory` in the frontend (`plainly/frontend/static/js/app.js:29`).
 
 #### breadcrumbs_to_schema() Function
 
-**Location:** `backend/app_base.py:95-106`
+**Location:** `plainly/app_base.py:95-106`
 
 Converts breadcrumb data to Schema.org BreadcrumbList JSON-LD format for search engines.
 
@@ -1036,7 +1062,7 @@ Converts breadcrumb data to Schema.org BreadcrumbList JSON-LD format for search 
 
 ### Frontend Breadcrumb Rendering
 
-**Location:** `frontend/static/js/app.js:1625-1731` (`updateBreadcrumbs()` method)
+**Location:** `plainly/frontend/static/js/app.js:1625-1731` (`updateBreadcrumbs()` method)
 
 **HTML Structure:**
 ```html
@@ -1057,7 +1083,7 @@ Converts breadcrumb data to Schema.org BreadcrumbList JSON-LD format for search 
 </nav>
 ```
 
-**Styling:** `frontend/static/css/style.css:111-159`
+**Styling:** `plainly/frontend/static/css/style.css:111-159`
 
 **Features:**
 - First breadcrumb automatically gets back arrow (`← `)
@@ -1068,7 +1094,7 @@ Converts breadcrumb data to Schema.org BreadcrumbList JSON-LD format for search 
 
 ### Page Title Updates
 
-**Location:** `frontend/static/js/app.js:159-161` (`updatePageTitle()` method)
+**Location:** `plainly/frontend/static/js/app.js:159-161` (`updatePageTitle()` method)
 
 Each route dynamically updates `document.title` for:
 - Browser tabs
@@ -1086,7 +1112,7 @@ Chapter: "Full Text of Chapter 1 - Pride and Prejudice | Summra"
 
 ### Meta Tag Improvements
 
-**Location:** `backend/app_base.py`
+**Location:** `plainly/app_base.py`
 
 **Updated Routes:**
 - `/` (line 164): `meta_title='Free Classic Book Summaries, Chapter Summaries & Full Text | Summra'`
@@ -1101,7 +1127,7 @@ Chapter: "Full Text of Chapter 1 - Pride and Prejudice | Summra"
 
 ### First-Paint Server Rendering (Added 2026-10-12)
 
-**Location:** `backend/routes/pages.py`, `frontend/templates/index.html`, `frontend/static/js/app.js`
+**Location:** `plainly/routes/pages.py`, `plainly/frontend/templates/index.html`, `plainly/frontend/static/js/app.js`
 
 Two above-the-fold areas are server-rendered so they paint with the HTML instead of after `app.min.js` → `/api/books` (the full ~57 KB catalog) → per-book fetches → covers:
 
@@ -1112,7 +1138,7 @@ Shared helper `_cover_base()` produces the extension-less static path both rende
 
 ### Kindle E-ink Mode (Added 2026-10-19)
 
-**Location:** `backend/kindle.py` (UA detection), `backend/routes/kindle.py` (blueprint), `frontend/templates/kindle/*.html`, `frontend/static/css/kindle.css`, `frontend/static/js/kindle.js`. Tests: `tests/test_kindle_mode.py`, `tests/e2e/kindle_mode.mjs`.
+**Location:** `plainly/kindle.py` (UA detection), `plainly/routes/kindle.py` (blueprint), `plainly/frontend/templates/kindle/*.html`, `plainly/frontend/static/css/kindle.css`, `plainly/frontend/static/js/kindle.js`. Tests: `tests/test_kindle_mode.py`, `tests/e2e/kindle_mode.mjs`.
 
 - **Interception.** The `kindle` blueprint's `before_app_request` hook checks `request.endpoint` against the SPA page endpoints that have a Kindle version (`pages.index/discover/library/all_books` → library, `pages.book_detail` → book, `pages.book_reader/book_chapter_detail` → reader). If `kindle_mode()` is on it returns the Kindle page and the SPA view never runs. `kindle_mode()`: `?kindle=0|1`, then the `kindle` cookie, then `is_kindle_user_agent()`. `after_app_request` adds `Vary: User-Agent, Cookie` on those endpoints; Kindle pages are `Cache-Control: private, no-cache`.
 - **Why a separate front end.** The older Kindle browser is WebKit 531 (Safari 4): it can't run `app.js` (ES modules, ES2015+). E-ink also ghosts on scrolling and animation. So pages are server-rendered and usable without JS, and `kindle.js` is ES5 only (no `let/const`, arrows, classes, template literals, `classList`, `bind`; `test_kindle_script_is_es5` enforces the syntax part).
@@ -1201,7 +1227,7 @@ CREATE TABLE authors (
 
 **Endpoint:** `GET /api/books/<book_id>/related`
 
-**Location:** `backend/app_base.py:912-935`
+**Location:** `plainly/app_base.py:912-935`
 
 **Response Format:**
 ```json
@@ -1224,7 +1250,7 @@ CREATE TABLE authors (
 
 **Algorithm:**
 
-**Location:** `backend/models.py:933-1019` (`get_related_books()` method)
+**Location:** `plainly/models.py:933-1019` (`get_related_books()` method)
 
 ```python
 def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
@@ -1267,7 +1293,7 @@ def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
 
 ### Frontend Related Books Carousel
 
-**Location:** `frontend/static/js/app.js:918-1023` (`loadRelatedBooks()` method)
+**Location:** `plainly/frontend/static/js/app.js:918-1023` (`loadRelatedBooks()` method)
 
 **UI Components:**
 
@@ -1276,7 +1302,7 @@ def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
 3. **Navigation Arrows**: Left/right scroll buttons
 4. **Responsive**: Adapts to mobile/tablet/desktop
 
-**Styling:** `frontend/static/css/style.css:648-774`
+**Styling:** `plainly/frontend/static/css/style.css:648-774`
 
 **Card Dimensions:**
 - Desktop: 200px wide, 300px cover height
@@ -1289,7 +1315,7 @@ def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
 - Touch-friendly horizontal scrolling
 - No visible scrollbar
 
-**Section Header:** "You May Also Like" (`frontend/templates/index.html:122`)
+**Section Header:** "You May Also Like" (`plainly/frontend/templates/index.html:122`)
 
 **Visibility:**
 - Hidden if no related books found
@@ -1298,7 +1324,7 @@ def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
 
 ### Database Methods
 
-**Location:** `backend/models.py:933-1305`
+**Location:** `plainly/models.py:933-1305`
 
 **Author Management:**
 ```python
@@ -1330,7 +1356,7 @@ The chapter detection system is one of the most complex parts of Summra. It hand
 
 ### Overview
 
-**Location:** `scripts/content/generate_summaries.py:406-874` (`detect_chapters` method)
+**Location:** `plainly/scripts/content/generate_summaries.py:406-874` (`detect_chapters` method)
 
 **Input:** Raw book text (after Gutenberg header/footer removal)
 
@@ -1416,7 +1442,7 @@ These are merged into single Chapter 1.
 
 ### Roman Numeral Conversion
 
-**Location:** `scripts/content/generate_summaries.py:261-283`
+**Location:** `plainly/scripts/content/generate_summaries.py:261-283`
 
 ```python
 def roman_to_int(self, s: str) -> int:
@@ -1492,7 +1518,7 @@ Special States:
 
 Instead of arbitrary distance-based scanning (e.g., "look back 10 lines"), the parser uses explicit boolean flags to track state:
 
-**Location:** `scripts/content/generate_summaries.py:817, 970, 1247-1249, 1367`
+**Location:** `plainly/scripts/content/generate_summaries.py:817, 970, 1247-1249, 1367`
 
 ```python
 # Initialize state flag
@@ -1529,7 +1555,7 @@ The Three Metamorphoses
 
 **Solution:** Look ahead to next line after detecting chapter marker
 
-**Location:** `scripts/content/generate_summaries.py:565-598`
+**Location:** `plainly/scripts/content/generate_summaries.py:565-598`
 
 ```python
 # Check if next line is a continuation of the title
@@ -1566,7 +1592,7 @@ if i + 1 < len(lines):
 
 **Solution:** Regex substitution after title concatenation
 
-**Location:** `scripts/content/generate_summaries.py:599-604`
+**Location:** `plainly/scripts/content/generate_summaries.py:599-604`
 
 ```python
 # Remove part markers from titles
@@ -1615,7 +1641,7 @@ The introduction to the work, or bill of fare to the feast.
 
 **Solution 1: BOOK Section Title Detection**
 
-**Location:** `scripts/content/generate_summaries.py:1185-1212`
+**Location:** `plainly/scripts/content/generate_summaries.py:1185-1212`
 
 ```python
 # If not on same line, check next few lines for section title
@@ -1663,7 +1689,7 @@ if not section_title and i + 1 < len(lines):
 
 **Solution 2: Chapter Title Detection**
 
-**Location:** `scripts/content/generate_summaries.py:1248-1274`
+**Location:** `plainly/scripts/content/generate_summaries.py:1248-1274`
 
 ```python
 # If title is empty, check next few lines (skip empty lines)
@@ -1735,7 +1761,7 @@ CHAPTER I.—Part III. (1500 words)
 
 **Solution:** Merge all parts with same chapter number
 
-**Location:** `scripts/content/generate_summaries.py:714-753`
+**Location:** `plainly/scripts/content/generate_summaries.py:714-753`
 
 ```python
 # After collecting all chapters, merge duplicates
@@ -1778,7 +1804,7 @@ III. Despisers of the Body
 
 **Solution 1:** Extract expected TOC entries
 
-**Location:** `scripts/content/generate_summaries.py:370-404`
+**Location:** `plainly/scripts/content/generate_summaries.py:370-404`
 
 ```python
 def extract_toc(self, text: str) -> Dict[str, str]:
@@ -1834,7 +1860,7 @@ This was incorrectly detected as a TOC entry with Roman numeral "I" and title "h
 
 ### Preface Extraction Logic (Chapter 0)
 
-**Location:** `scripts/content/generate_summaries.py:2301-2398, 2462-3143`
+**Location:** `plainly/scripts/content/generate_summaries.py:2301-2398, 2462-3143`
 
 **Objective:** Collect all introductory material before the first numbered chapter into Chapter 0 (Preface).
 
@@ -1893,7 +1919,7 @@ is_preface_header = re.match(r'^\s*(AUTHOR[\'\']S\s+PREFACE|TRANSLATOR[\'\']S\s+
 
 Titles extracted from title-only TOC are deduplicated while preserving order:
 
-**Location:** `scripts/content/generate_summaries.py:518`
+**Location:** `plainly/scripts/content/generate_summaries.py:518`
 
 ```python
 # Deduplicate titles while preserving order (dict keys maintain insertion order in Python 3.7+)
@@ -1924,7 +1950,7 @@ if toc:
 
 **Solution 3:** Filter out short chapter instances (likely TOC)
 
-**Location:** `scripts/content/generate_summaries.py:754-790`
+**Location:** `plainly/scripts/content/generate_summaries.py:754-790`
 
 ```python
 # Filter out TOC entries by length
@@ -1985,7 +2011,7 @@ Some titles appear only in TOC and not in actual content. Using TOC entries as c
 
 **Solution:** Paragraph content detection heuristic
 
-**Location:** `scripts/content/generate_summaries.py:2642-2684`
+**Location:** `plainly/scripts/content/generate_summaries.py:2642-2684`
 
 ```python
 # Filter matches to find actual chapter starts (not TOC entries)
@@ -2093,7 +2119,7 @@ for i, line in enumerate(lines):
 
 **Solution:** Require all-caps first word in title for Roman-numeral-only pattern
 
-**Location:** `scripts/content/generate_summaries.py:533-548`
+**Location:** `plainly/scripts/content/generate_summaries.py:533-548`
 
 ```python
 # For pattern: r'^([IVXLCDM]+)\.\s+(.+)$'
@@ -2134,7 +2160,7 @@ These BOOK markers are part of Ishmael's classification system discussion, NOT s
 
 **Solution:** Sophisticated embedded marker detection
 
-**Location:** `scripts/content/generate_summaries.py:617-673`
+**Location:** `plainly/scripts/content/generate_summaries.py:617-673`
 
 ```python
 # Check if this BOOK marker is embedded in a paragraph
@@ -2230,7 +2256,7 @@ BOOK XXIV
 
 **Solution:** Detect when BOOK markers should be converted to chapters
 
-**Location:** `scripts/content/generate_summaries.py:800-868`
+**Location:** `plainly/scripts/content/generate_summaries.py:800-868`
 
 ```python
 # Condition: Many BOOK markers but few nested chapters
@@ -2276,7 +2302,7 @@ if should_convert_books:
 
 **Solution:** Normalize to single newlines within paragraphs, preserve paragraph breaks
 
-**Location:** `scripts/content/generate_summaries.py:333-368`
+**Location:** `plainly/scripts/content/generate_summaries.py:333-368`
 
 ```python
 def normalize_chapter_text(self, text: str) -> str:
@@ -2324,7 +2350,7 @@ def normalize_chapter_text(self, text: str) -> str:
 
 **Solution:** Normalize all chapter titles to consistent title case with proper punctuation handling
 
-**Location:** `scripts/content/generate_summaries.py:556-640`
+**Location:** `plainly/scripts/content/generate_summaries.py:556-640`
 
 **Implementation:**
 
@@ -2433,9 +2459,9 @@ def normalize_chapter_title(self, title: str) -> str:
    - Example: `"Of the Division of Labour"` (first word capitalized)
 
 5. **Usage:**
-   - Called when saving chapters: `scripts/content/generate_summaries.py:1638`
-   - Backfill script available: `scripts/backfills/backfill_chapter_title_case.py`
-   - Dry-run mode: `python3 scripts/backfills/backfill_chapter_title_case.py --dry-run`
+   - Called when saving chapters: `plainly/scripts/content/generate_summaries.py:1638`
+   - Backfill script available: `plainly/scripts/backfills/backfill_chapter_title_case.py`
+   - Dry-run mode: `python3 plainly/scripts/backfills/backfill_chapter_title_case.py --dry-run`
 
 **Results:**
 - Fixed 1,013 out of 2,965 chapter titles
@@ -2447,7 +2473,7 @@ def normalize_chapter_title(self, title: str) -> str:
 
 **Solution:** Calculate percentage of original text captured
 
-**Location:** `scripts/content/generate_summaries.py:1624-1639`
+**Location:** `plainly/scripts/content/generate_summaries.py:1624-1639`
 
 ```python
 # Calculate total parsed content
@@ -2472,7 +2498,7 @@ else:
 
 ## TTS Engine Implementation
 
-> **Status note (2026-05):** The original local Coqui/VITS handler was removed. Both real-time TTS (dev) and offline batch TTS (prod) now use the **Google Gemini 2.5 Flash TTS API**. The sections below preserve the historical description of the VITS pipeline because (a) older cached audio files on disk still follow the VITS filename convention (`{audio_id}_vits.wav`) and `backend/tts_utils.py` still looks them up as a fallback, and (b) the chunking, caching, and rate-limiting logic carried over to the Gemini implementation. Treat the VITS narrative as historical context, not current implementation. See `### Gemini TTS (Offline Generation)` further down for the live system.
+> **Status note (2026-05):** The original local Coqui/VITS handler was removed. Both real-time TTS (dev) and offline batch TTS (prod) now use the **Google Gemini 2.5 Flash TTS API**. The sections below preserve the historical description of the VITS pipeline because (a) older cached audio files on disk still follow the VITS filename convention (`{audio_id}_vits.wav`) and `plainly/tts_utils.py` still looks them up as a fallback, and (b) the chunking, caching, and rate-limiting logic carried over to the Gemini implementation. Treat the VITS narrative as historical context, not current implementation. See `### Gemini TTS (Offline Generation)` further down for the live system.
 
 ### Overview (historical — VITS)
 
@@ -2482,10 +2508,10 @@ else:
 
 **Model:** `tts_models/en/vctk/vits` - Multi-speaker English model
 
-**Location (historical):** `backend/tts_handler.py` — **removed**. The live entry points are now:
-- `backend/app.py` (dev) → imports `GeminiTTSHandler` from `backend/gemini_tts_handler.py`
-- `backend/app_prod.py` (prod) → does **not** generate TTS; only serves files pre-generated by `scripts/audio/*`
-- `backend/tts_utils.py` → provider-agnostic chunking, WAV stitching, and cache lookup (still active; falls back to legacy `*_vits.wav` files on disk if present)
+**Location (historical):** `plainly/tts_handler.py` — **removed**. The live entry points are now:
+- `plainly/app.py` (dev) → imports `GeminiTTSHandler` from `plainly/gemini_tts_handler.py`
+- `plainly/app_prod.py` (prod) → does **not** generate TTS; only serves files pre-generated by `plainly/scripts/audio/*`
+- `plainly/tts_utils.py` → provider-agnostic chunking, WAV stitching, and cache lookup (still active; falls back to legacy `*_vits.wav` files on disk if present)
 
 ### Architecture
 
@@ -2513,7 +2539,7 @@ Return file path
 
 ### TTS Handler Class
 
-**Location:** `backend/tts_handler.py`
+**Location:** `plainly/tts_handler.py`
 
 ```python
 class TTSHandler:
@@ -2600,7 +2626,7 @@ filename = f"tts_{text_hash}.wav"
 
 **Cache Storage:**
 ```
-frontend/static/audio/
+plainly/frontend/static/audio/
 ├── tts_a3f5b8c9d2e1f4a6b7c8d9e0f1a2b3c4.wav
 ├── tts_b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4.wav
 └── ...
@@ -2610,7 +2636,7 @@ frontend/static/audio/
 
 **Manual Cleanup:**
 ```bash
-rm frontend/static/audio/*.wav
+rm plainly/frontend/static/audio/*.wav
 ```
 
 ### Audio Generation Process
@@ -2674,7 +2700,7 @@ def generate_tts():
         file_path = tts_handler.generate_audio(text)
 
         # Calculate duration from file
-        audio_path = os.path.join('frontend/static', file_path)
+        audio_path = os.path.join('plainly/frontend/static', file_path)
         duration = get_audio_duration(audio_path)
 
         return jsonify({
@@ -2725,7 +2751,7 @@ if len(text) > config.MAX_TTS_LENGTH:
 
 ### Configuration Options
 
-**`backend/config.py`:**
+**`plainly/config.py`:**
 
 ```python
 TTS_MODEL_NAME = "tts_models/en/vctk/vits"
@@ -2744,14 +2770,14 @@ MAX_TTS_LENGTH = 5000  # characters
 
 Gemini 2.5 Flash TTS is the **only** TTS engine in current builds. It serves two paths:
 
-1. **On-demand (dev only)** — `backend/app.py` exposes `POST /api/tts/generate`, which calls `GeminiTTSHandler` to synthesize audio in chunks, stitch the WAVs, cache the result on disk, and stream the path back to the client. Production (`backend/app_prod.py`) does **not** wire this up; it serves only pre-generated files via the same on-disk cache lookup in `backend/tts_utils.py`.
-2. **Offline batch (dev + prod prep)** — scripts in `scripts/audio/` (`batch_generate_concise_audio.py`, `batch_generate_medium_audio.py`, `generate_gemini_audio_batch_offline.py`) pre-render audio for every summary and chapter so the production VM never needs to hit the Gemini TTS API.
+1. **On-demand (dev only)** — `plainly/app.py` exposes `POST /api/tts/generate`, which calls `GeminiTTSHandler` to synthesize audio in chunks, stitch the WAVs, cache the result on disk, and stream the path back to the client. Production (`plainly/app_prod.py`) does **not** wire this up; it serves only pre-generated files via the same on-disk cache lookup in `plainly/tts_utils.py`.
+2. **Offline batch (dev + prod prep)** — scripts in `plainly/scripts/audio/` (`batch_generate_concise_audio.py`, `batch_generate_medium_audio.py`, `generate_gemini_audio_batch_offline.py`) pre-render audio for every summary and chapter so the production VM never needs to hit the Gemini TTS API.
 
 **Technology:** Google Gemini 2.5 Flash TTS API
 
-**Model:** `gemini-2.5-flash-preview-tts` (configured as `GEMINI_TTS_MODEL` in `backend/config.py`)
+**Model:** `gemini-2.5-flash-preview-tts` (configured as `GEMINI_TTS_MODEL` in `plainly/config.py`)
 
-**Location:** `backend/gemini_tts_handler.py`, `backend/tts_utils.py`, `scripts/audio/*.py`
+**Location:** `plainly/gemini_tts_handler.py`, `plainly/tts_utils.py`, `plainly/scripts/audio/*.py`
 
 **Why split this way:**
 - Keeps the production VM small (e2-micro on the free tier can serve audio without ever calling the TTS API)
@@ -2781,7 +2807,7 @@ Gemini API call with voice configuration
             ↓
 Extract audio data (WAV format)
             ↓
-Save to frontend/static/audio/ with _gemini.wav suffix
+Save to plainly/frontend/static/audio/ with _gemini.wav suffix
             ↓
 Store path in database (audio_files table)
             ↓
@@ -2790,7 +2816,7 @@ Return file path
 
 **Rate Limiting Implementation:**
 
-**Location:** `backend/gemini_tts_handler.py:21-61`
+**Location:** `plainly/gemini_tts_handler.py:21-61`
 
 ```python
 class RateLimiter:
@@ -2840,12 +2866,12 @@ estimated_tokens = len(text) // 4
 
 **Gemini TTS Handler Class:**
 
-**Location:** `backend/gemini_tts_handler.py:63-228`
+**Location:** `plainly/gemini_tts_handler.py:63-228`
 
 ```python
 class GeminiTTSHandler:
     def __init__(self, voice: str = None):
-        self.output_dir = config.TTS_OUTPUT_DIR  # frontend/static/audio
+        self.output_dir = config.TTS_OUTPUT_DIR  # plainly/frontend/static/audio
         self.voice = voice or config.GEMINI_TTS_VOICE  # Default: "Puck"
         self.model_name = config.GEMINI_TTS_MODEL  # "gemini-2.5-flash-tts"
 
@@ -2943,7 +2969,7 @@ Gemini TTS provides 5 high-quality prebuilt voices:
 **Audio File Naming:**
 
 ```
-frontend/static/audio/
+plainly/frontend/static/audio/
 ├── summary_28_concise_gemini.wav      # Book 28, concise summary
 ├── summary_28_medium_gemini.wav       # Book 28, medium summary
 ├── chapter_28_1_gemini.wav            # Book 28, Chapter 1
@@ -2958,21 +2984,21 @@ frontend/static/audio/
 
 **Offline Generation Script:**
 
-**Location:** `scripts/audio/generate_offline_tts.py`
+**Location:** `plainly/scripts/audio/generate_offline_tts.py`
 
 **Usage:**
 ```bash
 # Generate TTS for specific summary types
-python scripts/audio/generate_offline_tts.py --book "The Time Machine" --summaries concise medium
+python plainly/scripts/audio/generate_offline_tts.py --book "The Time Machine" --summaries concise medium
 
 # Generate TTS for comprehensive summary chapters
-python scripts/audio/generate_offline_tts.py --book "Alice's Adventures in Wonderland" --comprehensive-chapters 1-5
+python plainly/scripts/audio/generate_offline_tts.py --book "Alice's Adventures in Wonderland" --comprehensive-chapters 1-5
 
 # Generate TTS for all summaries of a book
-python scripts/audio/generate_offline_tts.py --book "Pride and Prejudice" --all-summaries
+python plainly/scripts/audio/generate_offline_tts.py --book "Pride and Prejudice" --all-summaries
 
 # Specify custom voice
-python scripts/audio/generate_offline_tts.py --book "The Odyssey" --summaries concise --voice Charon
+python plainly/scripts/audio/generate_offline_tts.py --book "The Odyssey" --summaries concise --voice Charon
 ```
 
 **Script Features:**
@@ -3004,7 +3030,7 @@ python scripts/audio/generate_offline_tts.py --book "The Odyssey" --summaries co
 
 **Configuration:**
 
-**Location:** `backend/config.py:50-58`
+**Location:** `plainly/config.py:50-58`
 
 ```python
 # Gemini TTS API configuration (for offline generation only)
@@ -3165,7 +3191,7 @@ if audio:
 
 ### Rate Limiter Implementation
 
-**Location:** `scripts/content/generate_summaries.py:40-79`
+**Location:** `plainly/scripts/content/generate_summaries.py:40-79`
 
 **Algorithm:** Rolling window token bucket with large call throttling
 
@@ -3212,7 +3238,7 @@ class RateLimiter:
 
 **Large Call Throttling:**
 
-**Location:** `scripts/content/generate_summaries.py:102-127`
+**Location:** `plainly/scripts/content/generate_summaries.py:102-127`
 
 In addition to the standard rate limiter, large API calls (>100K tokens) trigger additional spacing to prevent burst rate limit errors:
 
@@ -3275,7 +3301,7 @@ Time 60s: Large call proceeds
 
 ### LLM Client Initialization
 
-**Location:** `scripts/content/generate_summaries.py:84-91`
+**Location:** `plainly/scripts/content/generate_summaries.py:84-91`
 
 ```python
 class SummaryGenerator:
@@ -3295,7 +3321,7 @@ class SummaryGenerator:
 
 **Model:** `gemini-2.5-flash`
 
-**Location:** `scripts/content/generate_summaries.py:1629-1788`
+**Location:** `plainly/scripts/content/generate_summaries.py:1629-1788`
 
 **Token Optimization (2025-12-12):** Book content removed from prompt. The LLM now relies on its training data knowledge of classic literature, using only title and author. This reduced input tokens from ~140,000 to ~200 per call (99.86% reduction).
 
@@ -3485,7 +3511,7 @@ TITLE|AUTHOR
 
 **Model:** `gemini-2.0-flash-exp`
 
-**Location:** `scripts/content/generate_summaries.py:1261-1335`
+**Location:** `plainly/scripts/content/generate_summaries.py:1261-1335`
 
 ```python
 def generate_concise_summary(self, text: str, title: str, author: str,
@@ -3590,7 +3616,7 @@ Focus on the main theme, setting, and central conflict. For fiction, avoid spoil
 
 **Model:** `gemini-2.0-flash-exp`
 
-**Location:** `scripts/content/generate_summaries.py:916-954`
+**Location:** `plainly/scripts/content/generate_summaries.py:916-954`
 
 ```python
 def generate_medium_summary(self, text: str, title: str, author: str,
@@ -3628,7 +3654,7 @@ Cover all major plot points, themes, and character developments in chronological
 
 **Model:** `gemini-exp-1206` (more capable for detailed analysis)
 
-**Location:** `scripts/content/generate_summaries.py:1173-1253`
+**Location:** `plainly/scripts/content/generate_summaries.py:1173-1253`
 
 ```python
 def generate_chapter_summary(self, chapter_text: str, chapter_num: int,
@@ -3701,7 +3727,7 @@ Very short chapter (600 words):
 
 **Solution:** Regex-based cleaning
 
-**Location:** `scripts/content/generate_summaries.py:93-126`
+**Location:** `plainly/scripts/content/generate_summaries.py:93-126`
 
 ```python
 def clean_llm_response(self, text: str) -> str:
@@ -3760,7 +3786,7 @@ Output: "The Odyssey is an epic poem..."
 
 **Command Line Usage:**
 ```bash
-python scripts/content/generate_summaries.py data/books/pg996.txt --regenerate-overall
+python plainly/scripts/content/generate_summaries.py data/books/pg996.txt --regenerate-overall
 ```
 
 **What It Does:**
@@ -3784,7 +3810,7 @@ python scripts/content/generate_summaries.py data/books/pg996.txt --regenerate-o
 
 **Implementation Details:**
 
-**Location:** `scripts/content/generate_summaries.py:6103-6479`
+**Location:** `plainly/scripts/content/generate_summaries.py:6103-6479`
 
 ```python
 def process_book(self, file_path: Path, title: str = None, author: str = None,
@@ -3905,7 +3931,7 @@ Book already exists in database (ID: 98)
 
 **Example:** 24-chapter book = 8 API calls (instead of 24)
 
-**Location:** `scripts/content/generate_summaries.py:956-1171`
+**Location:** `plainly/scripts/content/generate_summaries.py:956-1171`
 
 ### Batching Algorithm
 
@@ -3930,7 +3956,7 @@ MAX_CHAPTERS_PER_BATCH = 10      # 10 chapters max per batch
 
 **Solution:** Enforce BOTH character limit AND chapter count limit.
 
-**Location:** `scripts/content/generate_summaries.py:2931-2943`
+**Location:** `plainly/scripts/content/generate_summaries.py:2931-2943`
 
 ```python
 # Constants
@@ -4066,7 +4092,7 @@ index_to_chapter = {1: 1, 2: 2}
 
 ### Bulk Prompt Construction
 
-**Location:** `scripts/content/generate_summaries.py:2459-2558`
+**Location:** `plainly/scripts/content/generate_summaries.py:2459-2558`
 
 ```python
 def generate_bulk_chapter_summaries(self, chapters_batch: List[Tuple],
@@ -4187,7 +4213,7 @@ Now provide summaries for all {len(chapters_batch)} chapters above, following th
 
 **Parser Implementation:**
 
-**Location:** `scripts/content/generate_summaries.py:995-1040`
+**Location:** `plainly/scripts/content/generate_summaries.py:995-1040`
 
 ```python
 def parse_bulk_summary_response(self, response_text: str,
@@ -4332,7 +4358,7 @@ Return: {15: "[content1]", 16: "[content2]"}
 
 **Purpose:** Provide narrative continuity across batch boundaries by including the last chapter from the previous batch as context.
 
-**Implementation:** `scripts/content/generate_summaries.py:2737-2760`
+**Implementation:** `plainly/scripts/content/generate_summaries.py:2737-2760`
 
 ```python
 # Initialize tracking
@@ -4391,11 +4417,11 @@ for batch_idx, batch in enumerate(batches, 1):
 
 **Purpose:** Automatically extract metadata, clean content, and download cover images from Project Gutenberg books
 
-**Location:** `scripts/content/generate_summaries.py`
+**Location:** `plainly/scripts/content/generate_summaries.py`
 
 ### Gutenberg ID Extraction
 
-**Location:** `scripts/content/generate_summaries.py:163-179`
+**Location:** `plainly/scripts/content/generate_summaries.py:163-179`
 
 ```python
 def extract_gutenberg_id(self, text: str) -> int:
@@ -4445,7 +4471,7 @@ Release Date: April 1, 1999 [eBook #1727]
 
 **Solution:** Remove everything before "START OF THE PROJECT GUTENBERG EBOOK" and after "END OF THE PROJECT GUTENBERG EBOOK"
 
-**Location:** `scripts/content/generate_summaries.py:285-331`
+**Location:** `plainly/scripts/content/generate_summaries.py:285-331`
 
 ```python
 def extract_gutenberg_content(self, text: str) -> str:
@@ -4504,7 +4530,7 @@ Removed: 50,000 chars (10% reduction)
 
 ### Metadata Extraction
 
-**Location:** `scripts/content/generate_summaries.py:138-161`
+**Location:** `plainly/scripts/content/generate_summaries.py:138-161`
 
 ```python
 def extract_metadata(self, text: str, filename: str) -> Tuple[str, str]:
@@ -4555,7 +4581,7 @@ https://www.gutenberg.org/cache/epub/{id}/pg{id}.cover.medium.jpg
 - `pg{id}.cover.small.jpg`
 - `{id}-h/images/cover.jpg`
 
-**Location:** `scripts/content/generate_summaries.py:181-259`
+**Location:** `plainly/scripts/content/generate_summaries.py:181-259`
 
 ```python
 def get_gutenberg_cover_url(self, gutenberg_id: int) -> str:
@@ -4631,7 +4657,7 @@ def download_gutenberg_cover(self, gutenberg_id: int, dry_run: bool = False) -> 
 
 **Storage Structure:**
 ```
-frontend/static/covers/
+plainly/frontend/static/covers/
 ├── pg11.jpg       # A Christmas Carol
 ├── pg1727.jpg     # The Odyssey
 ├── pg1342.jpg     # Pride and Prejudice
@@ -4656,12 +4682,12 @@ http://localhost:5000/static/covers/pg1727.jpg
 
 **Example:** `odyssey_custom.png`
 
-**Update Script:** `scripts/images/update_book_cover.py` (generic — replaced three
+**Update Script:** `plainly/scripts/images/update_book_cover.py` (generic — replaced three
 per-book scripts hardcoded to a single book ID each: `update_odyssey_cover.py`,
 `update_christmas_carol_cover.py`, `update_time_machine_cover.py`)
 
 ```sh
-python scripts/images/update_book_cover.py --title "The Odyssey" --source /path/to/odyssey_custom.png
+python plainly/scripts/images/update_book_cover.py --title "The Odyssey" --source /path/to/odyssey_custom.png
 ```
 
 ---
@@ -4676,7 +4702,7 @@ python scripts/images/update_book_cover.py --title "The Odyssey" --source /path/
 
 ```
 ┌─────────────────────────────────────────┐
-│         backend/app_base.py             │
+│         plainly/app_base.py             │
 │   (Common Flask App & Routes - 302L)    │
 ├─────────────────────────────────────────┤
 │ • Flask app initialization              │
@@ -4697,7 +4723,7 @@ python scripts/images/update_book_cover.py --title "The Odyssey" --source /path/
          │                       │
          │                       │
 ┌────────┴─────────┐    ┌────────┴──────────┐
-│  backend/app.py  │    │ backend/app_prod  │
+│  plainly/app.py  │    │ plainly/app_prod  │
 │   (295 lines)    │    │    (104 lines)    │
 ├──────────────────┤    ├───────────────────┤
 │ Dev-Specific:    │    │ Prod-Specific:    │
@@ -4728,12 +4754,12 @@ python scripts/images/update_book_cover.py --title "The Odyssey" --source /path/
 ### Dual Import System
 
 **Problem:** Python requires different import styles for different execution methods:
-- **Direct execution:** `python backend/app.py` → Requires absolute imports (`import config`)
-- **Module execution:** `python -m backend.app` → Requires relative imports (`from . import config`)
+- **Direct execution:** `python plainly/app.py` → Requires absolute imports (`import config`)
+- **Module execution:** `python -m plainly.app` → Requires relative imports (`from . import config`)
 
 **Solution:** Try/except pattern in all backend modules:
 
-**Location:** `backend/app_base.py:16-21`, `backend/app.py:11-16`, `backend/app_prod.py:11-16`
+**Location:** `plainly/app_base.py:16-21`, `plainly/app.py:11-16`, `plainly/app_prod.py:11-16`
 
 ```python
 # Handle both direct execution and module execution
@@ -4746,20 +4772,20 @@ except ImportError:
 ```
 
 **Benefits:**
-- Works with both `python backend/app.py` and `python -m backend.app`
+- Works with both `python plainly/app.py` and `python -m plainly.app`
 - Flexible for different deployment scenarios
 - Supports both development and testing workflows
 - No runtime overhead (import happens once at startup)
 
 ### Flask App Initialization
 
-**Location:** `backend/app_base.py:30-37`
+**Location:** `plainly/app_base.py:30-37`
 
 ```python
 # Create Flask app
 app = Flask(__name__,
-            static_folder='../frontend/static',
-            template_folder='../frontend/templates')
+            static_folder='../plainly/frontend/static',
+            template_folder='../plainly/frontend/templates')
 CORS(app)
 
 # Initialize database
@@ -4833,7 +4859,7 @@ def generate_tts():
 
 **Solution:** Defensive null checks before DOM access.
 
-**Location:** `frontend/static/js/app.js:384-394`
+**Location:** `plainly/frontend/static/js/app.js:384-394`
 
 ```javascript
 const bookCoverEl = document.getElementById('book-info-cover');
@@ -4874,7 +4900,7 @@ if (bookCoverEl) {  // ✅ Defensive check
 ```bash
 cd <LOCAL_REPO_PATH>
 source venv/bin/activate
-python backend/app.py  # or: python -m backend.app
+python plainly/app.py  # or: python -m plainly.app
 # Server runs on http://localhost:5001
 ```
 
@@ -5033,7 +5059,7 @@ async handleRoute() {
 
 **Backend (Single Source of Truth):**
 ```python
-# backend/models.py
+# plainly/models.py
 def slugify(text: str) -> str:
     """Convert text to URL-friendly slug."""
     text = text.lower()
@@ -5053,7 +5079,7 @@ def add_book(self, title, ...):
 
 **Frontend (Uses Backend Slug):**
 ```javascript
-// frontend/static/js/app.js
+// plainly/frontend/static/js/app.js
 updateURL(book, page = null) {
     // Use slug from backend, fallback to client-side generation
     const slug = book.slug || this.slugify(book.title);
@@ -5076,7 +5102,7 @@ const book = this.allBooks.find(b => (b.slug || this.slugify(b.title)) === bookS
 - Backend stores canonical slugs in database for SEO and consistency
 - Frontend uses backend slugs preferentially, with client-side fallback
 - All new books automatically get slugs via `models.py:add_book()`
-- Legacy books backfilled using `scripts/backfills/backfill_book_slugs.py`
+- Legacy books backfilled using `plainly/scripts/backfills/backfill_book_slugs.py`
 
 ### Page Sections & State Management
 
@@ -5525,36 +5551,36 @@ A series of improvements to enhance navigation consistency, performance, and use
 1. **Carousel Book Order Caching:**
    - **Problem:** Books randomized on every page load, causing inconsistent visual experience
    - **Solution:** Cache shuffled order in `this.carouselOrderCache` object
-   - **Implementation:** `frontend/static/js/app.js` lines 27 (property), 479-486 (logic)
+   - **Implementation:** `plainly/frontend/static/js/app.js` lines 27 (property), 479-486 (logic)
    - **Impact:** Consistent book order across page refreshes while maintaining randomization benefit
 
 2. **Category Data Caching:**
    - **Problem:** Category pages refetched data every time, causing flash/reload effect
    - **Solution:** Cache API responses in `this.categoryCache` object
-   - **Implementation:** `frontend/static/js/app.js` lines 27 (property), 1212-1278 (logic)
+   - **Implementation:** `plainly/frontend/static/js/app.js` lines 27 (property), 1212-1278 (logic)
    - **Impact:** Instant page loads when returning to previously visited categories
 
 3. **Consistent Back Button Behavior:**
    - **Problem:** "Back to Home" used browser history, causing unpredictable navigation
    - **Solution:** Replace `window.history.back()` with `this.showHomeSection()`
-   - **Implementation:** `frontend/static/js/app.js` lines 1275-1280, 1317-1322, 1391-1396
+   - **Implementation:** `plainly/frontend/static/js/app.js` lines 1275-1280, 1317-1322, 1391-1396
    - **Impact:** Always returns to home page, predictable for users
 
 4. **Image Lazy Loading:**
    - **Problem:** All images loaded immediately, slowing initial page load
    - **Solution:** Add `loading="lazy"` attribute to all book cover images
-   - **Implementation:** `frontend/static/js/app.js` lines 484 (carousel), 1386 (grid)
+   - **Implementation:** `plainly/frontend/static/js/app.js` lines 484 (carousel), 1386 (grid)
    - **Impact:** Faster page loads, reduced bandwidth usage
 
 5. **Header Navigation Styling (Bonus):**
    - **Problem:** Navigation buttons looked like separate UI elements
    - **Solution:** Minimal text-only design with transparent background
-   - **Implementation:** `frontend/static/css/style.css` lines 74-95
+   - **Implementation:** `plainly/frontend/static/css/style.css` lines 74-95
    - **Impact:** Cleaner header appearance, integrated menu items instead of buttons
 
 **Files Modified:**
-- `frontend/static/js/app.js` (5 changes across caching, navigation, and lazy loading)
-- `frontend/static/css/style.css` (1 change for header styling)
+- `plainly/frontend/static/js/app.js` (5 changes across caching, navigation, and lazy loading)
+- `plainly/frontend/static/css/style.css` (1 change for header styling)
 
 **Performance Gains:**
 - Category page load: Instant (cached) vs. 500-1000ms (API fetch)
@@ -5589,7 +5615,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 
 ### Settings Panel Implementation
 
-**Location:** `frontend/templates/index.html:90-150`
+**Location:** `plainly/frontend/templates/index.html:90-150`
 
 **HTML Structure:**
 
@@ -5653,7 +5679,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 </div>
 ```
 
-**CSS Implementation:** `frontend/static/css/style.css:1652-1850`
+**CSS Implementation:** `plainly/frontend/static/css/style.css:1652-1850`
 
 ```css
 /* Settings Panel - Slides from right edge */
@@ -5740,7 +5766,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 }
 ```
 
-**JavaScript Implementation:** `frontend/static/js/app.js:1483-1738`
+**JavaScript Implementation:** `plainly/frontend/static/js/app.js:1483-1738`
 
 ```javascript
 setupReadingSettings() {
@@ -5849,7 +5875,7 @@ setupReadingSettings() {
 
 1. **Georgia** (Default) - Classic serif font, traditional book feel
 2. **System** - Native system font stack, familiar to user's OS
-3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `frontend/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `style.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`. Pagination measures text, so `loadContinuousReaderAt()` awaits `document.fonts.load()` for the content's computed font before rendering. Otherwise Figtree loads after the pages are cut, the text re-wraps, and each page's last line falls under the footer (`tests/e2e/reader_last_line_visible.mjs`)
+3. **Figtree** - Modern sans-serif. Self-hosted variable font (weights 300–900, SIL OFL): `plainly/frontend/static/fonts/figtree-latin.woff2` and `figtree-latin-ext.woff2`, declared with `@font-face` at the top of `style.css` (`font-display: swap`, split by `unicode-range`). Replaced Open Sans, which was never loaded and fell back to Helvetica/Segoe UI. `loadReadingPreferences()` rewrites a saved `opensans` to `figtree`. Pagination measures text, so `loadContinuousReaderAt()` awaits `document.fonts.load()` for the content's computed font before rendering. Otherwise Figtree loads after the pages are cut, the text re-wraps, and each page's last line falls under the footer (`tests/e2e/reader_last_line_visible.mjs`)
 
 **CSS Data Attribute Pattern:**
 
@@ -6613,7 +6639,7 @@ Full-screen image overlay for viewing chapter illustrations in high quality, wit
 
 ### HTML Structure
 
-**Location:** `frontend/templates/index.html:299-303`
+**Location:** `plainly/frontend/templates/index.html:299-303`
 
 ```html
 <!-- Image Lightbox Overlay -->
@@ -6631,7 +6657,7 @@ Full-screen image overlay for viewing chapter illustrations in high quality, wit
 
 ### CSS Implementation
 
-**Location:** `frontend/static/css/style.css` (appended at end)
+**Location:** `plainly/frontend/static/css/style.css` (appended at end)
 
 **Key Styling Patterns:**
 
@@ -6730,7 +6756,7 @@ Full-screen image overlay for viewing chapter illustrations in high quality, wit
 
 ### JavaScript Implementation
 
-**Location:** `frontend/static/js/app.js`
+**Location:** `plainly/frontend/static/js/app.js`
 
 **Initialization:** Line 39 in constructor
 
@@ -7025,7 +7051,7 @@ This document should provide complete context for future development and Claude 
 ## Two-Level Book Structure Detection
 
 **Added:** 2025-11-27
-**Location:** `scripts/content/generate_summaries.py::extract_two_level_toc()`
+**Location:** `plainly/scripts/content/generate_summaries.py::extract_two_level_toc()`
 **Database:** `book_sections` table with `section_id` FK in `chapters` table
 
 ### Overview
@@ -7171,7 +7197,7 @@ elif regenerate_chapters:  # ✅ New branch
     section_id = section_lookup.get(section_number)
 ```
 
-**Location:** `scripts/content/generate_summaries.py:3248-3295`
+**Location:** `plainly/scripts/content/generate_summaries.py:3248-3295`
 
 **Impact of Bug:**
 - Regenerating Chapters 54-55 in "The Adventures of Ferdinand Count Fathom" (Book ID 63)
@@ -7209,7 +7235,7 @@ UPDATE chapters SET section_id = 58 WHERE book_id = 63 AND chapter_number BETWEE
 
 **Fix - Added Helper Functions:**
 
-**Location:** `backend/models.py:413-469`
+**Location:** `plainly/models.py:413-469`
 
 ```python
 def get_chapters_without_section(self, book_id: int) -> List[Dict]:
@@ -7244,7 +7270,7 @@ def get_chapters_metadata_without_section(self, book_id: int) -> List[Dict]:
 
 **Fix - Modified Structure Retrieval:**
 
-**Location:** `backend/models.py:515-579`
+**Location:** `plainly/models.py:515-579`
 
 ```python
 def get_book_structure_metadata(self, book_id: int) -> Dict:
@@ -7329,7 +7355,7 @@ def get_book_structure_metadata(self, book_id: int) -> Dict:
 }
 ```
 
-**UI Rendering Logic (`frontend/static/js/app.js::loadChapters()`):**
+**UI Rendering Logic (`plainly/frontend/static/js/app.js::loadChapters()`):**
 
 ```javascript
 if (data.has_sections && data.sections.length > 1) {
@@ -7484,7 +7510,7 @@ if not toc_structure:
 
 ## Gemini Image Generation System
 
-**Location:** `scripts/images/generate_illustrations.py` (1500+ lines)
+**Location:** `plainly/scripts/images/generate_illustrations.py` (1500+ lines)
 
 The Gemini Image Generation System provides automated creation of book covers and chapter illustrations using Google's Gemini image generation models. This enhances the visual presentation of classic literature with AI-generated artwork.
 
@@ -7716,7 +7742,7 @@ def __init__(self, api_key: str, model: str = DEFAULT_IMAGE_MODEL):
    - Skips if `cover_source = 'gemini-generated'` and not forced
    - Fetches medium summary for context
    - Generates cover image
-   - Saves to `frontend/static/covers/{book_id}.png`
+   - Saves to `plainly/frontend/static/covers/{book_id}.png`
    - Updates database: `cover_image_url`, `cover_source`
    - Saves prompt to `{book_id}.txt`
 
@@ -7729,7 +7755,7 @@ def __init__(self, api_key: str, model: str = DEFAULT_IMAGE_MODEL):
    - For each chapter:
      - Loads previous chapter illustration as reference
      - Generates illustration with character consistency
-     - Saves to `frontend/static/illustrations/{book_id}/{chapter_num}.png`
+     - Saves to `plainly/frontend/static/illustrations/{book_id}/{chapter_num}.png`
      - Updates database: `chapters.illustration_url`
      - Saves prompt to `{chapter_num}.txt`
 
@@ -7851,13 +7877,13 @@ else:
 **CLI Commands:**
 ```bash
 # Submit batch job
-python scripts/images/generate_illustrations.py --book-id 47 --provider gemini --batch-mode --chapters-only
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --provider gemini --batch-mode --chapters-only
 
 # List pending jobs
-python scripts/images/generate_illustrations.py --provider gemini --list-jobs
+python plainly/scripts/images/generate_illustrations.py --provider gemini --list-jobs
 
 # Resume interrupted job
-python scripts/images/generate_illustrations.py --provider gemini --resume data/batch_jobs/book_47_1234567890.json
+python plainly/scripts/images/generate_illustrations.py --provider gemini --resume data/batch_jobs/book_47_1234567890.json
 ```
 
 **Cost Comparison:**
@@ -7874,7 +7900,7 @@ python scripts/images/generate_illustrations.py --provider gemini --resume data/
 ### File Organization
 
 ```
-frontend/static/
+plainly/frontend/static/
 ├── covers/
 │   ├── {book_id}.png         # Book cover image
 │   └── {book_id}.txt         # Cover generation prompt
@@ -7908,34 +7934,34 @@ WHERE book_id = {book_id} AND chapter_number = {chapter_num};
 
 ### Command-Line Interface
 
-**Script:** `scripts/images/generate_illustrations.py`
+**Script:** `plainly/scripts/images/generate_illustrations.py`
 
 **Usage Examples:**
 
 ```bash
 # Generate cover only for specific book
-python scripts/images/generate_illustrations.py --book-id 47 --cover-only
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --cover-only
 
 # Generate all chapter illustrations
-python scripts/images/generate_illustrations.py --book-id 47 --chapters-only
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --chapters-only
 
 # Generate specific chapter range
-python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-10
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-10
 
 # Generate both cover and all chapters
-python scripts/images/generate_illustrations.py --book-id 47
+python plainly/scripts/images/generate_illustrations.py --book-id 47
 
 # Use faster flash model (lower cost, Gemini provider only)
-python scripts/images/generate_illustrations.py --book-id 47 --model gemini-2.5-flash-image
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --model gemini-2.5-flash-image
 
 # Batch process all books missing illustrations
-python scripts/images/generate_illustrations.py --batch-all
+python plainly/scripts/images/generate_illustrations.py --batch-all
 
 # Dry run (preview without generating)
-python scripts/images/generate_illustrations.py --book-id 47 --dry-run
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --dry-run
 
 # Force regenerate existing illustrations
-python scripts/images/generate_illustrations.py --book-id 47 --force
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --force
 ```
 
 **Arguments:**
@@ -8134,7 +8160,7 @@ Requirements:
 
 **Test Case: Peter Pan (Book ID 47)**
 ```bash
-python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-10
+python plainly/scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-10
 ```
 
 **Results:**
@@ -8204,8 +8230,8 @@ python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-1
 1. **Static Files:**
    ```bash
    # Copy generated images to production server
-   rsync -av frontend/static/covers/ user@server:<REMOTE_REPO_PATH>/frontend/static/covers/
-   rsync -av frontend/static/illustrations/ user@server:<REMOTE_REPO_PATH>/frontend/static/illustrations/
+   rsync -av plainly/frontend/static/covers/ user@server:<REMOTE_REPO_PATH>/plainly/frontend/static/covers/
+   rsync -av plainly/frontend/static/illustrations/ user@server:<REMOTE_REPO_PATH>/plainly/frontend/static/illustrations/
    ```
 
 2. **Database:**
@@ -8221,13 +8247,13 @@ python scripts/images/generate_illustrations.py --book-id 47 --chapter-range 1-1
 - Original high-resolution images stored in `data/illustration_originals/`
 - Gitignored to save space
 - Manual backup recommended for originals
-- Optimized versions in `frontend/static/` (tracked in git)
+- Optimized versions in `plainly/frontend/static/` (tracked in git)
 
 ---
 
 ## Image Optimization System
 
-**Location:** `scripts/images/reduce_illustration_resolution.py`
+**Location:** `plainly/scripts/images/reduce_illustration_resolution.py`
 
 The Image Optimization System provides automated WebP/JPG conversion and size reduction for book covers and chapter illustrations, dramatically reducing page load times while maintaining visual quality.
 
@@ -8235,7 +8261,7 @@ The Image Optimization System provides automated WebP/JPG conversion and size re
 
 The system implements a two-stage workflow:
 1. **Generation Stage**: High-resolution originals (2K, ~7MB each) saved to `data/` directory
-2. **Optimization Stage**: Creates dual-format web-optimized versions (WebP + JPG) in `frontend/static/`
+2. **Optimization Stage**: Creates dual-format web-optimized versions (WebP + JPG) in `plainly/frontend/static/`
 
 **Performance Metrics:**
 - Average file size reduction: **94.5%** per image (7MB → 0.4MB)
@@ -8259,7 +8285,7 @@ project_root/
 │       ├── 47/
 │       └── ...
 │
-└── frontend/static/
+└── plainly/frontend/static/
     ├── covers/                   # Optimized book covers (tracked in git)
     │   ├── 1.webp                # ~0.15MB (WebP, primary format)
     │   ├── 1.jpg                 # ~0.25MB (JPG, fallback)
@@ -8288,7 +8314,7 @@ save_image(image_data, illustration_path)  # ~7MB PNG, 2048×3072
 ```
 
 **Key Changes from Original Design:**
-- Previously saved directly to `frontend/static/` (deployment-ready location)
+- Previously saved directly to `plainly/frontend/static/` (deployment-ready location)
 - Now saves to `data/` (source storage, not deployed)
 - Database updates deferred until after optimization
 - Script outputs reminder to run optimization
@@ -8316,7 +8342,7 @@ def auto_optimize_illustrations(book_id: int, chapter_numbers: list = None, dry_
 1. Generation script creates high-res originals in `data/illustration_originals/`
 2. `auto_optimize_illustrations()` called at end of generation
 3. Subprocess runs optimization script with `--update-db` flag
-4. Optimization creates WebP/JPG in `frontend/static/illustrations/`
+4. Optimization creates WebP/JPG in `plainly/frontend/static/illustrations/`
 5. Database updated with illustration URLs automatically
 6. User sees optimized images in frontend immediately
 
@@ -8324,17 +8350,17 @@ def auto_optimize_illustrations(book_id: int, chapter_numbers: list = None, dry_
 
 ```bash
 # Manual usage - process book illustrations
-python scripts/images/reduce_illustration_resolution.py --book-id 47
+python plainly/scripts/images/reduce_illustration_resolution.py --book-id 47
 
 # Manual usage with database update
-python scripts/images/reduce_illustration_resolution.py --book-id 47 --update-db
+python plainly/scripts/images/reduce_illustration_resolution.py --book-id 47 --update-db
 
 # Process specific chapters
-python scripts/images/reduce_illustration_resolution.py --book-id 47 --chapters 1,2,3 --update-db
+python plainly/scripts/images/reduce_illustration_resolution.py --book-id 47 --chapters 1,2,3 --update-db
 
 # Process book covers
-python scripts/images/reduce_illustration_resolution.py --covers --book-id 47
-python scripts/images/reduce_illustration_resolution.py --covers --all
+python plainly/scripts/images/reduce_illustration_resolution.py --covers --book-id 47
+python plainly/scripts/images/reduce_illustration_resolution.py --covers --all
 
 # Automatic usage (called from generation script)
 # auto_optimize_illustrations() always passes --update-db flag
@@ -8360,7 +8386,7 @@ python scripts/images/reduce_illustration_resolution.py --covers --all
    ```
 
 4. **Output to frontend:**
-   - Saves to `frontend/static/illustrations/{book_id}/{chapter_num}.{webp,jpg}`
+   - Saves to `plainly/frontend/static/illustrations/{book_id}/{chapter_num}.{webp,jpg}`
    - Both formats created for browser compatibility
    - Original PNG remains in `data/` directory
 
@@ -8479,7 +8505,7 @@ def optimize_image(input_path: Path, output_base_path: Path,
     """
     Args:
         input_path: Source PNG (e.g., data/illustration_originals/47/1.png)
-        output_base_path: Output without extension (e.g., frontend/static/illustrations/47/1)
+        output_base_path: Output without extension (e.g., plainly/frontend/static/illustrations/47/1)
         max_width: Maximum width in pixels (default 1024 for illustrations)
         create_webp: Whether to create WebP version (default True)
 
@@ -8516,7 +8542,7 @@ def process_book_illustrations(book_id: int, max_width: int = 1024,
         2. Filter by chapter_numbers if specified
         3. For each PNG:
            - Call optimize_image()
-           - Create .webp and .jpg in frontend/static/illustrations/{book_id}/
+           - Create .webp and .jpg in plainly/frontend/static/illustrations/{book_id}/
            - If update_db: Update chapters table with illustration_url
         4. Report file size reductions
 
@@ -8551,7 +8577,7 @@ def process_book_illustrations(book_id: int, max_width: int = 1024,
 
 Similar to `process_book_illustrations()` but:
 - Reads from `data/cover_originals/`
-- Outputs to `frontend/static/covers/`
+- Outputs to `plainly/frontend/static/covers/`
 - Default max_width: 400px (covers displayed smaller than illustrations)
 
 ### Performance Impact
@@ -8592,8 +8618,8 @@ Similar to `process_book_illustrations()` but:
 ### Git Strategy
 
 **Tracked in Git:**
-- `frontend/static/covers/*.{webp,jpg}` - Optimized covers (~0.2MB each)
-- `frontend/static/illustrations/**/*.{webp,jpg}` - Optimized illustrations (~0.35MB each)
+- `plainly/frontend/static/covers/*.{webp,jpg}` - Optimized covers (~0.2MB each)
+- `plainly/frontend/static/illustrations/**/*.{webp,jpg}` - Optimized illustrations (~0.35MB each)
 
 **Gitignored:**
 - `data/cover_originals/*.png` - Original covers (~7MB each)
@@ -8632,13 +8658,13 @@ if img.mode in ('RGBA', 'LA', 'P'):
 
 ```bash
 # Dry run to preview operations
-python scripts/images/reduce_illustration_resolution.py --book-id 47 --dry-run
+python plainly/scripts/images/reduce_illustration_resolution.py --book-id 47 --dry-run
 
 # Process single book
-python scripts/images/reduce_illustration_resolution.py --book-id 47
+python plainly/scripts/images/reduce_illustration_resolution.py --book-id 47
 
 # Verify output
-ls -lh frontend/static/illustrations/47/
+ls -lh plainly/frontend/static/illustrations/47/
 # Should show .webp and .jpg files, no .png files
 ```
 
@@ -8649,7 +8675,7 @@ du -sh data/illustration_originals/47
 # Expected: ~79M
 
 # Optimized size
-du -sh frontend/static/illustrations/47
+du -sh plainly/frontend/static/illustrations/47
 # Expected: ~9.5M (88% reduction)
 ```
 
@@ -8659,19 +8685,19 @@ du -sh frontend/static/illustrations/47
 
 1. **Generate Illustrations:**
    ```bash
-   python scripts/images/generate_illustrations.py --book-id 47 --chapters-only
+   python plainly/scripts/images/generate_illustrations.py --book-id 47 --chapters-only
    # Saves originals to data/illustration_originals/47/*.png
    # Outputs: "ℹ️  Run reduce_illustration_resolution.py to create optimized versions"
    ```
 
 2. **Optimize for Web:**
    ```bash
-   python scripts/images/reduce_illustration_resolution.py --book-id 47
-   # Creates frontend/static/illustrations/47/*.{webp,jpg}
+   python plainly/scripts/images/reduce_illustration_resolution.py --book-id 47
+   # Creates plainly/frontend/static/illustrations/47/*.{webp,jpg}
    ```
 
 3. **Deploy:**
-   - Only `frontend/static/` directory deployed
+   - Only `plainly/frontend/static/` directory deployed
    - Optimized images (<1MB each) transferred to production
    - Original files remain local in `data/` directory
 
@@ -8703,7 +8729,7 @@ The Book Metadata Enrichment system uses AI to extract comprehensive metadata ab
 
 ### Enhanced generate_combined_summaries()
 
-**Location:** `scripts/content/generate_summaries.py:281-540`
+**Location:** `plainly/scripts/content/generate_summaries.py:281-540`
 
 **Previous Behavior (Before 2025-12-02):**
 - Generated only two summaries: concise (500 words) and medium (2000-3000 words)
@@ -8727,7 +8753,7 @@ The Book Metadata Enrichment system uses AI to extract comprehensive metadata ab
 
 ### Extended Prompt Template
 
-**Location:** `scripts/content/generate_summaries.py:294-330`
+**Location:** `plainly/scripts/content/generate_summaries.py:294-330`
 
 **Sections:**
 
@@ -8769,7 +8795,7 @@ The Book Metadata Enrichment system uses AI to extract comprehensive metadata ab
 
 ### Parsing Logic
 
-**Location:** `scripts/content/generate_summaries.py:434-532`
+**Location:** `plainly/scripts/content/generate_summaries.py:434-532`
 
 **Regex-Based Section Extraction:**
 
@@ -8801,7 +8827,7 @@ if similar_match:
 
 ### Word Count Reporting
 
-**Location:** `scripts/content/generate_summaries.py:520-527`
+**Location:** `plainly/scripts/content/generate_summaries.py:520-527`
 
 ```python
 about_words = len(about_text.split()) if about_text else 0
@@ -8834,7 +8860,7 @@ print(f"     Other Books: {len(other_books_by_author)}")
 
 ### Database Integration
 
-**Updated in:** `scripts/content/generate_summaries.py` (process_book method)
+**Updated in:** `plainly/scripts/content/generate_summaries.py` (process_book method)
 
 **New Data Flow:**
 
@@ -8894,7 +8920,7 @@ print(f"     Other Books: {len(other_books_by_author)}")
 
 **Function:** `normalize_book_title()`
 
-**Location:** `scripts/content/generate_summaries.py:34-105`
+**Location:** `plainly/scripts/content/generate_summaries.py:34-105`
 
 **Purpose:** Standardize book titles with consistent Title Case formatting and truncate subtitles.
 
@@ -8949,17 +8975,17 @@ normalize_book_title("Twenty Thousand Leagues under the Sea")
 
 **Migration Script:**
 
-**File:** `scripts/migrations/migrate_book_titles.py`
+**File:** `plainly/scripts/migrations/migrate_book_titles.py`
 
 **Purpose:** Backfill existing books in database with normalized titles
 
 **Usage:**
 ```bash
 # Preview changes without modifying database
-python scripts/migrations/migrate_book_titles.py --dry-run
+python plainly/scripts/migrations/migrate_book_titles.py --dry-run
 
 # Apply changes to database
-python scripts/migrations/migrate_book_titles.py
+python plainly/scripts/migrations/migrate_book_titles.py
 ```
 
 **Results (2025-12-02):**
@@ -8975,7 +9001,7 @@ python scripts/migrations/migrate_book_titles.py
 
 **Function:** `process_cover_image()`
 
-**Location:** `scripts/content/generate_summaries.py:665-728`
+**Location:** `plainly/scripts/content/generate_summaries.py:665-728`
 
 **Problem:**
 - Downloaded Gutenberg covers used `pg{gutenberg_id}.jpg` naming
@@ -9002,7 +9028,7 @@ def process_cover_image(self, gutenberg_id: int, book_id: int, dry_run: bool = F
 
 1. **Find Original:**
    ```python
-   covers_dir = config.COVERS_DIR  # frontend/static/covers/
+   covers_dir = config.COVERS_DIR  # plainly/frontend/static/covers/
    original_files = list(covers_dir.glob(f"pg{gutenberg_id}.*"))
    ```
 
@@ -9027,7 +9053,7 @@ def process_cover_image(self, gutenberg_id: int, book_id: int, dry_run: bool = F
 
 **Integration:**
 
-**Location:** `scripts/content/generate_summaries.py:4269-4275`
+**Location:** `plainly/scripts/content/generate_summaries.py:4269-4275`
 
 ```python
 # After book is added to database
@@ -9054,7 +9080,7 @@ if book_id and gutenberg_id and not dry_run:
 
 **Component Hierarchy:**
 ```
-book-detail-section (frontend/templates/index.html:73-155)
+book-detail-section (plainly/frontend/templates/index.html:73-155)
 ├── book-detail-header
 │   ├── book-detail-cover (WebP with fallback)
 │   └── book-detail-info (title, author)
@@ -9082,7 +9108,7 @@ book-detail-section (frontend/templates/index.html:73-155)
 
 **Key Technical Details:**
 
-**Summary Tabs (frontend/static/js/app.js:408-457)**
+**Summary Tabs (plainly/frontend/static/js/app.js:408-457)**
 - Single-page tab switching without reload
 - `setupSummaryTabs()`: Handles tab click events
 - `updateSummaryTTSButton()`: Dynamically shows/hides TTS button based on:
@@ -9091,7 +9117,7 @@ book-detail-section (frontend/templates/index.html:73-155)
 - Stores summary content in `this.conciseSummaryContent` and `this.mediumSummaryContent`
 - CSS classes: `.summary-tab.active`, `.summary-tab-content.active`
 
-**Author Books Carousel (frontend/static/js/app.js:832-915)**
+**Author Books Carousel (plainly/frontend/static/js/app.js:832-915)**
 - Reuses carousel pattern from "You May Also Like"
 - API call: `GET /api/books/by-author/{author}?exclude={current_book_id}`
 - Left/right navigation buttons
@@ -9099,7 +9125,7 @@ book-detail-section (frontend/templates/index.html:73-155)
 - Button states update on scroll (disabled at start/end)
 - CSS classes: `.carousel-container`, `.related-books-scroll`, `.related-book-card`
 
-**Chapter Summary Box (frontend/static/js/app.js:1417-1439)**
+**Chapter Summary Box (plainly/frontend/static/js/app.js:1417-1439)**
 - Yellow collapsed box with expandable content
 - Entire header is clickable (not just toggle button)
 - Prevents toggle when clicking TTS button
@@ -9114,12 +9140,12 @@ book-detail-section (frontend/templates/index.html:73-155)
 
 **Endpoint:** `GET /api/books/by-author/<author_name>`
 
-**Location:** `backend/app_base.py:945-990`
+**Location:** `plainly/app_base.py:945-990`
 
 **Query Parameters:**
 - `exclude` (int, optional): Book ID to exclude from results
 
-**Database Method:** `get_books_by_author_name()` in `backend/models.py:1072-1097`
+**Database Method:** `get_books_by_author_name()` in `plainly/models.py:1072-1097`
 ```sql
 SELECT id, title, author, filename, word_count, gutenberg_id, cover_image_url, slug
 FROM books
@@ -9162,7 +9188,7 @@ LIMIT ?
 
 ### Underscore Emphasis (Added 2025-12-03)
 
-**Function:** `formatChapterText()` in `frontend/static/js/app.js:375-389`
+**Function:** `formatChapterText()` in `plainly/frontend/static/js/app.js:375-389`
 
 **Purpose:** Convert Project Gutenberg underscore emphasis to HTML `<em>` tags
 
@@ -9190,7 +9216,7 @@ formatChapterText(text) {
 - `"He _said_ something"` → `"He <em>said</em> something"`
 - `"_vis-à-vis_ the text"` → `"<em>vis-à-vis</em> the text"`
 
-**CSS Styling:** `frontend/static/css/style.css:1376-1380`
+**CSS Styling:** `plainly/frontend/static/css/style.css:1376-1380`
 ```css
 .full-text-content em {
     font-style: italic;
@@ -9207,7 +9233,7 @@ The Top 10 Books carousel on the homepage uses a Netflix-inspired responsive lay
 
 ### HTML Structure
 
-**Location:** `frontend/templates/index.html:85-115`
+**Location:** `plainly/frontend/templates/index.html:85-115`
 
 ```html
 <section class="hero-banner hero-discover">
@@ -9343,10 +9369,10 @@ Gaps between cards also reduce proportionally (1rem → 0.25rem).
 
 ### Files Modified
 
-- `frontend/templates/index.html:85-115` - HTML structure
-- `frontend/static/css/style.css:2065` - Flexbox column layout
-- `frontend/static/css/style.css:2173-2188` - Carousel responsive styles
-- `frontend/static/css/style.css:2265-2420` - Mobile breakpoints
+- `plainly/frontend/templates/index.html:85-115` - HTML structure
+- `plainly/frontend/static/css/style.css:2065` - Flexbox column layout
+- `plainly/frontend/static/css/style.css:2173-2188` - Carousel responsive styles
+- `plainly/frontend/static/css/style.css:2265-2420` - Mobile breakpoints
 
 ---
 
@@ -9433,17 +9459,17 @@ if (chapterFulltext && !restoreScroll) {
 **Book Summary Loading:**
 - `loadConciseSummary()` - "Loading summary..."
 - `loadMediumSummary()` - "Loading full summary..."
-- Location: `frontend/static/js/app.js:1405-1413, 1479-1487`
+- Location: `plainly/frontend/static/js/app.js:1405-1413, 1479-1487`
 
 **Chapter Loading:**
 - `loadChapters()` - "Loading chapters..."
 - Chapter detail - "Loading chapter text..." and "Loading summary..."
-- Location: `frontend/static/js/app.js:1520-1528, 1886-1902`
+- Location: `plainly/frontend/static/js/app.js:1520-1528, 1886-1902`
 
 **Metadata Loading:**
 - `loadBookMetadata()` - "Loading book information..." and "Loading reading guide..."
 - `loadRelatedBooks()` - "Loading related books..."
-- Location: `frontend/static/js/app.js:1327-1365, 1654-1661`
+- Location: `plainly/frontend/static/js/app.js:1327-1365, 1654-1661`
 
 ### Loading Dismissal
 
@@ -9460,7 +9486,7 @@ if (skeleton) skeleton.remove();
 
 **Critical for Reading Guide:** The `updateReadingGuide()` method must remove both `.loading-container` and `.skeleton` to properly dismiss loading states when images load.
 
-Location: `frontend/static/js/app.js:1303-1310`
+Location: `plainly/frontend/static/js/app.js:1303-1310`
 
 ### Backward Compatibility
 
@@ -9487,14 +9513,14 @@ Legacy skeleton classes retained for backward compatibility:
 
 ### Files Modified
 
-- `frontend/static/css/style.css:556-641` - Loading component styles
-- `frontend/static/js/app.js:1303-1310` - Loading dismissal
-- `frontend/static/js/app.js:1327-1365` - Book metadata loading
-- `frontend/static/js/app.js:1405-1413` - Concise summary loading
-- `frontend/static/js/app.js:1479-1487` - Medium summary loading
-- `frontend/static/js/app.js:1520-1528` - Chapters loading
-- `frontend/static/js/app.js:1654-1661` - Related books loading
-- `frontend/static/js/app.js:1886-1902` - Chapter detail loading
+- `plainly/frontend/static/css/style.css:556-641` - Loading component styles
+- `plainly/frontend/static/js/app.js:1303-1310` - Loading dismissal
+- `plainly/frontend/static/js/app.js:1327-1365` - Book metadata loading
+- `plainly/frontend/static/js/app.js:1405-1413` - Concise summary loading
+- `plainly/frontend/static/js/app.js:1479-1487` - Medium summary loading
+- `plainly/frontend/static/js/app.js:1520-1528` - Chapters loading
+- `plainly/frontend/static/js/app.js:1654-1661` - Related books loading
+- `plainly/frontend/static/js/app.js:1886-1902` - Chapter detail loading
 
 ---
 
@@ -9562,7 +9588,7 @@ renderTop10AsStandardCarousel(containerId, title = 'Popular') {
 }
 ```
 
-Location: `frontend/static/js/app.js:955-980`
+Location: `plainly/frontend/static/js/app.js:955-980`
 
 #### UI Consistency
 
@@ -9596,7 +9622,7 @@ async showDiscoverPage(restoreScroll = false) {
 }
 ```
 
-Location: `frontend/static/js/app.js:2856-2894`
+Location: `plainly/frontend/static/js/app.js:2856-2894`
 
 **Why `ensureBooksLoaded()` is Required:**
 1. Popular carousel looks up books by Gutenberg ID
@@ -9617,7 +9643,7 @@ const viewAllLink = !isDiscoverPage && category.id !== 'all' && category.id !== 
         : '';
 ```
 
-Location: `frontend/static/js/app.js:800-805`
+Location: `plainly/frontend/static/js/app.js:800-805`
 
 **Exclusion Reasons:**
 - **Discover page carousels:** No category detail pages for difficulty levels
@@ -9633,7 +9659,7 @@ Quick-read carousel featuring shorter classics (under 50,000 words) perfect for 
 #### Implementation
 
 **Backend Filter Logic:**
-Location: `backend/app_base.py:1051-1056`
+Location: `plainly/app_base.py:1051-1056`
 
 ```python
 # Carousel 3: Books You Can Read in a Day (under 50,000 words)
@@ -9645,7 +9671,7 @@ for book in all_books:
 ```
 
 **Carousel Data Structure:**
-Location: `backend/app_base.py:1104-1110`
+Location: `plainly/app_base.py:1104-1110`
 
 ```python
 if quick_reads:
@@ -9696,14 +9722,14 @@ Placed after "Books with Full Audio Summaries" to:
 ### Files Modified
 
 **Original Implementation (2025-12-11):**
-- `frontend/static/js/app.js:800-805` - View All link logic
-- `frontend/static/js/app.js:955-980` - New popular carousel renderer
-- `frontend/static/js/app.js:2871-2872` - Ensure books loaded
-- `frontend/static/js/app.js:2895-2901` - Render popular carousel on page
+- `plainly/frontend/static/js/app.js:800-805` - View All link logic
+- `plainly/frontend/static/js/app.js:955-980` - New popular carousel renderer
+- `plainly/frontend/static/js/app.js:2871-2872` - Ensure books loaded
+- `plainly/frontend/static/js/app.js:2895-2901` - Render popular carousel on page
 
 **Quick-Reads Carousel Addition (2025-12-14):**
-- `backend/app_base.py:1051-1056` - Filter logic for books under 50k words
-- `backend/app_base.py:1104-1110` - Carousel data structure
+- `plainly/app_base.py:1051-1056` - Filter logic for books under 50k words
+- `plainly/app_base.py:1104-1110` - Carousel data structure
 
 ---
 
@@ -9724,7 +9750,7 @@ Blog posts feature header images automatically sourced from Unsplash API, displa
 
 ### Unsplash API Integration
 
-**Configuration:** `backend/config.py:23-24`
+**Configuration:** `plainly/config.py:23-24`
 ```python
 UNSPLASH_ACCESS_KEY = os.getenv('UNSPLASH_ACCESS_KEY', '')
 ```
@@ -9741,18 +9767,18 @@ UNSPLASH_ACCESS_KEY=<your-api-key>
 
 ### Image Assignment Script
 
-**Location:** `scripts/blog/assign_blog_header_images.py`
+**Location:** `plainly/scripts/blog/assign_blog_header_images.py`
 
 **Usage:**
 ```bash
 # Assign to all posts missing images
-python scripts/blog/assign_blog_header_images.py
+python plainly/scripts/blog/assign_blog_header_images.py
 
 # Assign to specific post by slug
-python scripts/blog/assign_blog_header_images.py --slug british-vs-american-english
+python plainly/scripts/blog/assign_blog_header_images.py --slug british-vs-american-english
 
 # Re-assign to all posts (force)
-python scripts/blog/assign_blog_header_images.py --force
+python plainly/scripts/blog/assign_blog_header_images.py --force
 ```
 
 **Search Strategy:**
@@ -9788,7 +9814,7 @@ query_mappings = {
 
 ### Frontend Display
 
-**Blog Index:** `frontend/static/js/components/BlogIndex.js:37-43`
+**Blog Index:** `plainly/frontend/static/js/components/BlogIndex.js:37-43`
 
 Thumbnail display in blog grid cards:
 ```javascript
@@ -9801,7 +9827,7 @@ const thumbnailHTML = post.header_image_url ? `
 ` : '';
 ```
 
-**Blog Post:** `frontend/static/js/components/BlogPost.js:46-53`
+**Blog Post:** `plainly/frontend/static/js/components/BlogPost.js:46-53`
 
 Full header image on post pages:
 ```javascript
@@ -9816,12 +9842,12 @@ const headerImageHTML = this.post.header_image_url ? `
 
 ### CSS Styling
 
-**Thumbnail Cards:** `frontend/static/css/style.css:4462-4500`
+**Thumbnail Cards:** `plainly/frontend/static/css/style.css:4462-4500`
 - Height: 200px
 - Object-fit: cover (crops to fill)
 - Hover effect: 1.05x scale
 
-**Full Headers:** `frontend/static/css/style.css:4541-4553`
+**Full Headers:** `plainly/frontend/static/css/style.css:4541-4553`
 - Max height: 400px
 - Object-fit: cover
 - Border radius: 12px
@@ -9878,18 +9904,18 @@ const headerImageHTML = this.post.header_image_url ? `
 ### Files Modified
 
 **Backend:**
-- `backend/models.py:278-284` - Database migration for header_image_url
-- `backend/models.py:1562-1577` - Updated add_blog_post() method
-- `backend/config.py:23-24` - Unsplash API key configuration
+- `plainly/models.py:278-284` - Database migration for header_image_url
+- `plainly/models.py:1562-1577` - Updated add_blog_post() method
+- `plainly/config.py:23-24` - Unsplash API key configuration
 
 **Frontend:**
-- `frontend/static/js/components/BlogIndex.js:37-43` - Thumbnail display
-- `frontend/static/js/components/BlogPost.js:46-53` - Full header display
-- `frontend/static/css/style.css:4462-4500` - Blog card styling
-- `frontend/static/css/style.css:4541-4553` - Header image styling
+- `plainly/frontend/static/js/components/BlogIndex.js:37-43` - Thumbnail display
+- `plainly/frontend/static/js/components/BlogPost.js:46-53` - Full header display
+- `plainly/frontend/static/css/style.css:4462-4500` - Blog card styling
+- `plainly/frontend/static/css/style.css:4541-4553` - Header image styling
 
 **Scripts:**
-- `scripts/blog/assign_blog_header_images.py` - New script for image assignment
+- `plainly/scripts/blog/assign_blog_header_images.py` - New script for image assignment
 
 **Configuration:**
 - `.env` - Added UNSPLASH_ACCESS_KEY
@@ -9911,7 +9937,7 @@ Summra maintains high data integrity for chapter text extracted from Project Gut
 
 ### Audit Script
 
-**Location:** `scripts/audits/audit_chapter_text.py`
+**Location:** `plainly/scripts/audits/audit_chapter_text.py`
 
 **Purpose:**
 Compares database `chapter_text` with re-extracted chapters from Gutenberg source files to identify discrepancies and verify data integrity.
@@ -9919,7 +9945,7 @@ Compares database `chapter_text` with re-extracted chapters from Gutenberg sourc
 **Usage:**
 ```bash
 # Run full audit on all 81 books
-python scripts/audits/audit_chapter_text.py
+python plainly/scripts/audits/audit_chapter_text.py
 ```
 
 ### Coverage Metrics
@@ -9948,20 +9974,20 @@ Summra can be installed to a device's home screen for an app-like launch experie
 
 ### Web App Manifest
 
-**Location:** `frontend/templates/manifest.json` (rendered via `/manifest.json`, `backend/routes/system.py`)
+**Location:** `plainly/frontend/templates/manifest.json` (rendered via `/manifest.json`, `plainly/routes/system.py`)
 
 **Purpose:** Defines app metadata for installation (name, icons, `display: standalone`, theme colors).
 
 **Template Integration:**
-- Linked in `frontend/templates/index.html` via `<link rel="manifest">`
+- Linked in `plainly/frontend/templates/index.html` via `<link rel="manifest">`
 - Includes Apple-specific meta tags for iOS compatibility
 
 ### iOS Install Banner
 
 **Components:**
 - iOS detection in `app.js` (`setupInstallPrompt()`)
-- Install banner in `frontend/templates/index.html` (`#ios-install-banner`)
-- Banner styles in `frontend/static/css/style.css`
+- Install banner in `plainly/frontend/templates/index.html` (`#ios-install-banner`)
+- Banner styles in `plainly/frontend/static/css/style.css`
 
 **Behavior:** Shown 2 seconds after page load on iOS Safari when not already in standalone mode and not previously dismissed (dismissal remembered via `localStorage.installBannerDismissed`, purely a UI preference — not offline-related). Android/Chrome uses the browser's native `beforeinstallprompt` flow instead.
 
@@ -9981,7 +10007,7 @@ The pagination system transforms chapter reading from scroll-based to page-based
 
 ### State Management
 
-**Location:** `frontend/static/js/app.js` lines 48-59
+**Location:** `plainly/frontend/static/js/app.js` lines 48-59
 
 ```javascript
 this.pagination = {
@@ -10004,7 +10030,7 @@ this.pagination = {
 
 ### Page Calculation Algorithm
 
-**Location:** `frontend/static/js/app.js` lines 4525-4801
+**Location:** `plainly/frontend/static/js/app.js` lines 4525-4801
 
 **Key Principle:** Break content only at paragraph boundaries to prevent mid-sentence splits.
 
@@ -10145,7 +10171,7 @@ Our implementation compared to industry standards:
 
 ### Navigation System (updated 2026-10-17)
 
-All in `frontend/static/js/pagination.js`; styles in `style.css` next to `.pagination-nav-button`. Controls are chosen by input device with CSS media queries, not by width.
+All in `plainly/frontend/static/js/pagination.js`; styles in `style.css` next to `.pagination-nav-button`. Controls are chosen by input device with CSS media queries, not by width.
 
 1. **Page-turn buttons** (`setupNavigationZones`). Two `<button>`s (`.pagination-nav-prev` / `.pagination-nav-next`) appended to the wrapper.
    - Default (touch): visually hidden with `clip-path: inset(50%)` at 1px, kept for screen readers.
@@ -10175,7 +10201,7 @@ All in `frontend/static/js/pagination.js`; styles in `style.css` next to `.pagin
 **Hint storage.** `auth.js` exposes `hintSeen(key)` / `markHintSeen(key)`.
 - Seen means the account's `hints_seen` (from `/api/auth/check`) or `localStorage['summra-hint-<key>']`.
 - Marking writes localStorage and, when signed in, sends `POST /api/hints/<key>/seen`.
-- Server side: table `user_hint_seen(user_id, hint_key, seen_at, PK(user_id, hint_key))` in the user DB (`backend/user_models.py`, keys limited to `VALID_HINTS`). The route lives in `progress_routes.py` (`login_required`, 400 for unknown keys). `whoami.check` returns `hints_seen` for signed-in users.
+- Server side: table `user_hint_seen(user_id, hint_key, seen_at, PK(user_id, hint_key))` in the user DB (`shared/auth/user_models.py`, keys limited to `VALID_HINTS`). The route lives in `progress_routes.py` (`login_required`, 400 for unknown keys). `whoami.check` returns `hints_seen` for signed-in users.
 
 **Tests:** `tests/e2e/reader_nav_mouse.mjs`, `reader_nav_touch.mjs`, `reader_nav_hint.mjs`; `tests/test_user_hints.py`.
 
@@ -10389,7 +10415,7 @@ const hasNextChapter = this.chapters.some(ch => ch.chapter_number === this.curre
 
 ### CSS Classes
 
-**Location:** `frontend/static/css/style.css` lines 4971-5220
+**Location:** `plainly/frontend/static/css/style.css` lines 4971-5220
 
 **Key Classes:**
 - `.pagination-wrapper` - Container for all pages (height set by JS)
@@ -10413,7 +10439,7 @@ body.pagination-active {
 ### Files Involved
 
 **JavaScript:**
-- `frontend/static/js/app.js`:
+- `plainly/frontend/static/js/app.js`:
   - Lines 48-59: State initialization
   - Lines 2159-2163: Flash prevention (hide)
   - Lines 3721-3752: Font size application
@@ -10424,14 +10450,14 @@ body.pagination-active {
   - Lines 5091-5092: Chapter navigation fix
 
 **CSS:**
-- `frontend/static/css/style.css`:
+- `plainly/frontend/static/css/style.css`:
   - Lines 1708-1710: Removed hardcoded font-size from `.chapter-fulltext`
   - Lines 1709: Removed hardcoded font-size from `.chapter-modern-english`
   - Lines 2082: Removed hardcoded font-size from `.pagination-page-container`
   - Lines 4971-5220: Complete pagination styling
 
 **HTML:**
-- `frontend/templates/index.html`:
+- `plainly/frontend/templates/index.html`:
   - Line 652: Version v5.17
 
 ### Version History
@@ -10466,7 +10492,7 @@ chapter heading; `pagination.js` treats that figure as a page block in both regu
 side-by-side modes.
 
 **Verse passages and side-by-side splitting** (2026-10-16):
-- Data: `scripts/content/segment_verse_passages.py` inserts blank lines into an `is_poetry` book's
+- Data: `plainly/scripts/content/segment_verse_passages.py` inserts blank lines into an `is_poetry` book's
   `chapter_text`, grouping lines into passages (target 20, range 12–30, ending at a sentence end;
   falls back to `;`/`:`, then the next sentence end up to 45 lines). Paradise Lost (book 102):
   518 passages.
@@ -10483,7 +10509,7 @@ side-by-side modes.
   fraction, which left the shorter column stopped mid-sentence above blank space. Measuring pages are appended beside the live page (so `.continuous-reader-section`
   row padding/borders apply) and start with the side-by-side header banner instead of subtracting
   its height. Both used to make live pages overflow and clip text.
-- Plain English for verse: `scripts/content/passage_rewrite.py` (`export` / `check` / `apply`) — an
+- Plain English for verse: `plainly/scripts/content/passage_rewrite.py` (`export` / `check` / `apply`) — an
   agent writes one paragraph per passage; `check_passages()` gates exact count, single line,
   sentence-terminator ending, per-passage ratio 0.5–1.3, chapter ratio 0.50–1.10, no summary language.
 - Tests: `tests/test_segment_verse_passages.py`, `tests/test_reader_verse_passages.py`,
@@ -10498,7 +10524,7 @@ side-by-side modes.
     - `_` may follow a terminator (italics);
     - a summary phrase passes when the chapter's original contains it.
   - Original-side cleanup:
-    - `scripts/audits/strip_footnotes.py` removes `[n]` markers and a trailing `Footnotes` block;
+    - `plainly/scripts/audits/strip_footnotes.py` removes `[n]` markers and a trailing `Footnotes` block;
     - `strip_illustration_captions.py --tags-only` removes only `[Illustration…]` paragraphs.
   - Process: `docs/agent_plain_english_workflow.md`.
   - Tests: `tests/test_passage_rewrite.py` (15), `tests/test_strip_footnotes.py` (6),
@@ -10551,7 +10577,7 @@ retired version, and grew the database to 0.8–1.2GB.
   constants). It holds no Plainly SQL; the host class supplies hooks: `get_connection`, `get_book`,
   `_reader_load_book` (`{'id', 'verse'}`), `_reader_load_chapters`, `_reader_chapter_units`,
   `_reader_plain_coverage`, `_reader_source_checksum` and `_reader_structure` (manifest parts and
-  chapters). Plainly's `Database(ReaderIndexMixin)` in `backend/models.py` implements them over
+  chapters). Plainly's `Database(ReaderIndexMixin)` in `plainly/models.py` implements them over
   `books`/`chapters`/`book_sections`, and keeps the old-table migration. Tests:
   `tests/shared/test_reader_index.py` (a fake host with no Plainly tables) and the pinned
   `test_source_checksum_is_stable_for_fixture_book`.

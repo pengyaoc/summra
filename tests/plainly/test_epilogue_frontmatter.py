@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 import pytest
 
 

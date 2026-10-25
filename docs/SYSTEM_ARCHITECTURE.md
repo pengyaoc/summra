@@ -97,7 +97,7 @@ flowchart LR
 ### Runtime path
 
 1. Apache or nginx terminates HTTPS, optionally performs OIDC, and serves `/static/` directly.
-2. Dynamic requests are proxied over loopback to one Gunicorn process running `backend.app_prod:app`.
+2. Dynamic requests are proxied over loopback to one Gunicorn process running `plainly.app_prod:app`.
 3. Flask blueprints implement pages, catalog, reader, taxonomy, authors, progress, and system endpoints.
 4. Public content is read from `data/database.db`.
 5. Identity and reading progress are stored in `data/summra.db`.
@@ -142,7 +142,7 @@ Measurements from the snapshot above:
 
 ### 1. The persistence layer has too many responsibilities
 
-`backend/models.py` combines:
+`plainly/models.py` combines:
 
 - schema definition and migration;
 - catalog, summary, chapter, taxonomy, author, blog, and audio persistence;
@@ -319,7 +319,7 @@ The dependency rule is the important part: entry points call application service
 The exact filenames can evolve incrementally. This is a destination, not a rewrite plan.
 
 ```text
-backend/
+plainly/
   app_factory.py
   config.py
   routes/
@@ -343,7 +343,7 @@ backend/
   auth/
     ...
 
-scripts/pipeline/
+plainly/scripts/pipeline/
   cli.py
   workflow.py
   state.py
@@ -362,7 +362,7 @@ scripts/pipeline/
     gutenberg.py
     unsplash.py
 
-frontend/static/js/
+plainly/frontend/static/js/
   api/
   router/
   features/
@@ -549,15 +549,15 @@ Until then, invest in module boundaries, explicit workflows, tests, and document
 
 ## Evidence map
 
-- Application construction, dependency injection through globals, auth gating, and caching: `backend/app_base.py`.
-- Development/production route differences: `backend/app.py`, `backend/app_prod.py`.
-- Content schema, startup migrations, repository breadth, reader compilation, and reader queries: `backend/models.py`.
-- User/progress schema, WAL mode, optimistic revisions, and mutation idempotency: `backend/user_models.py`.
-- Progress validation and library assembly: `backend/progress_routes.py`.
-- Public book/reader APIs and per-item audio checks: `backend/routes/books.py`.
-- Trusted-header identity: `backend/pchauth/`, `deploy/apache/summra.conf`.
+- Application construction, dependency injection through globals, auth gating, and caching: `plainly/app_base.py`.
+- Development/production route differences: `plainly/app.py`, `plainly/app_prod.py`.
+- Content schema, startup migrations, repository breadth, reader compilation, and reader queries: `plainly/models.py`.
+- User/progress schema, WAL mode, optimistic revisions, and mutation idempotency: `shared/auth/user_models.py`.
+- Progress validation and library assembly: `shared/progress/routes.py`.
+- Public book/reader APIs and per-item audio checks: `plainly/routes/books.py`.
+- Trusted-header identity: `shared/auth/pchauth/`, `deploy/apache/summra.conf`.
 - Runtime sizing and sandbox: `deploy/gunicorn_config.py`, `deploy/systemd/summra.service`.
 - Update, media-copy, and backup procedures: `deploy/install.sh`, `deploy/README.md`, `deploy/DEPLOY.md`.
 - CI: `.github/workflows/ci.yml`.
-- Content generation and audits: `scripts/content/generate_summaries.py`, `scripts/content/generate_modern_english.py`, `scripts/images/`, `scripts/audio/`, `scripts/audits/`.
-- Frontend structure: `frontend/static/js/app.js`, `frontend/static/js/reader.js`, `frontend/static/js/auth.js`.
+- Content generation and audits: `plainly/scripts/content/generate_summaries.py`, `plainly/scripts/content/generate_modern_english.py`, `plainly/scripts/images/`, `plainly/scripts/audio/`, `plainly/scripts/audits/`.
+- Frontend structure: `plainly/frontend/static/js/app.js`, `plainly/frontend/static/js/reader.js`, `plainly/frontend/static/js/auth.js`.

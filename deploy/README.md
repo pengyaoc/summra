@@ -47,9 +47,9 @@ it's host-level config owned outside any single service's repo. See
 Either way, then copy in data:
 ```bash
 gcloud compute scp data/database.db <vm>:/tmp/database.db --zone=<zone>
-gcloud compute scp --recurse frontend/static/audio frontend/static/covers <vm>:/tmp/ --zone=<zone>
+gcloud compute scp --recurse plainly/frontend/static/audio plainly/frontend/static/covers <vm>:/tmp/ --zone=<zone>
 # on the VM, as the summra user, move these into /opt/summra/data and
-# /opt/summra/frontend/static/ respectively
+# /opt/summra/plainly/frontend/static/ respectively
 ```
 
 ## Runtime shape
@@ -58,7 +58,7 @@ gcloud compute scp --recurse frontend/static/audio frontend/static/covers <vm>:/
 Internet
     |
 Apache or nginx (443, shared with other cohosted services)
-    ├── <prefix>/static/ → served directly from /opt/summra/frontend/static/
+    ├── <prefix>/static/ → served directly from /opt/summra/plainly/frontend/static/
     └── <prefix>/        → proxied to gunicorn on 127.0.0.1:<port>
                                 |
                         gunicorn (gthread, 1 worker, 4 threads)
@@ -77,7 +77,7 @@ also removes a real deploy risk: the pinned `gevent==24.2.1` has no wheel for ne
 fails to build from source, which is what previously forced an unpinned, undocumented install.
 
 **Why no `GEMINI_API_KEY` on the server:** production never generates TTS or calls Gemini for
-anything — `app_prod.py` serves only pre-generated audio from `frontend/static/audio/`, 404ing
+anything — `app_prod.py` serves only pre-generated audio from `plainly/frontend/static/audio/`, 404ing
 if it's missing. All Gemini calls happen locally during content generation; only the resulting
 audio files and DB rows get deployed. Keep the real key in your local, gitignored `.env` only.
 

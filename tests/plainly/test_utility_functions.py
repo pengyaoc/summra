@@ -14,7 +14,7 @@ import sys
 import os
 
 
-from scripts.content.generate_summaries import (
+from plainly.scripts.content.generate_summaries import (
     normalize_book_title,
     fix_roman_numerals_in_text,
     SummaryGenerator

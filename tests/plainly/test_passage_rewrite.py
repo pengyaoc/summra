@@ -1,5 +1,5 @@
-"""Tests for scripts/content/passage_rewrite.py (verse Plain English gate)."""
-from scripts.content.passage_rewrite import check_passages
+"""Tests for plainly/scripts/content/passage_rewrite.py (verse Plain English gate)."""
+from plainly.scripts.content.passage_rewrite import check_passages
 
 VERSE = "Of Man’s first disobedience, and the fruit\nOf that forbidden tree whose mortal taste\nBrought death into the World, and all our woe."
 GOOD = "Sing about how people first disobeyed God, and the fruit of the forbidden tree that brought death and all our sorrow."
@@ -49,21 +49,21 @@ def test_summary_phrase_present_in_original_passes():
 
 
 def test_chunks_respect_size_and_numbering():
-    from scripts.content.passage_rewrite import chunk_paragraphs
+    from plainly.scripts.content.passage_rewrite import chunk_paragraphs
     paras = ["a" * 40, "b" * 40, "c" * 40, "d" * 200]
     assert chunk_paragraphs(paras, max_chars=100) == [(1, paras[:2]), (3, [paras[2]]), (4, [paras[3]])]
     assert chunk_paragraphs([], max_chars=100) == []
 
 
 def test_rules_file_uses_generator_rules():
-    from scripts.content.passage_rewrite import build_rules
+    from plainly.scripts.content.passage_rewrite import build_rules
     rules = build_rules("The Iliad", "Homer")
     assert "PARAGRAPH COUNT MUST MATCH EXACTLY" in rules  # the Gemini generator's own rules
     assert "The Iliad" in rules and "Homer" in rules
 
 
 def test_chunk_prompt_points_to_rules_and_holds_only_its_paragraphs():
-    from scripts.content.passage_rewrite import build_chunk_prompt
+    from plainly.scripts.content.passage_rewrite import build_chunk_prompt
     prompt = build_chunk_prompt("Book I", 5, ["First para.", "Second para."], "out/ch1/005.json", "in/RULES.md")
     assert "in/RULES.md" in prompt and "Book I" in prompt
     assert "[P5] First para.\n\n[P6] Second para." in prompt
@@ -76,7 +76,7 @@ def test_verbatim_heading_without_terminator_passes():
 
 
 def test_review_pairs_format():
-    from scripts.content.passage_rewrite import format_pairs
+    from plainly.scripts.content.passage_rewrite import format_pairs
     out = format_pairs(["Orig one.", "Orig two."], ["Plain one.", "Plain two."])
     assert out == ("### P1 (ratio 1.11)\nORIGINAL: Orig one.\nPLAIN: Plain one.\n\n"
                    "### P2 (ratio 1.11)\nORIGINAL: Orig two.\nPLAIN: Plain two.\n")
@@ -122,7 +122,7 @@ def test_something_in_original_is_not_filler():
 
 
 def test_dropped_connective_warns():
-    from scripts.content.passage_rewrite import connective_warnings
+    from plainly.scripts.content.passage_rewrite import connective_warnings
     original = "The price, therefore, must rise; and it is perhaps not only the rich who feel it."
     plain = "The price must rise, and the rich feel it, along with others."
     warnings = connective_warnings([original], [plain])
@@ -130,14 +130,14 @@ def test_dropped_connective_warns():
 
 
 def test_kept_connective_does_not_warn():
-    from scripts.content.passage_rewrite import connective_warnings
+    from plainly.scripts.content.passage_rewrite import connective_warnings
     original = "The price, therefore, must rise; and it is perhaps not only the rich who feel it."
     plain = "So the price must rise. Maybe it is not just the rich who feel it."
     assert connective_warnings([original], [plain]) == []
 
 
 def test_rules_state_book_learnings():
-    from scripts.content.passage_rewrite import build_rules
+    from plainly.scripts.content.passage_rewrite import build_rules
     rules = build_rules("A Book", "An Author")
     for rule in ("short parenthetical", "{See", "therefore", "something.", "scanning errors"):
         assert rule in rules, rule

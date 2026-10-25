@@ -50,7 +50,7 @@ Complete guide for deploying Summra to Google Cloud Platform. Covers both e2-mic
 Internet
     |
 Nginx (Port 80/443)
-    ├── Static files → <REMOTE_REPO_PATH>/frontend/static/
+    ├── Static files → <REMOTE_REPO_PATH>/plainly/frontend/static/
     ├── API requests → Gunicorn (Port 5000)
     └── TTS requests → Gunicorn (Port 5000, 5min timeout)
            |
@@ -199,7 +199,7 @@ sudo deploy/install.sh
 ```bash
 sudo chown -R www-data:www-data <REMOTE_REPO_PATH>
 sudo chmod -R 775 <REMOTE_REPO_PATH>/data
-sudo chmod -R 775 <REMOTE_REPO_PATH>/frontend/static/audio
+sudo chmod -R 775 <REMOTE_REPO_PATH>/plainly/frontend/static/audio
 sudo chown -R $USER:$USER <REMOTE_REPO_PATH>/.git
 ```
 
@@ -215,14 +215,14 @@ cd /path/to/summra
 gcloud compute scp data/database.db summra:<REMOTE_REPO_PATH>/data/ --zone=us-west1-b
 
 # Audio files
-gcloud compute scp --recurse frontend/static/audio/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-west1-b
+gcloud compute scp --recurse plainly/frontend/static/audio/ summra:<REMOTE_REPO_PATH>/plainly/frontend/static/ --zone=us-west1-b
 
 # Cover images
-gcloud compute scp --recurse frontend/static/covers/ summra:<REMOTE_REPO_PATH>/frontend/static/ --zone=us-west1-b
+gcloud compute scp --recurse plainly/frontend/static/covers/ summra:<REMOTE_REPO_PATH>/plainly/frontend/static/ --zone=us-west1-b
 
 # Fix permissions after upload
 gcloud compute ssh summra --zone=us-west1-b -- \
-    "sudo chown -R www-data:www-data <REMOTE_REPO_PATH>/data <REMOTE_REPO_PATH>/frontend/static"
+    "sudo chown -R www-data:www-data <REMOTE_REPO_PATH>/data <REMOTE_REPO_PATH>/plainly/frontend/static"
 ```
 
 ---
@@ -512,7 +512,7 @@ gcloud compute instances add-metadata INSTANCE_NAME --zone=ZONE --metadata=enabl
 ### Static Files Return 404
 
 ```bash
-ls -la <REMOTE_REPO_PATH>/frontend/static/
+ls -la <REMOTE_REPO_PATH>/plainly/frontend/static/
 grep "location /static" /etc/nginx/sites-available/summra
 sudo nginx -t && sudo systemctl reload nginx
 ```

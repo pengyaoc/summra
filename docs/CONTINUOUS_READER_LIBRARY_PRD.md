@@ -25,7 +25,7 @@ The reader preserves Summra's existing book-like, viewport-based pagination and 
 
 The current implementation has useful foundations but exposes the storage model in the product experience:
 
-- Cloud progress is one row per user and book in `backend/user_models.py`.
+- Cloud progress is one row per user and book in `shared/auth/user_models.py`.
 - `/api/progress` saves chapter, rendered page, and pixel scroll position.
 - The book page may show a chapter/page-based Continue Reading action.
 - Pagination saves page changes and treats reaching a chapter's last rendered page as chapter completion.
@@ -849,8 +849,8 @@ These decisions do not change the product contract and should be resolved in tec
 ## 26. References
 
 - Existing product PRD: `docs/PRD.md`
-- Existing reading-progress implementation: `backend/user_models.py`, `backend/progress_routes.py`, `frontend/static/js/auth.js`
-- Existing reader and pagination: `frontend/static/js/reader.js`, `frontend/static/js/pagination.js`
+- Existing reading-progress implementation: `shared/auth/user_models.py`, `shared/progress/routes.py`, `plainly/frontend/static/js/auth.js`
+- Existing reader and pagination: `plainly/frontend/static/js/reader.js`, `plainly/frontend/static/js/pagination.js`
 - [Kindle User's Guide](https://kindle.s3.amazonaws.com/Kindle_User%27s_Guide_English.pdf) — reading progress/location and adjustable presentation precedents
 - [Amazon: Update Your Sync Settings for Kindle](https://digprjsurvey.amazon.com/csad/help/node/GGFEXXS8Z7DPJSTN)
 - [Amazon: Sync Your Kindle E-Reader](https://digprjsurvey.amazon.com/csad/help/node/GDCAMDFMC2LZP6BR)

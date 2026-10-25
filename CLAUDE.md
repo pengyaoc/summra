@@ -116,7 +116,7 @@ cd tests/e2e && npm install && npx playwright install chromium
 ```
 
 **Loop:**
-1. Start Flask in the background: `python backend/app.py` (binds `:5001` — `:5000` is taken by macOS ControlCenter).
+1. Start Flask in the background: `python plainly/app.py` (binds `:5001` — `:5000` is taken by macOS ControlCenter).
 2. Edit the template / JS / CSS.
 3. Run `cd tests/e2e && node smoke.mjs` — defaults to `http://localhost:5001/`.
 4. `Read` the PNG in `tests/e2e/screenshots/` to confirm visually.
@@ -145,14 +145,14 @@ git worktree remove .claude/worktrees/<name>   # cleanup
 ```
 
 **Per-session isolation (required):**
-- **Flask port** — only one session can bind `:5001`. Others must use `PORT=5002 python backend/app.py` etc., and run smoke tests with `BASE_URL=http://localhost:5002 node smoke.mjs`.
+- **Flask port** — only one session can bind `:5001`. Others must use `PORT=5002 python plainly/app.py` etc., and run smoke tests with `BASE_URL=http://localhost:5002 node smoke.mjs`.
 - **Python venv** — each worktree needs its own `venv/` (or symlink a shared one, accepting that dep changes affect all).
 - **`node_modules`** under `tests/e2e/` — reinstall per worktree or symlink.
 - **SQLite DB at `data/summra.db`** — each worktree has its own copy; ingestion in one worktree is invisible to others.
 
 **Practical limits:** 2–4 parallel sessions is the sweet spot. Beyond that, you lose the ability to review output and hit API rate limits.
 
-**Scope discipline:** Give each session a non-overlapping slice (e.g., one on `scripts/content/`, one on `frontend/`, one on `scripts/audits/`). Two sessions editing the same file will produce merge conflicts at PR time.
+**Scope discipline:** Give each session a non-overlapping slice (e.g., one on `plainly/scripts/content/`, one on `plainly/frontend/`, one on `plainly/scripts/audits/`). Two sessions editing the same file will produce merge conflicts at PR time.
 
 **Git hygiene:**
 - Commit at session boundaries — uncommitted state is the only thing that doesn't survive a reset.
@@ -161,7 +161,7 @@ git worktree remove .claude/worktrees/<name>   # cleanup
 
 **Subagent worktree discipline:** Subagents inherit the parent's CWD but can `cd` anywhere and use absolute paths. A subagent spawned from a worktree can silently write to the main checkout (or commit to `main`) if not constrained. Always:
 - **Brief explicitly** — subagents don't see conversation context. State the worktree path and branch in the prompt: "You are in worktree `.claude/worktrees/feature-x` on branch `feature-x`. Do NOT `cd` to the main checkout or use absolute paths outside this worktree."
-- **Use relative paths** in subagent prompts (`backend/app.py`, not an absolute path to your local checkout).
+- **Use relative paths** in subagent prompts (`plainly/app.py`, not an absolute path to your local checkout).
 - **For truly independent work, spawn with `isolation: "worktree"`** — the Agent tool creates a fresh worktree just for that subagent.
 - **Verify before committing** — end subagent prompts with: "Before committing, run `pwd && git branch --show-current` and confirm it matches the expected worktree. If not, stop and report."
 - **If a subagent writes to main unexpectedly:** `cd` to the main checkout, `git status` / `git log -5 main` to assess, then `git reset --hard HEAD~N` (local only) or `git revert <sha>` (if pushed). Re-do the work in the correct worktree.
@@ -172,7 +172,7 @@ When asked to ingest a new book file (typically a `data/books/pg<id>.txt` from P
 
 **1. Dry-run and review.**
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/content/generate_summaries.py data/books/<file> --dry-run
+venv/bin/python -m plainly.scripts.content.generate_summaries data/books/<file> --dry-run
 ```
 The `CHAPTER BREAKDOWN` block at the end prints each detected chapter with its title, char/word counts, and **start/end line numbers in the raw source file**. Read the source at those line numbers (or grep for `^CHAPTER\|^PART\|^BOOK\|^VOLUME` in the file) and verify:
   - Chapter count matches the source's actual chapter count.
@@ -183,13 +183,13 @@ The `CHAPTER BREAKDOWN` block at the end prints each detected chapter with its t
 
 **2. Ingest only if dry-run looks correct.** If anything looks off, STOP. Either fix the parser for that case (rare, only for clearly script-side bugs like the `PART I.` → `'.'` capture or `M.D.` → `M.d.` normalization), or document the book as a known-bad case below.
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/content/generate_summaries.py data/books/<file> --parse-only
+venv/bin/python -m plainly.scripts.content.generate_summaries data/books/<file> --parse-only
 ```
 Note the new `book_id` printed.
 
 **3. Validate after ingest.**
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/validate_chapter_split.py --book-id <id> --llm-digest
+venv/bin/python -m plainly.scripts.audits.validate_chapter_split --book-id <id> --llm-digest
 ```
 The deterministic checks should be 0 FAIL and at most 1 WARN (the "off-by-one for preface" warning is expected for most books). Read the `--llm-digest` block and spot-check that titles + first/last 200 chars look right per chapter.
 
@@ -230,8 +230,8 @@ When generating or fixing the `chapters.modern_english_text` column, follow this
 ### 1. Generate the plain-English version
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --all-chapters --dry-run
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --all-chapters
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --all-chapters --dry-run
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --all-chapters
 ```
 
 Always dry-run first to confirm batch count and chapter sizes. **Always start with the default `gemini-3.1-flash-lite`** — it's the cheapest/fastest model and handles most chapters. Only escalate to `--model gemini-3.5-flash` for individual chapters that come back truncated or summary-shaped (see step 4 for how to detect).
@@ -247,10 +247,10 @@ Raw responses are persisted to `data/log/gemini_logs/`; per-chapter previews to 
 Older ingests stored `chapter_text` (and some `modern_english_text`) as hard-wrapped with single `\n` between paragraphs instead of `\n\n`. The generator's paragraph validator splits on `\n\n` and will misreport `Orig=1, Modern=N` for these. Fix:
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id> --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id>
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id <id> --dry-run
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id <id>
 # Also reformat modern_english_text if it has the same shape:
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id <id> --column modern_english_text
+venv/bin/python -m plainly.scripts.audits.reformat_paragraphs --book-id <id> --column modern_english_text
 ```
 
 The script refuses to touch `is_poetry=1` books (single `\n` is a verse line break, not a paragraph). The transform is idempotent. Tests at `tests/test_reformat_paragraphs.py`.
@@ -260,8 +260,8 @@ The script refuses to touch `is_poetry=1` books (single `\n` is a verse line bre
 Some books use rows of `* * * * *` (or dashes/dots) as scene-break markers — Alice ch.1 has 6 of them (Carroll marks size changes), Dracula has them in 23 of 28 chapters. Gemini correctly ignores them as non-content, so modern winds up short. Strip them from BOTH columns so paragraph counts align:
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id <id> --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id <id>
+venv/bin/python -m plainly.scripts.audits.strip_decorative_dividers --book-id <id> --dry-run
+venv/bin/python -m plainly.scripts.audits.strip_decorative_dividers --book-id <id>
 ```
 
 Removes any paragraph that's entirely whitespace + decorative chars (`* - . … • · ~ _ =`). Idempotent. Tests at `tests/test_strip_decorative_dividers.py`.
@@ -279,7 +279,7 @@ For each chapter with `modern_english_text`, check ALL of the following — any 
 Quick per-book audit (replace `BOOK_ID`):
 
 ```sh
-PYTHONPATH=backend venv/bin/python3 -c "
+venv/bin/python3 -c "
 import sqlite3
 db = sqlite3.connect('data/database.db')
 def c(t): return len(t.strip().split(chr(10)*2)) if t and t.strip() else 0
@@ -332,9 +332,9 @@ db.commit()
 Tools:
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --inspect --snippet 200
-PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --split "5:200,7:100" --dry-run
-PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id <id> --chapter-number <n> --split "5:200,7:100"
+venv/bin/python -m plainly.scripts.audits.split_modern_paragraphs --book-id <id> --chapter-number <n> --inspect --snippet 200
+venv/bin/python -m plainly.scripts.audits.split_modern_paragraphs --book-id <id> --chapter-number <n> --split "5:200,7:100" --dry-run
+venv/bin/python -m plainly.scripts.audits.split_modern_paragraphs --book-id <id> --chapter-number <n> --split "5:200,7:100"
 ```
 
 Tests at `tests/test_split_modern_paragraphs.py`.
@@ -346,12 +346,12 @@ When step 4 audit flags a chapter as truncated, summary-shaped, or has a massive
 - **Truncated** — modern ends mid-sentence and is <50% of original length. Cause: `gemini-3.1-flash-lite` cut the output on a long chapter. Fix: re-run that single chapter; flash-lite is non-deterministic at temperature 0.3 and may produce a full response on retry. If a second flash-lite attempt also truncates, escalate that chapter to `--model gemini-3.5-flash`.
 - **Summary-shaped** — modern is 1 paragraph or <30% of original length, with condensed content. Sometimes Gemini prefaces with "I have provided a modern English summary of each section". Same flash-lite-first, escalate-to-3.5-on-repeat rule.
 - **Massive paragraph mismatch (diff >50 with valid full-length content)** — modern merged many original paragraphs. Manual alignment via subagent is infeasible without splitting mid-sentence. Escalate to `gemini-3.5-flash` which tends to preserve paragraph structure better. Some monster chapters (Odyssey ch.24 at 252 paragraphs / 79K chars) remain stubbornly summary-shaped even on 3.5-flash — accept and flag for manual review in those cases.
-- **Verse books** (`is_poetry=1`) — single `\n` is a verse line. Segment the original into blank-line passages with `scripts/content/segment_verse_passages.py`, then the paragraph check compares passages to plain paragraphs and must be exact. Paradise Lost's Plain English was written per passage by agents and gated with `scripts/content/passage_rewrite.py check`; reuse that for other verse books.
+- **Verse books** (`is_poetry=1`) — single `\n` is a verse line. Segment the original into blank-line passages with `plainly/scripts/content/segment_verse_passages.py`, then the paragraph check compares passages to plain paragraphs and must be exact. Paradise Lost's Plain English was written per passage by agents and gated with `plainly/scripts/content/passage_rewrite.py check`; reuse that for other verse books.
 
 After regenerating, return to step 2 to reformat then re-audit (steps 3–5).
 
 ```sh
-PYTHONPATH=backend venv/bin/python scripts/content/generate_modern_english.py --book-id <id> --chapters "N,N" --model gemini-3.5-flash
+venv/bin/python -m plainly.scripts.content.generate_modern_english --book-id <id> --chapters "N,N" --model gemini-3.5-flash
 ```
 
 ## Deploying to Production (GCP VM)
@@ -362,10 +362,11 @@ Production runs on a GCP VM serving the public production domain (`<PROD_DOMAIN>
 - GCP project `<GCP_PROJECT_ID>`, instance `<GCP_INSTANCE>`, zone `<GCP_ZONE>`, external IP `<VM_EXTERNAL_IP>`
 - Repo at `<REMOTE_REPO_PATH>` (owned `<VM_USER>:<SERVICE_USER>`, group-writable)
 - venv at `<REMOTE_REPO_PATH>/venv/` (Python 3.11)
-- gunicorn runs as a **systemd *user* service** `<SYSTEMD_UNIT>` owned by `<SERVICE_USER>` (uid `<SERVICE_UID>`, lingering enabled) — NOT a system unit, so plain `sudo systemctl ... <SYSTEMD_UNIT>` reports "Unit not found". Unit file: `/home/<SERVICE_USER>/.config/systemd/user/<SYSTEMD_UNIT>`; it runs `gunicorn -c deploy/gunicorn_config.py backend.app_prod:app` from `<REMOTE_REPO_PATH>` with `EnvironmentFile=<REMOTE_REPO_PATH>/service.env`
+- gunicorn runs as a **systemd *user* service** `<SYSTEMD_UNIT>` owned by `<SERVICE_USER>` (uid `<SERVICE_UID>`, lingering enabled) — NOT a system unit, so plain `sudo systemctl ... <SYSTEMD_UNIT>` reports "Unit not found". Unit file: `/home/<SERVICE_USER>/.config/systemd/user/<SYSTEMD_UNIT>`; it runs `gunicorn -c deploy/gunicorn_config.py plainly.app_prod:app` from `<REMOTE_REPO_PATH>` with `EnvironmentFile=<REMOTE_REPO_PATH>/service.env`
 - gunicorn binds `127.0.0.1:<GUNICORN_PORT>` (set by `GUNICORN_BIND` in `service.env`; the `deploy/gunicorn_config.py` default of `:5000` is NOT what prod uses)
-- **Apache** (not nginx — `deploy/nginx-*.conf` is unused on this VM) terminates TLS for `<PROD_DOMAIN>`, runs OIDC (mod_auth_openidc; forwards the signed-in email as `X-Remote-Email`), serves `/plainly/static/` straight from `<REMOTE_REPO_PATH>/frontend/static/` (gzipped by Apache), and proxies everything else to gunicorn with `X-Forwarded-Prefix: /plainly` (old `/summrabook/...` URLs get a 301 to the same page under `/plainly`). Config: `<APACHE_PROXY_CONF>`. Apache does NOT compress proxied responses — Flask gzips HTML/JSON itself (`gzip_response` in `backend/app_base.py`). Prod speaks HTTP/1.1.
+- **Apache** (not nginx — `deploy/nginx-*.conf` is unused on this VM) terminates TLS for `<PROD_DOMAIN>`, runs OIDC (mod_auth_openidc; forwards the signed-in email as `X-Remote-Email`), serves `/plainly/static/` straight from `<REMOTE_REPO_PATH>/plainly/frontend/static/` (gzipped by Apache), and proxies everything else to gunicorn with `X-Forwarded-Prefix: /plainly` (old `/summrabook/...` URLs get a 301 to the same page under `/plainly`). Config: `<APACHE_PROXY_CONF>`. Apache does NOT compress proxied responses — Flask gzips HTML/JSON itself (`gzip_response` in `plainly/app_base.py`). Prod speaks HTTP/1.1.
 - DB at `<REMOTE_DB_PATH>` (`<VM_USER>:<SERVICE_USER>`, mode `664`)
+- **Layout change (repo split):** the code now lives under `plainly/` and `shared/`. The systemd `ExecStart` must be `gunicorn -c deploy/gunicorn_config.py plainly.app_prod:app`, and the Apache static `Alias`/`<Directory>` must be `<REMOTE_REPO_PATH>/plainly/frontend/static/`. Update both on the VM (and `daemon-reload`) when first deploying this layout.
 - `<REMOTE_REPO_PATH>/service.env*` are untracked, VM-only config files — never delete or commit them
 - Pull/git work runs as `<VM_USER>`; service work runs as `<SERVICE_USER>` via `sudo -u`
 
@@ -394,7 +395,7 @@ gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo -u <VM_USER>
 
 Untracked `service.env*` files in `git status` are expected (see VM facts).
 
-**If the pull fails with "your local changes would be overwritten":** the VM has uncommitted state. Do NOT `git stash` or `--hard reset` blindly. Run `git diff HEAD -- backend/` to see if any divergence is prod-only (env-specific config, hot-patches). If it's truly safe to discard, snapshot first to a backup branch:
+**If the pull fails with "your local changes would be overwritten":** the VM has uncommitted state. Do NOT `git stash` or `--hard reset` blindly. Run `git diff HEAD -- plainly/` to see if any divergence is prod-only (env-specific config, hot-patches). If it's truly safe to discard, snapshot first to a backup branch:
 
 ```sh
 sudo -u <VM_USER> bash -c 'cd <REMOTE_REPO_PATH> && git checkout -b vm-state-backup-$(date +%Y%m%d-%H%M%S) && git add -A && git commit -m "snapshot VM working state before reset" && git checkout main && git reset --hard origin/main'
@@ -406,13 +407,13 @@ The backup branch survives so you can cherry-pick anything that turns out to mat
 
 | Changed file | Restart? |
 |---|---|
-| `backend/**` (any `.py` under backend/) | **Yes** — gunicorn workers cache imported modules |
-| `backend/requirements.txt` | **Yes** + `pip install -r backend/requirements.txt` inside the venv first |
-| `backend/models.py` schema changes | **Yes** — `Database.__init__` runs idempotent ALTER-TABLE migrations on boot |
+| `plainly/**` (any `.py` under plainly/) | **Yes** — gunicorn workers cache imported modules |
+| `plainly/requirements.txt` | **Yes** + `pip install -r plainly/requirements.txt` inside the venv first |
+| `plainly/models.py` schema changes | **Yes** — `Database.__init__` runs idempotent ALTER-TABLE migrations on boot |
 | `deploy/gunicorn_config.py` | **Yes** |
 | `/home/<SERVICE_USER>/.config/systemd/user/<SYSTEMD_UNIT>` or `service.env` | **Yes** + `systemctl --user daemon-reload` (as `<SERVICE_USER>`, see service control above) first for unit-file changes |
-| `frontend/templates/**` | **Yes** — gunicorn's Jinja caches compiled templates (debug is off); without a restart the old page keeps being served (seen 2026-10-17) |
-| `frontend/static/**` (CSS, JS, images) | No — Apache serves directly. Bump cache-busting query string in `index.html` if you need clients to pull a new asset |
+| `plainly/frontend/templates/**` | **Yes** — gunicorn's Jinja caches compiled templates (debug is off); without a restart the old page keeps being served (seen 2026-10-17) |
+| `plainly/frontend/static/**` (CSS, JS, images) | No — Apache serves directly. Bump cache-busting query string in `index.html` if you need clients to pull a new asset |
 | `data/books/**` raw text | No — only used during ingestion, not at request time |
 | `docs/**`, `WORK_LOG.md`, `README.md`, `tests/**` | No |
 

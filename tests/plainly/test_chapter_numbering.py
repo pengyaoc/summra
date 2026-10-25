@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestChapterNumbering(unittest.TestCase):
@@ -18,8 +18,8 @@ class TestChapterNumbering(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         # Chapter parsing needs neither Gemini nor the production database.
-        with patch("scripts.content.generate_summaries.genai.Client"), \
-             patch("scripts.content.generate_summaries.models.Database"):
+        with patch("plainly.scripts.content.generate_summaries.genai.Client"), \
+             patch("plainly.scripts.content.generate_summaries.models.Database"):
             self.generator = SummaryGenerator("")
 
     def test_introduction_as_chapter_one(self):

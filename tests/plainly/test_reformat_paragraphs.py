@@ -1,4 +1,4 @@
-"""Tests for scripts/audits/reformat_paragraphs.py — pure transform logic."""
+"""Tests for plainly/scripts/audits/reformat_paragraphs.py — pure transform logic."""
 import sqlite3
 import sys
 from pathlib import Path
@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.audits import reformat_paragraphs
-from scripts.audits.reformat_paragraphs import reformat_chapter_text
+from plainly.scripts.audits import reformat_paragraphs
+from plainly.scripts.audits.reformat_paragraphs import reformat_chapter_text
 
 
 def test_strips_leading_title_and_doubles_newlines():

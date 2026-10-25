@@ -492,7 +492,7 @@ def category_detail(category_id):
 
     if not category:
         new_id = db.get_category_redirect(category_id)
-        if new_id:  # categories were regrouped (scripts/content/apply_book_metadata.py)
+        if new_id:  # categories were regrouped (plainly/scripts/content/apply_book_metadata.py)
             target = 'categories' if new_id == 'all' else f'categories/{new_id}'
             return redirect(f'{request.script_root}/{target}', code=301)
         return render_template('index.html'), 404

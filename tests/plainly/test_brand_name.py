@@ -44,7 +44,7 @@ def test_manifest_and_robots_use_plainly(client):
 
 
 @pytest.mark.parametrize('path', sorted(
-    [p for p in (ROOT / 'frontend/static/js').rglob('*.js') if p.name != 'app.min.js']
+    [p for p in (ROOT / 'plainly/frontend/static/js').rglob('*.js') if p.name != 'app.min.js']
     + list((ROOT / 'plainly/routes').glob('*.py'))
     + [ROOT / 'plainly/models.py']
 ), ids=lambda p: str(p.relative_to(ROOT)))
@@ -55,5 +55,5 @@ def test_no_user_facing_summra_strings(path):
 
 
 def test_built_bundle_has_no_summra_strings():
-    bundle = (ROOT / 'frontend/static/js/app.min.js').read_text()
+    bundle = (ROOT / 'plainly/frontend/static/js/app.min.js').read_text()
     assert not QUOTED_BRAND.search(bundle), 'rebuild with `npm run build`'

@@ -1,5 +1,5 @@
-"""Tests for scripts/audits/strip_illustration_captions.py --tags-only."""
-from scripts.audits.strip_illustration_captions import strip_captions
+"""Tests for plainly/scripts/audits/strip_illustration_captions.py --tags-only."""
+from plainly.scripts.audits.strip_illustration_captions import strip_captions
 
 TEXT = "\n\n".join([
     "ARGUMENT",

@@ -7,7 +7,7 @@ Source: https://www.gutenberg.org/cache/epub/244/pg244.txt
 
 import pytest
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 @pytest.fixture

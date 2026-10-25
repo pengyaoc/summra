@@ -1,10 +1,10 @@
 {
   "name": "summra-frontend",
   "private": true,
-  "description": "Build tooling for frontend/static/js — no runtime Node dependency, only a minifier for the production bundle.",
+  "description": "Build tooling for plainly/frontend/static/js — no runtime Node dependency, only a minifier for the production bundle.",
   "scripts": {
-    "build": "esbuild frontend/static/js/app.js --bundle --minify --legal-comments=inline --outfile=frontend/static/js/app.min.js",
-    "build:check": "node frontend/static/js/check-build-fresh.mjs"
+    "build": "esbuild plainly/frontend/static/js/app.js --bundle --minify --legal-comments=inline --outfile=plainly/frontend/static/js/app.min.js",
+    "build:check": "node plainly/frontend/static/js/check-build-fresh.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2"

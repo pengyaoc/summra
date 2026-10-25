@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 class TestConsecutiveChapterValidation:
@@ -61,7 +61,7 @@ class TestConsecutiveChapterValidation:
 class TestBulkSummaryResponseParsing:
     """Test parsing of bulk summary responses using sequential indexing."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_parse_basic_response(self, mock_genai):
         """Test parsing a basic response with sequential indices (1, 2, 3)."""
         generator = SummaryGenerator("test_api_key")
@@ -93,7 +93,7 @@ This is the summary for chapter three.
         assert result[11] == "This is the summary for chapter two."
         assert result[12] == "This is the summary for chapter three."
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_parse_response_with_encoded_chapter_numbers(self, mock_genai):
         """Test parsing response when actual chapter numbers are encoded (101, 201, 301)."""
         generator = SummaryGenerator("test_api_key")
@@ -125,7 +125,7 @@ Summary for Act 3, Chapter 1 (encoded as 301).
         assert 201 in result
         assert 301 in result
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_parse_response_missing_chapters(self, mock_genai):
         """Test parsing when LLM response is missing some chapters."""
         generator = SummaryGenerator("test_api_key")
@@ -151,7 +151,7 @@ Summary three (missing chapter 2).
         assert 2 not in result
         assert 3 in result
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_parse_response_without_end_markers(self, mock_genai):
         """Test parsing response without END CHAPTER markers."""
         generator = SummaryGenerator("test_api_key")
@@ -178,7 +178,7 @@ Summary for third chapter.
 class TestBulkChapterSummariesGeneration:
     """Test bulk chapter summaries generation with context."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_context_building_with_medium_summary(self, mock_genai):
         """Test that medium summary context is properly truncated and formatted."""
         generator = SummaryGenerator("test_api_key")
@@ -214,7 +214,7 @@ Test summary
         # The prompt should not contain the full 25,000 chars
         assert len(prompt) < 30000
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_context_building_with_previous_chapter(self, mock_genai):
         """Test that previous chapter context is properly included."""
         generator = SummaryGenerator("test_api_key")
@@ -250,7 +250,7 @@ Test summary
         # The prompt should contain truncated previous chapter (100,000 chars max)
         assert len(prompt) < 120000
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_dry_run_mode(self, mock_genai):
         """Test that dry run mode skips API calls and returns dummy data."""
         generator = SummaryGenerator("test_api_key")
@@ -275,7 +275,7 @@ Test summary
 class TestGenerateComprehensiveSummary:
     """Test comprehensive summary generation always uses bulk processing."""
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_always_uses_bulk_processing(self, mock_genai):
         """Test that comprehensive summary always uses bulk processing (no conditional logic)."""
         generator = SummaryGenerator("test_api_key")
@@ -320,7 +320,7 @@ Summary 2
         # Verify all chapters were processed
         assert len(chapter_summaries) == 2
 
-    @patch('scripts.content.generate_summaries.genai')
+    @patch('plainly.scripts.content.generate_summaries.genai')
     def test_partial_run_mode(self, mock_genai):
         """Test that partial run mode processes only first 3 chapters."""
         generator = SummaryGenerator("test_api_key")

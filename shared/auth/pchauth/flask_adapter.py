@@ -1,6 +1,6 @@
 """Flask adapter for pchauth. login_required's error shape
 ({'error': 'Authentication required'}, 401) matches
-summra/backend/auth_utils.py exactly, so replacing that decorator with
+the old summra/backend/auth_utils.py exactly, so replacing that decorator with
 this one needs no call-site changes.
 """
 from __future__ import annotations

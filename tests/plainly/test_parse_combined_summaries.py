@@ -9,14 +9,14 @@ Watson, M.D.").
 
 Captured raw response: tests/fixtures/combined_response_pg244.txt
 (4,455 words, originally written to /tmp/summra_combined_raw.json by a
-debug write in scripts/content/generate_summaries.py).
+debug write in plainly/scripts/content/generate_summaries.py).
 """
 
 from pathlib import Path
 
 import pytest
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 
 
 FIXTURE_DIR = Path(__file__).parents[1] / "fixtures"

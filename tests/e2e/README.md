@@ -16,7 +16,7 @@ Start the Flask dev server in another shell:
 
 ```sh
 source venv/bin/activate
-python backend/app.py
+python plainly/app.py
 ```
 
 Then from `tests/e2e/`:

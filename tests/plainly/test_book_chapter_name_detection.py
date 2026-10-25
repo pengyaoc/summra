@@ -14,7 +14,7 @@ import sys
 import os
 
 
-from scripts.content.generate_summaries import SummaryGenerator
+from plainly.scripts.content.generate_summaries import SummaryGenerator
 import pytest
 
 

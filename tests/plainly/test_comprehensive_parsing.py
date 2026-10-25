@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 import pytest
-from scripts.content.generate_summaries import SummaryGenerator, normalize_book_title, fix_roman_numerals_in_text
+from plainly.scripts.content.generate_summaries import SummaryGenerator, normalize_book_title, fix_roman_numerals_in_text
 
 
 class TestTOCDetection:

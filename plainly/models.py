@@ -305,7 +305,7 @@ class Database(ReaderIndexMixin):
         ("books", "timeline_url TEXT"),
         ("books", "themes_url TEXT"),
         ("blog_posts", "header_image_url TEXT"),
-        # Reviewed book metadata (scripts/content/apply_book_metadata.py)
+        # Reviewed book metadata (plainly/scripts/content/apply_book_metadata.py)
         ("books", "audience TEXT"),
         ("books", "atos_level REAL"),
         ("books", "interest_level TEXT"),
@@ -1194,7 +1194,7 @@ class Database(ReaderIndexMixin):
 
         if row:
             # Verify file exists on disk
-            audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
+            audio_path = config.BASE_DIR / 'plainly' / 'frontend' / 'static' / row['audio_path']
             if audio_path.exists():
                 conn.close()
                 return True
@@ -1257,7 +1257,7 @@ class Database(ReaderIndexMixin):
 
         if row:
             # Verify file exists on disk
-            audio_path = config.BASE_DIR / 'frontend' / 'static' / row['audio_path']
+            audio_path = config.BASE_DIR / 'plainly' / 'frontend' / 'static' / row['audio_path']
             if audio_path.exists():
                 conn.close()
                 return True

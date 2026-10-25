@@ -19,7 +19,7 @@ import io
 
 
 # Import the modules we need to test
-from scripts.images.generate_illustrations import (
+from plainly.scripts.images.generate_illustrations import (
     GeminiImageGenerator,
     filter_eligible_chapters,
     build_chapter_illustration_prompt,
@@ -216,8 +216,8 @@ class TestGeminiIllustrations:
 
     # ==================== Sync Mode Tests ====================
 
-    @patch('scripts.images.generate_illustrations.save_image')
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.save_image')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_sync_mode_full_generation(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode: generate all chapters (1-10)"""
         db, book_id = temp_db
@@ -246,8 +246,8 @@ class TestGeminiIllustrations:
         second_call = mock_generator.generate_chapter_illustration.call_args_list[1]
         assert second_call.kwargs['reference_image'] is not None
 
-    @patch('scripts.images.generate_illustrations.save_image')
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.save_image')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_sync_mode_chapter_range_with_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode: generate chapters 1-5 (includes Chapter 1)"""
         db, book_id = temp_db
@@ -273,8 +273,8 @@ class TestGeminiIllustrations:
         assert first_call.kwargs['chapter']['chapter_number'] == 1
         assert first_call.kwargs['reference_image'] is None
 
-    @patch('scripts.images.generate_illustrations.save_image')
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.save_image')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_sync_mode_chapter_range_without_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode: generate chapters 5-8 (no Chapter 1)"""
         db, book_id = temp_db
@@ -309,8 +309,8 @@ class TestGeminiIllustrations:
 
     # ==================== Batch Mode Tests ====================
 
-    @patch('scripts.images.generate_illustrations.save_image')
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.save_image')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_batch_mode_full_generation(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode: generate all chapters (1-10)
 
@@ -353,8 +353,8 @@ class TestGeminiIllustrations:
         # Could be 9 (if Ch1 generated sync) or 10 (if Ch1 was in batch)
         assert mock_save_image.call_count in [9, 10], f"Expected 9 or 10 save calls, got {mock_save_image.call_count}"
 
-    @patch('scripts.images.generate_illustrations.save_image')
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.save_image')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_batch_mode_chapter_range_with_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode: generate chapters 1-5
 
@@ -396,8 +396,8 @@ class TestGeminiIllustrations:
         # If Chapter 1 doesn't exist: 4 chapters in batch (2-5 only)
         assert len(batch_requests) in [4, 5], f"Expected 4 or 5 batch requests, got {len(batch_requests)}"
 
-    @patch('scripts.images.generate_illustrations.save_image')
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.save_image')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_batch_mode_chapter_range_without_chapter_1(self, mock_config, mock_save_image, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode: generate chapters 5-8 (no Chapter 1 in range)
 
@@ -461,7 +461,7 @@ class TestGeminiIllustrations:
 
     # ==================== Edge Cases ====================
 
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_batch_mode_dry_run(self, mock_config, temp_db, mock_generator, temp_illustrations_dir):
         """Test batch mode dry run doesn't actually generate images"""
         db, book_id = temp_db
@@ -483,7 +483,7 @@ class TestGeminiIllustrations:
         assert mock_generator.poll_batch_job.call_count == 0
         assert mock_generator.retrieve_batch_results.call_count == 0
 
-    @patch('scripts.images.generate_illustrations.config')
+    @patch('plainly.scripts.images.generate_illustrations.config')
     def test_sync_mode_dry_run(self, mock_config, temp_db, mock_generator, temp_illustrations_dir):
         """Test sync mode dry run doesn't actually generate images"""
         db, book_id = temp_db
@@ -510,7 +510,7 @@ class TestImageGeneratorBaseInterface:
     """ImageGeneratorBase contract — both subclasses must expose name and capability flags."""
 
     def test_gemini_generator_attributes(self):
-        from scripts.images.generate_illustrations import GeminiImageGenerator
+        from plainly.scripts.images.generate_illustrations import GeminiImageGenerator
         gen = GeminiImageGenerator(api_key="fake-key", model="gemini-3-pro-image-preview")
         assert gen.name == "gemini"
         assert gen.supports_batch is True
@@ -519,7 +519,7 @@ class TestImageGeneratorBaseInterface:
     def test_gemini_chapter_signature_accepts_character_brief(self):
         """Gemini ignores character_brief but accepts the kwarg for interface parity."""
         import inspect
-        from scripts.images.generate_illustrations import GeminiImageGenerator
+        from plainly.scripts.images.generate_illustrations import GeminiImageGenerator
         sig = inspect.signature(GeminiImageGenerator.generate_chapter_illustration)
         assert "character_brief" in sig.parameters
 
@@ -529,7 +529,7 @@ class TestImagenIsRetryable:
 
     @pytest.fixture
     def generator(self):
-        from scripts.images.generate_illustrations import ImagenImageGenerator
+        from plainly.scripts.images.generate_illustrations import ImagenImageGenerator
         return ImagenImageGenerator(api_key="fake-key")
 
     def test_status_code_429_is_retryable(self, generator):
@@ -582,7 +582,7 @@ class TestImagenFallbackChain:
 
     @pytest.fixture
     def generator(self):
-        from scripts.images.generate_illustrations import ImagenImageGenerator
+        from plainly.scripts.images.generate_illustrations import ImagenImageGenerator
         gen = ImagenImageGenerator(api_key="fake-key")
         # Mock out the actual API client and the rate limiter
         gen.client = MagicMock()
@@ -655,7 +655,7 @@ class TestImagenCoverGeneration:
 
     @pytest.fixture
     def generator(self):
-        from scripts.images.generate_illustrations import ImagenImageGenerator
+        from plainly.scripts.images.generate_illustrations import ImagenImageGenerator
         gen = ImagenImageGenerator(api_key="fake-key")
         gen._generate_with_fallback = MagicMock(
             return_value=(b"cover-bytes", "imagen-4.0-ultra-generate-001")
@@ -708,7 +708,7 @@ class TestBuildChapterPromptCharacterBrief:
         }
 
     def test_brief_none_omits_style_guide_header(self):
-        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        from plainly.scripts.images.generate_illustrations import build_chapter_illustration_prompt
         prompt = build_chapter_illustration_prompt(
             book_title="Moby-Dick",
             book_author="Herman Melville",
@@ -720,7 +720,7 @@ class TestBuildChapterPromptCharacterBrief:
         assert "VISUAL STYLE GUIDE" not in prompt
 
     def test_brief_empty_string_omits_header(self):
-        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        from plainly.scripts.images.generate_illustrations import build_chapter_illustration_prompt
         prompt = build_chapter_illustration_prompt(
             book_title="Moby-Dick",
             book_author="Herman Melville",
@@ -731,7 +731,7 @@ class TestBuildChapterPromptCharacterBrief:
         assert "VISUAL STYLE GUIDE" not in prompt
 
     def test_brief_present_includes_header_and_brief_text(self):
-        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        from plainly.scripts.images.generate_illustrations import build_chapter_illustration_prompt
         brief = "ART STYLE: moody oil painting.\nCHARACTERS: Ahab — peg-legged captain..."
         prompt = build_chapter_illustration_prompt(
             book_title="Moby-Dick",
@@ -747,7 +747,7 @@ class TestBuildChapterPromptCharacterBrief:
     def test_brief_is_inserted_before_overall_summary(self):
         """Style guide should come before the per-book summary so the model
         weighs visual style ahead of plot context."""
-        from scripts.images.generate_illustrations import build_chapter_illustration_prompt
+        from plainly.scripts.images.generate_illustrations import build_chapter_illustration_prompt
         brief = "ART STYLE: watercolor"
         prompt = build_chapter_illustration_prompt(
             book_title="A", book_author="B",
@@ -765,7 +765,7 @@ class TestImagenChapterGeneration:
 
     @pytest.fixture
     def generator(self):
-        from scripts.images.generate_illustrations import ImagenImageGenerator
+        from plainly.scripts.images.generate_illustrations import ImagenImageGenerator
         gen = ImagenImageGenerator(api_key="fake-key")
         gen._generate_with_fallback = MagicMock(
             return_value=(b"chapter-bytes", "imagen-4.0-generate-001")
@@ -832,13 +832,13 @@ class TestGetOrBuildCharacterBrief:
     def tmp_briefs_dir(self, tmp_path, monkeypatch):
         d = tmp_path / "character_briefs"
         d.mkdir()
-        from scripts.images import generate_illustrations
+        from plainly.scripts.images import generate_illustrations
         monkeypatch.setattr(generate_illustrations, "CHARACTER_BRIEFS_DIR", d)
         return d
 
-    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    @patch("plainly.scripts.images.generate_illustrations._call_brief_llm")
     def test_first_call_invokes_llm_and_writes_cache(self, mock_llm, tmp_briefs_dir):
-        from scripts.images.generate_illustrations import get_or_build_character_brief
+        from plainly.scripts.images.generate_illustrations import get_or_build_character_brief
         mock_llm.return_value = "ART STYLE: oil painting"
         result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
         assert result == "ART STYLE: oil painting"
@@ -847,26 +847,26 @@ class TestGetOrBuildCharacterBrief:
         assert cache_file.exists()
         assert cache_file.read_text() == "ART STYLE: oil painting"
 
-    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    @patch("plainly.scripts.images.generate_illustrations._call_brief_llm")
     def test_second_call_uses_cache_and_skips_llm(self, mock_llm, tmp_briefs_dir):
-        from scripts.images.generate_illustrations import get_or_build_character_brief
+        from plainly.scripts.images.generate_illustrations import get_or_build_character_brief
         (tmp_briefs_dir / "42.txt").write_text("CACHED BRIEF")
         result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
         assert result == "CACHED BRIEF"
         mock_llm.assert_not_called()
 
-    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    @patch("plainly.scripts.images.generate_illustrations._call_brief_llm")
     def test_llm_failure_returns_empty_string(self, mock_llm, tmp_briefs_dir):
-        from scripts.images.generate_illustrations import get_or_build_character_brief
+        from plainly.scripts.images.generate_illustrations import get_or_build_character_brief
         mock_llm.side_effect = Exception("API down")
         result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
         assert result == ""
         # Should NOT write a cache file on failure
         assert not (tmp_briefs_dir / "42.txt").exists()
 
-    @patch("scripts.images.generate_illustrations._call_brief_llm")
+    @patch("plainly.scripts.images.generate_illustrations._call_brief_llm")
     def test_llm_empty_response_returns_empty_string(self, mock_llm, tmp_briefs_dir):
-        from scripts.images.generate_illustrations import get_or_build_character_brief
+        from plainly.scripts.images.generate_illustrations import get_or_build_character_brief
         mock_llm.return_value = ""
         result = get_or_build_character_brief(book_id=42, medium_summary="A summary")
         assert result == ""
@@ -876,14 +876,14 @@ class TestGetOrBuildCharacterBrief:
 class TestChapterLoopUsesCharacterBrief:
     """generate_chapter_illustrations_for_book passes character_brief to the generator."""
 
-    @patch("scripts.images.generate_illustrations.auto_optimize_illustrations")
-    @patch("scripts.images.generate_illustrations.save_image", return_value=True)
-    @patch("scripts.images.generate_illustrations.get_or_build_character_brief")
+    @patch("plainly.scripts.images.generate_illustrations.auto_optimize_illustrations")
+    @patch("plainly.scripts.images.generate_illustrations.save_image", return_value=True)
+    @patch("plainly.scripts.images.generate_illustrations.get_or_build_character_brief")
     def test_brief_fetched_once_per_book_and_passed_to_every_chapter(
         self, mock_brief, mock_save, mock_optimize, tmp_path, monkeypatch
     ):
-        from scripts.images import generate_illustrations
-        from scripts.images.generate_illustrations import (
+        from plainly.scripts.images import generate_illustrations
+        from plainly.scripts.images.generate_illustrations import (
             generate_chapter_illustrations_for_book, ImagenImageGenerator,
         )
 
@@ -918,14 +918,14 @@ class TestChapterLoopUsesCharacterBrief:
         for call in generator.generate_chapter_illustration.call_args_list:
             assert call.kwargs["character_brief"] == "ART STYLE: ink wash"
 
-    @patch("scripts.images.generate_illustrations.auto_optimize_illustrations")
-    @patch("scripts.images.generate_illustrations.save_image", return_value=True)
-    @patch("scripts.images.generate_illustrations.get_or_build_character_brief")
+    @patch("plainly.scripts.images.generate_illustrations.auto_optimize_illustrations")
+    @patch("plainly.scripts.images.generate_illustrations.save_image", return_value=True)
+    @patch("plainly.scripts.images.generate_illustrations.get_or_build_character_brief")
     def test_brief_not_fetched_for_gemini_generator(
         self, mock_brief, mock_save, mock_optimize, tmp_path, monkeypatch
     ):
-        from scripts.images import generate_illustrations
-        from scripts.images.generate_illustrations import (
+        from plainly.scripts.images import generate_illustrations
+        from plainly.scripts.images.generate_illustrations import (
             generate_chapter_illustrations_for_book, GeminiImageGenerator,
         )
         monkeypatch.setattr(generate_illustrations, "project_root", tmp_path, raising=False)
@@ -951,14 +951,14 @@ class TestProviderSelection:
     """build_generator factory + main() flag-guard behavior."""
 
     def test_build_generator_default_provider_is_imagen(self):
-        from scripts.images.generate_illustrations import (
+        from plainly.scripts.images.generate_illustrations import (
             build_generator, ImagenImageGenerator,
         )
         gen = build_generator(provider="imagen", api_key="fake", model=None)
         assert isinstance(gen, ImagenImageGenerator)
 
     def test_build_generator_gemini_explicit(self):
-        from scripts.images.generate_illustrations import (
+        from plainly.scripts.images.generate_illustrations import (
             build_generator, GeminiImageGenerator,
         )
         gen = build_generator(provider="gemini", api_key="fake", model="gemini-3-pro-image-preview")
@@ -966,20 +966,20 @@ class TestProviderSelection:
         assert gen.model == "gemini-3-pro-image-preview"
 
     def test_build_generator_gemini_default_model(self):
-        from scripts.images.generate_illustrations import build_generator
+        from plainly.scripts.images.generate_illustrations import build_generator
         gen = build_generator(provider="gemini", api_key="fake", model=None)
         assert gen.model == "gemini-3-pro-image-preview"
 
     def test_build_generator_unknown_provider_raises(self):
-        from scripts.images.generate_illustrations import build_generator
+        from plainly.scripts.images.generate_illustrations import build_generator
         with pytest.raises(ValueError, match="Unknown provider"):
             build_generator(provider="dall-e", api_key="fake", model=None)
 
-    @patch("scripts.images.generate_illustrations.config")
+    @patch("plainly.scripts.images.generate_illustrations.config")
     def test_imagen_with_sync_mode_exits_non_zero(self, mock_config, capsys, monkeypatch):
         """--provider imagen + --sync-mode should error out, not silently fall back."""
         mock_config.GEMINI_API_KEY = "fake"
-        from scripts.images.generate_illustrations import main
+        from plainly.scripts.images.generate_illustrations import main
         monkeypatch.setattr(
             "sys.argv",
             ["generate_illustrations.py", "--book-id", "1", "--sync-mode"],
@@ -991,10 +991,10 @@ class TestProviderSelection:
         assert "imagen" in combined.lower()
         assert "batch" in combined.lower() or "sync" in combined.lower()
 
-    @patch("scripts.images.generate_illustrations.config")
+    @patch("plainly.scripts.images.generate_illustrations.config")
     def test_imagen_with_list_jobs_exits_non_zero(self, mock_config, capsys, monkeypatch):
         mock_config.GEMINI_API_KEY = "fake"
-        from scripts.images.generate_illustrations import main
+        from plainly.scripts.images.generate_illustrations import main
         monkeypatch.setattr(
             "sys.argv",
             ["generate_illustrations.py", "--list-jobs"],
@@ -1004,11 +1004,11 @@ class TestProviderSelection:
         # Provider defaults to imagen, so this MUST error.
         assert rc != 0
 
-    @patch("scripts.images.generate_illustrations.config")
+    @patch("plainly.scripts.images.generate_illustrations.config")
     def test_imagen_with_model_flag_prints_warning(self, mock_config, capsys, monkeypatch):
         """--provider imagen --model X should warn and ignore the model flag, not crash."""
         mock_config.GEMINI_API_KEY = "fake"
-        from scripts.images.generate_illustrations import main
+        from plainly.scripts.images.generate_illustrations import main
         # Use --dry-run so we don't actually invoke the API
         monkeypatch.setattr(
             "sys.argv",

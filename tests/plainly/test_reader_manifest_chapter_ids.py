@@ -77,7 +77,7 @@ def test_continuation_segments_do_not_repeat_chapter_heading():
     script = r"""
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-const source = fs.readFileSync('frontend/static/js/reader.js', 'utf8');
+const source = fs.readFileSync('plainly/frontend/static/js/reader.js', 'utf8');
 const {readerMixin} = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const container = {};
 globalThis.document = {getElementById: () => container};

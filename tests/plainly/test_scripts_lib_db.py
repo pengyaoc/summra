@@ -1,10 +1,10 @@
-"""Tests for scripts/lib/db.py — the shared DB-connection helper that
+"""Tests for plainly/scripts/lib/db.py — the shared DB-connection helper that
 replaces 13+ scripts' individually hardcoded DB_PATH constants.
 """
 import sqlite3
 
 from plainly import config
-from scripts.lib.db import get_connection
+from plainly.scripts.lib.db import get_connection
 
 
 def test_get_connection_points_at_config_database_path():

@@ -1,8 +1,8 @@
-"""Tests for scripts/audits/strip_decorative_dividers.py."""
+"""Tests for plainly/scripts/audits/strip_decorative_dividers.py."""
 import sys
 from pathlib import Path
 
-from scripts.audits.strip_decorative_dividers import is_divider_paragraph, strip_dividers
+from plainly.scripts.audits.strip_decorative_dividers import is_divider_paragraph, strip_dividers
 
 
 def test_asterisk_row_is_divider():

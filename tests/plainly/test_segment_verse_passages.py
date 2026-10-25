@@ -1,5 +1,5 @@
-"""Tests for scripts/content/segment_verse_passages.py."""
-from scripts.content.segment_verse_passages import segment_verse
+"""Tests for plainly/scripts/content/segment_verse_passages.py."""
+from plainly.scripts.content.segment_verse_passages import segment_verse
 
 
 def _lines(n, end_every=None, terminal="."):

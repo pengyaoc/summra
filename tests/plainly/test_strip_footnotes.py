@@ -1,5 +1,5 @@
-"""Tests for scripts/audits/strip_footnotes.py."""
-from scripts.audits.strip_footnotes import strip_footnotes
+"""Tests for plainly/scripts/audits/strip_footnotes.py."""
+from plainly.scripts.audits.strip_footnotes import strip_footnotes
 
 BODY = "Such was the sovereign doom, and such the will of Jove![42]"
 

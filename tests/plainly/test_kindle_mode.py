@@ -187,7 +187,7 @@ def test_kindle_script_is_es5(client):
     """The older Kindle browser is WebKit 531 (Safari 4): no let/const,
     arrow functions, classes, template literals or classList."""
     from pathlib import Path
-    src = (Path(__file__).parents[2] / 'frontend/static/js/kindle.js').read_text()
+    src = (Path(__file__).parents[2] / 'plainly/frontend/static/js/kindle.js').read_text()
     for pattern in (r'\blet\s', r'\bconst\s', r'=>', r'\bclass\s', '`', r'classList'):
         assert not re.search(pattern, src), pattern
 

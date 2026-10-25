@@ -12,7 +12,7 @@ boundaries against the source.
 import pytest
 
 # Import will fail until the helper exists — that's the red phase.
-from scripts.content.generate_summaries import SummaryGenerator, derive_chapter_line_ranges
+from plainly.scripts.content.generate_summaries import SummaryGenerator, derive_chapter_line_ranges
 
 
 @pytest.fixture

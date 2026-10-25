@@ -21,32 +21,35 @@ Currently ships with ~90 books from Project Gutenberg covering Dickens, Austen, 
 
 ```
 summra/
-├── backend/
-│   ├── app_base.py          # Shared Flask routes (used by dev + prod)
+├── shared/                  # Code both apps use: web basics, Kindle detection, reader index
+│   ├── auth/                # Auth blueprint + user DB models (gated by FEATURE_AUTH)
+│   ├── progress/            # Reading-progress blueprint (gated by FEATURE_AUTH)
+│   └── reader/              # Continuous-reader index mixin
+├── plainly/                 # The Plainly app
+│   ├── app_base.py          # Shared Flask setup (used by dev + prod)
 │   ├── app.py               # Dev entry point — registers live Gemini TTS generation
 │   ├── app_prod.py          # Prod entry point — TTS serves pre-generated files only
 │   ├── config.py            # Models, rate limits, feature flags, paths
 │   ├── models.py            # Content DB (books, chapters, summaries, categories, authors, blog…)
-│   ├── user_models.py       # User DB (users, reading_progress, chapter_completion)
-│   ├── auth_routes.py       # Auth blueprint (gated by FEATURE_AUTH)
-│   ├── progress_routes.py   # Reading-progress blueprint (gated by FEATURE_AUTH)
+│   ├── routes/              # Page + API blueprints
 │   ├── gemini_tts_handler.py# Gemini 2.5 Flash TTS client
-│   └── tts_utils.py         # Provider-agnostic chunking, stitching, cache lookup
-├── frontend/
-│   ├── templates/           # index.html (SPA shell), manifest.json, sitemap.xml
-│   └── static/              # css/, js/, covers/, illustrations/, audio/, guides/, images/
-├── scripts/
-│   ├── content/             # generate_summaries.py (main ingestion), modern-English rewrite, slugs, chapter cleanup, author bios
-│   ├── audio/               # Offline TTS batches, audio backfill, filename migration
-│   ├── images/              # Cover download, chapter illustrations, hero images, app icon, resize helpers
-│   ├── categorization/      # Category assignment + master-category generation
-│   ├── migrations/          # One-shot schema migrations
-│   ├── backfills/           # Idempotent backfills after schema/field changes
-│   ├── audits/              # Read-only inspections (chapter-text audit, validate_chapter_split, etc.)
-│   ├── book_fixes/          # Per-book one-shot fixes (mostly historical)
-│   ├── blog/                # Blog import + Unsplash header-image assignment
-│   ├── archive/             # Dead-end or destructive scripts — read before running
-│   └── README.md            # Per-folder index
+│   ├── tts_utils.py         # Provider-agnostic chunking, stitching, cache lookup
+│   ├── frontend/
+│   │   ├── templates/       # index.html (SPA shell), manifest.json, sitemap.xml
+│   │   └── static/          # css/, js/, covers/, illustrations/, audio/, guides/, images/
+│   └── scripts/
+│       ├── content/         # generate_summaries.py (main ingestion), modern-English rewrite, slugs, chapter cleanup, author bios
+│       ├── audio/           # Offline TTS batches, audio backfill, filename migration
+│       ├── images/          # Cover download, chapter illustrations, hero images, app icon, resize helpers
+│       ├── categorization/  # Category assignment + master-category generation
+│       ├── migrations/      # One-shot schema migrations
+│       ├── backfills/       # Idempotent backfills after schema/field changes
+│       ├── audits/          # Read-only inspections (chapter-text audit, validate_chapter_split, etc.)
+│       ├── book_fixes/      # Per-book one-shot fixes (mostly historical)
+│       ├── blog/            # Blog import + Unsplash header-image assignment
+│       ├── archive/         # Dead-end or destructive scripts — read before running
+│       └── README.md        # Per-folder index
+├── distill/                 # Second app (placeholder package, built later)
 ├── data/
 │   ├── books/               # Source .txt files (Project Gutenberg)
 │   ├── character_briefs/    # Per-book character/style briefs for illustration consistency
@@ -58,7 +61,7 @@ summra/
 ├── CLAUDE.md                # Instructions for Claude Code sessions (work log, TDD, parser quirks)
 ├── WORK_LOG.md              # Append-only log of completed and in-progress work
 ├── requirements-prod.txt    # Prod deps (no TTS model)
-├── backend/requirements.txt # Dev deps
+├── plainly/requirements.txt # Dev deps
 └── .env.example
 ```
 
@@ -70,7 +73,7 @@ Two databases are intentional: content lives in `data/database.db` (large, regen
 
 - Python 3.8+
 - A Google Gemini API key — https://aistudio.google.com/app/apikey (free tier is enough to run the app; ingesting new books burns through the free quota quickly)
-- Optional: an Unsplash access key (`UNSPLASH_ACCESS_KEY`) if you want to use `scripts/blog/assign_blog_header_images.py`
+- Optional: an Unsplash access key (`UNSPLASH_ACCESS_KEY`) if you want to use `plainly/scripts/blog/assign_blog_header_images.py`
 
 ### Install
 
@@ -86,24 +89,24 @@ Or manually:
 ```bash
 python3 -m venv venv
 source venv/bin/activate       # Windows: venv\Scripts\activate
-pip install -r backend/requirements.txt
+pip install -r plainly/requirements.txt
 cp .env.example .env           # then add GEMINI_API_KEY
 ```
 
 ### Run the app
 
 ```bash
-python backend/app.py
+python plainly/app.py
 ```
 
-The server binds **`http://localhost:5001`** (port 5000 is reserved by macOS ControlCenter). Override with `PORT=5002 python backend/app.py` if needed.
+The server binds **`http://localhost:5001`** (port 5000 is reserved by macOS ControlCenter). Override with `PORT=5002 python plainly/app.py` if needed.
 
 The repository ships without `data/database.db` (it's gitignored). To get a working app, either restore your own DB or ingest books — see below.
 
 ## Ingesting a book
 
 ```bash
-PYTHONPATH=backend venv/bin/python scripts/content/generate_summaries.py data/books/your_book.txt
+venv/bin/python -m plainly.scripts.content.generate_summaries data/books/your_book.txt
 ```
 
 Common options:
@@ -128,24 +131,24 @@ The script auto-detects chapters, generates a combined short + full summary in a
 
 ### Generating audio (offline batches)
 
-Real-time TTS via the dev server (`backend/app.py`) uses the **Gemini 2.5 Flash TTS** API and caches the resulting WAV files under `frontend/static/audio/`. For pre-generating audio in bulk:
+Real-time TTS via the dev server (`plainly/app.py`) uses the **Gemini 2.5 Flash TTS** API and caches the resulting WAV files under `plainly/frontend/static/audio/`. For pre-generating audio in bulk:
 
 ```bash
 # All concise summaries in the DB:
-venv/bin/python scripts/audio/batch_generate_concise_audio.py
+venv/bin/python -m plainly.scripts.audio.batch_generate_concise_audio
 
 # All medium summaries:
-venv/bin/python scripts/audio/batch_generate_medium_audio.py
+venv/bin/python -m plainly.scripts.audio.batch_generate_medium_audio
 
 # Per-chapter audio for a specific book:
-venv/bin/python scripts/audio/generate_gemini_audio_batch_offline.py --book-id 47
+venv/bin/python -m plainly.scripts.audio.generate_gemini_audio_batch_offline --book-id 47
 ```
 
-Production (`backend/app_prod.py`) does **not** generate TTS on demand — it only serves files pre-generated by these scripts. The TTS pipeline is split this way so the production VM can stay small (e2-small or even e2-micro).
+Production (`plainly/app_prod.py`) does **not** generate TTS on demand — it only serves files pre-generated by these scripts. The TTS pipeline is split this way so the production VM can stay small (e2-small or even e2-micro).
 
 ## Configuration
 
-`backend/config.py` is the single source of truth:
+`plainly/config.py` is the single source of truth:
 
 - **`DATABASE_PATH`** — `data/database.db`
 - **`GEMINI_API_KEY`** — read from env
@@ -169,7 +172,7 @@ To audit the locally provisioned hero content explicitly, run
 An empty database created by app startup is insufficient for this audit.
 
 ```bash
-PYTHONPATH=backend venv/bin/python -m pytest tests/ -v
+venv/bin/python -m pytest tests/ -v
 ```
 
 40+ test files cover chapter detection, the LLM client + rate limiter, the bulk-summary parser, validators, the database layer, and several specific historical bugs (preface detection, two-level TOC, multi-line titles, dotted abbreviations).
@@ -178,7 +181,7 @@ PYTHONPATH=backend venv/bin/python -m pytest tests/ -v
 
 ```bash
 cd tests/e2e && npm install && npx playwright install chromium     # one-time
-python backend/app.py &                                              # in another terminal
+python plainly/app.py &                                              # in another terminal
 cd tests/e2e && node smoke.mjs
 ```
 
@@ -187,7 +190,7 @@ cd tests/e2e && node smoke.mjs
 ### Post-ingest validation
 
 ```bash
-PYTHONPATH=backend venv/bin/python scripts/audits/validate_chapter_split.py --book-id <id> --llm-digest
+venv/bin/python -m plainly.scripts.audits.validate_chapter_split --book-id <id> --llm-digest
 ```
 
 Deterministic checks (chapter count, monotonic numbering, coverage) plus an optional LLM digest spot-check.
@@ -234,7 +237,7 @@ JSON API:
 - `GET /api/summary-configs` — Summary config for the frontend
 - `POST /api/tts/generate` — Generate (dev) or fetch (prod) TTS audio for a given text id
 
-Auth + progress endpoints register under blueprints when `FEATURE_AUTH=True` — see `backend/auth_routes.py` and `backend/progress_routes.py`.
+Auth + progress endpoints register under blueprints when `FEATURE_AUTH=True` — see `shared/auth/` and `shared/progress/routes.py`.
 
 ## Deployment
 
@@ -242,7 +245,7 @@ Auth + progress endpoints register under blueprints when `FEATURE_AUTH=True` —
 
 ## Troubleshooting
 
-**"no such table: books"** — `data/database.db` is empty or missing. Either restore a database, or ingest at least one book with `scripts/content/generate_summaries.py`.
+**"no such table: books"** — `data/database.db` is empty or missing. Either restore a database, or ingest at least one book with `plainly/scripts/content/generate_summaries.py`.
 
 **Port 5000 already in use** — That's macOS ControlCenter (AirPlay Receiver). Use 5001 (the default) or pick another with `PORT=`.
 
@@ -250,7 +253,7 @@ Auth + progress endpoints register under blueprints when `FEATURE_AUTH=True` —
 
 **Chapter detection looks wrong** — Run `generate_summaries.py … --dry-run` and read the `CHAPTER BREAKDOWN` block. The parser handles standard prose novels; see `CLAUDE.md` for known-bad book classes (anthologies, aphoristic works) that should be skipped.
 
-**TTS isn't generating in production** — That's by design. `app_prod.py` only serves pre-generated audio. Run the offline batch scripts (`scripts/audio/`) and deploy the resulting WAV files.
+**TTS isn't generating in production** — That's by design. `app_prod.py` only serves pre-generated audio. Run the offline batch scripts (`plainly/scripts/audio/`) and deploy the resulting WAV files.
 
 ## Acknowledgments
 

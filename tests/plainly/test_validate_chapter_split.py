@@ -1,4 +1,4 @@
-"""Tests for scripts/audits/validate_chapter_split.py.
+"""Tests for plainly/scripts/audits/validate_chapter_split.py.
 
 Validates the deterministic checks by constructing in-memory ValidationResult
 objects and asserting each check produces the right Finding.
@@ -6,7 +6,7 @@ objects and asserting each check produces the right Finding.
 
 import pytest
 
-from scripts.audits.validate_chapter_split import (
+from plainly.scripts.audits.validate_chapter_split import (
     Finding,
     ValidationResult,
     check_count_matches_toc,

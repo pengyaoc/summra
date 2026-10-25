@@ -18,8 +18,8 @@ READER_HINTS = frozenset({'reader_swipe_mobile', 'reader_nav_desktop'})
 BOOKS_DIR = BASE_DIR / 'data' / 'books'
 SUMMARIES_DIR = BASE_DIR / 'data' / 'summaries'
 BLOG_DIR = BASE_DIR / 'data' / 'blog'
-COVERS_DIR = BASE_DIR / 'frontend' / 'static' / 'covers'
-ILLUSTRATIONS_DIR = BASE_DIR / 'frontend' / 'static' / 'illustrations'
+COVERS_DIR = BASE_DIR / 'plainly' / 'frontend' / 'static' / 'covers'
+ILLUSTRATIONS_DIR = BASE_DIR / 'plainly' / 'frontend' / 'static' / 'illustrations'
 
 # Gemini API configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
@@ -65,7 +65,7 @@ SUMMARY_CONFIGS = {
 PLAIN_TEXT_MODEL = 'gemini-3.1-flash-lite'
 
 # TTS configuration (using VITS for real-time, Gemini for offline)
-TTS_OUTPUT_DIR = BASE_DIR / 'frontend' / 'static' / 'audio'
+TTS_OUTPUT_DIR = BASE_DIR / 'plainly' / 'frontend' / 'static' / 'audio'
 TTS_LANGUAGE = 'en'  # Default language for TTS
 
 # Gemini TTS API configuration (for offline generation only)
