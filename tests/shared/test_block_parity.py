@@ -8,7 +8,7 @@ from pathlib import Path
 from shared.reader import blocks
 
 ROOT = Path(__file__).resolve().parents[2]
-FIXTURES = ROOT / 'tests' / 'fixtures' / 'reader_blocks'
+FIXTURES = ROOT / 'tests' / 'shared' / 'fixtures' / 'reader_blocks'
 
 NODE_SCRIPT = r"""
 import fs from 'node:fs';

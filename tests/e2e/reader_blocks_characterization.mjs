@@ -1,5 +1,5 @@
 // Reader block characterization: renders every unit in
-// tests/fixtures/reader_blocks/plainly_units.json through Plainly's live
+// tests/shared/fixtures/reader_blocks/plainly_units.json through Plainly's live
 // window.summraApp.continuousReaderBlock(), once with marked loaded and once
 // with window.marked deleted (the fallback regexes), and compares the
 // {tag, className, content} results to plainly_golden.json. Guards phase 3
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const BASE = (process.env.BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
 const MODE = process.env.MODE || 'compare';
 const SLUG = process.env.SLUG || 'pride-and-prejudice';
-const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'reader_blocks');
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'shared', 'fixtures', 'reader_blocks');
 const UNITS = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'plainly_units.json'), 'utf8'));
 const GOLDEN = path.join(FIXTURES, 'plainly_golden.json');
 

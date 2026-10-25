@@ -11,7 +11,7 @@ import pytest
 from shared.reader import blocks
 from shared.reader.index import ReaderIndexMixin
 
-FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures' / 'reader_blocks'
+FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'reader_blocks'
 CASES = json.loads((FIXTURES / 'blocks.json').read_text(encoding='utf-8'))
 PAGINATED = re.compile(r'<(?:p|h[1-6]|blockquote|pre|ul|ol|figure)[\s>]', re.I)
 

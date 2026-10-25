@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
-const fixtures = join(root, "tests", "fixtures", "reader_blocks");
+const fixtures = join(root, "tests", "shared", "fixtures", "reader_blocks");
 const readJson = name => JSON.parse(readFileSync(join(fixtures, name), "utf8"));
 const load = path => import(pathToFileURL(path).href);
 const { renderBlock, formatInline, escapeText, blocksMixin } = await load(join(root, "shared", "static", "js", "blocks.js"));
