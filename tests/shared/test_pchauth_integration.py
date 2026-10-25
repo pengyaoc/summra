@@ -10,11 +10,14 @@ import pytest
 
 
 def _reload_app_base(monkeypatch, feature_auth: bool, auth_mode: str | None = None, allowed_emails: str | None = None):
-    for mod in ['app_base', 'config', 'progress_routes', 'models', 'user_models']:
-        sys.modules.pop(mod, None)
-        sys.modules.pop(f'backend.{mod}', None)
+    # Purge the app and the shared modules it wires together as one unit: the
+    # routes hold references to shared.progress.routes / shared.auth, so a
+    # partial reload leaves later tests patching one copy while routes use another.
+    for name in [m for m in sys.modules
+                 if (m.split('.')[0] == 'plainly' and m != 'plainly.app_prod') or m.startswith(('shared.progress', 'shared.auth'))]:
+        sys.modules.pop(name, None)
 
-    from backend import config as _config
+    from plainly import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
     if auth_mode is not None:
         monkeypatch.setenv('SUMMRA_AUTH_MODE', auth_mode)
@@ -25,14 +28,14 @@ def _reload_app_base(monkeypatch, feature_auth: bool, auth_mode: str | None = No
     else:
         monkeypatch.delenv('SUMMRA_ALLOWED_EMAILS', raising=False)
 
-    sys.modules['backend.config'] = _config
-    app_base = importlib.import_module('backend.app_base')
+    sys.modules['plainly.config'] = _config
+    app_base = importlib.import_module('plainly.app_base')
     return app_base.app.test_client()
 
 
 def test_no_auth_login_route_exists():
     """There is no login endpoint any more — Apache owns login entirely."""
-    from backend import app_base
+    from plainly import app_base
     client = app_base.app.test_client()
     assert client.get('/api/auth/login').status_code == 404
     assert client.post('/api/auth/register').status_code == 404

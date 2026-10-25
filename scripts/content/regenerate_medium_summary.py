@@ -9,8 +9,8 @@ import re
 
 
 from dotenv import load_dotenv
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 from scripts.lib.llm import get_gemini_client
 
 def regenerate_medium_summary(book_id: int):

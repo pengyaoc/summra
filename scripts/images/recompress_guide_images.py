@@ -23,7 +23,7 @@ from PIL import Image
 
 project_root = Path(__file__).parent.parent.parent
 
-from backend import config
+from plainly import config
 
 
 def recompress_guide_image(original_path: Path, output_dir: Path, max_width: int = 1200):

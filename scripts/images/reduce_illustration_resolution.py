@@ -30,8 +30,8 @@ from PIL import Image
 project_root = Path(__file__).parent.parent.parent
 
 
-from backend import config
-from backend.models import Database
+from plainly import config
+from plainly.models import Database
 
 # Default maximum width for reduced images
 DEFAULT_MAX_WIDTH = 1024

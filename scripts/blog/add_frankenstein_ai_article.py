@@ -5,9 +5,9 @@ Add the Mary Shelley & AI Anxiety article to the Summra blog
 import sys
 from pathlib import Path
 
-backend_dir = Path(__file__).parent.parent.parent / 'backend'
+backend_dir = Path(__file__).parent.parent.parent / 'plainly'
 
-from backend.models import Database
+from plainly.models import Database
 from datetime import datetime
 
 def main():

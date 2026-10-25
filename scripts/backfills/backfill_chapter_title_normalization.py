@@ -6,7 +6,7 @@ This script updates chapter titles in the database to apply the new title
 normalization (title casing) that was recently added to generate_summaries.py.
 """
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 from scripts.lib.text import normalize_chapter_title, fix_roman_numerals_in_text
 

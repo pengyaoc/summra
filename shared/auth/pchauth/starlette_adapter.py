@@ -1,5 +1,5 @@
 """Starlette adapter for pchauth. Modeled directly on
-reader/backend/app/auth.py:AuthMiddleware — same scope["state"]["user_id"]
+reader/plainly/app/auth.py:AuthMiddleware — same scope["state"]["user_id"]
 mechanism, same deliberate omission of WWW-Authenticate on the 401 so no
 native browser dialog fires; the SPA's own fetch code just sees a normal
 401 body.

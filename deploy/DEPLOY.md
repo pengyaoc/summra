@@ -454,7 +454,7 @@ sudo journalctl -u summra -n 100 --no-pager
 # Test manually
 cd <REMOTE_REPO_PATH>
 source venv/bin/activate
-gunicorn -c deploy/gunicorn_config.py backend.app_prod:app
+gunicorn -c deploy/gunicorn_config.py plainly.app_prod:app
 # One config for both instance sizes now — GUNICORN_WORKERS/GUNICORN_THREADS
 # in service.env control concurrency, not a separate e2-small config file.
 ```

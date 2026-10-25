@@ -12,14 +12,14 @@ the dividers from chapter_text aligns the counts without losing content.
 Idempotent. No LLM calls.
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id 1 --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id 1
+    PYTHONPATH=plainly venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id 1 --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id 1
 """
 import argparse
 import re
 import sys
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

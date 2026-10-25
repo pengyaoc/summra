@@ -17,14 +17,14 @@ ending in ';' or ':' within range; the next sentence end up to
 Idempotent (existing blank lines are ignored and re-derived). No LLM calls.
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/content/segment_verse_passages.py --book-id 102 --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/content/segment_verse_passages.py --book-id 102
+    PYTHONPATH=plainly venv/bin/python scripts/content/segment_verse_passages.py --book-id 102 --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/content/segment_verse_passages.py --book-id 102
 """
 import argparse
 import re
 import sys
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

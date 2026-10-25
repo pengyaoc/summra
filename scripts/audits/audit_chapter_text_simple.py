@@ -10,8 +10,8 @@ from typing import Dict, List, Optional
 
 
 
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 
 
 class SimpleChapterAuditor:

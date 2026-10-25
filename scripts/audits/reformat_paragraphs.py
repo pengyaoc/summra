@@ -14,14 +14,14 @@ form, and strips any leading title-prefix line that duplicates
 chapters.chapter_title. It does NOT call any LLM — pure DB rewrite.
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id 41 --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id 41
+    PYTHONPATH=plainly venv/bin/python scripts/audits/reformat_paragraphs.py --book-id 41 --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/audits/reformat_paragraphs.py --book-id 41
 """
 import argparse
 import re
 import sys
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

@@ -63,14 +63,14 @@ Apache or nginx (443, shared with other cohosted services)
                                 |
                         gunicorn (gthread, 1 worker, 4 threads)
                                 |
-                        Flask (backend/app_prod.py)
+                        Flask (plainly/app_prod.py)
                                 |
                         ├── data/database.db   (content, read-only in prod)
                         └── data/summra.db     (user/session state, read-write)
 ```
 
 **Why `gthread`, not `gevent`:** the app is synchronous WSGI with zero `async def` anywhere in
-`backend/` — its per-request work is SQLite reads and Jinja rendering, neither of which
+`plainly/` — its per-request work is SQLite reads and Jinja rendering, neither of which
 benefits from gevent's cooperative sockets. gevent's only real payoff was not blocking on large
 audio-file transfers, which the Apache/nginx static fragment now handles instead. Dropping it
 also removes a real deploy risk: the pinned `gevent==24.2.1` has no wheel for newer Python and
@@ -85,7 +85,7 @@ audio files and DB rows get deployed. Keep the real key in your local, gitignore
 
 `ProtectSystem=strict` + `ProtectHome=read-only` make everything except
 `ReadWritePaths=/opt/summra/data` read-only to the process. This is why all mutable state —
-`data/database.db` and `data/summra.db` — must live under `data/`; `backend/config.py`'s
+`data/database.db` and `data/summra.db` — must live under `data/`; `plainly/config.py`'s
 `DATABASE_PATH` and `USER_DATABASE_PATH` both resolve there. `static/audio/` is deliberately
 **not** writable in production, since nothing writes to it at runtime.
 

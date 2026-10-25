@@ -7,7 +7,7 @@ Finds all book mentions and checks if they have links.
 import sqlite3
 import re
 
-from backend import config
+from plainly import config
 
 DB_PATH = config.DATABASE_PATH
 BLOG_DIR = config.BLOG_DIR

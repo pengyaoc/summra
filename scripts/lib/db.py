@@ -4,10 +4,10 @@ Before this, 13+ scripts each hardcoded their own DB_PATH — some via
 `Path(__file__).parent.parent.parent / 'data' / 'database.db'` (breaks if
 the script moves one directory level deeper or shallower), some via the
 bare relative string `'data/database.db'` (only works if the script is run
-from the repo root). All of them duplicated what backend/config.py already
+from the repo root). All of them duplicated what plainly/config.py already
 gets right. Use this instead:
 
-    from backend import config
+    from plainly import config
     from scripts.lib.db import get_connection
 
     DB_PATH = config.DATABASE_PATH   # keep this module-level name — tests
@@ -18,12 +18,12 @@ gets right. Use this instead:
 """
 import sqlite3
 
-from backend import config
+from plainly import config
 
 
 def get_connection(db_path=None) -> sqlite3.Connection:
     """A sqlite3 connection with row_factory set so rows support both index
-    and column-name access — matching backend/models.py's
+    and column-name access — matching plainly/models.py's
     Database.get_connection().
 
     db_path defaults to config.DATABASE_PATH. Callers should still keep

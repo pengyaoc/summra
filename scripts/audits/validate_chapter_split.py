@@ -3,9 +3,9 @@
 Deterministic grep-style checks + optional LLM digest for Claude to read.
 
 Usage:
-    PYTHONPATH=backend python scripts/audits/validate_chapter_split.py --book-id 107
-    PYTHONPATH=backend python scripts/audits/validate_chapter_split.py --book-id 107 --llm-digest
-    PYTHONPATH=backend python scripts/audits/validate_chapter_split.py --file data/books/pg244.txt
+    PYTHONPATH=plainly python scripts/audits/validate_chapter_split.py --book-id 107
+    PYTHONPATH=plainly python scripts/audits/validate_chapter_split.py --book-id 107 --llm-digest
+    PYTHONPATH=plainly python scripts/audits/validate_chapter_split.py --file data/books/pg244.txt
 
 Exit codes:
     0 = all deterministic checks pass
@@ -23,8 +23,8 @@ from typing import Dict, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-from backend import models  # noqa: E402
-from backend import config  # noqa: E402
+from plainly import models  # noqa: E402
+from plainly import config  # noqa: E402
 from scripts.content.generate_summaries import SummaryGenerator  # noqa: E402
 
 

@@ -26,8 +26,8 @@ Usage:
 import re
 
 
-from backend.models import Database
-from backend import config
+from plainly.models import Database
+from plainly import config
 
 
 def find_audio_files():

@@ -17,7 +17,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 
 
-from backend.models import Database
+from plainly.models import Database
 
 
 def find_gemini_audio_files(audio_dir: Path) -> list:

@@ -29,16 +29,19 @@ def test_hints_are_per_user(test_db_path):
 
 
 def _client(monkeypatch, tmp_path):
-    for mod in ['app_base', 'config', 'progress_routes', 'models', 'user_models', 'whoami']:
-        sys.modules.pop(mod, None)
-        sys.modules.pop(f'backend.{mod}', None)
-    from backend import config as _config
+    # Purge the app and the shared modules it wires together as one unit: the
+    # routes hold references to shared.progress.routes / shared.auth, so a
+    # partial reload leaves later tests patching one copy while routes use another.
+    for name in [m for m in sys.modules
+                 if (m.split('.')[0] == 'plainly' and m != 'plainly.app_prod') or m.startswith(('shared.progress', 'shared.auth'))]:
+        sys.modules.pop(name, None)
+    from plainly import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', True, raising=False)
     monkeypatch.setattr(_config, 'USER_DATABASE_PATH', tmp_path / 'users.db', raising=False)
     monkeypatch.setenv('SUMMRA_AUTH_MODE', 'optional')
     monkeypatch.setenv('SUMMRA_ALLOWED_EMAILS', 'me@example.com')
-    sys.modules['backend.config'] = _config
-    return importlib.import_module('backend.app_base').app.test_client()
+    sys.modules['plainly.config'] = _config
+    return importlib.import_module('plainly.app_base').app.test_client()
 
 
 ME = {'X-Remote-Email': 'me@example.com'}

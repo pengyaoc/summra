@@ -26,9 +26,9 @@ import sys
 import argparse
 
 
-from backend.models import Database
-from backend.gemini_tts_handler import GeminiTTSHandler
-from backend import tts_utils  # Shared TTS utilities
+from plainly.models import Database
+from plainly.gemini_tts_handler import GeminiTTSHandler
+from plainly import tts_utils  # Shared TTS utilities
 
 
 def parse_chapter_range(chapter_str: str) -> list:

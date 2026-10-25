@@ -12,8 +12,8 @@ import urllib.error
 from pathlib import Path
 
 
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 
 
 class GutenbergFetcher:

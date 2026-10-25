@@ -14,7 +14,7 @@ import argparse
 from pathlib import Path
 
 
-from backend import models
+from plainly import models
 
 def list_books(db):
     """List all books in the database"""

@@ -39,14 +39,14 @@ headings break the caption rules (Pope's Iliad: `ARGUMENT`, `A. POPE`,
 Idempotent. No LLM calls. Safe to run before generate_modern_english.py.
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/audits/strip_illustration_captions.py --book-id 36 --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/audits/strip_illustration_captions.py --book-id 36
+    PYTHONPATH=plainly venv/bin/python scripts/audits/strip_illustration_captions.py --book-id 36 --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/audits/strip_illustration_captions.py --book-id 36
 """
 import argparse
 import re
 import sys
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

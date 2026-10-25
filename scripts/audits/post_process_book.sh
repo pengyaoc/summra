@@ -14,16 +14,16 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 echo "=== Book $BOOK_ID: step 2 reformat (chapter_text) ==="
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id "$BOOK_ID" || true
+PYTHONPATH=plainly venv/bin/python scripts/audits/reformat_paragraphs.py --book-id "$BOOK_ID" || true
 
 echo "=== Book $BOOK_ID: step 2 reformat (modern_english_text) ==="
-PYTHONPATH=backend venv/bin/python scripts/audits/reformat_paragraphs.py --book-id "$BOOK_ID" --column modern_english_text || true
+PYTHONPATH=plainly venv/bin/python scripts/audits/reformat_paragraphs.py --book-id "$BOOK_ID" --column modern_english_text || true
 
 echo "=== Book $BOOK_ID: step 3 strip decorative dividers ==="
-PYTHONPATH=backend venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id "$BOOK_ID" || true
+PYTHONPATH=plainly venv/bin/python scripts/audits/strip_decorative_dividers.py --book-id "$BOOK_ID" || true
 
 echo "=== Book $BOOK_ID: step 4 audit ==="
-PYTHONPATH=backend venv/bin/python3 -c "
+PYTHONPATH=plainly venv/bin/python3 -c "
 import sqlite3, sys
 bid = $BOOK_ID
 db = sqlite3.connect('data/database.db')

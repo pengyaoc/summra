@@ -6,8 +6,8 @@ Reads all .md files from data/blog/ and inserts them into blog_posts table.
 
 import re
 from datetime import datetime
-from backend import config
-from backend.models import Database
+from plainly import config
+from plainly.models import Database
 
 
 def slugify(text):

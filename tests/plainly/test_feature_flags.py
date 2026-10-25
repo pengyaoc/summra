@@ -1,0 +1,105 @@
+"""Tests for FEATURE_AUTH and FEATURE_BLOG feature flags.
+
+These tests verify that:
+- When the flag is False, gated routes return 404 (not 403) and are not registered.
+- When the flag is True, the routes register and respond normally.
+- The sitemap excludes /blog URLs when FEATURE_BLOG is False.
+
+Each test reloads the relevant backend modules so the flag value at import time
+takes effect — Flask blueprint registration happens at module import.
+"""
+
+import importlib
+import sys
+import pytest
+
+
+def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
+    """Reload backend modules with the requested flag values.
+
+    Returns the Flask test client for the reloaded app.
+    """
+    # Drop cached modules so module-level blueprint registration re-runs
+    # Purge the app and the shared modules it wires together as one unit: the
+    # routes hold references to shared.progress.routes / shared.auth, so a
+    # partial reload leaves later tests patching one copy while routes use another.
+    for name in [m for m in sys.modules
+                 if (m.split('.')[0] == 'plainly' and m != 'plainly.app_prod') or m.startswith(('shared.progress', 'shared.auth'))]:
+        sys.modules.pop(name, None)
+
+    from plainly import config as _config
+    monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
+    monkeypatch.setattr(_config, 'FEATURE_BLOG', feature_blog, raising=False)
+    # Ensure the freshly-imported app_base sees the patched values
+    sys.modules['plainly.config'] = _config
+
+    # `from plainly import app_base` would silently return backend's stale
+    # cached `app_base` attribute (never cleared by the sys.modules.pop above)
+    # instead of re-executing the module — import_module correctly detects
+    # it's missing from sys.modules and re-imports for real.
+    app_base = importlib.import_module('plainly.app_base')
+    return app_base.app.test_client()
+
+
+def test_progress_routes_return_404_when_flag_off(monkeypatch):
+    client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
+    assert client.get('/api/progress/all').status_code == 404
+    assert client.get('/api/progress/save').status_code == 404
+
+
+def test_progress_routes_registered_when_flag_on(monkeypatch):
+    """/api/progress/* exists when FEATURE_AUTH registers the blueprint.
+    There is no /api/auth/* any more — Apache owns login entirely in
+    trusted_header mode; see tests/shared/test_pchauth_integration.py for that
+    coverage instead."""
+    client = _reload_app_base(monkeypatch, feature_auth=True, feature_blog=False)
+    resp = client.get('/api/progress/all')
+    assert resp.status_code != 404, f'progress blueprint should register, got {resp.status_code}'
+
+
+def test_blog_routes_return_404_when_flag_off(monkeypatch):
+    client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
+    assert client.get('/blog').status_code == 404
+    assert client.get('/blog/some-slug').status_code == 404
+    assert client.get('/api/blog').status_code == 404
+    assert client.get('/api/blog/some-slug').status_code == 404
+
+
+def test_blog_routes_registered_when_flag_on(monkeypatch):
+    client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=True)
+    # /blog should return 200 (renders blog index); /api/blog returns 200 JSON.
+    assert client.get('/blog').status_code == 200
+    assert client.get('/api/blog').status_code == 200
+
+
+def test_sitemap_excludes_blog_when_flag_off(monkeypatch):
+    client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
+    resp = client.get('/sitemap.xml')
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert '/blog' not in body, 'sitemap must not contain blog URLs when FEATURE_BLOG=False'
+
+
+def test_templates_receive_feature_flags(monkeypatch):
+    """The home page render call must expose feature_auth / feature_blog
+    to templates so frontend Jinja conditionals can read them.
+    Verified via the context processor wiring."""
+    client = _reload_app_base(monkeypatch, feature_auth=False, feature_blog=False)
+    from plainly import app_base
+    # Trigger a request context so context processors run.
+    with app_base.app.test_request_context('/'):
+        ctx = {}
+        for processor in app_base.app.template_context_processors[None]:
+            ctx.update(processor())
+        assert 'feature_auth' in ctx, 'context processor must inject feature_auth'
+        assert 'feature_blog' in ctx, 'context processor must inject feature_blog'
+        assert ctx['feature_auth'] is False
+        assert ctx['feature_blog'] is False
+
+
+def test_tts_handler_module_is_removed():
+    """The local Coqui/VITS TTS handler must be deleted."""
+    sys.modules.pop('tts_handler', None)
+    sys.modules.pop('plainly.tts_handler', None)
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module('tts_handler')

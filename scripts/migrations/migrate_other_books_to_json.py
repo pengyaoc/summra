@@ -19,7 +19,7 @@ import json
 import argparse
 from datetime import datetime
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 

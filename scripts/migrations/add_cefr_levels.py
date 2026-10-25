@@ -6,7 +6,7 @@ Based on research and standard difficulty classifications for classic literature
 
 import sqlite3
 
-from backend import config
+from plainly import config
 
 DB_PATH = config.DATABASE_PATH
 

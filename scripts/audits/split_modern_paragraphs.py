@@ -19,9 +19,9 @@ Splits are applied BEFORE merges. Indices in --merge refer to paragraph
 positions AFTER splits have been applied.
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id 60 --chapter-number 12 --inspect
-    PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id 60 --chapter-number 12 --split "5:200,7:100" --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id 60 --chapter-number 12 --split "5:200" --merge "1"
+    PYTHONPATH=plainly venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id 60 --chapter-number 12 --inspect
+    PYTHONPATH=plainly venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id 60 --chapter-number 12 --split "5:200,7:100" --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/audits/split_modern_paragraphs.py --book-id 60 --chapter-number 12 --split "5:200" --merge "1"
 
 No LLM calls — pure DB rewrite of modern_english_text.
 """
@@ -29,7 +29,7 @@ import argparse
 import sys
 from typing import List, Tuple, Optional
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

@@ -2,7 +2,7 @@
 """Fix chapter numbering for The Time Machine based on TOC"""
 
 
-from backend import models
+from plainly import models
 
 def main():
     db = models.Database()

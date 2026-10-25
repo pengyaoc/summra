@@ -8,7 +8,7 @@ This script generates URL-friendly slugs for all books that don't have one yet.
 import sys
 
 
-from backend.models import Database, slugify
+from plainly.models import Database, slugify
 
 
 def backfill_slugs(dry_run=True):

@@ -28,7 +28,7 @@ source venv/bin/activate
 echo ""
 echo "Installing dependencies..."
 pip install --upgrade pip
-pip install -r backend/requirements.txt
+pip install -r plainly/requirements.txt
 
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
@@ -58,7 +58,7 @@ echo "Next steps:"
 echo "1. Edit .env and add your GEMINI_API_KEY"
 echo "2. Place book .txt files in data/books/"
 echo "3. Generate summaries: python scripts/content/generate_summaries.py data/books/your_book.txt"
-echo "4. Start the server: python backend/app.py"
+echo "4. Start the server: python plainly/app.py"
 echo "5. Open http://localhost:5000 in your browser"
 echo ""
 echo "For more information, see README.md"

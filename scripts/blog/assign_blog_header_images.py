@@ -16,8 +16,8 @@ import argparse
 import requests
 
 
-from backend import config
-from backend.models import Database
+from plainly import config
+from plainly.models import Database
 
 def search_unsplash(query, per_page=1):
     """

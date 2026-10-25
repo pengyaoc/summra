@@ -4,7 +4,7 @@ Migration script to populate the authors table from existing book.author strings
 and link books to their authors via author_id foreign key.
 """
 
-from backend.models import Database
+from plainly.models import Database
 
 
 def migrate_authors():

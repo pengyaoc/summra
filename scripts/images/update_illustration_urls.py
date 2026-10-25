@@ -6,8 +6,8 @@ Quick script to populate illustration_url in database for existing illustration 
 import sys
 
 
-from backend.models import Database
-import backend.config as config
+from plainly.models import Database
+import plainly.config as config
 
 
 def update_illustration_urls(book_id=None):

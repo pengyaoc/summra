@@ -10,8 +10,8 @@ Changes:
 import shutil
 
 
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 
 
 def reorganize_illustrations(dry_run=False):

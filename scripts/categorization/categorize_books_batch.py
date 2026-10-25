@@ -20,8 +20,8 @@ import argparse
 import time
 
 
-from backend.models import Database
-from backend import config
+from plainly.models import Database
+from plainly import config
 from google import genai
 from google.genai import types
 from scripts.lib.llm import get_gemini_client

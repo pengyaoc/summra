@@ -6,13 +6,13 @@ the modern text. Idempotent — refuses to act if modern already starts with the
 title (case-insensitive).
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/audits/prepend_missing_titles.py --book-id 80 --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/audits/prepend_missing_titles.py --book-id 80
+    PYTHONPATH=plainly venv/bin/python scripts/audits/prepend_missing_titles.py --book-id 80 --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/audits/prepend_missing_titles.py --book-id 80
 """
 import argparse
 import sys
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

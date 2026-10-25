@@ -14,8 +14,8 @@ import shutil
 from pathlib import Path
 from PIL import Image
 
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 
 # Import resize function from existing script
 from scripts.images.resize_image import resize_image_to_target_size, get_file_size_mb

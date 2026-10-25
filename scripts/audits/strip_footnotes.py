@@ -13,14 +13,14 @@ Idempotent. No LLM calls. `[Illustration: ]` and other non-numeric
 brackets are left alone (see strip_illustration_captions.py).
 
 Usage:
-    PYTHONPATH=backend venv/bin/python scripts/audits/strip_footnotes.py --book-id 66 --dry-run
-    PYTHONPATH=backend venv/bin/python scripts/audits/strip_footnotes.py --book-id 66
+    PYTHONPATH=plainly venv/bin/python scripts/audits/strip_footnotes.py --book-id 66 --dry-run
+    PYTHONPATH=plainly venv/bin/python scripts/audits/strip_footnotes.py --book-id 66
 """
 import argparse
 import re
 import sys
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

@@ -6,7 +6,7 @@ Replace technical jargon with relatable concepts while keeping depth
 import sys
 
 
-from backend.models import Database
+from plainly.models import Database
 
 def main():
     db = Database()

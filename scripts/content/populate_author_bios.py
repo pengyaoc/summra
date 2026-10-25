@@ -20,8 +20,8 @@ import argparse
 import json
 from typing import Optional, Dict, List
 
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 from scripts.lib.llm import get_gemini_client
 
 class AuthorBioGenerator:

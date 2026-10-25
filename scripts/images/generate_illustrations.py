@@ -55,8 +55,8 @@ from PIL import Image
 project_root = Path(__file__).parent.parent.parent
 
 
-from backend.models import Database
-from backend import config
+from plainly.models import Database
+from plainly import config
 
 # Import Google GenAI
 try:

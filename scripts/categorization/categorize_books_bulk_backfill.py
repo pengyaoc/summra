@@ -24,8 +24,8 @@ import sys
 import argparse
 
 from dotenv import load_dotenv
-from backend import config
-from backend import models
+from plainly import config
+from plainly import models
 from scripts.categorization import categorization
 from scripts.lib.llm import get_gemini_client
 

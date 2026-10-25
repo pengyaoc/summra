@@ -91,7 +91,7 @@ Investigate what process is bound. Either lock it to loopback or close it via `u
 
 Out of scope for these scripts (handle separately if needed):
 
-- Application-layer bugs in the Flask app (run `bandit -r backend/` for a quick scan).
+- Application-layer bugs in the Flask app (run `bandit -r plainly/` for a quick scan).
 - DDoS protection (use Cloudflare in front if needed).
 - Secrets in `.env` rotation cadence.
 - Backup verification — checks the cert *exists*, not that backups actually restore.

@@ -7,15 +7,15 @@ name = "summra"
 version = "0.1.0"
 description = "Read the classics in plain English"
 requires-python = ">=3.11"
-# Runtime dependencies stay in backend/requirements.txt / requirements-prod.txt
-# (installed separately) — this project file exists to make `backend` and
+# Runtime dependencies stay in plainly/requirements.txt / requirements-prod.txt
+# (installed separately) — this project file exists to make `plainly` and
 # `scripts` importable as real packages via `pip install -e .`, replacing the
 # sys.path hacks and try/except ImportError shims that used to be needed for
 # every script and test to find `config`, `models`, and sibling scripts.
 dependencies = []
 
 [tool.setuptools.packages.find]
-include = ["backend*", "scripts*", "shared*", "distill*"]
+include = ["plainly*", "scripts*", "shared*", "distill*"]
 
 [tool.ruff]
 line-length = 120

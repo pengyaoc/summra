@@ -11,7 +11,7 @@ from urllib.parse import quote
 import time
 
 
-from backend import models
+from plainly import models
 
 
 # Known Gutenberg IDs for common books (to speed up lookups)

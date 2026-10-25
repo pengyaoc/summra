@@ -9,7 +9,7 @@ Usage:
 import re
 
 
-from backend import models
+from plainly import models
 
 
 def slugify(text):

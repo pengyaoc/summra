@@ -92,8 +92,8 @@ from urllib.parse import quote
 from google import genai
 from dotenv import load_dotenv
 
-from backend import config
-from backend import models
+from plainly import config
+from plainly import models
 from scripts.lib import text as text_lib
 try:
     from scripts.categorization import categorization

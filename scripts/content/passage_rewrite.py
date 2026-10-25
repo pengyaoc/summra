@@ -28,9 +28,9 @@ length ratio within [0.5, 1.3] of the original; chapter ratio within
 the chapter's original uses the same phrase (commentary such as a preface).
 
 Usage:
-    PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py export --book-id 66 --dir <dir> [--chapter N]
-    PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py check --book-id 66 --dir <dir> [--chapter N]
-    PYTHONPATH=backend:. venv/bin/python scripts/content/passage_rewrite.py apply --book-id 66 --dir <dir> [--dry-run]
+    PYTHONPATH=plainly:. venv/bin/python scripts/content/passage_rewrite.py export --book-id 66 --dir <dir> [--chapter N]
+    PYTHONPATH=plainly:. venv/bin/python scripts/content/passage_rewrite.py check --book-id 66 --dir <dir> [--chapter N]
+    PYTHONPATH=plainly:. venv/bin/python scripts/content/passage_rewrite.py apply --book-id 66 --dir <dir> [--dry-run]
 """
 import argparse
 import json
@@ -38,7 +38,7 @@ import re
 import sys
 from pathlib import Path
 
-from backend import config
+from plainly import config
 from scripts.lib.db import get_connection
 
 DB_PATH = config.DATABASE_PATH

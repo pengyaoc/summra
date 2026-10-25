@@ -5,7 +5,7 @@ Validate blog post links to ensure all book links are valid
 import re
 import sqlite3
 
-from backend import config
+from plainly import config
 
 DB_PATH = config.DATABASE_PATH
 

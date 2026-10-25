@@ -8,8 +8,8 @@ This script detects chapter names like "Book Ii" and converts them to "Book II".
 import re
 
 
-from backend import config
-from backend.models import Database
+from plainly import config
+from plainly.models import Database
 
 
 def contains_title_case_roman_numeral(text):

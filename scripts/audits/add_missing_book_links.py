@@ -6,7 +6,7 @@ Automatically add links to book references in blog posts.
 import sqlite3
 import re
 
-from backend import config
+from plainly import config
 
 DB_PATH = config.DATABASE_PATH
 BLOG_DIR = config.BLOG_DIR
@@ -170,7 +170,7 @@ def main():
 
     if dry_run and total_changes > 0:
         print("\nTo apply these changes, run:")
-        print("  python backend/add_missing_book_links.py --apply")
+        print("  python plainly/add_missing_book_links.py --apply")
     print()
 
 if __name__ == '__main__':

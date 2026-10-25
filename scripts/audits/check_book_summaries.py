@@ -3,7 +3,7 @@
 import sys
 
 
-from backend import models
+from plainly import models
 
 def main():
     if len(sys.argv) < 2:

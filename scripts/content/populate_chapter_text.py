@@ -7,8 +7,8 @@ without calling LLM. Uses existing chapter detection logic.
 import sys
 from pathlib import Path
 
-from backend import config
-from backend import models
+from plainly import config
+from plainly import models
 
 # Import chapter detection from generate_summaries
 

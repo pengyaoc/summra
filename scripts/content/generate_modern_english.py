@@ -38,8 +38,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
-from backend import config
-from backend.models import Database
+from plainly import config
+from plainly.models import Database
 
 try:
     from google import genai

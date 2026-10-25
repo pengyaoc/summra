@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 from scripts.content.generate_summaries import SummaryGenerator
-from backend import models
+from plainly import models
 
 def update_chapter_titles(book_id: int, book_file: Path):
     """

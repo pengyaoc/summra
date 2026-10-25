@@ -10,7 +10,7 @@ called `genai.Client(api_key=...)` themselves. Use this instead:
 """
 from google import genai
 
-from backend import config
+from plainly import config
 
 
 def get_gemini_client(api_key: str = None) -> genai.Client:

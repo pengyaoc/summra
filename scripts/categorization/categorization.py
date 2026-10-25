@@ -19,8 +19,8 @@ import time
 from typing import List, Dict, Optional
 
 from google import genai
-from backend import config
-from backend import models
+from plainly import config
+from plainly import models
 
 
 def categorize_single_book(client: genai.Client, db: models.Database,

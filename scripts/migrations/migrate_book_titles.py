@@ -13,7 +13,7 @@ Usage:
 
 
 
-from backend import models
+from plainly import models
 from scripts.lib.text import normalize_book_title as _normalize_book_title
 import argparse
 

@@ -10,8 +10,8 @@ from typing import Dict, List, Tuple, Optional
 
 
 
-from backend import models
-from backend import config
+from plainly import models
+from plainly import config
 from scripts.content.generate_summaries import SummaryGenerator
 
 

@@ -26,8 +26,8 @@ import subprocess
 import shutil
 
 
-from backend.models import Database
-from backend import config
+from plainly.models import Database
+from plainly import config
 
 
 def process_guide_image(original_path: Path, output_dir: Path, output_name: str, max_width: int = 1200) -> tuple:

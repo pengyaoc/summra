@@ -29,7 +29,7 @@ REM Install dependencies
 echo.
 echo Installing dependencies...
 python -m pip install --upgrade pip
-pip install -r backend\requirements.txt
+pip install -r plainly\requirements.txt
 
 REM Create .env file if it doesn't exist
 if not exist .env (
@@ -61,7 +61,7 @@ echo Next steps:
 echo 1. Edit .env and add your GEMINI_API_KEY
 echo 2. Place book .txt files in data\books\
 echo 3. Generate summaries: python scripts\generate_summaries.py data\books\your_book.txt
-echo 4. Start the server: python backend\app.py
+echo 4. Start the server: python plainly\app.py
 echo 5. Open http://localhost:5000 in your browser
 echo.
 echo For more information, see README.md

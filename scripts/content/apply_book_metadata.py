@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from backend import models  # noqa: E402
+from plainly import models  # noqa: E402
 
 METADATA = Path(__file__).resolve().parent / 'book_metadata.json'
 

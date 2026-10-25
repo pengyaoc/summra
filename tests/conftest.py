@@ -11,9 +11,9 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
-# `backend` and `scripts` are installed as real packages (see pyproject.toml,
+# `plainly` and `scripts` are installed as real packages (see pyproject.toml,
 # `pip install -e .`), so no sys.path manipulation is needed here — tests
-# import them as `from backend import config`, `from scripts.content.
+# import them as `from plainly import config`, `from scripts.content.
 # generate_summaries import SummaryGenerator`, etc.
 
 # Test fixtures root directory
@@ -121,8 +121,8 @@ def mock_config_paths(test_illustrations_dir, test_audio_dir, test_batch_jobs_di
 
     This prevents tests from writing to production directories.
     """
-    with patch('backend.config.ILLUSTRATIONS_DIR', test_illustrations_dir), \
-         patch('backend.config.TTS_OUTPUT_DIR', test_audio_dir), \
+    with patch('plainly.config.ILLUSTRATIONS_DIR', test_illustrations_dir), \
+         patch('plainly.config.TTS_OUTPUT_DIR', test_audio_dir), \
          patch('scripts.images.generate_illustrations.BATCH_JOBS_DIR', test_batch_jobs_dir):
         yield {
             'illustrations': test_illustrations_dir,

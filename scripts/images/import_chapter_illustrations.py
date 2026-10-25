@@ -27,8 +27,8 @@ import glob
 from PIL import Image
 
 
-from backend.models import Database
-import backend.config as config
+from plainly.models import Database
+import plainly.config as config
 
 
 def get_file_size_mb(filepath):

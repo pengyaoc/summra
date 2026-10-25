@@ -20,7 +20,7 @@ After=network.target
 [Service]
 WorkingDirectory=/opt/summra
 EnvironmentFile=/opt/summra/service.env
-ExecStart=/opt/summra/venv/bin/gunicorn -c deploy/gunicorn_config.py backend.app_prod:app
+ExecStart=/opt/summra/venv/bin/gunicorn -c deploy/gunicorn_config.py plainly.app_prod:app
 Restart=on-failure
 RestartSec=5
 

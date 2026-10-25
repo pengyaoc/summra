@@ -4,7 +4,7 @@ import sys
 import os
 
 
-from backend import models
+from plainly import models
 
 def main():
     db = models.Database()

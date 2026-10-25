@@ -2,7 +2,7 @@
 """Check for test books in the database"""
 
 
-from backend import models
+from plainly import models
 
 def main():
     db = models.Database()

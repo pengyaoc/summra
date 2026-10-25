@@ -32,9 +32,9 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 
 
-from backend.models import Database
-from backend.gemini_tts_handler import GeminiTTSHandler
-from backend import tts_utils
+from plainly.models import Database
+from plainly.gemini_tts_handler import GeminiTTSHandler
+from plainly import tts_utils
 
 
 def find_books_without_audio(db: Database) -> list:
