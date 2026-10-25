@@ -8,14 +8,11 @@ import sys
 
 import pytest
 
+from _reload import purge_app_modules
+
 
 def _reload_app_base(monkeypatch, feature_auth: bool, auth_mode: str | None = None, allowed_emails: str | None = None):
-    # Purge the app and the shared modules it wires together as one unit: the
-    # routes hold references to shared.progress.routes / shared.auth, so a
-    # partial reload leaves later tests patching one copy while routes use another.
-    for name in [m for m in sys.modules
-                 if (m.split('.')[0] == 'plainly' and m != 'plainly.app_prod') or m.startswith(('shared.progress', 'shared.auth'))]:
-        sys.modules.pop(name, None)
+    purge_app_modules()
 
     from plainly import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)

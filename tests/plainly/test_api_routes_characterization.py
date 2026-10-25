@@ -11,6 +11,8 @@ touch the real data/database.db and don't depend on run order.
 """
 import pytest
 
+from _reload import purge_app_modules
+
 
 @pytest.fixture
 def db(test_db_path):
@@ -355,12 +357,7 @@ def blog_client(db, monkeypatch):
     from plainly import config as _config
 
     monkeypatch.setattr(_config, 'FEATURE_BLOG', True, raising=False)
-    # Purge the app and the shared modules it wires together as one unit: the
-    # routes hold references to shared.progress.routes / shared.auth, so a
-    # partial reload leaves later tests patching one copy while routes use another.
-    for name in [m for m in sys.modules
-                 if (m.split('.')[0] == 'plainly' and m != 'plainly.app_prod') or m.startswith(('shared.progress', 'shared.auth'))]:
-        sys.modules.pop(name, None)
+    purge_app_modules()
     sys.modules['plainly.config'] = _config
 
     app_base = importlib.import_module('plainly.app_base')

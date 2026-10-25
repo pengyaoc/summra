@@ -13,6 +13,8 @@ import importlib
 import sys
 import pytest
 
+from _reload import purge_app_modules
+
 
 def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     """Reload backend modules with the requested flag values.
@@ -20,12 +22,7 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     Returns the Flask test client for the reloaded app.
     """
     # Drop cached modules so module-level blueprint registration re-runs
-    # Purge the app and the shared modules it wires together as one unit: the
-    # routes hold references to shared.progress.routes / shared.auth, so a
-    # partial reload leaves later tests patching one copy while routes use another.
-    for name in [m for m in sys.modules
-                 if (m.split('.')[0] == 'plainly' and m != 'plainly.app_prod') or m.startswith(('shared.progress', 'shared.auth'))]:
-        sys.modules.pop(name, None)
+    purge_app_modules()
 
     from plainly import config as _config
     monkeypatch.setattr(_config, 'FEATURE_AUTH', feature_auth, raising=False)
@@ -33,7 +30,7 @@ def _reload_app_base(monkeypatch, feature_auth: bool, feature_blog: bool):
     # Ensure the freshly-imported app_base sees the patched values
     sys.modules['plainly.config'] = _config
 
-    # `from plainly import app_base` would silently return backend's stale
+    # `from plainly import app_base` would silently return plainly's stale
     # cached `app_base` attribute (never cleared by the sys.modules.pop above)
     # instead of re-executing the module — import_module correctly detects
     # it's missing from sys.modules and re-imports for real.
