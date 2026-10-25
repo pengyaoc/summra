@@ -156,7 +156,7 @@ def book_page(slug):
 @bp.app_template_filter('kindle_inline')
 def kindle_inline(text):
     """Escape a paragraph and turn *x* / _x_ into italics, as the web
-    reader does without marked (reader.js formatContinuousReaderText)."""
+    reader does without marked (shared/static/js/blocks.js formatInline)."""
     html = str(escape(text))
     html = re.sub(r'\*([^\s*](?:[^*\n]*?[^\s*])?)\*', r'<em>\1</em>', html)
     html = re.sub(r'\b_([^_\n]+?)_\b', r'<em>\1</em>', html)

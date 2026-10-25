@@ -4,8 +4,9 @@
 // readerUtilsMixin. Merged onto the host app's prototype by platform.js, so
 // every method still reads/writes `this.*` exactly as before.
 //
-// Host hooks: continuousReaderBlock(text) -> {tag, className, content}
-// renders one unit's body; selectBook(book) is where the back button goes.
+// Host hooks: classifyUnit(text) -> block turns one unit's body into a block
+// that blocksMixin.continuousReaderBlock (blocks.js) renders as
+// {tag, className, content}; selectBook(book) is where the back button goes.
 export const continuousReaderMixin = {
     async showContinuousReader(book, options = {}) {
         if (this.continuousReader?.active && this.currentBook?.id !== book.id) {

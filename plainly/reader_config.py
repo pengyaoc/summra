@@ -30,4 +30,5 @@ PLAINLY_READER = ReaderConfig(
     ),
     kindle=KindleOptions((('plain', 'Plain English'), ('original', 'Original')), 'plain'),
     hint_keys=frozenset({'reader_swipe_mobile', 'reader_nav_desktop'}),
+    inline='markdown',
 )

@@ -4,8 +4,9 @@
 // 4b continuation); merged onto SummraApp.prototype via Object.assign in
 // app.js, so every method still reads/writes `this.*` exactly as before.
 // The continuous reader itself is the shared platform's continuousReaderMixin
-// (shared/static/js/continuous_reader.js); continuousReaderBlock() below is
-// Plainly's hook for rendering one unit's body.
+// (shared/static/js/continuous_reader.js); classifyUnit() below is Plainly's
+// hook that turns one unit's text into a block for the shared block renderer
+// (shared/static/js/blocks.js).
 export const readerMixin = {
     renderMarkdown(text) {
         if (typeof marked !== 'undefined') {
@@ -721,36 +722,18 @@ export const readerMixin = {
         });
     },
 
-    formatContinuousReaderText(text) {
-        // The reader uses escaped text for safety, but source chapters use
-        // Markdown emphasis. Parse inline Markdown only after escaping source
-        // HTML so emphasis renders without allowing stored tags through.
-        const escaped = this.escapeHtml((text || '').trim());
-        if (typeof marked !== 'undefined' && typeof marked.parseInline === 'function') {
-            return marked.parseInline(escaped);
-        }
-        return escaped
-            .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*([^\s*](?:[^*\n]*?[^\s*])?)\*/g, '<em>$1</em>')
-            .replace(/\b_([^_\n]+?)_\b/g, '<em>$1</em>');
-    },
-
-    continuousReaderBlock(text) {
+    classifyUnit(text) {
         const value = (text || '').trim();
         // Verse passages (poetry books) keep their line breaks.
         if (value.includes('\n')) {
-            return {
-                tag: 'p',
-                className: 'reader-verse',
-                content: value.split('\n').map(line => this.formatContinuousReaderText(line)).join('<br>\n'),
-            };
+            return { type: 'verse', lines: value.split('\n') };
         }
         const heading = value.length <= 100 && (
             /^(?:Original Transcriber’s Notes|Original Transcriber's Notes)\s*:?$/i.test(value)
             || /^[A-Z][A-Z0-9\s’'.,:;!?()—–-]*$/.test(value)
         );
         if (heading) {
-            return { tag: 'h3', className: 'reader-section-heading', content: this.formatContinuousReaderText(value) };
+            return { type: 'h', text: value };
         }
 
         const numberedListItem = /^\s*\d+[.)]\s+/.test(value);
@@ -760,11 +743,7 @@ export const readerMixin = {
         const content = bulletMatch
             ? `• ${value.slice(bulletMatch[0].length)}`
             : value;
-        return {
-            tag: 'p',
-            className: listItem ? 'reader-list-item' : '',
-            content: this.formatContinuousReaderText(content),
-        };
+        return { type: listItem ? 'li' : 'p', text: content };
     },
 
     async loadContinuousAbout() {

@@ -10499,7 +10499,7 @@ side-by-side modes.
 - Reader compile: `_reader_split_paragraphs(text, verse)` splits an `is_poetry` book's original on
   blank lines and keeps `\n` inside a unit, so side-by-side row *i* pairs passage *i* with plain
   paragraph *i*. The checksum includes `verse: true` only for poetry, so prose checksums are unchanged.
-- Rendering: `continuousReaderBlock()` renders a unit containing `\n` as `p.reader-verse` with
+- Rendering: `classifyUnit()` makes a unit containing `\n` a `verse` block, rendered (shared `blocks.js`) as `p.reader-verse` with
   `<br>\n` between lines (the `\n` keeps word counts right in `textContent`).
 - Pagination: `textUnits()` / `sliceUnits()` cut a block at word starts (or after each `<br>` for
   `.reader-verse`) with a DOM Range, preserving inline markup. `splitSideBySideRowToFit()` binary

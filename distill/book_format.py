@@ -10,6 +10,8 @@ from typing import Optional
 
 from PIL import Image
 
+from shared.reader.blocks import block_text  # noqa: F401  (re-exported)
+
 FORMAT_VERSION = 1
 BLOCK_TYPES = frozenset({'p', 'h', 'ul', 'ol', 'quote', 'keypoints', 'table', 'image'})
 
@@ -39,10 +41,6 @@ def list_images(folder: Path) -> list:
 def word_count(text: str) -> int:
     """Each CJK character counts one; other runs of word characters count one each."""
     return len(CJK_RE.findall(text)) + len(_WORD_RE.findall(CJK_RE.sub(' ', text)))
-
-
-def _strip_markup(text: str) -> str:
-    return text.replace('**', '').replace('*', '')
 
 
 def _check_inline(text, where, errors):
@@ -153,22 +151,6 @@ def validate_book(book: dict, folder: Path) -> list:
                 continue
             _check_blocks(chapter.get('blocks'), f'{cwhere}.blocks', folder, errors)
     return errors
-
-
-def block_text(block: dict) -> str:
-    btype = block.get('type')
-    if btype in ('p', 'h', 'quote'):
-        return _strip_markup(block.get('text', ''))
-    if btype in ('ul', 'ol', 'keypoints'):
-        return '\n'.join(_strip_markup(i) for i in block.get('items', []))
-    if btype == 'table':
-        cells = list(block.get('header', []))
-        for row in block.get('rows', []):
-            cells.extend(row)
-        return ' '.join(_strip_markup(c) for c in cells)
-    if btype == 'image':
-        return _strip_markup(block.get('caption') or '')
-    return ''
 
 
 def iter_chapters(book: dict) -> list:

@@ -6,6 +6,7 @@ import { readerUtilsMixin } from './reader_utils.js';
 import { paginationMixin, createPaginationState } from './pagination.js';
 import { settingsMixin } from './settings.js';
 import { continuousReaderMixin } from './continuous_reader.js';
+import { blocksMixin } from './blocks.js';
 
 export { createPaginationState };
 
@@ -20,7 +21,7 @@ const readerPlatformDefaults = {
 };
 
 export function applyReaderPlatform(Host) {
-    Object.assign(Host.prototype, readerUtilsMixin, paginationMixin, settingsMixin, continuousReaderMixin);
+    Object.assign(Host.prototype, readerUtilsMixin, paginationMixin, settingsMixin, continuousReaderMixin, blocksMixin);
     for (const [key, method] of Object.entries(readerPlatformDefaults)) {
         if (!(key in Host.prototype)) Host.prototype[key] = method;
     }

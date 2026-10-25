@@ -95,6 +95,8 @@ def test_plainly_to_client_is_pinned_exactly():
         'cache_db_name': 'summra-reader-v2',
         'api_base': '/api',
         'extra_page_blocks': '',
+        'inline': 'markdown',
+        'image_base': '',
         'default_modes': ['plain', 'original'],
         'modes': [
             _plain_mode('summary', 'Summary'),
@@ -124,6 +126,13 @@ def test_plainly_to_client_is_pinned_exactly():
 def test_settings_defaults_must_be_valid(change):
     with pytest.raises(ValueError):
         make(settings=replace(DEFAULT_SETTINGS, **change))
+
+
+def test_inline_mode_must_be_known():
+    with pytest.raises(ValueError):
+        make(inline='html')
+    assert make(inline='strict', image_base='/b/').to_client()['inline'] == 'strict'
+    assert make().to_client()['image_base'] == ''
 
 
 def test_kindle_default_text_must_be_a_configured_mode():

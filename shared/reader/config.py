@@ -8,6 +8,8 @@ from shared.reader.modes import ALL_MODES, SIDE_BY_SIDE_MEMBERS
 
 LAYOUTS = ('single', 'side_by_side')
 CACHE_VISIBILITIES = ('public', 'private')
+# Inline markup in reader blocks (shared/static/js/blocks.js formatInline).
+INLINE_MODES = ('markdown', 'strict')
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class ReaderConfig:
     api_base: str = '/api'
     extra_page_blocks: str = ''
     hint_keys: frozenset[str] = frozenset()
+    inline: str = 'markdown'
+    image_base: str = ''
 
     def __post_init__(self):
         ids = [mode.id for mode in self.modes]
@@ -92,6 +96,8 @@ class ReaderConfig:
         self._require_configured(self.default_modes, 'default_modes')
         if self.cache_visibility not in CACHE_VISIBILITIES:
             raise ValueError(f'cache_visibility must be one of {CACHE_VISIBILITIES}')
+        if self.inline not in INLINE_MODES:
+            raise ValueError(f'inline must be one of {INLINE_MODES}')
         if self.features.kindle:
             if self.kindle is None:
                 raise ValueError('features.kindle requires kindle options')
@@ -122,6 +128,8 @@ class ReaderConfig:
             'cache_db_name': self.cache_db_name,
             'api_base': self.api_base,
             'extra_page_blocks': self.extra_page_blocks,
+            'inline': self.inline,
+            'image_base': self.image_base,
             'default_modes': list(self.default_modes),
             'modes': [
                 {
