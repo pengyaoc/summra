@@ -123,8 +123,9 @@ The skill and the converter both write a book as a folder. The folder is only a 
   - `{"type":"table","header":[…],"rows":[[…]]}`
   - `{"type":"image","src":"images/…","caption":…}`
 - Inline formatting inside `text` and `items`: `**bold**` and `*italic*` only. No links, no raw HTML.
-- `sources` is stored and shown on the book page, not in the reader. The skill's Worklog is not imported.
+- `sources` remains input metadata and is exposed as a final, ungrouped `Source` chapter in the TOC and both readers when non-empty. It is not rendered separately below the TOC. Existing content chapters retain their IDs and ordinals when the Source chapter is appended. The skill's Worklog is not imported.
 - **Reader units:** each top-level block in a chapter is one reader unit, the equivalent of a paragraph. The Overview is reader chapter 0. Its title is "Overview".
+- **Cover delivery:** imports pre-generate 320×480-bounded AVIF, WebP and JPEG thumbnails in the content DB. Web covers use `<picture>` in that order; Kindle uses JPEG. Content-addressed cover URLs are authenticated and privately cached. Original JPEG/PNG assets and the folder format remain unchanged; no encoding runs during page/image requests. Pillow 11.3+ is required for AVIF encoding. Existing libraries can backfill with `DistillDatabase.generate_cover_thumbnails()`.
 
 ### 5.3 Data
 
@@ -209,9 +210,10 @@ No HTTP upload endpoint, so no write API on a 1 GB box. The skill ends with `pus
   - `/` — the library.
     - "Reading now" first: in-progress books with current chapter and progress bar, as on Plainly's Kindle home.
     - Then all books, most recently imported first.
-  - `/books/<slug>` — book page: title, author, cover, progress, table of contents grouped by part, sources.
+  - `/books/<slug>` — book page: title, author, cover, progress, table of contents grouped by part, ending with Source when present.
   - `/books/<slug>/read` — the reader, at the saved place.
   - Progress API and image route. Images are served through Flask behind sign-in, not as Apache static files.
+- **Installed app:** the existing drop mark supplies SVG/ICO favicons and 180/192/512px app icons, with maskable-safe padding. `/manifest.webmanifest` sets a stable app ID, start URL and scope using the live deployment prefix, and opens in standalone mode. The manifest link includes credentials because the app is private. `/sw.js` is scoped to the same prefix and returns a generic offline fallback for failed navigations; it never persists private pages, books, or progress in Cache Storage. Chromium exposes an Install app button when eligible; iPhone installation uses Share → Add to Home Screen. Installation requires HTTPS in deployment (localhost works for development).
 - **Signed out:** `<Location /distill/>` uses `OIDCUnAuthAction auth`, so Apache sends anyone signed out to Google sign-in. This differs from Plainly's `pass`. Pages also check that the signed-in email is on an allow-list (`DISTILL_ALLOWED_EMAILS`) and return 403 otherwise. Without that, any Google account could sign in and read.
 - **Reader code is shared, not forked (owner requirement).** Phase 1 leaves the web reader JS and Kindle templates in Plainly. The Distill web-app phase starts by extracting the common reader components from Plainly's app into `shared/`:
   - pagination and scrolling

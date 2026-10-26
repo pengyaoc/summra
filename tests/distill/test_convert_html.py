@@ -14,6 +14,38 @@ from distill.scripts import convert_html_summaries as conv  # noqa: E402
 FIXTURES = Path(__file__).parent / 'fixtures'
 
 
+@pytest.mark.parametrize('badge,heading,expected', [
+    ('1', '1 What is life?', '1. What is life?'),
+    ('Chapter 1', '1. What is life?', '1. What is life?'),
+    ('Chapter 1', 'Chapter 1: What is life?', '1. What is life?'),
+    ('1.2', 'Figures of Merit', '1.2 Figures of Merit'),
+    ('1', '1.2 Figures of Merit', '1.2 Figures of Merit'),
+    ('Appendix A:', 'The Gallup Path', 'Appendix A: The Gallup Path'),
+    ('Foreword', 'Foreword by Richard Dawkins', 'Foreword by Richard Dawkins'),
+    ('Postscript 1984', 'The Case for Optimism', 'Postscript 1984: The Case for Optimism'),
+    ('Chapter II', 'The Principle', 'Chapter II: The Principle'),
+    ('2', '1 + 1 = Closing the Math Gap', '2. 1 + 1 = Closing the Math Gap'),
+    ('1', '1 + 1 = Two', '1. 1 + 1 = Two'),
+])
+def test_chapter_badges_do_not_duplicate_or_truncate_labels(tmp_path, badge, heading, expected):
+    html = ('<div class="tab-content" id="tab-main"><div class="chapter">'
+            f'<div class="chapter-num">{badge}</div><h3>{heading}</h3><p>Body.</p></div></div>')
+    conv.convert_page(html, 'test', tmp_path, _no_fetch)
+    assert load_book(tmp_path / 'test')['parts'][0]['chapters'][0]['title'] == expected
+
+
+def test_parent_badges_are_removed_only_within_the_same_part(tmp_path):
+    html = '<button class="tab-btn" onclick="switchTab(\'main\')">2 · Inventions</button>'
+    html += '<div class="tab-content" id="tab-main"><p>Part introduction.</p>'
+    for title in ('Leaded Gasoline', 'DDT'):
+        html += ('<div class="chapter"><div class="chapter-num">Chapter 2</div>'
+                 f'<h3>{title}</h3><p>Body.</p></div>')
+    html += '</div>'
+    conv.convert_page(html, 'test', tmp_path, _no_fetch)
+    assert [c['title'] for c in load_book(tmp_path / 'test')['parts'][0]['chapters']] == [
+        'Section overview', 'Leaded Gasoline', 'DDT']
+
+
 def _jpeg_bytes(size=(8, 8)):
     buf = io.BytesIO()
     Image.new('RGB', size, (10, 120, 200)).save(buf, 'JPEG')
@@ -40,7 +72,7 @@ def test_tabs_become_parts_and_overview(tmp_path):
     assert [b['type'] for b in book['overview']] == ['h', 'p', 'p', 'table']
     assert [p['title'] for p in book['parts']] == ['The Basics']
     titles = [c['title'] for c in book['parts'][0]['chapters']]
-    assert titles == ['The Basics — Introduction', 'Why Small Works', 'Counting Things']
+    assert titles == ['Section overview', 'Why Small Works', 'Counting Things']
     assert book['sources'] == [{'type': 'h', 'text': 'Sources & Notes'},
                                {'type': 'p', 'text': 'Edition used: first.'}]
     assert report.chapters == 3

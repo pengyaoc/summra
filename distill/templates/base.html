@@ -11,11 +11,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>{% block title %}Distill{% endblock %}</title>
+    <meta name="theme-color" content="#8A2E2E">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Distill">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}{{ asset_v('images/favicon.svg') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon-32.png') }}{{ asset_v('images/icon-32.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icon-180.png') }}{{ asset_v('images/icon-180.png') }}">
+    <link rel="manifest" href="{{ url_for('distill.manifest') }}" crossorigin="use-credentials">
     <script>window.APP_BASE_PATH = {{ (base_path | default('')) | tojson }};</script>
     {% include 'shared/reader/_config_script.html' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/base.css') }}{{ asset_v('shared/css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/reader.css') }}{{ asset_v('shared/css/reader.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/distill.css') }}{{ asset_v('css/distill.css') }}">
+    <script defer src="{{ url_for('static', filename='js/pwa.js') }}{{ asset_v('js/pwa.js') }}"></script>
 </head>
 <body{% block body_attrs %}{% endblock %}>
 {% block header %}
@@ -24,6 +34,7 @@
             <span id="distill-brand-mark">{{ brand_mark() }}</span><span>Distill<span class="distill-brand-dot">.</span></span>
         </a>
         <span class="distill-header-caption">A little reading. A lot to keep.</span>
+        <button id="distill-install-button" class="distill-install-action" type="button" hidden>Install app</button>
     </header>
 {% endblock %}
 {% block content %}{% endblock %}

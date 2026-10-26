@@ -82,6 +82,8 @@ body.on-chapter-page .header {
     text-underline-offset: 4px;
 }
 
+#plainly-install-button { font-family: inherit; }
+
 .logo {
     font-family: var(--font-serif);
     font-size: 1.5rem;

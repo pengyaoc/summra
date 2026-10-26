@@ -6,7 +6,7 @@
 <main class="distill-main distill-book">
     <a class="distill-back" href="{{ base_path }}/">← Library</a>
     <section class="distill-book-head">
-        {{ cover(book) }}
+        {{ cover(book, eager=True) }}
         <div>
             <h1>{{ book.title }}</h1>
             <p class="distill-author">{{ book.author }}</p>
@@ -29,15 +29,5 @@
         </ol>
 {% endfor %}
     </section>
-{% if book.sources %}
-    <section class="distill-sources" aria-labelledby="sources-heading">
-        <h2 id="sources-heading">Sources</h2>
-        <div class="distill-source-blocks">
-{% for source in book.sources %}
-            {{ block_element(source, loop.index0, base_path ~ '/books/' ~ book.slug ~ '/') }}
-{% endfor %}
-        </div>
-    </section>
-{% endif %}
 </main>
 {% endblock %}

@@ -9893,3 +9893,239 @@ Checkpoint: all sections 0–36 independently verified, 4,158 of 7,172 pairs; 16
 Checkpoint: all sections 0–44 independently verified, 4,948 of 7,172 paragraph pairs; 190 corrected. All gates pass, no unresolved doubts. Writers on 45–52, final 15 chapters still pending after those assignments. No text applied or deployed before full verification.
 
 Checkpoint: sections 0–47 independently verified (5,278 of 7,172 pairs; 203 corrected), clean gates and no unresolved doubts. Review 48–49 active; writing 50–52 active. Usage near limit, prioritizing existing review work. Optimized pending plan: tiny final chapters66–67 join group25 chapters55–56 (70,527 chars), group29 merged; unique coverage of all68 sections retained. No text applied/deployed.
+
+
+## 2026-10-26 — Distill contents cleanup (local)
+
+Reviewed all 54 books / 1,564 TOC entries. Applied 254 title-only repairs across
+41 books: 207 concise section-overview labels (Chinese books use 本节概览), seven
+doubled chapter numbers in The Vital Question, twelve inherited parent numbers
+in Invention and Innovation, five double appendix colons, duplicated Foreword
+wording, distinct Introduction overview / Introduction labels, consistent
+unnumbered Feynman stories, and the stray “Chapter:” prefix on Wealth of Nations’
+introduction. Preserved numbering resets within parts/volumes, decimal sections,
+years, mathematical titles, and all chapter order and content. No empty or
+malformed titles or duplicate titles within a part remain in the local corpus.
+
+Shared normalization in distill/book_format.py now runs for folder imports and
+HTML conversion. Badge handling preserves decimal and Roman numbering, retains
+years embedded in named labels, and avoids duplicating existing number/Foreword
+prefixes. DistillDatabase.repair_toc() previews changes by default; explicitly
+pass dry_run=False to apply in-place title updates. Existing run5 import folders
+produce the repaired titles for all 54 books, so reimport does not undo cleanup.
+
+Before application, backed up content DB to
+/private/tmp/distill-pre-toc-20261026T160759Z.db (temporary local recovery copy).
+Verified all 1,564 chapter IDs, ordinals, part titles and blocks unchanged; all
+book metadata and images unchanged; user/progress database logical fingerprint
+unchanged. Refreshed 54 existing reader indices and verified every one of 11,374
+reader-unit rows identical, including paragraph IDs, offsets and counts.
+SQLite integrity_check passes; repeating the repair proposes zero changes.
+
+Validation: all 174 Distill tests pass. An initial reader-shell configuration
+expectation mismatch was resolved by concurrent reader work; the final full-suite
+run is green. New regressions cover badge normalization, hierarchy/math/year preservation,
+part-scoped repairs, idempotence, dry-run behavior, reimport stability, and reader
+coordinate preservation. Test invocation uses PYTHONPATH=.:tests, preimports
+app packages, and pytest --import-mode=importlib to avoid test-package shadowing.
+Installed the existing Beautiful Soup tools dependency in venv to run converter
+tests. No production deployment or changes to original vault HTML sources.
+
+
+### 2026-10-26 — Source as the final Distill chapter (local)
+
+Moved source presentation into a final ungrouped chapter titled Source for all
+54 books. Removed the separate sources section below the book-page TOC and its
+unused styles. Both web and Kindle readers expose the final chapter through
+their existing navigation and block rendering. Empty source metadata creates
+no chapter. iter_chapters() includes sources for future imports; books.sources
+remains the canonical input metadata for compatibility with existing folders.
+DistillDatabase.append_source_chapters() previews by default and appends in
+place with dry_run=False; reruns do not duplicate Source, and changes to source
+metadata update an existing final Source chapter in place.
+
+Backed up the content DB to
+/private/tmp/distill-pre-source-chapters-20261026T161227Z.db before applying.
+Verified all 1,564 prior chapter rows and 11,374 prior reader-unit rows remain
+identical after refreshing all 54 reader indices. Source adds 54 new chapters
+(1,618 total) without changing old IDs, ordinals, blocks, or reader coordinates.
+The user/progress database logical fingerprint and book metadata are unchanged.
+All 54 canonical run5 folders produce exactly the migrated chapters on reimport;
+SQLite integrity_check and migration idempotence pass. Existing saved positions
+remain valid; total chapter/unit counts now include Source.
+
+Validation: all 177 Distill tests pass, including migration preservation,
+reimport stability, no-source behavior, Source in the web reader API and Kindle
+reader, final-chapter completion, and absence of a separate source section.
+Updated the design spec to reflect the new presentation. Local only; no deploy.
+
+
+## 2026-10-26 — Distill latency pass
+
+Profiled the book-to-home path against all 54 real books, using a scratch user DB
+with 54 in-progress states (the actual local user DB has none). Found that home,
+/api/library, and even a single book page constructed full reader manifests for
+the entire reading list. Each manifest reparsed and hashed every chapter before
+building metadata that the library needed only for its word count. Auth also
+updated last_login on every page/API/private-image request, contending with the
+SQLite progress writer.
+
+Replaced Distill library manifest fan-out with a batched word-total hook over the
+existing reader index; batched chapter counts and user mode-state retrieval;
+scoped book-page progress lookup to that book. Finished cards skip totals.
+Added persistent per-book revision tracking with SQLite chapter triggers so
+unchanged reader requests can use an already verified index across worker
+restarts without reparsing text. Imports and external SQL edits invalidate it;
+a concurrent edit cannot be falsely marked indexed. The first lookup after a
+legacy migration or content change still validates/rebuilds normally.
+
+Known-user authentication reads instead of updating last_login on every request;
+timestamps refresh at most every five minutes. Verified authentication succeeds
+while a progress write lock is held, with zero busy timeout. Authorization and
+allow-list checks still run on every request. Content-hashed static URLs now
+cache privately for one year; bare module URLs and obsolete hashes revalidate,
+so deployments remain fresh and assets never become publicly cacheable.
+
+Representative local warm Flask test-client medians (same 54-state fixture):
+home 105.20 -> 8.24 ms; book page 96.88 -> 2.78 ms; /api/library 95.43 -> 4.13 ms;
+reader manifest 2.34 -> 1.76 ms. The first home lookup after adding revision
+tracking was 164 ms, including initial validation and template compilation;
+subsequent fresh app processes reuse the persisted index verification.
+
+Headless Chromium desktop (1280x900) and mobile (375x667), actual back-to-library
+links, three runs each: home TTFB 9–12 ms, DOM-ready 20–61 ms. Source chapter
+reading, reader-back to book, and back-to-home pass without JavaScript errors.
+Benchmarks use loopback/dev hardware, not production timings. Scratch user DB:
+/private/tmp/distill-latency-benchmark-user.db. Real reading progress untouched.
+
+
+Validation complete: 328 Distill/shared tests pass, plus 20 Plainly home tests
+(1 content audit deselected by the repository default). Ran the Plainly tests in
+a separate invocation because the combined run exposed the existing _reload /
+tests/plainly package-shadowing problem; the isolated run is green. New coverage
+prevents manifest fan-out on home/book pages, verifies batched percentages and
+single-book projections, checks index reuse across process restarts and external
+or concurrent edits, checks authentication under a held write lock, and checks
+private cache headers and authentication enforcement. git diff --check passes.
+No source text, chapter IDs, saved positions, or actual user progress modified;
+no production deployment. Temporary browser-test server stopped after validation.
+
+
+## 2026-10-26 — Pre-generated AVIF cover thumbnails (local)
+
+Added 320×480-bounded cover thumbnails in AVIF (quality 60/speed 6), WebP
+(quality 80), and optimized JPEG (quality 82). Imports generate all three before
+the content transaction; requests only serve stored bytes. The derived
+cover_thumbnails table references original image IDs and cascades on reimport.
+URLs use a hash of the encoded outputs and return authenticated, private,
+one-year immutable caching with ETags. Different cover bytes generate new URLs.
+Existing books without derivatives fall back to their original images.
+
+Web cover markup now uses picture with AVIF, WebP and JPEG fallback; list covers
+remain lazy and the book-detail cover loads eagerly. CSS preserves existing
+cover geometry. Kindle gets the JPEG thumbnail directly. Original book-folder
+format, full-size covers, and reader illustrations remain unchanged. Raised
+Distill's Pillow minimum to 11.3 (built-in AVIF encoder in supported wheels).
+Documented derived-cover delivery in the existing design spec.
+
+Backed up the content DB to
+/private/tmp/distill-pre-cover-thumbnails-20261026T200556Z.db, then ran
+DistillDatabase.generate_cover_thumbnails() for all 54 books. It generated 162
+variants: AVIF 794,971 bytes; WebP 1,113,666; JPEG 1,669,435. Originals total
+3,840,055 bytes, so AVIF reduces aggregate cover transfer by 79.3%. A second
+backfill generates zero covers. Verified every original image digest, book
+metadata row, chapter row, reader-unit row, and real user/progress fingerprint
+unchanged; SQLite integrity_check passes.
+
+Validation: 333 Distill/shared tests pass; Kindle tests rechecked (20 pass) after
+adding a JPEG-fetch assertion. Coverage checks decode all formats, verify MIME,
+ETags/304, authentication, private caching, stale/missing URL handling, no runtime
+encoding, idempotent backfill, and reimport invalidation. Chromium desktop and
+mobile at 2x pixel density select AVIF and successfully fall back to WebP then
+JPEG when the corresponding picture sources are removed. No JavaScript/image
+errors; book covers keep 160×240 desktop and 100×150 mobile dimensions. Visually
+reviewed original/AVIF/WebP comparisons for representative covers and the mobile
+book page. QA artifacts: /private/tmp/distill-cover-quality-comparison.jpg,
+/private/tmp/distill-cover-1280.png, /private/tmp/distill-cover-375.png.
+Temporary test server stopped. No production deployment.
+
+
+## 2026-10-26 — Drop favicon and installable Distill PWA (local)
+
+Created SVG and 16/32px ICO favicons from the existing drop logo, plus 32px PNG,
+180px Apple touch icon, and 192/512px install icons. Preserved the exact drop
+paths and brand colors (#8A2E2E / #FBF8F1); app icons have opaque backgrounds and
+padding that keeps the mark inside the maskable safe circle. Chromium rendered
+the source SVG into PNGs; visually verified the 512px icon.
+
+Added authenticated /manifest.webmanifest, /sw.js and /favicon.ico routes.
+Manifest uses the live prefix for id/start_url/scope and versioned PNG icon URLs;
+the HTML link sends credentials for the private deployment. Base HTML includes
+favicon/touch-icon links, standalone/iPhone metadata, theme color, and a small
+PWA client. It registers the scoped service worker and exposes Install app only
+when beforeinstallprompt is available. iPhone installation uses Share -> Add to
+Home Screen. The worker stays network-only, with a generic offline navigation
+fallback and scoped retry link; it never writes private pages/books/progress to
+Cache Storage. Existing authentication and app content remain unchanged.
+
+Validation: all 338 Distill/shared tests pass, including authenticated asset
+access, manifest metadata/prefixes, icon decoding/dimensions, maskable safe area,
+and worker scope/cache headers. Chromium reports zero manifest or native PWA
+installability errors at both / and /distill/. Verified worker control, empty
+Cache Storage, offline fallback without book content, successful reconnection,
+and install-button prompt handling. Prefix browser test uses a WSGI proxy
+simulation that supplies the prefix to every request, including Chrome’s
+internal worker/manifest/icon fetches; page-only extra headers were insufficient
+for that test harness. Scoped offline retry stays under /distill/.
+
+New assets are distill/static/images/{favicon.svg,favicon.ico,icon-32.png,
+icon-180.png,icon-192.png,icon-512.png} and distill/static/js/{pwa.js,sw.js}.
+No production deployment or installation on the user’s device. Installability
+requires HTTPS in production; localhost is supported for development.
+
+
+## 2026-10-26 — Complete Plainly PWA installation support (local)
+
+Audited existing support: manifest and iPhone guidance existed, but the manifest
+referenced a missing 512px icon, no worker registered, and beforeinstallprompt
+was swallowed without exposing an installation action. Added the missing 512px
+and padded maskable icons from Plainly's existing book-and-spark SVG, preserving
+its separate identity from Distill. Existing 180/192px icons remain unchanged;
+the 192px icon now correctly declares purpose any, with a separate safe-area
+maskable variant.
+
+Manifest now has a stable prefix-aware app ID, updated brand colors, landscape
+support, and credentialed linking. Added an uncached /sw.js endpoint with a
+prefix-scoped network-only worker and generic offline navigation fallback.
+It never caches HTML, scripts/styles, books, or personal progress in Cache
+Storage, preserving the reason the old offline caching worker was removed.
+Install app now invokes the native Chromium prompt and hides after installation.
+Retained iPhone Share/Add-to-Home-Screen guidance, added iPad detection and
+standalone suppression, and made dismissal storage tolerant of blocked storage.
+Updated README and removed outdated comments claiming a cache-first worker.
+
+Validation: 69 targeted Plainly URL-prefix, branding, asset-versioning, and home
+page tests pass (one content audit deselected). Added manifest/icon dimension,
+maskable safe-circle, worker MIME/cache/scope, and installation-markup coverage.
+Rebuilt app.min.js; npm run build:check passes. Chromium native manifest and
+installability checks report zero errors at / and /plainly/, with correct app
+ID/scope, worker control, and empty Cache Storage. Native-prompt wiring, scoped
+offline fallback, reconnection, and iPhone install guidance/dismissal pass with
+no JavaScript errors. Browser verification uses scratch content/user databases
+and an accurate prefix proxy simulation. Visually inspected the maskable icon.
+No production deployment or installation on the user's device.
+
+
+## 2026-10-26 — Release preparation
+
+User authorized committing, pushing and deploying the TOC/Source, latency,
+cover-thumbnail, and Distill/Plainly favicon/PWA work. Final checks: 338
+Distill/shared tests, 69 targeted Plainly tests, and production bundle freshness
+pass. The test suites must run separately and sequentially: their shared fixture
+cleanup can delete the other suite's databases if run concurrently; the initial
+parallel attempt exposed that harness limitation and the sequential rerun passed.
+Production checkout has no tracked edits and is at feb3b4c; host-owned untracked
+backend/config files remain untouched. Production Pillow 13.0 already supports
+AVIF/WebP. Apply Distill content migrations to the live content DB in place,
+with a backup and before/after identity/content checks, instead of overwriting
+it with a local DB. Preserve both apps' user/progress databases.

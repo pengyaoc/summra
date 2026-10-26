@@ -30,7 +30,10 @@ def test_library_lists_books_newest_first(app_env, sample_book, write_book):
     assert html.index('/books/newer-book"') < html.index('/books/my-book"')
     # A book with no cover gets a title placeholder instead of a broken image.
     assert 'book-cover-placeholder' in html
-    assert '/books/my-book/images/cover.jpg' in html
+    token = content_db.get_book_by_slug('my-book')['cover_thumbnail_token']
+    assert f'/books/my-book/cover/{token}.avif' in html
+    assert f'/books/my-book/cover/{token}.webp' in html
+    assert f'/books/my-book/cover/{token}.jpg' in html
 
 
 def test_library_with_no_progress_has_no_reading_now(tmp_path, monkeypatch):
@@ -51,7 +54,7 @@ def test_library_reading_now_shows_progress_label(app_env):
                        headers=HEADERS).status_code == 200
     html = get(client, '/').get_data(as_text=True)
     assert 'Reading now' in html
-    assert 'Chapter 1 of 3' in html
+    assert 'Chapter 1 of 4' in html
     assert 'href="/books/my-book/read"' in html
     assert html.index('Reading now') < html.index('All books')
 
@@ -64,7 +67,22 @@ def test_library_counts_chapters_without_loading_blocks(app_env, monkeypatch):
     def boom(_book_id):
         raise AssertionError('library must not load chapter blocks')
     monkeypatch.setattr(content_db, 'get_chapters', boom)
-    assert 'Chapter 1 of 3' in get(client, '/').get_data(as_text=True)
+    assert 'Chapter 1 of 4' in get(client, '/').get_data(as_text=True)
+
+
+def test_home_and_book_pages_do_not_build_full_reader_manifests(app_env, monkeypatch):
+    client, db, _, bid = app_env
+    chapter = db.get_chapters(bid)[1]
+    client.post('/api/progress/v2/mutations', json=_mutation(bid, chapter['id']), headers=HEADERS)
+    monkeypatch.setattr(db, 'get_reader_manifest', lambda *a: (_ for _ in ()).throw(
+        AssertionError('library must not construct a full manifest')))
+    monkeypatch.setattr(db, '_reader_load_chapters', lambda *a: (_ for _ in ()).throw(
+        AssertionError('library must not parse chapter text')))
+    assert get(client, '/books/my-book').status_code == 200
+    monkeypatch.setattr(db, 'count_chapters', lambda *a: (_ for _ in ()).throw(
+        AssertionError('home must batch chapter counts')))
+    assert get(client, '/').status_code == 200
+    assert get(client, '/api/library').status_code == 200
 
 
 def test_book_page_toc_grouped_by_part_and_overview_first(app_env):
@@ -90,7 +108,7 @@ def test_book_page_builds_toc_without_loading_blocks(app_env, monkeypatch):
     monkeypatch.setattr(content_db, 'get_chapters', boom)
     html = get(client, '/books/my-book').get_data(as_text=True)
     assert 'Part One' in html and '3. Third' in html
-    assert 'Chapter 1 of 3' in html
+    assert 'Chapter 1 of 4' in html
 
 
 def test_book_page_continue_reading_when_in_progress(app_env):
@@ -98,17 +116,26 @@ def test_book_page_continue_reading_when_in_progress(app_env):
     chapter = content_db.get_chapters(book_id)[2]
     client.post('/api/progress/v2/mutations', json=_mutation(book_id, chapter['id'], unit=0), headers=HEADERS)
     html = get(client, '/books/my-book').get_data(as_text=True)
-    assert 'Continue reading' in html and 'Chapter 2 of 3' in html
+    assert 'Continue reading' in html and 'Chapter 2 of 4' in html
 
 
-def test_book_page_sources_rendered(app_env, sample_book, write_book):
-    client, content_db, _, _ = app_env
+def test_sources_are_a_final_reader_chapter_instead_of_a_separate_section(app_env, sample_book, write_book):
+    client, content_db, _, book_id = app_env
     sample_book['sources'] = [{'type': 'p', 'text': 'src **bold**'},
                               {'type': 'image', 'src': 'images/cover.jpg', 'caption': None}]
     content_db.import_book(write_book(sample_book))
     html = get(client, '/books/my-book').get_data(as_text=True)
-    assert '<p data-i="0">src <strong>bold</strong></p>' in html
-    assert 'src="/books/my-book/images/cover.jpg"' in html
+    source = content_db.get_chapters(book_id)[-1]
+    assert f'read?chapter={source["id"]}">Source</a>' in html
+    assert 'distill-sources' not in html and 'src <strong>bold</strong>' not in html
+    assert source['title'] == 'Source' and source['part_title'] is None
+    manifest = get(client, f'/api/reader/books/{book_id}/manifest').get_json()['manifest']
+    assert manifest['structure'][-1]['title'] == 'Source'
+    units = []
+    for segment in manifest['segments']:
+        payload = get(client, f'/api/reader/books/{book_id}/segments/{segment["id"]}?mode=summary').get_json()
+        units.extend(payload['segment']['units'])
+    assert [json.loads(unit['content']) for unit in units[-2:]] == sample_book['sources']
 
 
 def test_reader_shell_has_platform_partials_and_no_mode_selector(app_env):

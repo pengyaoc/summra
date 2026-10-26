@@ -22,6 +22,28 @@ def _book():
     }
 
 
+def test_toc_repairs_preserve_meaningful_numbers_and_are_idempotent():
+    rows = [
+        {'part_title': 'Part I', 'title': '1. First'},
+        {'part_title': 'Part II', 'title': '1. Second'},
+        {'part_title': '1. Growth', 'title': '1.1 Time Spans'},
+        {'part_title': '1. Growth', 'title': '1.2 Figures of Merit'},
+        {'part_title': 'Math', 'title': '1. 1 + 1 = Two'},
+        {'part_title': 'Years', 'title': '2020: A Year'},
+        {'part_title': 'Book I', 'title': 'Chapter I: Labour'},
+        {'part_title': 'Book II', 'title': 'Chapter I: Stock'},
+        {'part_title': '上册', 'title': '第一章 引言'},
+        {'part_title': '下册', 'title': '第一章 导言'},
+    ]
+    assert bf.normalize_toc_titles(rows) == rows
+    broken = [{'part_title': '第一部分', 'title': '第一部分 — Introduction'},
+              {'part_title': '第一部分', 'title': '1. 1 A heading'}]
+    repaired = bf.normalize_toc_titles(broken, 'zh')
+    assert [c['title'] for c in repaired] == ['本节概览', '1. A heading']
+    assert bf.normalize_toc_titles(repaired, 'zh') == repaired
+    assert broken[0]['title'].endswith(' — Introduction')  # input is not mutated
+
+
 @pytest.fixture
 def folder(tmp_path):
     (tmp_path / 'images').mkdir()
@@ -117,8 +139,11 @@ def test_iter_chapters_overview_first():
     chapters = bf.iter_chapters(book)
     assert chapters[0] == (None, 'Overview', book['overview'])
     assert chapters[1][:2] == (None, '1. First')
+    assert chapters[-1] == (None, 'Source', book['sources'])
     book['overview'] = []
     assert bf.iter_chapters(book)[0][1] == '1. First'
+    book['sources'] = []
+    assert bf.iter_chapters(book)[-1][1] == '1. First'
 
 
 def test_word_count_counts_cjk_characters_and_words():

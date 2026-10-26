@@ -41,7 +41,7 @@ def test_kindle_library_reading_now_and_all_books(app_env):
         assert save(client, book_id=book_id, ch=2, p=0, forward=True, seconds=30).status_code == 200
     html = body(kget(client, '/'))
     assert html.index('Reading now') < html.index('All books')
-    assert 'href="/books/my-book/read"' in html and 'Chapter 2 of 3' in html
+    assert 'href="/books/my-book/read"' in html and 'Chapter 2 of 4' in html
 
 
 def test_kindle_library_paginates_all_books(app_env, sample_book, write_book):
@@ -63,7 +63,7 @@ def test_kindle_book_contents_has_part_headings_and_paginates(app_env, sample_bo
     page1 = body(kget(client, '/books/big-book'))
     assert page1.count('/read?ch=') == 8 and 'page=2' in page1
     page2 = body(kget(client, '/books/big-book?page=2'))
-    assert page2.count('/read?ch=') == 3  # the Overview and 10 chapters
+    assert page2.count('/read?ch=') == 4  # Overview, 10 chapters, and Source
 
 
 def test_kindle_book_contents_marks_saved_place(app_env):
@@ -84,6 +84,25 @@ def test_kindle_reader_renders_blocks_with_data_i(app_env):
     assert '<figure class="reader-figure" data-i="4"><img src="images/cover.jpg"' in html
     assert 'data-chars=' in html and 'data-before=' in html and 'data-sync="/api/kindle/progress"' in html
     assert 'type="module"' not in html
+
+
+def test_kindle_source_is_last_and_readable(app_env):
+    client, content_db, _, book_id = app_env
+    source = content_db.get_chapters(book_id)[-1]
+    html = body(kget(client, '/books/my-book'))
+    assert f'read?ch={source["ordinal"]}' in html and '>Source</span>' in html
+    html = body(kget(client, f'/books/my-book/read?ch={source["ordinal"]}'))
+    assert '<p data-i="0">src</p>' in html
+
+
+def test_kindle_uses_jpeg_cover_fallback(app_env):
+    client, db, _, bid = app_env
+    token = db.get_book(bid)['cover_thumbnail_token']
+    html = body(kget(client, '/books/my-book'))
+    assert f'/books/my-book/cover/{token}.jpg' in html
+    assert '.avif' not in html and '.webp' not in html
+    image = kget(client, f'/books/my-book/cover/{token}.jpg')
+    assert image.status_code == 200 and image.mimetype == 'image/jpeg'
 
 
 def test_kindle_reader_lang_follows_book(app_env, sample_book, write_book):
@@ -157,7 +176,7 @@ def test_kindle_progress_completion_on_last_block_forward_only(app_env):
     assert projection(user_db, book_id)['book']['status'] != 'finished'
     save(client, book_id=book_id, ch=2, p=0, forward=True, finished=True)
     assert projection(user_db, book_id)['book']['status'] != 'finished'
-    save(client, book_id=book_id, ch=3, p=0, forward=True, finished=True)
+    save(client, book_id=book_id, ch=4, p=0, forward=True, finished=True)
     assert projection(user_db, book_id)['book']['status'] == 'finished'
 
 

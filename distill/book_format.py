@@ -156,8 +156,53 @@ def validate_book(book: dict, folder: Path) -> list:
     return errors
 
 
+def normalize_toc_titles(chapters: list, lang: str = 'en', slug: str = '') -> list:
+    """Return title-only repairs; never remove, reorder, or change chapter content.
+
+    Numbering is scoped to a part. Repeated parent numbers on subsections are
+    labels inherited from the HTML, not chapter numbers to renumber globally.
+    """
+    rows = [dict(chapter) for chapter in chapters]
+    for row in rows:
+        title = re.sub(r'[:：]{2,}', ':', row['title']).strip()
+        title = re.sub(r'^(Foreword|Preface|Introduction):\s*\1\b', r'\1', title, flags=re.I)
+        # A bare number in the heading can repeat the separate chapter badge.
+        title = re.sub(r'^(\d+)\.\s+\1\s+(?=[^\d\s+×÷=−-])', r'\1. ', title)
+        if title.endswith(' — Introduction') and title[:-len(' — Introduction')] == row.get('part_title'):
+            title = '本节概览' if lang == 'zh' else 'Section overview'
+        if slug == 'surely-youre-joking-mr-feynman':
+            title = re.sub(r'^\d+\.\s+', '', title)
+        if slug == 'wealth-of-nations' and title == 'Chapter: Introduction and Plan of the Work':
+            title = 'Introduction and Plan of the Work'
+        row['title'] = title
+
+    # Only consecutive entries under the same heading form a part.
+    start = 0
+    while start < len(rows):
+        end = start + 1
+        part = rows[start].get('part_title')
+        while end < len(rows) and rows[end].get('part_title') == part:
+            end += 1
+        group = rows[start:end]
+        parent = re.match(r'^(\d+)(?:\s*[.·:]\s*|\s+)', part or '')
+        if parent:
+            prefix = parent[1] + '. '
+            inherited = [r for r in group if r['title'].startswith(prefix)]
+            if len(inherited) > 1:
+                for row in inherited:
+                    row['title'] = row['title'][len(prefix):]
+        if len(group) > 1 and group[0]['title'] == 'Introduction' and group[1]['title'] == 'Introduction':
+            group[0]['title'] = 'Introduction overview'
+        start = end
+    return rows
+
+
 def iter_chapters(book: dict) -> list:
-    """(part_title, chapter_title, blocks) in reading order, Overview first if non-empty."""
+    """Reading order: Overview, content chapters, then Source when non-empty.
+
+    Keep sources in the input metadata so old book folders remain compatible;
+    expose their blocks as a normal terminal chapter to both readers.
+    """
     out: list = []
     if book.get('overview'):
         out.append((None, 'Overview', book['overview']))
@@ -165,4 +210,9 @@ def iter_chapters(book: dict) -> list:
         part_title: Optional[str] = part.get('title')
         for chapter in part.get('chapters', []):
             out.append((part_title, chapter['title'], chapter.get('blocks', [])))
-    return out
+    if book.get('sources'):
+        out.append((None, 'Source', book['sources']))
+    rows = normalize_toc_titles(
+        [{'part_title': part, 'title': title, 'blocks': blocks} for part, title, blocks in out],
+        book.get('lang', 'en'), book.get('slug', ''))
+    return [(r['part_title'], r['title'], r['blocks']) for r in rows]

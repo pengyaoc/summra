@@ -159,6 +159,12 @@ class UserDatabase:
         email = email.strip().lower()
         conn = self.get_connection()
         try:
+            # Authentication runs for every page, API and private image. Known
+            # users should not wait for the progress writer's SQLite lock.
+            row = conn.execute('''SELECT id, last_login >= datetime('now', '-5 minutes') AS recent
+                FROM users WHERE email = ?''', (email,)).fetchone()
+            if row and row['recent']:
+                return row['id']
             with conn:
                 conn.execute('''
                     INSERT INTO users (email, last_login) VALUES (?, CURRENT_TIMESTAMP)
@@ -239,24 +245,25 @@ class UserDatabase:
         finally:
             conn.close()
 
-    def get_library_projection(self, user_id: int) -> List[Dict]:
+    def get_library_projection(self, user_id: int, book_id: Optional[int] = None) -> List[Dict]:
         conn = self.get_connection()
         try:
+            scope = ' AND book_id = ?' if book_id is not None else ''
+            params = (user_id, book_id) if book_id is not None else (user_id,)
             rows = conn.execute('''
                 SELECT * FROM book_reading_state
                 WHERE user_id = ? AND status IN ('in_progress', 'finished')
-                ORDER BY
+                ''' + scope + ''' ORDER BY
                     CASE status WHEN 'in_progress' THEN 0 ELSE 1 END,
                     CASE WHEN status = 'in_progress' THEN last_meaningful_read_at END DESC,
                     CASE WHEN status = 'finished' THEN finished_at END DESC
-            ''', (user_id,)).fetchall()
+            ''', params).fetchall()
+            modes = {(r['book_id'], r['mode']): r for r in conn.execute(
+                'SELECT * FROM mode_reading_state WHERE user_id = ?' + scope, params)} if rows else {}
             result = []
             for row in rows:
                 item = dict(row)
-                mode = conn.execute('''
-                    SELECT * FROM mode_reading_state
-                    WHERE user_id = ? AND book_id = ? AND mode = ?
-                ''', (user_id, item['book_id'], item['last_mode'])).fetchone()
+                mode = modes.get((item['book_id'], item['last_mode']))
                 item['last_mode_state'] = self._mode_projection(mode) if mode else None
                 result.append(item)
             return result

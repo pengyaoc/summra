@@ -49,7 +49,16 @@ def create_app(content_db=None, user_db=None, auth_config=None) -> Flask:
     def default_private_cache(response):
         # Everything here is one reader's private content: never let a response
         # fall through without a Cache-Control (static assets excepted).
-        if not request.path.startswith('/static/') and 'Cache-Control' not in response.headers:
+        if request.endpoint == 'static' and response.status_code in (200, 304):
+            filename = (request.view_args or {}).get('filename', '')
+            version = request.args.get('v')
+            expected = app.jinja_env.globals['asset_v'](filename)
+            # Only content-hashed URLs can be immutable. ES module imports use
+            # bare URLs and must still revalidate to pick up deployments.
+            response.headers['Cache-Control'] = (
+                'private, max-age=31536000, immutable' if version and expected == f'?v={version}'
+                else 'private, no-cache')
+        elif 'Cache-Control' not in response.headers:
             response.headers['Cache-Control'] = 'private, no-cache'
         return response
 

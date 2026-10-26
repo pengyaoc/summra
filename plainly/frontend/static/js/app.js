@@ -121,12 +121,22 @@ class SummraApp {
     }
 
     setupInstallPrompt() {
+        if ('serviceWorker' in navigator && window.isSecureContext) {
+            const root = (window.APP_BASE_PATH || '').replace(/\/$/, '') + '/';
+            const register = () => navigator.serviceWorker.register(root + 'sw.js', {
+                scope: root, updateViaCache: 'none',
+            }).catch(error => console.warn('Plainly app registration failed:', error));
+            if (document.readyState === 'complete') register();
+            else window.addEventListener('load', register, {once: true});
+        }
         // Detect iOS Safari
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isInStandaloneMode = ('standalone' in window.navigator) && window.navigator.standalone;
+        const isIOS = (/iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.MSStream;
+        const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
         // Check if already installed or dismissed
-        const installBannerDismissed = localStorage.getItem('installBannerDismissed');
+        let installBannerDismissed = false;
+        try { installBannerDismissed = localStorage.getItem('installBannerDismissed'); } catch (_) { /* storage disabled */ }
 
         // Show iOS install banner if:
         // 1. User is on iOS
@@ -141,16 +151,26 @@ class SummraApp {
             }, 2000); // Show after 2 seconds
         }
 
-        // Handle Android Chrome install prompt
+        // Offer the browser's native install prompt on Chromium desktop/Android.
+        const button = document.getElementById('plainly-install-button');
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Prevent the mini-infobar from appearing on mobile
+            if (!button || isInStandaloneMode) return;
             e.preventDefault();
-            // Stash the event so it can be triggered later
             deferredPrompt = e;
-
-            // Show custom install button (we can implement this later)
-            console.log('💡 Install prompt available');
+            button.classList.remove('hidden');
+        });
+        button?.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            const prompt = deferredPrompt;
+            deferredPrompt = null;
+            button.classList.add('hidden');
+            await prompt.prompt();
+        });
+        window.addEventListener('appinstalled', () => {
+            deferredPrompt = null;
+            button?.classList.add('hidden');
+            document.getElementById('ios-install-banner')?.classList.add('hidden');
         });
     }
 
@@ -554,7 +574,7 @@ class SummraApp {
                 if (banner) {
                     banner.classList.add('hidden');
                     // Remember user dismissed the banner
-                    localStorage.setItem('installBannerDismissed', 'true');
+                    try { localStorage.setItem('installBannerDismissed', 'true'); } catch (_) { /* storage disabled */ }
                 }
             });
         }

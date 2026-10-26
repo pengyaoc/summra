@@ -13,7 +13,7 @@ Currently ships with ~90 books from Project Gutenberg covering Dickens, Austen, 
 - **Text-to-speech** for summaries (and chapters where pre-generated), via the Google Gemini 2.5 Flash TTS API.
 - **Kindle-style reading UI:** page-based pagination, font/size/theme settings (light/dark/sepia), progress indicator, sticky chapter header.
 - **Discovery:** home page with curated carousels (Popular, Easy to Read, Read in a Day, by category, by author), a full categories page, an authors hub, and a related-books carousel on each book.
-- **PWA:** installable on iOS/Android/desktop, offline-cached pages, offline fallback page.
+- **PWA:** installable on iOS/Android/desktop with Plainly's own app icons. A scoped, network-only service worker provides an offline fallback without caching pages or personal reading state. Chrome/Edge offer **Install app** when eligible; on iPhone use **Share → Add to Home Screen**. Production requires HTTPS.
 - **Optional auth + reading progress** (behind a feature flag — see below).
 - **Optional editorial blog** (behind a feature flag).
 

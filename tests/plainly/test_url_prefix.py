@@ -74,6 +74,43 @@ def test_manifest_scope_matches_prefix(client):
     assert data['icons'][0]['src'].startswith('/summrabook/static/images/icon-32.png?v=')
 
 
+@pytest.mark.parametrize('prefix', ['', '/plainly', '/summrabook'])
+def test_plainly_pwa_has_all_install_icons_and_stable_identity(client, prefix):
+    import io
+    from PIL import Image
+    headers = {'X-Forwarded-Prefix': prefix}
+    manifest = client.get('/manifest.json', headers=headers).get_json()
+    assert manifest['id'] == manifest['scope'] == manifest['start_url'] == prefix + '/'
+    assert manifest['short_name'] == 'Plainly' and manifest['display'] == 'standalone'
+    assert {'192x192', '512x512'} <= {i['sizes'] for i in manifest['icons']}
+    assert any(i.get('purpose') == 'maskable' for i in manifest['icons'])
+    for icon in manifest['icons']:
+        response = client.get(icon['src'], headers=headers)
+        assert response.status_code == 200
+        with Image.open(io.BytesIO(response.data)) as image:
+            assert image.format == 'PNG' and f'{image.width}x{image.height}' == icon['sizes']
+    worker = client.get('/sw.js', headers=headers)
+    assert worker.status_code == 200 and worker.mimetype == 'application/javascript'
+    assert worker.headers['Service-Worker-Allowed'] == prefix + '/'
+    assert 'no-cache' in worker.headers['Cache-Control'] and 'immutable' not in worker.headers['Cache-Control']
+    html = client.get('/', headers=headers).get_data(as_text=True)
+    assert f'href="{prefix}/manifest.json" crossorigin="use-credentials"' in html
+    assert 'id="plainly-install-button"' in html
+
+
+def test_plainly_maskable_icon_keeps_its_symbol_in_the_safe_circle():
+    from pathlib import Path
+    from PIL import Image
+    path = Path(__file__).resolve().parents[2] / 'plainly/frontend/static/images/icon-512-maskable.png'
+    with Image.open(path) as source:
+        image = source.convert('RGB')
+        bg = (138, 46, 46)
+        assert image.getpixel((0, 0)) == bg
+        assert all((x-256)**2 + (y-256)**2 <= (512*.4)**2
+                   for y in range(512) for x in range(512)
+                   if max(abs(a-b) for a,b in zip(image.getpixel((x,y)), bg)) > 3)
+
+
 def test_robots_txt_reflects_prefix_and_origin(client):
     """robots.txt Allow/Disallow rules and the Sitemap line must match the
     real deployed paths, not the domain root."""

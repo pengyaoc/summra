@@ -11,7 +11,7 @@ def test_dry_run_does_not_create_db(sample_book, write_book, tmp_path, capsys):
     assert not db_path.exists()
     out = capsys.readouterr().out
     assert 'My Book' in out
-    assert 'Chapters: 4' in out  # Overview + three chapters
+    assert 'Chapters: 5' in out  # Overview + three chapters + Source
     assert 'Images: 1' in out
 
 
@@ -27,6 +27,7 @@ def test_import_prints_id_and_returns_0(sample_book, write_book, tmp_path, capsy
 
 def test_words_count_cjk_characters_individually(sample_book, write_book, tmp_path, capsys):
     sample_book['overview'] = []
+    sample_book['sources'] = []
     sample_book['parts'] = [{'title': None, 'chapters': [
         {'title': '1. Only', 'blocks': [{'type': 'p', 'text': '你好，世界。 hello'}]}]}]
     folder = write_book(sample_book)

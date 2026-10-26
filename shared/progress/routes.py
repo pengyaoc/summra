@@ -8,6 +8,7 @@ the app. `content_db` is duck-typed; the surface used here is:
     get_reader_manifest(book_id)
     library_books(book_ids)      # {book_id: {id, slug, title, author, cover_image_url}}
     chapter_titles(chapter_ids)  # {chapter_id: {id, chapter_number, chapter_title}}
+    library_word_totals(book_ids)  # optional batched {book_id: {mode: word_count}}
 """
 
 import logging
@@ -89,11 +90,16 @@ def get_library():
     return jsonify({'success': True, **library_cards(g.user_id)})
 
 
-def library_cards(user_id):
+def library_cards(user_id, book_id=None):
     """A reader's Library cards, {'continue_reading': [...], 'finished': [...]}.
     Shared by /api/library and the home page, which renders Continue reading
-    into the first HTML so it doesn't pop in after the page loads."""
-    states = user_db.get_library_projection(user_id) if user_db and user_id is not None else []
+    into the first HTML so it doesn't pop in after the page loads. A book_id
+    scopes a book page's lookup instead of processing the reader's whole shelf.
+    """
+    states = []
+    if user_db and user_id is not None:
+        states = (user_db.get_library_projection(user_id, book_id=book_id) if book_id is not None
+                  else user_db.get_library_projection(user_id))
     if not states:
         return {'continue_reading': [], 'finished': []}
 
@@ -107,6 +113,10 @@ def library_cards(user_id):
     chapters = content_db.chapter_titles(list(chapter_ids)) if chapter_ids else {}
 
     cards = {'continue_reading': [], 'finished': []}
+    progress_ids = [s['book_id'] for s in states if s['book_id'] in books and s['status'] != 'finished'
+                    and s.get('last_mode_state') and s['last_mode_state'].get('furthest_marker')]
+    totals_hook = getattr(content_db, 'library_word_totals', None)
+    totals = totals_hook(progress_ids) if totals_hook and progress_ids else {}
     for state in states:
         book = books.get(state['book_id'])
         if not book:
@@ -114,11 +124,15 @@ def library_cards(user_id):
         mode_state = state.get('last_mode_state')
         marker = mode_state.get('furthest_marker') if mode_state else None
         percentage = 0
-        if marker and mode_state:
-            manifest = content_db.get_reader_manifest(state['book_id'])
-            mode = next((item for item in manifest['modes'] if item['mode'] == state['last_mode']), None)
-            if mode and mode['total_word_count']:
-                percentage = min(99, round(marker['word_position'] * 100 / mode['total_word_count']))
+        if marker and mode_state and state['status'] != 'finished':
+            if totals_hook:
+                word_count = totals.get(state['book_id'], {}).get(state['last_mode'], 0)
+            else:
+                manifest = content_db.get_reader_manifest(state['book_id'])
+                mode = next((item for item in manifest['modes'] if item['mode'] == state['last_mode']), None)
+                word_count = mode['total_word_count'] if mode else 0
+            if word_count:
+                percentage = min(99, round(marker['word_position'] * 100 / word_count))
         if state['status'] == 'finished':
             percentage = 100
         current = mode_state.get('current_marker') if mode_state else None

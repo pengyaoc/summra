@@ -25,7 +25,7 @@ from typing import Callable, Optional
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 from PIL import Image
 
-from distill.book_format import CJK_RE, FORMAT_VERSION, block_text, validate_book, word_count
+from distill.book_format import CJK_RE, FORMAT_VERSION, block_text, normalize_toc_titles, validate_book, word_count
 
 MAX_WIDTH = 1600
 THUMB_WIDTH = 1280
@@ -449,12 +449,20 @@ class _Walker:
             return title
         if not title:
             return num
-        digits = re.search(r'\d+', num)
+        num = num.rstrip(':：. ')
+        digits = re.fullmatch(r'(?:Chapter\s+)?(\d+(?:\.\d+)*)(?:\.)?', num, re.I)
         if digits:
-            label = f'{digits.group()}. '
+            label = digits[1] + (' ' if '.' in digits[1] else '. ')
+            heading = re.match(r'^(?:Chapter\s+)?(\d+(?:\.\d+)*)(?:[.:：]\s*|\s+|$)', title, re.I)
+            if heading:
+                remainder = title[heading.end():]
+                if heading[1].startswith(digits[1] + '.'):
+                    return title  # the heading supplies a more specific section number
+                if heading[1] == digits[1] and not re.match(r'[+×÷=−-]', remainder):
+                    return label + remainder
         elif num.startswith('第'):
             label = f'{num} '
-        elif num.lower() == title.lower():
+        elif num.lower() == title.lower() or title.lower().startswith(num.lower() + ' '):
             return title
         else:
             label = f'{num}: '
@@ -586,6 +594,11 @@ def convert_page(html: str, slug: str, out_dir: Path, fetch: Callable[[str], byt
 
     book = {'format': FORMAT_VERSION, 'slug': slug, 'title': title, 'author': report.author,
             'lang': report.lang, 'cover': cover, 'overview': overview, 'parts': parts, 'sources': sources}
+    for part in parts:
+        repaired = normalize_toc_titles(
+            [dict(c, part_title=part['title']) for c in part['chapters']], report.lang, slug)
+        for chapter, row in zip(part['chapters'], repaired):
+            chapter['title'] = row['title']
     (folder / 'book.json').write_text(json.dumps(book, ensure_ascii=False, indent=1), encoding='utf-8')
     report.dropped = sorted(set(report.dropped))
     report.errors = validate_book(book, folder)

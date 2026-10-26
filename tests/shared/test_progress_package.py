@@ -67,3 +67,19 @@ def test_library_cards_use_content_hooks_not_sql(monkeypatch):
     assert [c['id'] for c in cards['finished']] == [2]
     assert cards['finished'][0]['furthest_percentage'] == 100
     assert cards['finished'][0]['current_chapter'] is None
+
+
+def test_library_cards_batch_word_totals_without_manifests(monkeypatch):
+    content = _SchemaFreeContent()
+    calls = []
+
+    def totals(ids):
+        calls.append(ids)
+        return {1: {'original': 200}}
+
+    content.library_word_totals = totals
+    content.get_reader_manifest = lambda *a: (_ for _ in ()).throw(AssertionError('full manifest requested'))
+    monkeypatch.setattr(routes, 'user_db', _StubUsers())
+    monkeypatch.setattr(routes, 'content_db', content)
+    assert routes.library_cards(1)['continue_reading'][0]['furthest_percentage'] == 25
+    assert calls == [[1]]

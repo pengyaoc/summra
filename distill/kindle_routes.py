@@ -81,7 +81,8 @@ def book_page(slug):
     return render_page(
         'book.html',
         book=book, rows=rows, page=page, pages=pages, saved=saved,
-        cover_url=url(f'/books/{slug}/images/{cover}') if cover else None,
+        cover_url=(url(f'/books/{slug}/cover/{book["cover_thumbnail_token"]}.jpg')
+                   if book.get('cover_thumbnail_token') else url(f'/books/{slug}/images/{cover}') if cover else None),
         prev_url=page_url(page - 1) if page > 1 else None,
         next_url=page_url(page + 1) if page < pages else None,
     )

@@ -1,11 +1,54 @@
 """Distill's own routes: the pages (library, book, reader) and the private
 image route. The reader API, progress and sign-in come from the shared platform."""
-from flask import Blueprint, abort, current_app, g, make_response, render_template, request
+import hashlib
+
+from flask import Blueprint, abort, current_app, g, jsonify, make_response, render_template, request, send_from_directory, url_for
 
 from shared.auth.pchauth.flask_adapter import login_required
 from shared.progress.routes import library_cards
 
 bp = Blueprint('distill', __name__)
+
+
+@bp.route('/manifest.webmanifest')
+@login_required
+def manifest():
+    root = request.script_root + '/'
+    asset_v = current_app.jinja_env.globals['asset_v']
+
+    def icon(size, purpose):
+        filename = f'images/icon-{size}.png'
+        return {'src': url_for('static', filename=filename) + asset_v(filename),
+                'sizes': f'{size}x{size}', 'type': 'image/png', 'purpose': purpose}
+
+    response = jsonify({
+        'id': root, 'name': 'Distill', 'short_name': 'Distill',
+        'description': 'A little reading. A lot to keep. Your personal book-summary library.',
+        'start_url': root, 'scope': root, 'display': 'standalone',
+        'background_color': '#FBF8F1', 'theme_color': '#8A2E2E',
+        'icons': [icon(192, 'any'), icon(512, 'any maskable')],
+        'categories': ['books', 'education'], 'prefer_related_applications': False,
+    })
+    response.mimetype = 'application/manifest+json'
+    response.headers['Cache-Control'] = 'private, no-cache'
+    return response
+
+
+@bp.route('/sw.js')
+@login_required
+def service_worker():
+    response = send_from_directory(current_app.static_folder, 'js/sw.js', mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = request.script_root + '/'
+    response.headers['Cache-Control'] = 'private, no-cache'
+    return response
+
+
+@bp.route('/favicon.ico')
+@login_required
+def favicon():
+    response = send_from_directory(current_app.static_folder, 'images/favicon.ico', mimetype='image/vnd.microsoft.icon')
+    response.headers['Cache-Control'] = 'private, max-age=86400'
+    return response
 
 
 def progress_label(card, chapter_count) -> str:
@@ -29,7 +72,7 @@ def _not_found_page():
 
 def _card_for(book_id):
     """The signed-in reader's library card for one book, if they have started it."""
-    cards = library_cards(g.user_id)
+    cards = library_cards(g.user_id, book_id=book_id)
     return next((c for c in cards['continue_reading'] + cards['finished'] if c['id'] == book_id), None)
 
 
@@ -41,13 +84,16 @@ def reading_cards(db, user_id, books):
     """The reader's books in progress, as library cards whose location line is `progress_label`."""
     by_id = {b['id']: b for b in books}
     reading = []
-    for card in library_cards(user_id)['continue_reading']:
+    cards = library_cards(user_id)['continue_reading']
+    counts = db.chapter_counts([c['id'] for c in cards])
+    for card in cards:
         book = by_id.get(card['id'])
         if not book:
             continue
-        label = progress_label(card, db.count_chapters(book['id']))
+        label = progress_label(card, counts.get(book['id'], 0))
         # The shared card macro prints current_chapter.chapter_title as its location line.
         reading.append({**card, 'cover_image': book['cover_image'],
+                        'cover_thumbnail_token': book.get('cover_thumbnail_token'),
                         'current_chapter': {'chapter_title': label} if label else None})
     return reading
 
@@ -135,4 +181,21 @@ def book_image(slug, name):
     response.headers['Cache-Control'] = 'private, max-age=3600'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.add_etag()
+    return response.make_conditional(request)
+
+
+@bp.route('/books/<slug>/cover/<token>.<fmt>')
+@login_required
+def cover_thumbnail(slug, token, fmt):
+    if fmt not in ('avif', 'webp', 'jpg'):
+        abort(404)
+    image = _db().get_cover_thumbnail(slug, token, fmt)
+    if not image:
+        abort(404)
+    mime, data = image
+    response = make_response(data)
+    response.mimetype = mime
+    response.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.set_etag(hashlib.sha256(data).hexdigest())
     return response.make_conditional(request)

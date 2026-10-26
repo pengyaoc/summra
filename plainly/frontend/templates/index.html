@@ -52,11 +52,11 @@
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='images/icon-192.png') }}{{ asset_v('images/icon-192.png') }}">
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="{{ url_for('system.manifest') }}">
-    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="{{ url_for('system.manifest') }}" crossorigin="use-credentials">
+    <meta name="theme-color" content="#8A2E2E">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Plainly">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/base.css') }}{{ asset_v('shared/css/base.css') }}">
@@ -113,6 +113,7 @@
                     <a href="{{ base_path }}/library" class="header-nav-btn hidden" id="library-nav-btn">Library</a>
                     <a href="{{ base_path }}/discover" class="header-nav-btn" id="discover-nav-btn">Discover</a>
                     <a href="{{ base_path }}/categories" class="header-nav-btn" id="categories-nav-btn">Categories</a>
+                    <button type="button" class="header-nav-btn hidden" id="plainly-install-button">Install app</button>
                     {% if feature_blog %}
                     <a href="{{ base_path }}/blog" class="header-nav-btn" id="blog-nav-btn">Blog</a>
                     {% endif %}
@@ -866,9 +867,8 @@
        execute ES modules natively, no bundler needed in dev. Prod serves
        app.min.js, esbuild's single bundled/minified file with no
        import/export left in it, so a plain (non-module) script tag.
-       asset_v() appends a content-hash query so the service worker (which
-       caches JS with StaleWhileRevalidate) picks up new builds on the next
-       navigation. #}
+       asset_v() appends a content-hash query to refresh the browser's HTTP
+       cache on deployment. The installable PWA worker is network-only. #}
     {% if is_development %}
     <script type="module" src="{{ url_for('static', filename='js/app.js') }}{{ asset_v('js/app.js') }}"></script>
     {% else %}

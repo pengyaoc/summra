@@ -46,6 +46,46 @@ def test_upsert_by_email_is_case_insensitive(test_db_path):
     assert first_id == second_id
 
 
+def test_known_user_authentication_does_not_wait_for_progress_writer(test_db_path, monkeypatch):
+    db = UserDatabase(test_db_path)
+    uid = db.upsert_user_by_email('me@example.com')
+    connect = db.get_connection
+
+    def no_wait_connection():
+        conn = connect()
+        conn.execute('PRAGMA busy_timeout = 0')
+        return conn
+
+    monkeypatch.setattr(db, 'get_connection', no_wait_connection)
+    with connect() as writer:
+        writer.execute('BEGIN IMMEDIATE')
+        assert db.upsert_user_by_email('me@example.com') == uid
+
+
+def test_login_timestamp_is_refreshed_after_the_throttle_window(test_db_path):
+    db = UserDatabase(test_db_path)
+    uid = db.upsert_user_by_email('me@example.com')
+    with db.get_connection() as conn:
+        conn.execute("UPDATE users SET last_login = '2000-01-01' WHERE id = ?", (uid,))
+    assert db.upsert_user_by_email('me@example.com') == uid
+    with db.get_connection() as conn:
+        assert conn.execute("SELECT last_login > '2000-01-01' FROM users WHERE id = ?", (uid,)).fetchone()[0]
+
+
+def test_library_projection_can_scope_one_book_without_losing_mode_state(test_db_path):
+    db = UserDatabase(test_db_path)
+    uid = db.upsert_user_by_email('me@example.com')
+    for sequence, bid in enumerate((7, 8), 1):
+        payload = _mutation(sequence, boundaries=2)
+        payload['book_id'] = bid
+        db.apply_mutation(uid, payload, _marker(), _marker())
+    all_books = db.get_library_projection(uid)
+    selected = db.get_library_projection(uid, book_id=8)
+    assert len(all_books) == 2
+    assert selected == [item for item in all_books if item['book_id'] == 8]
+    assert selected[0]['last_mode_state']['current_marker']['paragraph_id'] == 'paragraph-0'
+
+
 def test_schema_has_no_password_columns(test_db_path):
     db = UserDatabase(db_path=test_db_path)
     conn = db.get_connection()

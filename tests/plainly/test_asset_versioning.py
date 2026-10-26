@@ -14,9 +14,9 @@ fresh fetch. (Originally this was '?v=<mtime>' — switched to a content hash
 since mtime is preserved or reset inconsistently by different deploy paths,
 so it can miss a real content change or churn on a no-op one.)
 
-This app previously also ran a service worker with its own CSS caching
-strategy (removed 2026-09-07 along with the rest of offline support); that
-half of the original fix no longer applies.
+The old service worker's CSS caching strategy was removed on 2026-09-07.
+The installable PWA worker added later is network-only; it does not cache
+styles or override this content-hash versioning.
 
 These tests cover the URL versioning piece.
 """

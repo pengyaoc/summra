@@ -14,6 +14,122 @@ def _chapter_blocks(book):
     return book['parts'][0]['chapters'][0]['blocks']
 
 
+def test_cover_backfill_is_idempotent_and_reimport_invalidates_variants(db, sample_book, write_book):
+    from PIL import Image
+    folder = write_book(sample_book)
+    bid = db.import_book(folder)
+    before_chapters = db.get_chapters(bid)
+    token = db.get_book(bid)['cover_thumbnail_token']
+    assert token and db.generate_cover_thumbnails() == 0
+    with db.get_connection() as conn:
+        conn.execute('DELETE FROM cover_thumbnails')
+    assert db.get_book(bid)['cover_thumbnail_token'] is None
+    assert db.generate_cover_thumbnails() == 1
+    assert db.get_book(bid)['cover_thumbnail_token'] == token
+    assert db.get_chapters(bid) == before_chapters
+    Image.new('RGB', (600, 900), 'blue').save(folder / 'images' / 'cover.jpg')
+    db.import_book(folder)
+    new_token = db.get_book(bid)['cover_thumbnail_token']
+    assert new_token != token
+    assert db.get_cover_thumbnail('my-book', token, 'avif') is None
+    assert db.get_cover_thumbnail('my-book', new_token, 'avif')
+    assert db.generate_cover_thumbnails() == 0
+
+
+
+def test_reader_index_freshness_survives_restart_and_external_edits(db, sample_book, write_book, monkeypatch):
+    import sqlite3
+    bid = db.import_book(write_book(sample_book))
+    first = db.ensure_reader_content(bid)
+    restarted = DistillDatabase(db.db_path)
+    with monkeypatch.context() as patch:
+        patch.setattr(restarted, '_reader_load_chapters', lambda *a: pytest.fail('unchanged content was loaded'))
+        assert restarted.ensure_reader_content(bid) == first
+        assert restarted.library_word_totals([bid])[bid]['summary'] > 0
+    chapter = db.get_chapters(bid)[1]
+    with sqlite3.connect(db.db_path) as conn:
+        conn.execute('UPDATE chapters SET title = ? WHERE id = ?', ('Changed externally', chapter['id']))
+    assert restarted.ensure_reader_content(bid)['version'] == first['version'] + 1
+    assert restarted.get_reader_manifest(bid)['structure'][2]['title'] == 'Changed externally'
+
+
+def test_index_freshness_does_not_swallow_concurrent_content_changes(db, sample_book, write_book, monkeypatch):
+    bid = db.import_book(write_book(sample_book))
+    checksum = db._reader_source_checksum
+    changed = False
+
+    def edit_during_checksum(chapters):
+        nonlocal changed
+        if not changed:
+            changed = True
+            with db.get_connection() as conn:
+                conn.execute('UPDATE chapters SET title = ? WHERE id = ?', ('Concurrent title', chapters[1]['id']))
+        return checksum(chapters)
+
+    monkeypatch.setattr(db, '_reader_source_checksum', edit_during_checksum)
+    old = db.ensure_reader_content(bid)
+    assert db.ensure_reader_content(bid)['version'] == old['version'] + 1
+
+
+
+def test_append_sources_preserves_existing_chapters_and_reader_units(db, sample_book, write_book):
+    sources = sample_book['sources']
+    sample_book['sources'] = []
+    bid = db.import_book(write_book(sample_book))
+    before = db.get_chapters(bid)
+    db.ensure_reader_content(bid)
+    with db.get_connection() as conn:
+        conn.execute('UPDATE books SET sources = ? WHERE id = ?', (json.dumps(sources), bid))
+        units = [tuple(r) for r in conn.execute('SELECT * FROM reader_unit ORDER BY ordinal')]
+    assert db.append_source_chapters() == [bid]
+    assert db.get_chapters(bid) == before  # default is read-only preview
+    assert db.append_source_chapters(dry_run=False) == [bid]
+    after = db.get_chapters(bid)
+    assert after[:-1] == before
+    assert after[-1]['ordinal'] == before[-1]['ordinal'] + 1
+    assert after[-1]['title'] == 'Source' and after[-1]['blocks'] == sources
+    db.ensure_reader_content(bid)
+    with db.get_connection() as conn:
+        assert [tuple(r) for r in conn.execute('SELECT * FROM reader_unit ORDER BY ordinal')][:len(units)] == units
+    assert db.append_source_chapters(dry_run=False) == []
+    sample_book['sources'] = sources
+    db.import_book(write_book(sample_book))
+    assert db.get_chapters(bid) == after  # reimport preserves the new Source ID too
+
+
+def test_empty_sources_do_not_add_a_chapter(db, sample_book, write_book):
+    sample_book['sources'] = []
+    bid = db.import_book(write_book(sample_book))
+    assert db.get_chapters(bid)[-1]['title'] == '3. Third'
+    assert db.append_source_chapters(dry_run=False) == []
+
+
+def test_toc_repair_preserves_reader_coordinates_and_reimport(db, sample_book, write_book):
+    sample_book['parts'][0]['chapters'][0]['title'] = '1. 1 First'
+    folder = write_book(sample_book)
+    bid = db.import_book(folder)
+    chapters = db.get_chapters(bid)
+    assert chapters[1]['title'] == '1. First'  # old folders cannot reintroduce the error
+    with db.get_connection() as conn:
+        conn.execute('UPDATE chapters SET title = ? WHERE id = ?', ('1. 1 First', chapters[1]['id']))
+    db.ensure_reader_content(bid)
+    with db.get_connection() as conn:
+        before = [tuple(r) for r in conn.execute('SELECT * FROM reader_unit ORDER BY mode, ordinal')]
+    preview = db.repair_toc()
+    assert preview == [{'slug': 'my-book', 'id': chapters[1]['id'], 'before': '1. 1 First', 'after': '1. First'}]
+    assert db.get_chapters(bid)[1]['title'] == '1. 1 First'
+    assert db.repair_toc(dry_run=False) == preview
+    db.ensure_reader_content(bid)
+    after = db.get_chapters(bid)
+    assert [(c['id'], c['ordinal'], c['part_title'], c['blocks']) for c in after] == [
+        (c['id'], c['ordinal'], c['part_title'], c['blocks']) for c in chapters]
+    with db.get_connection() as conn:
+        assert [tuple(r) for r in conn.execute('SELECT * FROM reader_unit ORDER BY mode, ordinal')] == before
+    assert db.repair_toc(dry_run=False) == []
+    db.import_book(folder)
+    assert db.get_chapters(bid) == after
+
+
 def test_import_round_trip(db, sample_book, write_book):
     book_id = db.import_book(write_book(sample_book))
 
@@ -25,7 +141,9 @@ def test_import_round_trip(db, sample_book, write_book):
 
     chapters = db.get_chapters(book_id)
     assert [(c['ordinal'], c['part_title'], c['title']) for c in chapters] == [
-        (0, None, 'Overview'), (1, 'Part One', '1. First'), (2, 'Part One', '2. Second'), (3, None, '3. Third')]
+        (0, None, 'Overview'), (1, 'Part One', '1. First'), (2, 'Part One', '2. Second'),
+        (3, None, '3. Third'), (4, None, 'Source')]
+    assert chapters[-1]['blocks'] == sample_book['sources']
     assert chapters[1]['blocks'] == _chapter_blocks(sample_book)
 
     mime, data = db.get_image(book_id, 'cover.jpg')
@@ -51,7 +169,8 @@ def test_reimport_with_fewer_chapters_drops_extras(db, sample_book, write_book):
     book_id = db.import_book(write_book(sample_book))
     del sample_book['parts'][1]
     db.import_book(write_book(sample_book))
-    assert [c['ordinal'] for c in db.get_chapters(book_id)] == [0, 1, 2]
+    assert [c['ordinal'] for c in db.get_chapters(book_id)] == [0, 1, 2, 3]
+    assert db.get_chapters(book_id)[-1]['title'] == 'Source'
 
 
 def test_invalid_book_is_not_imported(db, sample_book, write_book):
@@ -69,12 +188,12 @@ def test_manifest_counts_blocks_as_units(db, sample_book, write_book):
     manifest = db.get_reader_manifest(book_id)
     modes = {m['mode']: m for m in manifest['modes']}
     assert modes['summary']['availability'] == 'available'
-    assert modes['summary']['unit_count'] == 1 + 5 + 1 + 1
+    assert modes['summary']['unit_count'] == 1 + 5 + 1 + 1 + 1
     for mode in ('original', 'plain', 'side_by_side'):
         assert modes[mode]['availability'] == 'unavailable'
     last = db.get_chapters(book_id)[-1]
     assert modes['summary']['terminal_paragraph_id'] == f"{last['id']}.0"
-    assert [s['kind'] for s in manifest['structure']] == ['chapter', 'part', 'chapter', 'chapter', 'chapter']
+    assert [s['kind'] for s in manifest['structure']] == ['chapter', 'part', 'chapter', 'chapter', 'chapter', 'chapter']
     assert manifest['structure'][1]['title'] == 'Part One'
 
 
@@ -176,11 +295,11 @@ def test_get_book_cover_image_name(db, sample_book, write_book):
 
 def test_count_chapters_excludes_overview(db, sample_book, write_book):
     book_id = db.import_book(write_book(sample_book))
-    assert db.count_chapters(book_id) == 3  # Overview + 3 chapters
+    assert db.count_chapters(book_id) == 4  # 3 chapters + Source, excluding Overview
     assert db.count_chapters(9999) == 0
     sample_book.update(slug='no-overview', overview=[])
     other = db.import_book(write_book(sample_book))
-    assert db.count_chapters(other) == 2  # ordinals 0..2: the first chapter sits at ordinal 0
+    assert db.count_chapters(other) == 3  # ordinals 0..3: the first chapter sits at ordinal 0
 
 
 def test_categories_round_trip_and_old_schema_migration(tmp_path, sample_book, write_book):

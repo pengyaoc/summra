@@ -3,7 +3,7 @@
 Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 """
 from datetime import datetime
-from flask import Blueprint, current_app, render_template
+from flask import Blueprint, current_app, render_template, request, send_from_directory
 
 from plainly.routes import common
 
@@ -26,6 +26,16 @@ def manifest():
     this app's own subpath when reverse-proxied alongside another site."""
     response = current_app.make_response(render_template('manifest.json'))
     response.headers['Content-Type'] = 'application/manifest+json'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
+
+
+@bp.route('/sw.js')
+def service_worker():
+    """Keep the installed app scoped to Plainly, alongside the other apps."""
+    response = send_from_directory(current_app.static_folder, 'js/sw.js', mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = request.script_root + '/'
+    response.headers['Cache-Control'] = 'no-cache'
     return response
 
 

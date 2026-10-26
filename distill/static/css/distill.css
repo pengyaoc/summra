@@ -2,6 +2,8 @@
 
 /* The shared reader hides its panels and status line with .hidden but does not define it. */
 .hidden { display: none !important; }
+.distill-install-action[hidden] { display: none; }
+.distill-install-action { flex-shrink: 0; padding: .55rem .85rem; border: 1px solid var(--accent); border-radius: 7px; color: var(--accent); background: var(--surface); font: inherit; cursor: pointer; }
 .main-content { flex: 1; padding: 0 0 40px 0; }
 
 .distill-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule); background: var(--surface); }
@@ -10,10 +12,11 @@
 .distill-main { max-width: 1040px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
 .distill-main h1 { margin: 0 0 .35rem; font-family: var(--font-serif); font-size: 2rem; line-height: 1.2; }
 .distill-section { margin-bottom: 2.5rem; }
-.distill-section h2, .distill-toc h2, .distill-sources h2 { margin: 0 0 1rem; font-family: var(--font-serif); font-size: 1.3rem; }
+.distill-section h2, .distill-toc h2 { margin: 0 0 1rem; font-family: var(--font-serif); font-size: 1.3rem; }
 
 /* Covers: the real image, or a card built from the title. */
-.distill-cover { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--cover-placeholder-bg); box-shadow: var(--shadow); }
+.distill-cover-picture { display: block; }
+.distill-cover { display: block; width: 100%; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--cover-placeholder-bg); box-shadow: var(--shadow); }
 .book-cover-placeholder { display: flex; align-items: center; justify-content: center; padding: 10%; background: linear-gradient(160deg, var(--paper-deep), var(--rule-strong)); color: var(--ink); text-align: center; overflow: hidden; }
 .book-cover-placeholder span { font-family: var(--font-serif); font-size: .9rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
 .library-card .distill-cover { width: 108px; }
@@ -38,8 +41,6 @@
 .toc-list a { display: block; padding: .6rem 0; color: var(--ink); text-decoration: none; }
 .toc-list a:hover { color: var(--accent); }
 
-.distill-sources { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule-strong); color: var(--ink-muted); font-size: .9rem; }
-.distill-source-blocks img { max-width: 100%; }
 
 /* Block styles live in shared reader.css; only the app-language label is here. */
 .reader-keypoints::before { content: "Key points"; display: block; margin: 0 0 .4em -1.2em; font-size: .75em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
