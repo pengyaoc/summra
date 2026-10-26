@@ -1,11 +1,11 @@
 # Summra Work Log
 
-## 2026-10-26: Shared Chinese paragraph pagination (in progress)
+## 2026-10-26: Shared Chinese paragraph pagination (deployed)
 
 - User reported large blank tails on Distill's Chinese reader pages and requested the same paragraph splitting as Plainly. Confirmed both apps already use `shared/static/js/pagination.js`; its whitespace-only text units made Chinese paragraphs effectively indivisible. Added Unicode Han-character boundaries to that shared splitter while retaining English word and verse line boundaries.
 - Shared DOM slicing now retains inline ancestor markup when a cut falls entirely inside an emphasis element. Added a shared fragment-size calculation for Chinese marker offsets, so saving/restoring continuation pages uses character fractions rather than the paragraph's whitespace word count. English offsets keep the existing word-based convention. Reader IDs, database content and marker schema unchanged.
 - Regression tests failed before the fix (Chinese boundaries absent; continuation offset .99 instead of .2), then passed. Full suite: 1,064 passed, one skipped, two deselected. Used importlib collection with app packages preloaded to avoid this checkout's existing tests/app package name collision. Distill desktop/mobile/Kindle e2e passes, including no clipping, exact text, emphasis, filled pages and continuation marker round trips. Plainly's side-by-side/verse splitting harness passes, including real Tess pages. Rebuilt app.min.js for production. Updated the Distill cover check to permit the now-complete cover-art collection.
-- Mobile inspection of cell-song chapter 544 shows paragraph continuation filling the page. Deploy the shared modules and rebuilt Plainly bundle, then restart both app services because both consume shared assets/configured templates. No database copy required.
+- Mobile inspection of cell-song chapter 544 shows paragraph continuation filling the page. Committed/pushed 82d8648 and fast-forwarded production to it; restarted Distill and Plainly, both active. Owner Chinese reader returns 200/private, unauthorized backend access remains 401/403; public Distill redirects to sign-in (302), Plainly returns 200. SHA-256 of both shared JS modules served by both apps and Plainly app.min.js match the tested files. No database copy or content/index migration.
 
 ## 2026-10-26: Distill search and drop logo deployment (complete)
 
