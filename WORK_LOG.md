@@ -1,5 +1,13 @@
 # Summra Work Log
 
+## 2026-10-26: Distill `--deploy` and standalone DB push (complete)
+
+- New `distill/scripts/deploy_db.py` (`deploy_db(db_path, settings, run=subprocess.run)`, `DeployError`, runnable as `python -m distill.scripts.deploy_db`). It checkpoints the WAL, snapshots the VM copy (skipped on a first push), scps to `~/distill.db.new`, compares md5 before touching the service, then stops, swaps, chowns, chmods and starts the unit. It checks `is-active` and a local 401, then prunes to the newest 2 `*.bak-pre-push-*`.
+- `push_book <folder> --deploy` runs it after a successful import and prints the book URL. `--deploy` with `--dry-run` is an argument error.
+- Settings: gitignored `deploy/distill/deploy.local.env`; committed `deploy.local.env.example`.
+- Tests: `tests/distill/test_deploy_db.py` mocks only the subprocess boundary.
+- Live check: pushed the unchanged local DB. The service came back, `/distill/` still 302s to Google, `/plainly/` is 200.
+
 ## 2026-10-26: Distill phase 6 — old /pages summaries taken down (complete)
 
 I compared VM `/var/www/html/pages` (55 files) with the vault `03-resources/book-summaries/` by name and md5.

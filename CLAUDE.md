@@ -509,7 +509,11 @@ Distill is the owner-only summary reader at `/distill` on the same host. It shar
   - It sets `OIDCUnAuthAction auth`, so signed-out visitors go to Google sign-in.
   - Everything is proxied to gunicorn, static files included. There is no Apache `Alias`: Distill's static files must not skip sign-in or be cached `public`.
 - **App guard.** `distill.app_prod` refuses to start unless the auth mode is `required`, and the app returns 403 to any non-allow-listed email.
-- **Database.** `distill.db` holds the content and images. Push it from local with the same snapshot → scp → md5 → stop → mv → chown/chmod 664 → start flow as step 4 above, using `<DISTILL_UNIT>` and `<REMOTE_REPO_PATH>/data/distill.db`. Run `sqlite3 data/distill.db "pragma wal_checkpoint(TRUNCATE)"` locally first. Never push `distill_user.db`: it holds reading progress.
+- **Database.** `distill.db` holds the content and images. Push it from local with one command, which does the snapshot, scp to `~/distill.db.new`, md5 check, stop, mv, chown `<SERVICE_USER>` / chmod 664, start, `is-active`, a local `curl` that must return 401, and pruning to the newest 2 `*.bak-pre-push-*` snapshots:
+  - `venv/bin/python -m distill.scripts.deploy_db [--db PATH] [--config PATH]` pushes the DB alone.
+  - `venv/bin/python -m distill.scripts.push_book <folder> --deploy` imports the book locally, then runs the same push, and prints the book's URL. `--deploy` with `--dry-run` is an error.
+  - Settings come from the gitignored `deploy/distill/deploy.local.env` (override with `--config`). Make it from `deploy/distill/deploy.local.env.example`. Keys: `DISTILL_VM_INSTANCE`, `_ZONE`, `_PROJECT`, `_ACCOUNT`, `_SERVICE_USER`, `_REMOTE_DB`, `_UNIT`, `_PORT`, and `DISTILL_SITE_URL`.
+  - An md5 mismatch aborts before the service is stopped. Never push `distill_user.db`: it holds reading progress.
 
 **First install** (as done 2026-10-26). Run as root via `gcloud compute ssh`:
 1. `pip install -r distill/requirements.txt` in the venv (Pillow).

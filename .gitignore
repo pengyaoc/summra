@@ -85,3 +85,6 @@ tests/e2e/node_modules/
 tests/e2e/screenshots/
 tests/e2e/tests/e2e/screenshots/
 tests/e2e/package-lock.json
+
+# Distill deploy settings (real VM identifiers)
+deploy/distill/deploy.local.env
