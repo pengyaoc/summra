@@ -71,8 +71,47 @@ export function renderBlock(block, { inline, imageBase = '' } = {}) {
     }
 }
 
+// A paginated web reader can opt into a flat flow. Each paragraph still
+// belongs to the original reader unit; the paginator splits its text normally.
+// Keep renderBlock unchanged for the semantic Kindle/non-flow representation.
+export function renderFlowBlocks(block, options = {}) {
+    const fmt = text => formatInline(text, options.inline);
+    const paragraph = (content, className) => ({tag: 'p', className, content, flow: true});
+    if (['ul', 'ol', 'keypoints'].includes(block?.type)) {
+        const label = block.type === 'keypoints'
+            ? `<strong class="reader-flow-keypoints-label">${escapeText(options.keypointsLabel || 'Key points')}</strong><br>` : '';
+        const items = block.items || [];
+        if (!items.length) return label ? [paragraph(label, 'reader-flow-item')] : [];
+        return items.map((item, index) => paragraph(
+            (index === 0 ? label : '') + (block.type === 'ol' ? `${index + 1}. ` : '• ') + fmt(item),
+            'reader-flow-item'));
+    }
+    if (block?.type === 'table') {
+        const header = block.header || [];
+        if (!block.rows?.length) {
+            return header.map(label => paragraph(`<strong>${fmt(label)}</strong>`, 'reader-flow-table-cell'));
+        }
+        return block.rows.flatMap(row => Array.from({length: Math.max(row.length, header.length)}, (_, index) =>
+            paragraph((header[index] ? `<strong>${fmt(header[index])}:</strong> ` : '') + fmt(row[index] || ''),
+                `reader-flow-table-cell${index === 0 ? ' reader-flow-table-row-start' : ''}`)));
+    }
+    const rendered = renderBlock(block, options);
+    // Quotes can span pages too; retain their quote styling on a splittable p.
+    if (block?.type === 'quote') return [{...rendered, tag: 'p'}];
+    return [rendered];
+}
+
 // Host hook: classifyUnit(text) -> block.
 export const blocksMixin = {
+    continuousReaderBlocks(text) {
+        const cfg = this.readerConfig();
+        if (!cfg.flow_complex_blocks) return [this.continuousReaderBlock(text)];
+        return renderFlowBlocks(this.classifyUnit(text), {
+            inline: cfg.inline, imageBase: cfg.image_base,
+            keypointsLabel: document.documentElement.lang.startsWith('zh') ? '要点' : 'Key points',
+        });
+    },
+
     continuousReaderBlock(text) {
         const cfg = this.readerConfig();
         return renderBlock(this.classifyUnit(text), { inline: cfg.inline, imageBase: cfg.image_base });

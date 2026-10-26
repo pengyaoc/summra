@@ -77,6 +77,7 @@ class ReaderConfig:
     hint_keys: frozenset[str] = frozenset()
     inline: str = 'markdown'
     image_base: str = ''
+    flow_complex_blocks: bool = False
 
     def __post_init__(self):
         ids = [mode.id for mode in self.modes]
@@ -130,6 +131,7 @@ class ReaderConfig:
             'extra_page_blocks': self.extra_page_blocks,
             'inline': self.inline,
             'image_base': self.image_base,
+            'flow_complex_blocks': self.flow_complex_blocks,
             'default_modes': list(self.default_modes),
             'modes': [
                 {

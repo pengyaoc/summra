@@ -95,6 +95,7 @@ def test_plainly_to_client_is_pinned_exactly():
         'cache_db_name': 'summra-reader-v2',
         'api_base': '/api',
         'extra_page_blocks': '',
+        'flow_complex_blocks': False,
         'inline': 'markdown',
         'image_base': '',
         'default_modes': ['plain', 'original'],
@@ -204,3 +205,9 @@ def test_library_card_hides_mode_label_for_single_mode_app():
     assert 'Beginning · Original' in multi
     linked = _render(src.replace("book, cover)", "book, cover, read_href='/r/7')"), make(), book=book)
     assert '<a class="library-read-action" href="/r/7">' in linked and 'data-library-read' not in linked
+
+
+def test_distill_flattens_complex_blocks_only_in_web_reader():
+    from distill.reader_config import DISTILL_READER
+    assert DISTILL_READER.to_client()['flow_complex_blocks'] is True
+    assert PLAINLY_READER.to_client()['flow_complex_blocks'] is False

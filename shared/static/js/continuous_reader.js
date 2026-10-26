@@ -288,9 +288,11 @@ export const continuousReaderMixin = {
                 } else if (unit.availability === 'gap') {
                     html.push(`<div class="reader-gap" data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="0">${modeConfig.label} unavailable for this section.</div>`);
                 } else {
-                    const block = this.continuousReaderBlock(unit.content || '');
-                    const className = block.className ? ` class="${block.className}"` : '';
-                    html.push(`<${block.tag}${className} data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.word_count || 0}">${block.content}</${block.tag}>`);
+                    for (const block of this.continuousReaderBlocks(unit.content || '')) {
+                        const className = block.className ? ` class="${block.className}"` : '';
+                        const flow = block.flow ? ' data-reader-flow="true"' : '';
+                        html.push(`<${block.tag}${className}${flow} data-reader-anchor="${unit.id}" data-reader-ordinal="${unit.ordinal}" data-reader-chapter="${unit.chapter_id}" data-reader-word-count="${unit.word_count || 0}">${block.content}</${block.tag}>`);
+                    }
                 }
             }
         }
@@ -334,12 +336,13 @@ export const continuousReaderMixin = {
         for (let index = 0; index < this.pagination.pages.length; index += 1) {
             const page = document.createElement('div');
             page.innerHTML = this.pagination.pages[index];
-            const text = [...page.querySelectorAll('[data-reader-anchor]')]
-                .filter(candidate => candidate.dataset.readerAnchor === paragraphId)
-                .map(candidate => this.readerLayout(reader.mode) === 'side_by_side'
+            const anchors = [...page.querySelectorAll('[data-reader-anchor]')]
+                .filter(candidate => candidate.dataset.readerAnchor === paragraphId);
+            const flow = anchors.some(anchor => anchor.dataset.readerFlow === 'true');
+            const text = anchors.map(candidate => this.readerLayout(reader.mode) === 'side_by_side'
                     ? (candidate.querySelector(`.side-by-side-cell.${this.readerMode(reader.mode).members[0].cell_class}`)?.textContent || candidate.textContent || '')
-                    : candidate.textContent || '').join('');
-            if (text) fragments.push({ index, text });
+                    : candidate.textContent || '').join(' ');
+            if (text) fragments.push({ index, text, flow });
         }
         const chinese = fragments.some(fragment => /\p{Script=Han}/u.test(fragment.text));
         const pages = fragments.map(({ index, text }) => ({index, size: chinese
@@ -347,7 +350,11 @@ export const continuousReaderMixin = {
             : text.trim().split(/\s+/).filter(Boolean).length}));
         const unit = reader?.unitsById?.get(paragraphId);
         const measured = pages.reduce((sum, page) => sum + page.size, 0);
-        return { pages, total: chinese ? measured : (unit?.word_count || unit?.canonical_word_count || measured) };
+        // Flattened tables repeat column labels for readability. Normalize the
+        // displayed flow so every continuation has a restorable offset without
+        // changing the underlying unit ID, content version or progress schema.
+        const flow = fragments.some(fragment => fragment.flow);
+        return { pages, total: chinese || flow ? measured : (unit?.word_count || unit?.canonical_word_count || measured) };
     },
 
     findContinuousPageForMarker(marker) {

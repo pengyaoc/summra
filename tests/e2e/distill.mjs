@@ -59,15 +59,16 @@ const inspectPage = (pg = page) => pg.evaluate(() => {
   for (const el of document.querySelectorAll('#continuous-reader-content [data-reader-anchor]')) {
     const r = el.getBoundingClientRect();
     if (r.height === 0 || getComputedStyle(el).display === 'none') continue;
-    // The block's own box must fit the page. A table or list may be taller inside than its box
-    // (it scrolls), but only if it really scrolls; a clipped block must not pass.
     if (r.bottom > pageBottom + 1) {
       overflowing.push(`${el.tagName}.${el.className} bottom=${Math.round(r.bottom)} page=${Math.round(pageBottom)}`);
-    } else if (el.matches('table.reader-table, .reader-list, .reader-keypoints') && el.scrollHeight > el.clientHeight + 1
-      && !['auto', 'scroll'].includes(getComputedStyle(el).overflowY)) {
-      overflowing.push(`${el.tagName}.${el.className} clipped, not scrollable (${el.scrollHeight} > ${el.clientHeight})`);
     }
   }
+  const nestedScrollers = [...document.querySelectorAll('#continuous-reader-content .pagination-page-container *')]
+    .filter(el => {
+      const css = getComputedStyle(el);
+      return (el.scrollHeight > el.clientHeight + 1 && ['auto', 'scroll'].includes(css.overflowY))
+        || (el.scrollWidth > el.clientWidth + 1 && ['auto', 'scroll'].includes(css.overflowX));
+    }).map(el => `${el.tagName}.${el.className}`);
   const merged = [];
   for (const list of document.querySelectorAll('#continuous-reader-content ul, #continuous-reader-content ol')) {
     const items = [...list.children].filter((c) => c.tagName === 'LI').map((c) => c.textContent);
@@ -80,11 +81,10 @@ const inspectPage = (pg = page) => pg.evaluate(() => {
   const img = [...document.querySelectorAll('#continuous-reader-content figure.reader-figure img')]
     .find((i) => i.getBoundingClientRect().height > 0);
   return {
-    overflowing, merged,
+    overflowing, merged, nestedScrollers,
     imageOk: img ? img.complete && img.naturalWidth > 0 : null,
-    hasTable: !!document.querySelector('#continuous-reader-content table.reader-table'),
-    hasScrollingList: [...document.querySelectorAll('#continuous-reader-content .reader-list, #continuous-reader-content .reader-keypoints')]
-      .some((e) => e.scrollHeight > e.clientHeight + 1),
+    hasTable: !!document.querySelector('#continuous-reader-content .reader-flow-table-cell'),
+    hasList: !!document.querySelector('#continuous-reader-content .reader-flow-item'),
   };
 });
 
@@ -110,10 +110,11 @@ const scanBlocks = (pg) => pg.evaluate(async () => {
 async function walkChapter(pg, chapter, minPages, shotPrefix) {
   await pg.goto(`${BASE}/books/${SLUG}/read?chapter=${chapter}`, { waitUntil: 'networkidle' });
   await anchorsReady(pg);
-  const seen = { image: false, table: false, scrollingList: false, imageBroken: false, pages: 0, overflow: [], merged: [] };
+  const seen = { image: false, table: false, list: false, nestedScrollers: [], imageBroken: false, pages: 0, overflow: [], merged: [] };
   for (let i = 0; i < 150 && (!(seen.image && seen.table) || i < minPages); i++, seen.pages++) {
     const info = await inspectPage(pg);
     seen.overflow.push(...info.overflowing);
+    seen.nestedScrollers.push(...info.nestedScrollers);
     seen.merged.push(...info.merged);
     if (info.imageOk !== null) {
       if (!seen.image) await pg.screenshot({ path: `${SHOTS}${shotPrefix}_figure.png` });
@@ -121,7 +122,7 @@ async function walkChapter(pg, chapter, minPages, shotPrefix) {
       if (!info.imageOk) seen.imageBroken = true;
     }
     if (info.hasTable && !seen.table) { seen.table = true; await pg.screenshot({ path: `${SHOTS}${shotPrefix}_table.png` }); }
-    if (info.hasScrollingList && !seen.scrollingList) { seen.scrollingList = true; await pg.screenshot({ path: `${SHOTS}${shotPrefix}_list.png` }); }
+    if (info.hasList && !seen.list) { seen.list = true; await pg.screenshot({ path: `${SHOTS}${shotPrefix}_list.png` }); }
     await pg.keyboard.press('ArrowRight');
     await pg.waitForTimeout(120);
   }
@@ -137,9 +138,9 @@ async function realKeypointsLabel(pg, slug, chapters) {
   await anchorsReady(pg);
   for (let i = 0; i < 120; i++) {
     const content = await pg.evaluate(() => {
-      const el = [...document.querySelectorAll('#continuous-reader-content .reader-keypoints')]
+      const el = [...document.querySelectorAll('#continuous-reader-content .reader-flow-keypoints-label')]
         .find((e) => e.getBoundingClientRect().height > 0);
-      return el ? getComputedStyle(el, '::before').content : null;
+      return el ? JSON.stringify(el.textContent) : null;
     });
     if (content) return content;
     await pg.keyboard.press('ArrowRight');
@@ -204,6 +205,7 @@ try {
       const seen = await walkChapter(pg, both.chapter, minPages, name === 'desktop' ? 'distill' : 'distill_mobile');
       check(seen.image && !seen.imageBroken, `${name}: figure images load (naturalWidth > 0)`);
       check(seen.image && seen.table, `${name}: paged through ${seen.pages} pages to an image and a table`);
+      check(seen.nestedScrollers.length === 0, `${name}: no nested scrollable reading components`);
       check(seen.overflow.length === 0, `${name}: no anchored block overflows its page${seen.overflow.length ? ': ' + [...new Set(seen.overflow)].slice(0, 3).join('; ') : ''}`);
       check(seen.merged.length === 0, `${name}: list items and table cells keep separating whitespace${seen.merged.length ? ': ' + seen.merged.slice(0, 3).join('; ') : ''}`);
       if (name === 'mobile') await pg.screenshot({ path: `${SHOTS}distill_mobile_reader.png` });
@@ -297,6 +299,54 @@ try {
   check(chineseSplit.markers.every(Boolean), 'Chinese saved offsets restore each continuation page');
 
   await page.screenshot({ path: `${SHOTS}distill_zh.png` });
+  const flatFlow = await page.evaluate(async () => {
+    const {applyReaderPlatform} = await import('/static/shared/js/platform.js');
+    class Fixture {classifyUnit(text) {return JSON.parse(text);}}
+    applyReaderPlatform(Fixture);
+    const app = new Fixture(); app.initReaderPlatform();
+    app.continuousReader = {active: true, mode: 'summary', unitsById: new Map()};
+    const words = (prefix, n) => Array.from({length:n}, (_, i) => `${prefix}${i}`).join(' ');
+    const blocks = [
+      {type:'ol', items:[words('L',500), 'Second item']},
+      {type:'table', header:['Topic','Explanation'], rows:[['Cell',words('T',650)],['Energy','All preserved']]},
+      {type:'keypoints', items:[words('K',450)]},
+    ];
+    const container = document.createElement('div'); container.className='continuous-reader-content';
+    container.style.cssText='position:absolute;left:-9999px;width:335px';
+    container.innerHTML=blocks.map((block,i)=>app.continuousReaderBlocks(JSON.stringify(block)).map(part=>
+      `<${part.tag} class="${part.className}" data-reader-flow="true" data-reader-anchor="90.${i}" data-reader-word-count="1">${part.content}</${part.tag}>`).join('')).join('');
+    const expected=container.textContent.replace(/\s/g,'');
+    document.querySelector('#continuous-reader-section').appendChild(container);
+    const cs=getComputedStyle(container);
+    const box=`width:${container.offsetWidth}px;padding:${cs.padding};box-sizing:${cs.boxSizing};font-size:${cs.fontSize};line-height:${parseFloat(cs.lineHeight)/parseFloat(cs.fontSize)}`;
+    app.calculatePages(container);
+    let text='', overflow=false, scroll=false, restore=true;
+    const details=[];
+    const sources=new Set();
+    for (const [index,html] of app.pagination.pages.entries()) {
+      const el=document.createElement('div'); el.className='pagination-page-container';
+      el.setAttribute('data-font',document.getElementById('continuous-reader-section').getAttribute('data-font'));
+      el.style.cssText=`position:absolute;left:-9999px;${box};height:${app.pagination.containerHeight}px;overflow:hidden`;
+      el.innerHTML=html; container.parentElement.appendChild(el);
+      text+=el.textContent.replace(/\s/g,'');
+      overflow ||= el.scrollHeight > app.pagination.containerHeight+1;
+      if (el.scrollHeight > app.pagination.containerHeight+1) details.push({index,scroll:el.scrollHeight,height:app.pagination.containerHeight,font:getComputedStyle(el).fontFamily,line:getComputedStyle(el).lineHeight,last:el.lastElementChild?.outerHTML.slice(-300)});
+      for (const child of el.querySelectorAll('*')) {
+        const css=getComputedStyle(child);
+        scroll ||= ['auto','scroll'].includes(css.overflowY) || ['auto','scroll'].includes(css.overflowX);
+      }
+      const anchor=el.querySelector('[data-reader-anchor]'); sources.add(anchor.dataset.readerAnchor);
+      app.pagination.currentPage=index;
+      restore &&= app.findContinuousPageForMarker({paragraph_id:anchor.dataset.readerAnchor,offset:app.continuousMarkerOffset(anchor)})===index;
+      el.remove();
+    }
+    container.remove();
+    return {pages:app.pagination.pages.length, exact:text===expected, overflow,scroll,restore,sources:sources.size,details};
+  });
+  check(flatFlow.pages > 5 && flatFlow.exact && flatFlow.sources === 3, 'long list items and table cells span pages with every word and source anchor preserved');
+  check(!flatFlow.overflow && !flatFlow.scroll, `flat list/table/keypoint pages neither clip nor create nested scroll areas (${JSON.stringify(flatFlow)})`);
+  check(flatFlow.restore, 'saved positions restore across all flattened-list and table pages');
+
   const zhLabel = await keypointsLabel(page, KEYPOINTS_ZH_SLUG);
   check(zhLabel === '"要点"', `zh .reader-keypoints::before is ${zhLabel}`);
 

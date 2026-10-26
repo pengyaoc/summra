@@ -136,7 +136,8 @@ def test_reader_shell_serialises_distill_config(app_env):
     config = json.loads(re.search(r'window\.READER_CONFIG = (\{.*?\});</script>', html).group(1))
     assert config['cache_db_name'] == 'distill-reader-v1'
     assert [m['id'] for m in config['modes']] == ['summary']
-    assert config['extra_page_blocks'] == 'table.reader-table, figure.reader-figure'
+    assert config['extra_page_blocks'] == 'figure.reader-figure'
+    assert config['flow_complex_blocks'] is True
 
 
 def test_reader_lang_follows_book(app_env, sample_book, write_book):

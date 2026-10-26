@@ -741,3 +741,10 @@ body.on-reader-page .main-content { padding-bottom: 0; }
 .reader-table { display: block; overflow: auto; max-height: calc(100dvh - 180px); margin: 0 0 1.25em; border-collapse: collapse; font-size: .9em; }
 .reader-table th, .reader-table td { padding: .4em .7em; border: 1px solid var(--rule-strong); text-align: left; vertical-align: top; }
 .reader-table th { background: var(--paper-deep); }
+
+/* Optional flat flow for complex web-reader blocks: ordinary paragraphs,
+   measured and split by the shared paginator, with no nested scroll boxes. */
+.reader-flow-item, .reader-flow-table-cell { overflow-wrap: anywhere; }
+.reader-flow-table-cell { margin-bottom: .65em; }
+.reader-flow-table-row-start { margin-top: 1.1em; padding-top: .6em; border-top: 1px solid var(--rule-strong); }
+.reader-flow-keypoints-label { font-size: .75em; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); }

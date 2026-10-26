@@ -1,5 +1,12 @@
 # Summra Work Log
 
+## 2026-10-26: Distill lists and tables flow across reader pages (local)
+
+- Replaced Distill web-reader list/keypoint containers with numbered or bulleted paragraphs, and tables with stacked cells labeled by their column headers. Long items/cells split through the shared paginator without nested scrolling. Added an opt-in shared flow renderer; Plainly retains its existing rendering, and Kindle keeps semantic tables/lists. Source blocks, unit IDs and content databases are unchanged.
+- All expanded paragraphs retain their source anchors. Saved offsets normalize against displayed flow (including repeated table labels), preserving continuation-page restoration. Inline emphasis, numbering, Chinese keypoint labels, empty/header-only tables and uneven table rows are covered.
+- Full-suite check: 1,122 passed, two deselected, nine failures outside this change: eight Gutenberg network-dependent tests fail in the restricted-network sandbox, and one concurrently edited source-chapter test expects the wrong segment payload shape. These files were left to their separate work.
+- Distill desktop/mobile/Kindle e2e passes. A synthetic long list/table/keypoint fixture spans nine pages with exact text, no clipping, no nested scrolling and correct saved-page restoration. Plainly side-by-side/verse regression passes, including real Tess pages. Build freshness and scoped whitespace checks pass. Local preview: http://localhost:5018; screenshot: /private/tmp/distill-flat-table-preview.jpg. Not committed or deployed.
+
 ## 2026-10-26: Distill iPhone search focus zoom (deployed)
 
 - User reported iPhone Chrome zooming on focus of the home search field, then allowing sideways panning. Search input was .9rem (14.4px), below iOS's auto-focus-zoom threshold. Set search input and language/category selectors to max(16px, 1rem), retaining accessibility scaling and unrestricted pinch zoom. Viewport meta unchanged.

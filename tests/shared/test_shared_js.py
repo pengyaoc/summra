@@ -79,7 +79,7 @@ const app = {
     continuousReader: {active: true, mode: 'original'},
     pagination: {},
     escapeHtml: value => value,
-    continuousReaderBlock: content => ({tag: 'p', content}),
+    continuousReaderBlocks: content => [{tag: 'p', content}],
     continuousIllustrationHtml: () => '<figure>illustration</figure>',
     initializePagination: () => {throw stop;},
 };
@@ -218,4 +218,49 @@ app.currentView='book';
 listeners.pagehide({persisted:true});
 listeners.pageshow({persisted:true});
 assert.equal(loads,1,'Restoring a book document must not reactivate the reader');
+""")
+
+
+def test_flow_blocks_flatten_lists_and_tables_without_losing_content():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/blocks.js','utf8');
+const {renderFlowBlocks}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const options={inline:'strict',keypointsLabel:'要点'};
+const numbered=renderFlowBlocks({type:'ol',items:['**First** item','Second <script>item</script>']},options);
+assert.equal(numbered.length,2);
+assert.ok(numbered.every(b=>b.tag==='p' && b.flow));
+assert.match(numbered[0].content,/1\. <strong>First<\/strong> item/);
+assert.match(numbered[1].content,/2\. Second &lt;script&gt;item&lt;\/script&gt;/);
+const keypoints=renderFlowBlocks({type:'keypoints',items:['Keep this','And this']},options);
+assert.ok(keypoints[0].content.includes('要点'));
+assert.ok(keypoints.map(b=>b.content).join(' ').includes('And this'));
+const table=renderFlowBlocks({type:'table',header:['Part','Chapters','Focus'],rows:[['Part I','1–2','Defining life'],['Part II','3–4','Alkaline vents']]},options);
+assert.equal(table.length,6);
+assert.ok(table.every(b=>b.tag==='p' && b.flow));
+assert.match(table[0].content,/<strong>Part:<\/strong> Part I/);
+assert.match(table[5].content,/<strong>Focus:<\/strong> Alkaline vents/);
+assert.equal(table.filter(b=>b.content.includes('Defining life')).length,1);
+assert.equal(renderFlowBlocks({type:'table',header:['Header only'],rows:[]},options)[0].content,'<strong>Header only</strong>');
+assert.equal(renderFlowBlocks({type:'table',rows:[['no header','extra cell']]},options).length,2);
+assert.equal(renderFlowBlocks({type:'quote',text:'Long quote'},options)[0].tag,'p');
+""")
+
+
+def test_flat_table_labels_do_not_break_saved_offsets():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/continuous_reader.js','utf8');
+const {continuousReaderMixin}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const texts=['Column: alpha','Column: beta','Column: gamma'];
+const anchor=text=>({dataset:{readerAnchor:'1.0',readerFlow:'true'},textContent:text});
+globalThis.document={createElement(){return {set innerHTML(v){this.index=+v;},querySelectorAll(){return [anchor(texts[this.index])];}};}};
+const app={...continuousReaderMixin,readerLayout:()=> 'single',
+ continuousReader:{mode:'summary',unitsById:new Map([['1.0',{word_count:3}]])},
+ pagination:{pages:['0','1','2'],currentPage:2}};
+const offset=app.continuousMarkerOffset(anchor(texts[2]));
+assert.equal(offset,2/3);
+assert.equal(app.findContinuousPageForMarker({paragraph_id:'1.0',offset}),2);
 """)
