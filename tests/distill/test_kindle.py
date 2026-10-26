@@ -153,3 +153,51 @@ def test_kindle_off_switch_serves_web_pages(app_env):
     assert 'class="kindle' not in html and 'window.READER_CONFIG' in html
     assert 'class="kindle' not in body(kget(client, '/'))
     assert 'class="kindle' in body(kget(client, '/?kindle=1'))
+
+
+def test_kindle_pages_and_progress_need_the_allow_list(app_env):
+    client = app_env[0]
+    for headers, status in (({'User-Agent': KINDLE_PW}, 401),
+                            ({'User-Agent': KINDLE_PW, 'X-Remote-Email': 'stranger@example.com'}, 403)):
+        for url in ('/', '/books/my-book', '/books/my-book/read', '/books/my-book/read?ch=1', '/?kindle=1'):
+            response = client.get(url, headers=headers)
+            assert response.status_code == status, (url, status)
+            assert 'class="kindle' not in body(response)
+        post = client.post('/api/kindle/progress', json={'book_id': 1, 'ch': 1, 'p': 0, 'text': 'summary'},
+                           headers=headers)
+        assert post.status_code == status
+
+
+def test_kindle_reader_unicode_digit_chapter_is_404(app_env):
+    assert kget(app_env[0], '/books/my-book/read?ch=%C2%B2').status_code == 404
+
+
+def test_kindle_progress_quote_is_none_for_captionless_image(app_env):
+    from distill.kindle_routes import _position
+    _, content_db, _, book_id = app_env
+    unit_id, quote = _position(content_db, book_id, 1, 4, 'summary')
+    assert quote is None and unit_id.endswith('.4')
+    assert _position(content_db, book_id, 1, 2, 'summary')[1] == 'h1 h2 x y'
+
+
+def test_kindle_feature_off_serves_web_and_404s_progress(app_env, monkeypatch):
+    import importlib
+    from dataclasses import replace
+
+    from distill import app_base, kindle_routes, reader_config
+    from shared.auth.pchauth.config import AuthConfig
+    from shared.reader.config import ReaderFeatures
+    client, content_db, user_db, _ = app_env
+    off = replace(reader_config.DISTILL_READER, features=ReaderFeatures(progress=True, kindle=False), kindle=None)
+    monkeypatch.setattr(kindle_routes, 'DISTILL_READER', off)
+    assert client.post('/api/kindle/progress', json={'book_id': 1, 'ch': 1, 'p': 0, 'text': 'summary'},
+                       headers=KINDLE_HEADERS).status_code == 404
+    # An app built with the feature off never registers the Kindle dispatch.
+    monkeypatch.setattr(reader_config, 'DISTILL_READER', off)
+    try:
+        monkeypatch.setattr(app_base, 'kindle_bp', importlib.reload(kindle_routes).bp)
+        app = app_base.create_app(content_db, user_db, AuthConfig(mode='required', allowed_emails=frozenset({ALLOWED})))
+        assert 'class="kindle' not in body(app.test_client().get('/', headers=KINDLE_HEADERS))
+    finally:
+        monkeypatch.undo()
+        importlib.reload(kindle_routes)

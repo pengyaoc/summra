@@ -26,7 +26,7 @@ bp = Blueprint('distill_kindle', __name__)
 LIBRARY_PAGE_SIZE = 7
 READING_ON_HOME = 3
 CONTENTS_PAGE_SIZE = 8
-TEXT = DISTILL_READER.kindle.default_text
+TEXT = 'summary'  # Distill's one text
 
 
 def _user_id():
@@ -111,7 +111,7 @@ def reader_page(slug):
     saved = _saved_position(book['id'], chapters)
     start = 0
     if 'ch' in request.args:
-        if not request.args['ch'].isdigit():
+        if not re.fullmatch(r'[0-9]+', request.args['ch']):
             return not_found()
         ordinal = int(request.args['ch'])
     else:
@@ -156,6 +156,7 @@ def _position(db, book_id, ordinal, index, text):
         return None
     blocks = chapter['blocks']
     quote = re.sub(r'\s+', ' ', block_text(blocks[index])).strip()[:180] if index < len(blocks) else None
+    quote = quote or None  # a block with no text (an image without a caption) has no quote
     return ReaderIndexMixin._reader_unit_id(chapter['id'], index), quote
 
 
