@@ -1,5 +1,25 @@
 # Summra Work Log
 
+## 2026-10-26: Distill phase 4 — deployed to the VM (complete; owner sign-in check pending)
+
+**Plainly.**
+- Pulled `main` to `f2e82f6`.
+- The VM's `summra.conf` static `<Directory>` gained `Options -Indexes +FollowSymLinks`. A backup is at `summra.conf.bak-pre-distill-*`.
+- Apache reloaded and `summra.service` restarted.
+- `/plainly/`, `/plainly/api/books` and `/plainly/static/shared/{css,js}/*` all return 200, gzipped.
+
+**Distill.**
+- New `deploy/distill/` holds `distill.service` (user unit for `summra`), `distill.conf` (Apache, `OIDCUnAuthAction auth`, everything proxied, no static Alias) and `distill.env.example`.
+- On the VM:
+  - Pillow installed in the venv.
+  - `/opt/summra/distill.env` (mode 600) binds `127.0.0.1:5002`, with its own proc name and pidfile, and allow-lists the owner only.
+  - `data/distill.db` copied up (154.6 MB, 54 books, md5 matched) and owned `summra` with mode 664.
+  - The unit is enabled, and `distill.conf` installed.
+- Checked on the VM: anonymous 401, stranger 403, owner 200. Pages are `private, no-cache`, images `private, max-age=3600`, and every link is `/distill`-prefixed. A Kindle user agent gets the e-ink library.
+- Checked publicly: every `/distill` path (page, static, API, image) redirects a signed-out visitor to Google sign-in, and a forged `X-Remote-Email` doesn't get past it.
+- Port 5002 added to the vault port registry.
+- CLAUDE.md gained "Deploying Distill (same VM)".
+
 ## 2026-10-25: Distill phase 3 final-review fixes (complete)
 
 Fixed the whole-branch review findings (I1-I4, M1-M9; M10 skipped, outside the branch). I1: segment fetch URL carries `&v=<manifest content_version>` (IndexedDB already keyed on content_version); `app.min.js` rebuilt. I2: `GUNICORN_PIDFILE` / `GUNICORN_PROC_NAME` (defaults unchanged). I3: CLAUDE.md deploy section gained the `+FollowSymLinks` step and `shared/**` / `distill/**` restart rows. I4/M1/M5/M8/M9: ERD "Adding a third app" rewritten with the auth-first order, `install_web_basics`, private cache hook and one-app-per-process; symlink depths corrected; shared localStorage and same-origin XSS noted; PRD 17.1 says the sign-in prompt is Apache's. M2: Kindle glue (`account_user_id`, `render_page`, `not_found_page`, page sizes) moved to `shared.kindle.pages`. M3: block-type CSS moved to shared `reader.css`; the "Key points" label stays in `distill.css` as app copy. M4: Kindle progress rejects bool ids. M6: Distill book page uses the chapter outline plus `count_chapters`. M7: Distill Kindle reader maps `?chapter=<id>` to its ordinal. Full pytest 1076 passed; node 60; Plainly e2e 14/14; style snapshot clean; `distill.mjs` passed.

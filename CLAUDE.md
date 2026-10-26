@@ -428,7 +428,7 @@ curl -sI https://<PROD_DOMAIN>/plainly/static/shared/css/base.css | head -1   # 
 | `/home/<SERVICE_USER>/.config/systemd/user/<SYSTEMD_UNIT>` or `service.env` | **Yes** + `systemctl --user daemon-reload` (as `<SERVICE_USER>`, see service control above) first for unit-file changes |
 | `shared/**/*.py`, `shared/templates/**` | **Yes** — restart every app that runs on the VM (Plainly, and Distill once deployed); both import `shared` |
 | `shared/static/**` (CSS, JS, fonts) | No — Apache serves it through the `static/shared` symlink (see the symlink step in step 1). Plainly's bundled `app.min.js` embeds shared JS, so rebuild it and treat a changed bundle as a `plainly/frontend/static` change |
-| `distill/**` (any `.py` or template) | **Yes** — restart Distill only (its unit; runbook is phase 4) |
+| `distill/**` (any `.py` or template) | **Yes** — restart Distill only (`<DISTILL_UNIT>`; see "Deploying Distill" below) |
 | `plainly/frontend/templates/**` | **Yes** — gunicorn's Jinja caches compiled templates (debug is off); without a restart the old page keeps being served (seen 2026-10-17) |
 | `plainly/frontend/static/**` (CSS, JS, images) | No — Apache serves directly. Bump cache-busting query string in `index.html` if you need clients to pull a new asset |
 | `data/books/**` raw text | No — only used during ingestion, not at request time |
@@ -494,3 +494,38 @@ curl -sSL https://<PROD_DOMAIN>/api/books | python3 -c "import sys, json; d=json
 ```
 
 **Backups accumulate.** `<REMOTE_DB_PATH>.bak-pre-copy-*` on the VM is root-owned and ~170M each. Periodically: `sudo rm <REMOTE_DB_PATH>.bak-pre-copy-*` after you're sure the deploy is healthy (keep at most the last 1–2).
+
+## Deploying Distill (same VM)
+
+Distill is the owner-only summary reader at `/distill` on the same host. It shares Plainly's checkout, venv and `<SERVICE_USER>`, but runs its own gunicorn.
+
+**Shape:**
+- **Service.** Unit `<DISTILL_UNIT>`, a systemd *user* unit for `<SERVICE_USER>`, installed from `deploy/distill/distill.service`. It runs `gunicorn -c deploy/gunicorn_config.py distill.app_prod:app`.
+- **Settings.** `EnvironmentFile=<REMOTE_REPO_PATH>/distill.env` is VM-only, mode 600, and made from `deploy/distill/distill.env.example`. It sets:
+  - `GUNICORN_BIND=127.0.0.1:<DISTILL_PORT>`, plus its own `GUNICORN_PROC_NAME` and `GUNICORN_PIDFILE`
+  - absolute `DISTILL_DB` / `DISTILL_USER_DB` under `<REMOTE_REPO_PATH>/data/`
+  - `DISTILL_AUTH_MODE=required`, `DISTILL_ALLOWED_EMAILS=<owner email>`
+- **Apache.** The fragment `/etc/apache2/service-locations/distill.conf` is installed from `deploy/distill/distill.conf`.
+  - It sets `OIDCUnAuthAction auth`, so signed-out visitors go to Google sign-in.
+  - Everything is proxied to gunicorn, static files included. There is no Apache `Alias`: Distill's static files must not skip sign-in or be cached `public`.
+- **App guard.** `distill.app_prod` refuses to start unless the auth mode is `required`, and the app returns 403 to any non-allow-listed email.
+- **Database.** `distill.db` holds the content and images. Push it from local with the same snapshot → scp → md5 → stop → mv → chown/chmod 664 → start flow as step 4 above, using `<DISTILL_UNIT>` and `<REMOTE_REPO_PATH>/data/distill.db`. Run `sqlite3 data/distill.db "pragma wal_checkpoint(TRUNCATE)"` locally first. Never push `distill_user.db`: it holds reading progress.
+
+**First install** (as done 2026-10-26). Run as root via `gcloud compute ssh`:
+1. `pip install -r distill/requirements.txt` in the venv (Pillow).
+2. Copy the env file from the example and fill in the allow-list.
+3. Copy the unit to `/home/<SERVICE_USER>/.config/systemd/user/`, then `daemon-reload` and `enable --now <DISTILL_UNIT>`.
+4. Copy `distill.conf` into `service-locations/`, run `apachectl configtest`, then `systemctl reload apache2`.
+
+**Restart:** the same service-control commands as Plainly, with `<DISTILL_UNIT>`.
+
+**Verify after deploy:**
+
+```sh
+# On the VM: anonymous 401, stranger 403, owner 200
+curl -sS -o /dev/null -w 'anon %{http_code}\n' http://127.0.0.1:<DISTILL_PORT>/
+curl -sS -o /dev/null -H 'X-Remote-Email: stranger@example.com' -w 'stranger %{http_code}\n' http://127.0.0.1:<DISTILL_PORT>/
+curl -sS -o /dev/null -H 'X-Remote-Email: <owner email>' -w 'owner %{http_code}\n' http://127.0.0.1:<DISTILL_PORT>/
+# Public: a signed-out request is redirected to accounts.google.com
+curl -sS -o /dev/null -w '%{http_code} -> %{redirect_url}\n' https://<SITE_HOST>/distill/
+```
