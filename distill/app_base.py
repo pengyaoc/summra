@@ -12,6 +12,7 @@ from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
 from shared.auth.pchauth.flask_adapter import init_pchauth
 from shared.auth.user_models import UserDatabase
+from shared.reader.blocks import block_element
 from shared.reader.platform import install_reader_platform
 from shared.web import install_shared_ui, install_web_basics
 
@@ -34,6 +35,7 @@ def create_app(content_db=None, user_db=None, auth_config=None) -> Flask:
 
     install_reader_platform(app, DISTILL_READER, lambda: app.config['CONTENT_DB'], user_db)
     app.register_blueprint(bp)
+    app.jinja_env.globals['block_element'] = block_element
 
     @app.context_processor
     def inject_environment():

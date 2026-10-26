@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="{% block lang %}en{% endblock %}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}Distill{% endblock %}</title>
+    <script>window.APP_BASE_PATH = {{ (base_path | default('')) | tojson }};</script>
+    {% include 'shared/reader/_config_script.html' %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/base.css') }}{{ asset_v('shared/css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/reader.css') }}{{ asset_v('shared/css/reader.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/distill.css') }}{{ asset_v('css/distill.css') }}">
+</head>
+<body{% block body_attrs %}{% endblock %}>
+{% block header %}
+    <header class="distill-header">
+        <a class="distill-wordmark" href="{{ base_path }}/">Distill</a>
+    </header>
+{% endblock %}
+{% block content %}{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

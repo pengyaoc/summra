@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% from 'shared/_library_card.html' import library_card with context %}
+{% from '_cover.html' import cover with context %}
+{% block title %}Library · Distill{% endblock %}
+{% block content %}
+<main class="distill-main">
+{% if reading %}
+    <section class="distill-section" aria-labelledby="reading-now-heading">
+        <h2 id="reading-now-heading">Reading now</h2>
+        <div class="library-cards">
+{% for card in reading %}
+            {{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read') }}
+{% endfor %}
+        </div>
+    </section>
+{% endif %}
+    <section class="distill-section" aria-labelledby="all-books-heading">
+        <h2 id="all-books-heading">All books</h2>
+        <div class="distill-grid">
+{% for book in books %}
+            <a class="distill-tile" href="{{ base_path }}/books/{{ book.slug }}">
+                {{ cover(book) }}
+                <h3>{{ book.title }}</h3>
+                <p>{{ book.author }}</p>
+            </a>
+{% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

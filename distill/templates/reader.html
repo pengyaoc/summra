@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block lang %}{{ book.lang }}{% endblock %}
+{% block title %}{{ book.title }} · Distill{% endblock %}
+{% block body_attrs %} class="on-chapter-page on-reader-page"{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+    <main class="main-content">
+{% set reader_hidden = False %}
+{% include 'shared/reader/_continuous_reader.html' %}
+{% include 'shared/reader/_settings_panel.html' %}
+    </main>
+{% endblock %}
+{% block scripts %}
+    <script>window.DISTILL_BOOK = {{ {'id': book.id, 'slug': book.slug, 'title': book.title, 'author': book.author}|tojson }};</script>
+    <script src="{{ url_for('static', filename='shared/js/base_path.js') }}{{ asset_v('shared/js/base_path.js') }}"></script>
+    <script src="{{ url_for('static', filename='shared/js/reader_state.js') }}{{ asset_v('shared/js/reader_state.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/distill_reader.js') }}{{ asset_v('js/distill_reader.js') }}"></script>
+{% endblock %}

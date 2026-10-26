@@ -1,10 +1,84 @@
-"""Distill's own routes. The reader API, progress and sign-in come from the
-shared platform; this blueprint holds the pages (Task 8) and the image route."""
-from flask import Blueprint, abort, current_app, make_response, request
+"""Distill's own routes: the pages (library, book, reader) and the private
+image route. The reader API, progress and sign-in come from the shared platform."""
+from flask import Blueprint, abort, current_app, g, make_response, render_template, request
 
 from shared.auth.pchauth.flask_adapter import login_required
+from shared.progress.routes import library_cards
 
 bp = Blueprint('distill', __name__)
+
+
+def progress_label(card, chapter_count) -> str:
+    """Where a reader is in a book: 'Overview', 'Chapter 3 of 12', or '' with no place saved.
+    The count excludes the Overview (chapter_number 0)."""
+    chapter = (card or {}).get('current_chapter')
+    if not chapter:
+        return ''
+    if chapter['chapter_number'] == 0:
+        return 'Overview'
+    return f"Chapter {chapter['chapter_number']} of {chapter_count}"
+
+
+def _db():
+    return current_app.config['CONTENT_DB']
+
+
+def _chapter_count(chapters) -> int:
+    return sum(1 for chapter in chapters if chapter['ordinal'] > 0)
+
+
+def _not_found_page():
+    return render_template('not_found.html'), 404
+
+
+def _card_for(book_id):
+    """The signed-in reader's library card for one book, if they have started it."""
+    cards = library_cards(g.user_id)
+    return next((c for c in cards['continue_reading'] + cards['finished'] if c['id'] == book_id), None)
+
+
+@bp.route('/')
+@login_required
+def library():
+    db = _db()
+    books = sorted(db.list_books(), key=lambda b: (b['imported_at'] or '', b['id']), reverse=True)
+    by_id = {b['id']: b for b in books}
+    reading = []
+    for card in library_cards(g.user_id)['continue_reading']:
+        book = by_id.get(card['id'])
+        if not book:
+            continue
+        label = progress_label(card, _chapter_count(db.get_chapters(book['id'])))
+        # The shared card macro prints current_chapter.chapter_title as its location line.
+        reading.append({**card, 'cover_image': book['cover_image'],
+                        'current_chapter': {'chapter_title': label} if label else None})
+    return render_template('library.html', reading=reading, books=books)
+
+
+@bp.route('/books/<slug>')
+@login_required
+def book_page(slug):
+    book = _db().get_book_by_slug(slug)
+    if not book:
+        return _not_found_page()
+    chapters = _db().get_chapters(book['id'])
+    card = _card_for(book['id'])
+    toc = []  # [(part_title, [chapter, ...])] in reading order
+    for chapter in chapters:
+        if not toc or toc[-1][0] != chapter['part_title']:
+            toc.append((chapter['part_title'], []))
+        toc[-1][1].append(chapter)
+    return render_template(
+        'book.html', book=book, toc=toc, card=card,
+        label=progress_label(card, _chapter_count(chapters)),
+        percent=card['furthest_percentage'] if card else 0)
+
+
+@bp.route('/books/<slug>/read')
+@login_required
+def reader(slug):
+    book = _db().get_book_by_slug(slug)
+    return render_template('reader.html', book=book) if book else _not_found_page()
 
 
 @bp.route('/books/<slug>/images/<name>')

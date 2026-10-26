@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% from '_cover.html' import cover with context %}
+{% block lang %}{{ book.lang }}{% endblock %}
+{% block title %}{{ book.title }} · Distill{% endblock %}
+{% block content %}
+<main class="distill-main distill-book">
+    <a class="distill-back" href="{{ base_path }}/">← Library</a>
+    <section class="distill-book-head">
+        {{ cover(book) }}
+        <div>
+            <h1>{{ book.title }}</h1>
+            <p class="distill-author">{{ book.author }}</p>
+{% if label %}
+            <p class="distill-progress">{{ label }}{% if percent %} · {{ percent }}%{% endif %}</p>
+{% endif %}
+            <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read">{{ 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
+        </div>
+    </section>
+    <section class="distill-toc" aria-labelledby="toc-heading">
+        <h2 id="toc-heading">Contents</h2>
+{% for part_title, chapters in toc %}
+{% if part_title %}
+        <h3 class="toc-part-title">{{ part_title }}</h3>
+{% endif %}
+        <ol class="toc-list">
+{% for chapter in chapters %}
+            <li><a href="{{ base_path }}/books/{{ book.slug }}/read?chapter={{ chapter.id }}">{{ chapter.title }}</a></li>
+{% endfor %}
+        </ol>
+{% endfor %}
+    </section>
+{% if book.sources %}
+    <section class="distill-sources" aria-labelledby="sources-heading">
+        <h2 id="sources-heading">Sources</h2>
+        <div class="distill-source-blocks">
+{% for source in book.sources %}
+            {{ block_element(source, loop.index0, base_path ~ '/books/' ~ book.slug ~ '/') }}
+{% endfor %}
+        </div>
+    </section>
+{% endif %}
+</main>
+{% endblock %}

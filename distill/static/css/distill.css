@@ -1,0 +1,57 @@
+/* Distill: library, book page and reader block styling, on the shared tokens. */
+
+/* The shared reader hides its panels and status line with .hidden but does not define it. */
+.hidden { display: none !important; }
+.main-content { flex: 1; padding: 0 0 40px 0; }
+
+.distill-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule); background: var(--surface); }
+.distill-wordmark { color: var(--ink); font-family: var(--font-serif); font-size: 1.35rem; font-weight: 700; letter-spacing: .01em; text-decoration: none; }
+
+.distill-main { max-width: 1040px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.distill-main h1 { margin: 0 0 .35rem; font-family: var(--font-serif); font-size: 2rem; line-height: 1.2; }
+.distill-section { margin-bottom: 2.5rem; }
+.distill-section h2, .distill-toc h2, .distill-sources h2 { margin: 0 0 1rem; font-family: var(--font-serif); font-size: 1.3rem; }
+
+/* Covers: the real image, or a card built from the title. */
+.distill-cover { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--cover-placeholder-bg); box-shadow: var(--shadow); }
+.book-cover-placeholder { display: flex; align-items: center; justify-content: center; padding: 10%; background: linear-gradient(160deg, var(--paper-deep), var(--rule-strong)); color: var(--ink); text-align: center; overflow: hidden; }
+.book-cover-placeholder span { font-family: var(--font-serif); font-size: .9rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.library-card .distill-cover { width: 108px; }
+@media (max-width: 640px) { .library-card .distill-cover { width: 82px; } }
+
+.distill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem 1.25rem; }
+.distill-tile { display: block; color: inherit; text-decoration: none; }
+.distill-tile:hover h3 { text-decoration: underline; }
+.distill-tile h3 { margin: .6rem 0 .15rem; font-family: var(--font-serif); font-size: 1rem; line-height: 1.25; }
+.distill-tile p { margin: 0; color: var(--ink-muted); font-size: .85rem; }
+
+.distill-back { display: inline-block; margin-bottom: 1rem; color: var(--ink-muted); font-size: .9rem; text-decoration: none; }
+.distill-book-head { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 1.75rem; align-items: start; margin-bottom: 2.5rem; }
+.distill-author { margin: 0 0 .75rem; color: var(--ink-muted); font-size: 1.05rem; }
+.distill-progress { margin: 0 0 1rem; color: var(--ink-muted); font-size: .9rem; font-weight: 650; }
+.library-read-action { text-decoration: none; }
+@media (max-width: 640px) { .distill-book-head { grid-template-columns: 100px minmax(0, 1fr); gap: 1rem; } .distill-main h1 { font-size: 1.5rem; } }
+
+.toc-part-title { margin: 1.5rem 0 .4rem; color: var(--ink-muted); font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.toc-list { margin: 0; padding: 0; list-style: none; }
+.toc-list li { border-bottom: 1px solid var(--rule); }
+.toc-list a { display: block; padding: .6rem 0; color: var(--ink); text-decoration: none; }
+.toc-list a:hover { color: var(--accent); }
+
+.distill-sources { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule-strong); color: var(--ink-muted); font-size: .9rem; }
+.distill-source-blocks img { max-width: 100%; }
+
+/* Reader blocks (shared/static/js/blocks.js vocabulary). */
+.reader-quote { margin: 0 0 1.25em; padding: .1em 0 .1em 1em; border-left: 3px solid var(--rule-strong); color: var(--ink-muted); font-style: italic; }
+.reader-list { margin: 0 0 1.25em; padding-left: 1.5em; }
+.reader-list li { margin-bottom: .3em; }
+.reader-keypoints { margin: 0 0 1.25em; padding: .85em 1em .85em 2.2em; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--paper-deep); }
+.reader-keypoints::before { content: "Key points"; display: block; margin: 0 0 .4em -1.2em; font-size: .75em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
+.reader-keypoints:lang(zh)::before { content: "要点"; }
+.reader-keypoints li { margin-bottom: .3em; }
+.reader-figure { margin: 0 0 1.25em; }
+.reader-figure img { display: block; width: 100%; height: 40vh; object-fit: contain; }
+.reader-figure figcaption { margin-top: .4em; color: var(--ink-muted); font-size: .85em; text-align: center; }
+.reader-table { display: block; overflow: auto; max-height: calc(100dvh - 180px); margin: 0 0 1.25em; border-collapse: collapse; font-size: .9em; }
+.reader-table th, .reader-table td { padding: .4em .7em; border: 1px solid var(--rule-strong); text-align: left; vertical-align: top; }
+.reader-table th { background: var(--paper-deep); }

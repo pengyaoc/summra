@@ -11,34 +11,9 @@ from shared.auth.pchauth.config import AuthConfig
 from shared.auth.user_models import UserDatabase
 from shared.progress import routes as progress_routes
 
+from .conftest import ALLOWED, HEADERS, pin_platform_globals
+
 ROOT = Path(__file__).resolve().parents[2]
-ALLOWED = 'me@example.com'
-HEADERS = {'X-Remote-Email': ALLOWED}
-
-
-def pin_platform_globals(monkeypatch):
-    # The reader platform keeps its db handles in module globals (last install
-    # wins). Pin them to their current values first so monkeypatch restores
-    # them and Plainly tests in the same process are unaffected.
-    for module, name in ((progress_routes, 'user_db'), (progress_routes, 'content_db'), (whoami, 'user_db')):
-        monkeypatch.setattr(module, name, getattr(module, name))
-
-
-@pytest.fixture
-def app_env(tmp_path, monkeypatch, sample_book, write_book):
-    pin_platform_globals(monkeypatch)
-
-    from distill.app_base import create_app
-    content_db = DistillDatabase(tmp_path / 'distill.db')
-    book_id = content_db.import_book(write_book(sample_book))
-    user_db = UserDatabase(tmp_path / 'user.db', valid_hints=frozenset({'reader_nav_desktop'}))
-    app = create_app(content_db, user_db, AuthConfig(mode='required', allowed_emails=frozenset({ALLOWED})))
-    return app.test_client(), content_db, user_db, book_id
-
-
-@pytest.fixture
-def client(app_env):
-    return app_env[0]
 
 
 def test_unknown_email_gets_403_on_pages_images_and_api(client, app_env):
