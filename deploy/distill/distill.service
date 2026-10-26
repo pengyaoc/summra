@@ -1,0 +1,28 @@
+# Distill systemd --user unit.
+#
+# Installed to ~/.config/systemd/user/distill.service for the same `summra`
+# Linux user that runs Plainly (both apps share the /opt/summra checkout and
+# venv). Per-host values live in /opt/summra/distill.env — see
+# distill.env.example next to this file.
+
+[Unit]
+Description=Distill private book-summary reader
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/summra
+EnvironmentFile=/opt/summra/distill.env
+ExecStart=/opt/summra/venv/bin/gunicorn -c deploy/gunicorn_config.py distill.app_prod:app
+Restart=on-failure
+RestartSec=5
+
+# Same sandbox as summra.service: only data/ (distill.db, distill_user.db
+# and their -wal/-shm siblings) is writable at runtime.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/summra/data
+
+[Install]
+WantedBy=default.target
