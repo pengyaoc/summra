@@ -30,7 +30,7 @@ def _js_render(block_list, image_base):
 def test_js_and_python_render_identically():
     cases = json.loads((FIXTURES / 'blocks.json').read_text(encoding='utf-8'))
     block_list = [c['block'] for c in cases] + [{'type': 'callout', 'text': '*x*'}, {}]
-    for image_base in ('', '/distill/books/x/'):
+    for image_base in ('', '/distill/books/x/', '/x"><script>&/'):
         js = _js_render(block_list, image_base)
         for block, rendered in zip(block_list, js, strict=True):
             tag, class_name, content = blocks.render_block(block, image_base=image_base)

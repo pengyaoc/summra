@@ -56,6 +56,17 @@ def test_library_reading_now_shows_progress_label(app_env):
     assert html.index('Reading now') < html.index('All books')
 
 
+def test_library_counts_chapters_without_loading_blocks(app_env, monkeypatch):
+    client, content_db, _, book_id = app_env
+    chapter = content_db.get_chapters(book_id)[1]
+    client.post('/api/progress/v2/mutations', json=_mutation(book_id, chapter['id']), headers=HEADERS)
+
+    def boom(_book_id):
+        raise AssertionError('library must not load chapter blocks')
+    monkeypatch.setattr(content_db, 'get_chapters', boom)
+    assert 'Chapter 1 of 3' in get(client, '/').get_data(as_text=True)
+
+
 def test_book_page_toc_grouped_by_part_and_overview_first(app_env):
     client, content_db, _, book_id = app_env
     chapters = content_db.get_chapters(book_id)

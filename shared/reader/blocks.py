@@ -62,7 +62,7 @@ def render_block(block, image_base='') -> tuple:
         caption = block.get('caption')
         figcaption = f' <figcaption>{format_inline(caption)}</figcaption>' if caption else ''
         return 'figure', 'reader-figure', Markup(
-            f'<img src="{image_base}{_quote_attr(block.get("src"))}" alt="">{figcaption}')
+            f'<img src="{_quote_attr(image_base)}{_quote_attr(block.get("src"))}" alt="">{figcaption}')
     return 'p', '', format_inline(block.get('text'))
 
 

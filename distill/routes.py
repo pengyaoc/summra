@@ -48,7 +48,7 @@ def library():
         book = by_id.get(card['id'])
         if not book:
             continue
-        label = progress_label(card, _chapter_count(db.get_chapters(book['id'])))
+        label = progress_label(card, db.count_chapters(book['id']))
         # The shared card macro prints current_chapter.chapter_title as its location line.
         reading.append({**card, 'cover_image': book['cover_image'],
                         'current_chapter': {'chapter_title': label} if label else None})

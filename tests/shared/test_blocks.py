@@ -47,6 +47,12 @@ def test_block_element_sets_data_i():
     assert image == '<figure class="reader-figure" data-i="2"><img src="/b/images/a.png" alt=""></figure>'
 
 
+def test_image_base_is_attribute_escaped():
+    _, _, content = blocks.render_block({'type': 'image', 'src': 'a.png'}, image_base='/x"><script>&/')
+    assert '<script>' not in content and '"><' not in content
+    assert 'src="/x&quot;&gt;&lt;script&gt;&amp;/a.png"' in content
+
+
 def test_unknown_type_falls_back_to_p():
     assert blocks.render_block({'type': 'callout', 'text': 'Hi *there*'}) == ('p', '', 'Hi <em>there</em>')
 

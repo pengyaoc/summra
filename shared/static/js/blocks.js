@@ -64,7 +64,7 @@ export function renderBlock(block, { inline, imageBase = '' } = {}) {
         }
         case 'image': {
             const caption = block.caption ? ` <figcaption>${fmt(block.caption)}</figcaption>` : '';
-            return { tag: 'figure', className: 'reader-figure', content: `<img src="${imageBase}${quoteAttr(block.src)}" alt="">${caption}` };
+            return { tag: 'figure', className: 'reader-figure', content: `<img src="${quoteAttr(imageBase)}${quoteAttr(block.src)}" alt="">${caption}` };
         }
         default:
             return { tag: 'p', className: '', content: fmt(block?.text) };

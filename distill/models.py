@@ -169,6 +169,15 @@ class DistillDatabase(ReaderIndexMixin):
         finally:
             conn.close()
 
+    def count_chapters(self, book_id: int) -> int:
+        """Chapters excluding the Overview (ordinal 0), without loading any blocks."""
+        conn = self.get_connection()
+        try:
+            return conn.execute('SELECT COUNT(*) FROM chapters WHERE book_id = ? AND ordinal > 0',
+                                (book_id,)).fetchone()[0]
+        finally:
+            conn.close()
+
     def get_image(self, book_id: int, name: str) -> Optional[Tuple[str, bytes]]:
         conn = self.get_connection()
         try:

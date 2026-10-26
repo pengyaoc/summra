@@ -172,3 +172,12 @@ def test_get_book_cover_image_name(db, sample_book, write_book):
 
     del sample_book["cover"]
     assert db.get_book(db.import_book(write_book(sample_book)))["cover_image"] is None
+
+
+def test_count_chapters_excludes_overview(db, sample_book, write_book):
+    book_id = db.import_book(write_book(sample_book))
+    assert db.count_chapters(book_id) == 3  # Overview + 3 chapters
+    assert db.count_chapters(9999) == 0
+    sample_book.update(slug='no-overview', overview=[])
+    other = db.import_book(write_book(sample_book))
+    assert db.count_chapters(other) == 2  # ordinals 0..2: the first chapter sits at ordinal 0
