@@ -1,10 +1,12 @@
 # Summra Work Log
 
-## 2026-10-26: Distill search and drop logo deployment (in progress)
+## 2026-10-26: Distill search and drop logo deployment (complete)
 
 - Owner authorized commit, push and deployment. Current branch matches origin/main at 2ea7a86. Production checkout is at f2e82f6 with no tracked edits; existing untracked backend/config files will be preserved.
 - Full suite passed: 1,106 tests, two deselected. All 160 Distill tests pass. Browser checks for typeahead and combined filters completed before this deploy.
-- Code deployment only: fast-forward production, snapshot its Distill content DB before the additive categories migration, restart Distill, verify access controls, filters, static assets, content fingerprints and Plainly health. No user-progress DB copy or shared code changes.
+- Committed and pushed 38c6397 to origin/main; production fast-forwarded to that revision and Distill restarted successfully. Verified rollback snapshot: `/opt/summra/data/distill.db.bak-pre-search-38c6397`. Additive categories column migrated on startup; SQLite quick_check passes. User-progress DB was not copied or modified by the deployment.
+- Production checks: anonymous backend 401, stranger 403, owner 200 with private caching; public `/distill/` redirects to Google sign-in (302), and `/plainly/` remains 200. Owner responses contain the fixed drop, typeahead metadata for 54 books, correct `/distill` form/navigation paths and the new CSS. Chinese filter returns six books; Chinese + Science & technology + Chinese query returns one; empty search and book detail verified.
+- Exact pre/post SHA-256 fingerprints match for existing book fields (54 books), all chapters (1,564), image BLOBs (886), and reader units (11,374). No chapter content, cover art, reader units, shared code, or Plainly service changes. Signed-in browser checks were completed locally; production verified through trusted loopback owner requests because the browser had no active sign-in session.
 
 ## 2026-10-26: Distill drop logo selected; typeahead (local preview)
 
