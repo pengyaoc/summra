@@ -726,3 +726,18 @@ body.on-reader-page .main-content { padding-bottom: 0; }
     .reader-book-title { display: none; }
     .continuous-reader-content { padding: .75rem 1rem 0; }
 }
+
+/* Block vocabulary (shared/static/js/blocks.js): quote, list, keypoints, table
+   and figure. The max-heights keep a block inside one page for pagination.
+   Label copy for a keypoints block is the app's, in its own stylesheet. */
+.reader-quote { margin: 0 0 1.25em; padding: .1em 0 .1em 1em; border-left: 3px solid var(--rule-strong); color: var(--ink-muted); font-style: italic; }
+.reader-list { max-height: calc(100dvh - 180px); overflow: auto; margin: 0 0 1.25em; padding-left: 1.5em; }
+.reader-list li { margin-bottom: .3em; }
+.reader-keypoints { max-height: calc(100dvh - 180px); overflow: auto; margin: 0 0 1.25em; padding: .85em 1em .85em 2.2em; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--paper-deep); }
+.reader-keypoints li { margin-bottom: .3em; }
+.reader-figure { margin: 0 0 1.25em; }
+.reader-figure img { display: block; width: 100%; height: 40vh; object-fit: contain; }
+.reader-figure figcaption { margin-top: .4em; color: var(--ink-muted); font-size: .85em; text-align: center; }
+.reader-table { display: block; overflow: auto; max-height: calc(100dvh - 180px); margin: 0 0 1.25em; border-collapse: collapse; font-size: .9em; }
+.reader-table th, .reader-table td { padding: .4em .7em; border: 1px solid var(--rule-strong); text-align: left; vertical-align: top; }
+.reader-table th { background: var(--paper-deep); }

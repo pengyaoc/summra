@@ -111,6 +111,20 @@ def test_kindle_reader_resumes_saved_chapter_and_index(app_env):
     assert kget(client, '/books/my-book/read?ch=x').status_code == 404
 
 
+def test_kindle_reader_honours_web_chapter_id(app_env):
+    """A web contents link (?chapter=<id>) opened on a Kindle lands on that chapter."""
+    client, content_db, _, book_id = app_env
+    chapters = content_db.get_chapters(book_id)
+    target = chapters[2]
+    html = body(kget(client, f"/books/my-book/read?chapter={target['id']}"))
+    assert f"data-ch=\"{target['ordinal']}\"" in html and 'data-start="0"' in html
+    # An explicit ch wins; an unknown or malformed id is a 404.
+    assert f"data-ch=\"{chapters[1]['ordinal']}\"" in body(
+        kget(client, f"/books/my-book/read?chapter={target['id']}&ch={chapters[1]['ordinal']}"))
+    assert kget(client, '/books/my-book/read?chapter=999999').status_code == 404
+    assert kget(client, '/books/my-book/read?chapter=x').status_code == 404
+
+
 def test_kindle_progress_records_summary_marker_with_quote(app_env):
     client, content_db, user_db, book_id = app_env
     chapter = content_db.get_chapters(book_id)[1]

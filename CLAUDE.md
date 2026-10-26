@@ -410,6 +410,13 @@ sudo -u <VM_USER> bash -c 'cd <REMOTE_REPO_PATH> && git checkout -b vm-state-bac
 
 The backup branch survives so you can cherry-pick anything that turns out to matter.
 
+**Shared assets symlink (Ruling A) — required when first deploying the `shared/` layout.** Shared CSS, JS and fonts reach Apache through the symlink `plainly/frontend/static/shared -> ../../../shared/static`. Apache follows it only if the static `<Directory>` has `Options -Indexes +FollowSymLinks`; without it every `/plainly/static/shared/...` URL returns 404 and the reader is unstyled. The repo's `deploy/apache/summra.conf` has the option; the VM's copy may not. Add it to the VM's `<APACHE_PROXY_CONF>` static `<Directory>` (keep the existing `Alias`), then:
+
+```sh
+gcloud compute ssh <GCP_INSTANCE> --zone=<GCP_ZONE> --command="sudo apachectl configtest && sudo systemctl reload apache2"
+curl -sI https://<PROD_DOMAIN>/plainly/static/shared/css/base.css | head -1   # must be HTTP/... 200
+```
+
 ### 2. Check whether a restart is needed
 
 | Changed file | Restart? |
@@ -419,6 +426,9 @@ The backup branch survives so you can cherry-pick anything that turns out to mat
 | `plainly/models.py` schema changes | **Yes** — `Database.__init__` runs idempotent ALTER-TABLE migrations on boot |
 | `deploy/gunicorn_config.py` | **Yes** |
 | `/home/<SERVICE_USER>/.config/systemd/user/<SYSTEMD_UNIT>` or `service.env` | **Yes** + `systemctl --user daemon-reload` (as `<SERVICE_USER>`, see service control above) first for unit-file changes |
+| `shared/**/*.py`, `shared/templates/**` | **Yes** — restart every app that runs on the VM (Plainly, and Distill once deployed); both import `shared` |
+| `shared/static/**` (CSS, JS, fonts) | No — Apache serves it through the `static/shared` symlink (see the symlink step in step 1). Plainly's bundled `app.min.js` embeds shared JS, so rebuild it and treat a changed bundle as a `plainly/frontend/static` change |
+| `distill/**` (any `.py` or template) | **Yes** — restart Distill only (its unit; runbook is phase 4) |
 | `plainly/frontend/templates/**` | **Yes** — gunicorn's Jinja caches compiled templates (debug is off); without a restart the old page keeps being served (seen 2026-10-17) |
 | `plainly/frontend/static/**` (CSS, JS, images) | No — Apache serves directly. Bump cache-busting query string in `index.html` if you need clients to pull a new asset |
 | `data/books/**` raw text | No — only used during ingestion, not at request time |

@@ -2343,7 +2343,7 @@ Distill is a private app for the owner's book summaries, the second app on the s
 **User story:** As the owner, I want my summaries visible only to me, so that I can keep private notes on books I own.
 
 - Everything is behind sign-in. Access is owner-only through an allow-list of email addresses (`DISTILL_ALLOWED_EMAILS`). A signed-in email that is not on the list gets 403 on a page, an image and the reader API.
-- Signed-out visitors see only a sign-in prompt. There is no marketing or pitch page.
+- Signed-out visitors see only a sign-in prompt. There is no marketing or pitch page. The prompt comes from Apache OIDC (`OIDCUnAuthAction auth` redirects to Google); the app itself returns 401 (signed out) or 403 (email not on the allow-list) as JSON.
 - Sign-in is shared with Plainly: signed in to one means signed in to the other, Kindle included.
 - Book text and images are never publicly cacheable and images are not served from a static path.
 

@@ -42,7 +42,7 @@ shared/                  Code both apps use (must not import plainly/ or distill
 plainly/                 The Plainly app (package `plainly`)
   app_base.py, app.py, app_prod.py, config.py, models.py, routes/, tts_utils.py, ...
   frontend/              Flask static_folder / template_folder (relative to plainly/)
-    static/              css/, js/ (app.min.js is built), covers/, illustrations/, audio/, shared -> ../../shared/static
+    static/              css/, js/ (app.min.js is built), covers/, illustrations/, audio/, shared -> ../../../shared/static
     templates/
   scripts/               Ingestion, audits, audio, images (run as `python -m plainly.scripts.<group>.<name>`)
 distill/                 Distill, the second app (see "Distill app")
@@ -10667,7 +10667,7 @@ The block types, one renderer per language: `shared/static/js/blocks.js` (web re
 | `li` | `text` | `<p class="reader-list-item">` |
 | `quote` | `text` | `<blockquote class="reader-quote">` |
 | `ul`, `ol` | `items` | `<ul>` or `<ol class="reader-list">` of `<li>` |
-| `keypoints` | `items` | `<ul class="reader-keypoints">` (the "Key points" label comes from CSS `::before`) |
+| `keypoints` | `items` | `<ul class="reader-keypoints">` (the "Key points" label comes from CSS `::before` in `distill.css`, since it is app copy) |
 | `table` | `header`?, `rows` | `<table class="reader-table">` with `thead` and `tbody`; cells are inline text |
 | `image` | `src`, `caption`? | `<figure class="reader-figure"><img src="{image_base}{src}" alt="">` plus `figcaption` |
 
@@ -10677,21 +10677,34 @@ Plainly's Kindle pages keep their own `kindle_inline` filter instead of `block_e
 
 ### Serving and bundling
 
-Shared assets live in `shared/static/` (`css/base.css`, `reader.css`, `kindle.css`; `fonts/`; `js/`). Each app exposes them at `/static/shared/...` through a symlink inside its static folder (`plainly/frontend/static/shared` and `distill/static/shared`, both to `../../shared/static`). `shared/templates/shared/` is a fallback template root added by `install_shared_ui(app)`; an app's own template at the same path wins.
+Shared assets live in `shared/static/` (`css/base.css`, `reader.css`, `kindle.css`; `fonts/`; `js/`). Each app exposes them at `/static/shared/...` through a symlink inside its static folder (`plainly/frontend/static/shared` -> `../../../shared/static`, `distill/static/shared` -> `../../shared/static`; the depth differs because Plainly's static folder is one level deeper). `shared/templates/shared/` is a fallback template root added by `install_shared_ui(app)`; an app's own template at the same path wins.
 
 **Apache follows that symlink only with `Options -Indexes +FollowSymLinks` on the static `<Directory>`.** The repo's `deploy/apache/summra.conf` has it, the VM's copy does not. Plainly's next deploy must reinstall that file and confirm `/plainly/static/shared/css/base.css` returns 200 (the static Alias serves it, so Apache gzip applies).
+
+Segment URLs carry the manifest's content version (`.../segments/<id>?mode=<m>&v=<content_version>`). The server ignores `v`; it exists so a re-imported book (same book id, bumped `reader_version.version`) misses the 1-year `immutable` HTTP cache. The IndexedDB cache is keyed on `[book_id, content_version, mode, segment_id]`, so it is invalidated by the same version bump.
 
 Plainly's `app.min.js` is built by esbuild from `app.js`, which imports `shared/static/js/platform.js`; `npm run build:check` fails if the bundle is stale. Distill loads `platform.js` as a native module and has no bundle.
 
 ### Adding a third app
 
+`distill/app_base.py` is the reference factory; copy its order.
+
 1. Write the content DB: a class with `ReaderIndexMixin` and the library hooks (`library_books`, `chapter_titles`).
 2. Declare a `ReaderConfig` in `<app>/reader_config.py` with a unique `cache_db_name`. Choose modes from `ALL_MODES`.
-3. Call `install_reader_platform(app, config, get_content_db, user_db)` and `install_shared_ui(app)` in the app factory.
-4. Add the `static/shared` symlink (`ln -s ../../shared/static <app static dir>/shared`).
+3. In the app factory, in this order:
+   1. `init_pchauth(app, auth_config, upsert_user=...)` **first, before any blueprint is registered.** The Kindle dispatch is a `before_app_request` that skips `@login_required`, so if a Kindle blueprint is registered before pchauth's `before_request`, Flask runs the Kindle hook first and serves Kindle pages to anyone. `test_kindle_pages_and_progress_need_the_allow_list` (Distill) guards this order.
+   2. `install_reader_platform(app, config, get_content_db, user_db)`, then the app's blueprints.
+   3. For a private app, an `after_request` hook that gives every non-static response without a `Cache-Control` the value `private, no-cache` (as `distill/app_base.py` does).
+   4. `install_web_basics(app, '<APP>_STATIC_DIR_OVERRIDE')`: it installs `PrefixMiddleware` (the `X-Forwarded-Prefix` deploy prefix, without which every URL breaks under `/prefix`), gzip, and the `asset_v` template helper that the shared templates call.
+   5. `install_shared_ui(app)`.
+4. Add the `static/shared` symlink with the right depth for the app: `ln -s "$(realpath --relative-to=<app static dir> shared/static)" <app static dir>/shared` (Plainly's is `../../../shared/static`, Distill's `../../shared/static`).
 5. Write the host class with `classifyUnit` and `selectBook` so its units map onto the shared block vocabulary, call `applyReaderPlatform(Host)`, and provide everything under "What the host page must provide" (render the shell with the `_continuous_reader.html` and `_settings_panel.html` partials).
-6. If Kindle is on: write the page handlers and register them with `register_kindle_pages`, add the thin `/api/kindle/progress` route with a `position` hook, and extend `reader_base.html`.
+6. If Kindle is on: write the page handlers and register them with `register_kindle_pages` (use `shared.kindle.pages.render_page`, `not_found_page`, `account_user_id` and the page-size constants rather than copying them), add the thin `/api/kindle/progress` route with a `position` hook, and extend `reader_base.html`.
 7. Add an e2e script under `tests/e2e/`.
+
+**One app per process.** `shared.progress.routes` (`user_db`, `content_db`) and `shared.auth.whoami` are module globals set by `install_reader_platform`, so a process serves one app. Run each app in its own gunicorn. Tests that build both apps pin these globals per app (`pin_platform_globals` in `tests/distill/conftest.py`).
+
+**Shared origin.** Apps cohosted on one origin share `localStorage`: reading preferences (`reading_font`, `reading_fontSize`, `reading_theme`) and dismissed hints (`summra-hint-*`) are common to Plainly and Distill. That is intended: one reader, one set of display preferences. IndexedDB is namespaced per app by `cache_db_name`, because book ids collide between apps.
 
 ### Plainly-only reader code that stays in shared
 
@@ -10715,8 +10728,8 @@ Distill is a private reader for book summaries, served at `/distill` behind Apac
 | Route | Notes |
 |---|---|
 | `GET /` | Library: "Reading now" (from `library_cards`), then "All books", newest import first. |
-| `GET /books/<slug>` | Book page: cover, progress, Start or Continue reading, contents grouped by part, sources. An unknown slug renders `not_found.html` with 404. |
-| `GET /books/<slug>/read` | Reader shell. The JS opens at `?chapter=<chapter id>` or the saved place. |
+| `GET /books/<slug>` | Book page: cover, progress, Start or Continue reading, contents grouped by part (built from `get_chapter_outline` and `count_chapters`, so no chapter blocks are loaded), sources. An unknown slug renders `not_found.html` with 404. |
+| `GET /books/<slug>/read` | Reader shell. The JS opens at `?chapter=<chapter id>` or the saved place. The Kindle reader at the same URL takes `?ch=<ordinal>` and also maps `?chapter=<id>` to its ordinal (an explicit `ch` wins), so a web contents link works on a Kindle. |
 | `GET /books/<slug>/images/<name>` | The private image route: `login_required`, `Cache-Control: private, max-age=3600`, ETag and 304, `nosniff`. |
 | `/api/reader/*`, `/api/progress/*`, `/api/auth/check` | From the shared platform. |
 | `POST /api/kindle/progress` | Thin route over `shared.kindle.progress.save_progress` (`ch` is the chapter ordinal). |
@@ -10728,7 +10741,9 @@ Every page and image route is `@login_required`. Kindle pages are served from th
 - `DISTILL_AUTH_MODE`: `off` (the default when unset; local dev) or `required`. `optional` is rejected, since Distill is all-private. `distill.app_prod` raises unless it is `required`.
 - `DISTILL_ALLOWED_EMAILS`: the allow-list (pchauth, prefix `DISTILL`). A signed-in email not on it gets 403 on a page, an image and a segment. It must be non-empty when the mode is not `off`.
 - `DISTILL_DB` and `DISTILL_USER_DB` (defaults `data/distill.db` and `data/distill_user.db`), `DISTILL_HOST` (default `127.0.0.1`: the dev server runs with auth off, so it binds loopback), `PORT` (5003), `DISTILL_STATIC_DIR_OVERRIDE`.
-- Production entry: `distill.app_prod:app`, served by the env-driven `deploy/gunicorn_config.py`. The VM, Apache and systemd setup for Distill is phase 4 and not written down yet.
+- **Sign-in prompt comes from Apache, not the app.** The app itself returns raw JSON 401 (no identity) or 403 (email not on the allow-list; the body names the email, acceptable for one owner). The browser redirect to Google is Apache's `OIDCUnAuthAction auth` on `/distill/`. Verifying that a signed-out visit to `/distill/` redirects to sign-in is a phase 4 deploy check.
+- **Accepted risk: same-origin XSS.** Plainly and Distill share an origin, so script running on a `/plainly` page could `fetch('/distill/...')` with the owner's OIDC cookie. Plainly renders only owner-controlled content with escaped values, so the risk is accepted. A later hardening step is a `Content-Security-Policy` on `/distill/`, or moving Distill to its own subdomain.
+- Production entry: `distill.app_prod:app`, served by the env-driven `deploy/gunicorn_config.py` (`GUNICORN_BIND`, `GUNICORN_WORKERS`, `GUNICORN_PIDFILE`, `GUNICORN_PROC_NAME`: a second app on the VM must set its own bind, pidfile and proc name or gunicorn refuses to start beside Plainly's). The VM, Apache and systemd setup for Distill is phase 4 and not written down yet.
 
 ### Two databases
 
@@ -10743,7 +10758,7 @@ Every page and image route is `@login_required`. Kindle pages are served from th
 
 ### Config
 
-`DISTILL_READER`: `summary` only (so the selector never shows), `cache_db_name='distill-reader-v1'`, `cache_visibility='private'`, `inline='strict'`, `image_base=''`, `illustrations=False`, Kindle on with the single text mode `summary`, and `extra_page_blocks='table.reader-table, figure.reader-figure'`. Page fit is CSS in `distill.css`: a figure image is a fixed `40vh` box with `object-fit: contain`, and tables, lists and keypoints scroll inside a `calc(100dvh - 180px)` box, so nothing is clipped on a 375x667 phone.
+`DISTILL_READER`: `summary` only (so the selector never shows), `cache_db_name='distill-reader-v1'`, `cache_visibility='private'`, `inline='strict'`, `image_base=''`, `illustrations=False`, Kindle on with the single text mode `summary`, and `extra_page_blocks='table.reader-table, figure.reader-figure'`. Page fit is CSS in the shared `reader.css` (the block vocabulary styles); only the "Key points" / "要点" label is in `distill.css`. A figure image is a fixed `40vh` box with `object-fit: contain`, and tables, lists and keypoints scroll inside a `calc(100dvh - 180px)` box, so nothing is clipped on a 375x667 phone.
 
 ### Images
 

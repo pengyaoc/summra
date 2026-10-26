@@ -24,16 +24,14 @@ from plainly.routes import common
 from plainly.routes.pages import _cover_base
 from shared.kindle import pages as kindle_pages
 from shared.kindle.pages import (
-    cookie_path, font_size, page_number, paginate, register_kindle_pages, url,
+    CONTENTS_PAGE_SIZE, LIBRARY_PAGE_SIZE, READING_ON_HOME, cookie_path, font_size, not_found_page,
+    page_number, paginate, register_kindle_pages, render_page, url,
 )
 from shared.kindle.progress import save_progress as shared_save_progress
 from shared.progress import routes as progress_routes
 
 bp = Blueprint('kindle', __name__)
 
-LIBRARY_PAGE_SIZE = 7
-READING_ON_HOME = 3
-CONTENTS_PAGE_SIZE = 8
 KINDLE = PLAINLY_READER.kindle
 TEXT_MODES = tuple(mode for mode, _ in KINDLE.text_modes)
 
@@ -52,13 +50,11 @@ def _account_user_id():
 
 
 def _render(template, **context):
-    return kindle_pages.render(f'kindle/{template}', progress_routes.user_db, _account_user_id(), **context)
+    return render_page(template, _account_user_id(), **context)
 
 
 def not_found():
-    resp, _, headers = kindle_pages.render(
-        'shared/kindle/not_found.html', progress_routes.user_db, _account_user_id())
-    return resp, 404, headers
+    return not_found_page(_account_user_id())
 
 
 def _saved_position(book_id):

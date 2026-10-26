@@ -23,10 +23,6 @@ def _db():
     return current_app.config['CONTENT_DB']
 
 
-def _chapter_count(chapters) -> int:
-    return sum(1 for chapter in chapters if chapter['ordinal'] > 0)
-
-
 def _not_found_page():
     return render_template('not_found.html'), 404
 
@@ -70,16 +66,16 @@ def book_page(slug):
     book = _db().get_book_by_slug(slug)
     if not book:
         return _not_found_page()
-    chapters = _db().get_chapters(book['id'])
+    outline = _db().get_chapter_outline(book['id'])
     card = _card_for(book['id'])
     toc = []  # [(part_title, [chapter, ...])] in reading order
-    for chapter in chapters:
+    for chapter in outline:
         if not toc or toc[-1][0] != chapter['part_title']:
             toc.append((chapter['part_title'], []))
         toc[-1][1].append(chapter)
     return render_template(
         'book.html', book=book, toc=toc, card=card,
-        label=progress_label(card, _chapter_count(chapters)),
+        label=progress_label(card, _db().count_chapters(book['id'])),
         percent=card['furthest_percentage'] if card else 0)
 
 

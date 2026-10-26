@@ -153,6 +153,28 @@ def test_account_context_and_render(tmp_path):
         assert pages.account_context(None, None)['auth_enabled'] is False
 
 
+def test_shared_glue_account_user_id_render_page_and_not_found(monkeypatch):
+    from flask import g
+    from shared.progress import routes as progress_routes
+    assert (pages.LIBRARY_PAGE_SIZE, pages.READING_ON_HOME, pages.CONTENTS_PAGE_SIZE) == (7, 3, 8)
+    app = Flask(__name__)
+    web.install_shared_ui(app)
+    app.jinja_env.globals['asset_v'] = lambda f: ''
+    with app.test_request_context('/'):
+        g.user_id = 5
+        monkeypatch.setattr(progress_routes, 'user_db', None)
+        assert pages.account_user_id() is None   # auth off: nobody is signed in
+        monkeypatch.setattr(progress_routes, 'user_db', type(
+            'Users', (), {'get_user_by_id': staticmethod(lambda uid: {'email': 'a@example.com'})})())
+        assert pages.account_user_id() == 5
+        body, status_code, headers = pages.not_found_page()
+        assert status_code == 404 and headers['Cache-Control'] == 'private, no-cache'
+        # An explicit id (an app's own auth boundary) overrides the default.
+        assert pages.account_user_id() == 5
+        body, status_code, _ = pages.not_found_page(user_id=None)
+        assert status_code == 404
+
+
 class FakeContent:
     def __init__(self, terminal='1.3'):
         self.terminal = terminal

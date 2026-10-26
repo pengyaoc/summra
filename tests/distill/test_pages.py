@@ -80,6 +80,19 @@ def test_book_page_toc_grouped_by_part_and_overview_first(app_env):
     assert html.count('class="toc-part-title"') == 1
 
 
+def test_book_page_builds_toc_without_loading_blocks(app_env, monkeypatch):
+    client, content_db, _, book_id = app_env
+    chapter = content_db.get_chapters(book_id)[1]
+    client.post('/api/progress/v2/mutations', json=_mutation(book_id, chapter['id']), headers=HEADERS)
+
+    def boom(_book_id):
+        raise AssertionError('book page must not load chapter blocks')
+    monkeypatch.setattr(content_db, 'get_chapters', boom)
+    html = get(client, '/books/my-book').get_data(as_text=True)
+    assert 'Part One' in html and '3. Third' in html
+    assert 'Chapter 1 of 3' in html
+
+
 def test_book_page_continue_reading_when_in_progress(app_env):
     client, content_db, _, book_id = app_env
     chapter = content_db.get_chapters(book_id)[2]

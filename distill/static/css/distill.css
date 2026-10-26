@@ -41,17 +41,6 @@
 .distill-sources { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule-strong); color: var(--ink-muted); font-size: .9rem; }
 .distill-source-blocks img { max-width: 100%; }
 
-/* Reader blocks (shared/static/js/blocks.js vocabulary). */
-.reader-quote { margin: 0 0 1.25em; padding: .1em 0 .1em 1em; border-left: 3px solid var(--rule-strong); color: var(--ink-muted); font-style: italic; }
-.reader-list { max-height: calc(100dvh - 180px); overflow: auto; margin: 0 0 1.25em; padding-left: 1.5em; }
-.reader-list li { margin-bottom: .3em; }
-.reader-keypoints { max-height: calc(100dvh - 180px); overflow: auto; margin: 0 0 1.25em; padding: .85em 1em .85em 2.2em; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--paper-deep); }
+/* Block styles live in shared reader.css; only the app-language label is here. */
 .reader-keypoints::before { content: "Key points"; display: block; margin: 0 0 .4em -1.2em; font-size: .75em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
 .reader-keypoints:lang(zh)::before { content: "要点"; }
-.reader-keypoints li { margin-bottom: .3em; }
-.reader-figure { margin: 0 0 1.25em; }
-.reader-figure img { display: block; width: 100%; height: 40vh; object-fit: contain; }
-.reader-figure figcaption { margin-top: .4em; color: var(--ink-muted); font-size: .85em; text-align: center; }
-.reader-table { display: block; overflow: auto; max-height: calc(100dvh - 180px); margin: 0 0 1.25em; border-collapse: collapse; font-size: .9em; }
-.reader-table th, .reader-table td { padding: .4em .7em; border: 1px solid var(--rule-strong); text-align: left; vertical-align: top; }
-.reader-table th { background: var(--paper-deep); }

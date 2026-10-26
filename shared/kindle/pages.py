@@ -8,7 +8,7 @@ the page templates; paging, cookies, pagination and the account line live here.
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import quote, urlencode
 
-from flask import Blueprint, after_this_request, render_template, request
+from flask import Blueprint, after_this_request, g, render_template, request
 
 from shared.kindle import is_kindle_user_agent
 from shared.reader.config import ReaderConfig
@@ -107,6 +107,41 @@ def font_size() -> int:
 def render(template, user_db, user_id, **context):
     resp = render_template(template, **account_context(user_db, user_id), **context)
     return resp, 200, {'Cache-Control': 'private, no-cache'}
+
+
+LIBRARY_PAGE_SIZE = 7
+READING_ON_HOME = 3
+CONTENTS_PAGE_SIZE = 8
+_ACCOUNT = object()
+
+
+def _progress_routes():
+    # Imported at call time so the app's current shared.progress.routes is always
+    # the one read (tests purge and re-import that module).
+    from shared.progress import routes
+    return routes
+
+
+def account_user_id():
+    """The signed-in reader whose progress syncs, or None (signed out, or the
+    app has no sign-in). Set per request by pchauth."""
+    return g.get('user_id') if _progress_routes().user_db is not None else None
+
+
+def render_page(template, user_id=_ACCOUNT, **context):
+    """Render the app's `kindle/<template>` with the account line. `user_id`
+    defaults to the signed-in reader; an app with its own auth boundary passes it."""
+    if user_id is _ACCOUNT:
+        user_id = account_user_id()
+    return render(f'kindle/{template}', _progress_routes().user_db, user_id, **context)
+
+
+def not_found_page(user_id=_ACCOUNT):
+    """The shared 404 page as a (body, 404, headers) response."""
+    if user_id is _ACCOUNT:
+        user_id = account_user_id()
+    resp, _, headers = render('shared/kindle/not_found.html', _progress_routes().user_db, user_id)
+    return resp, 404, headers
 
 
 def saved_marker(user_db, content_db, user_id, book_id, modes) -> Optional[tuple]:

@@ -9,6 +9,17 @@ from shared import web
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_block_vocabulary_styles_live_in_shared_reader_css():
+    shared = (ROOT / 'shared/static/css/reader.css').read_text()
+    distill = (ROOT / 'distill/static/css/distill.css').read_text()
+    for selector in ('.reader-quote', '.reader-list ', '.reader-keypoints ', '.reader-figure ',
+                     '.reader-table ', 'calc(100dvh - 180px)'):
+        assert selector in shared, selector
+    # Only the app-language label stays with the app.
+    assert '.reader-table' not in distill and '.reader-quote' not in distill
+    assert '.reader-keypoints::before' in distill and 'Key points' not in shared
+
+
 def _fake_shared(tmp_path, monkeypatch, text):
     (tmp_path / 'shared').mkdir()
     (tmp_path / 'shared' / 'probe.html').write_text(text)
