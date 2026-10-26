@@ -1294,6 +1294,9 @@ export const paginationMixin = {
      * Clear pagination (used when switching view modes or chapters)
      */
     clearPagination() {
+        clearTimeout(this.pagination.wheelTimeout);
+        this.pagination.isNavigating = false;
+        this.pagination.activeWrapper = null;
         this.pagination.currentPage = 0;
         this.pagination.totalPages = 0;
         this.pagination.pages = [];

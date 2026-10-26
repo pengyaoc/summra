@@ -423,8 +423,7 @@ class SummraApp {
         // stop it, so late reader work (a section load, the turn of the swipe
         // that was the back gesture) can't re-paginate and lock this page.
         if (!onContinuousReader && this.continuousReader?.active) {
-            this.saveContinuousReader('navigation');
-            this.continuousReader.active = false;
+            this.leaveContinuousReader();
         }
         // The reader's document must not scroll (CSS: body.on-reader-page).
         document.body.classList.toggle('on-reader-page', onContinuousReader);
@@ -972,8 +971,7 @@ class SummraApp {
         // Book cards open the editorial book page. Reading is an explicit
         // choice from its Read book control, which owns the /read route.
         if (this.continuousReader?.active) {
-            await this.saveContinuousReader('navigation');
-            this.continuousReader.active = false;
+            await this.leaveContinuousReader();
         }
 
         // Track origin for context-aware breadcrumbs BEFORE changing view

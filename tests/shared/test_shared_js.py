@@ -142,3 +142,80 @@ assert.equal(app.continuousMarkerOffset(anchor(fragments[2])), .6);
 assert.equal(app.findContinuousPageForMarker({paragraph_id: '1.0', offset: .2}), 1);
 assert.equal(app.findContinuousPageForMarker({paragraph_id: '1.0', offset: .6}), 2);
 """)
+
+
+def test_leaving_reader_unlocks_before_slow_save_and_cancels_timers():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const load = async path => import('data:text/javascript;base64,' + Buffer.from(fs.readFileSync(path, 'utf8')).toString('base64'));
+const {continuousReaderMixin} = await load('shared/static/js/continuous_reader.js');
+const {paginationMixin} = await load('shared/static/js/pagination.js');
+const classes = values => ({values: new Set(values), remove(...names) {names.forEach(name => this.values.delete(name));}, add(...names) {names.forEach(name => this.values.add(name));}});
+const html = {style: {overflow:'hidden'}, classList: classes(['pagination-active'])};
+const body = {style: {overflow:'hidden'}, classList: classes(['pagination-active','on-reader-page','on-chapter-page'])};
+const panels = new Map(['reading-settings-panel','reader-toc-panel'].map(id => [id,{classList:classes([])}]));
+globalThis.document = {documentElement: html, body, getElementById: id => panels.get(id)};
+let finishSave, fired = false;
+const saving = new Promise(resolve => {finishSave=resolve;});
+const app = {...paginationMixin, ...continuousReaderMixin,
+    pagination: {pages:['page'], totalPages:1, wheelTimeout: setTimeout(() => {fired=true;}, 5)},
+    continuousReader: {active:true, settleTimer:setTimeout(() => {fired=true;},5), terminalTimer:setTimeout(() => {fired=true;},5)},
+    saveContinuousReader(cause) {assert.equal(cause,'navigation'); assert.equal(this.continuousReader.active,true); return saving;},
+};
+const pending = app.leaveContinuousReader();
+assert.equal(app.continuousReader.active,false);
+assert.equal(html.style.overflow,''); assert.equal(body.style.overflow,'');
+assert.equal(body.classList.values.has('on-reader-page'),false);
+assert.equal(html.classList.values.has('pagination-active'),false);
+assert.equal(app.pagination.totalPages,0);
+for (const panel of panels.values()) assert.ok(panel.classList.values.has('hidden'));
+await new Promise(resolve => setTimeout(resolve,15));
+assert.equal(fired,false,'Late wheel/save/completion work must be cancelled');
+finishSave(); await pending;
+""")
+
+
+def test_reader_load_finishing_after_exit_does_not_render():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/continuous_reader.js','utf8');
+const {continuousReaderMixin}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+let release; const loaded=new Promise(resolve => {release=resolve;});
+const reader={active:true, mode:'summary', manifest:{segments:[{id:'s',mode:'summary',ordinal:0}]}};
+let renders=0;
+globalThis.document={getElementById:()=>null};
+const app={...continuousReaderMixin, continuousReader:reader,
+    fetchContinuousSegment:()=>loaded, renderContinuousSegments:()=>{renders++;}};
+const pending=app.loadContinuousReaderAt();
+reader.active=false;
+release({id:'s'}); await pending;
+assert.equal(renders,0,'An exited reader must not paginate after a delayed fetch');
+""")
+
+
+def test_reader_bfcache_restores_pagination_only_for_reader_document():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/continuous_reader.js','utf8');
+const {continuousReaderMixin}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const listeners={};
+globalThis.document={addEventListener(){},body:{classList:{add(){}}}};
+globalThis.window={addEventListener(name,fn){listeners[name]=fn;},setInterval(){}};
+const reader={active:true,currentMarker:{chapter_id:42}};
+let saves=0,loads=0;
+const app={...continuousReaderMixin, currentView:'reader',continuousReader:reader,
+    readerConfig:()=>({modes:[]}), leaveContinuousReader(cause){assert.equal(cause,'pagehide');saves++;reader.active=false;},
+    loadContinuousReaderAt(marker,chapter){assert.equal(chapter,42);loads++;}};
+app.setupContinuousReaderLifecycle();
+listeners.pagehide({persisted:true});
+assert.equal(reader.active,false);
+listeners.pageshow({persisted:true});
+assert.equal(reader.active,true); assert.equal(loads,1); assert.equal(saves,1);
+app.currentView='book';
+listeners.pagehide({persisted:true});
+listeners.pageshow({persisted:true});
+assert.equal(loads,1,'Restoring a book document must not reactivate the reader');
+""")

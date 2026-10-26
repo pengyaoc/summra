@@ -109,5 +109,37 @@ const homeScrolls = async (page, label) => {
   await homeScrolls(page, 'back while a section is loading');
   await ctx.close();
 }
+// Distill uses full-document navigation, so it must release the reader lock
+// before navigating and rebuild it on a cached reader restore (WebKit/iOS).
+if (process.env.DISTILL_BASE_URL) {
+  const base = process.env.DISTILL_BASE_URL.replace(/\/$/, '');
+  const ctx = await browser.newContext(devices['iPhone 13']);
+  const page = await ctx.newPage();
+  const book = `${base}/books/atomic-habits`;
+  const ready = () => page.waitForSelector('.pagination-page-container [data-reader-anchor]');
+  const bookScrolls = async label => {
+    await page.waitForURL(book);
+    await page.waitForTimeout(600); // catch resize/page-turn debounce after exit
+    const state = await page.evaluate(() => {
+      window.scrollTo(0, 350);
+      return {html: getComputedStyle(document.documentElement).overflow,
+        body: getComputedStyle(document.body).overflow, scroll: scrollY,
+        classes: document.body.className};
+    });
+    expect(`Distill ${label}: book scrolls`, state.html !== 'hidden' && state.body !== 'hidden'
+      && !state.classes.includes('on-reader-page') && state.scroll > 100, JSON.stringify(state));
+  };
+  await page.goto(book);
+  await page.click('.library-read-action'); await ready();
+  await page.click('#reader-back-button');
+  await bookScrolls('toolbar back');
+  await page.click('.library-read-action'); await ready();
+  await page.goBack(); await bookScrolls('browser back');
+  await page.goForward(); await ready();
+  expect('Distill browser forward: reader paginates again', await page.evaluate(() =>
+    document.documentElement.classList.contains('pagination-active')));
+  await page.goBack(); await bookScrolls('back again after restore');
+  await ctx.close();
+}
 await browser.close();
 process.exit(failed ? 1 : 0);

@@ -67,3 +67,17 @@ after any change under `shared/` or `plainly/`: `smoke`, `kindle_mode`,
 `reader_opens_at_chapter`, `reader_segments_fast_open`, `reader_illustrations`,
 `reader_font_figtree`, `reader_nav_mouse`, `sxs_row_split`, `text_size_adjust`,
 `redesign_home`, `redesign_reader`.
+
+### Reader exit and iOS scroll lock
+
+With Plainly on :5016 and Distill on :5015 (use a scratch Distill user DB):
+
+```sh
+BASE_URL=http://localhost:5016 DISTILL_BASE_URL=http://localhost:5015 node reader_back_unlocks_scroll.mjs
+ENGINE=webkit BASE_URL=http://localhost:5016 DISTILL_BASE_URL=http://localhost:5015 node reader_back_unlocks_scroll.mjs
+```
+
+Checks Plainly browser back, edge swipe and late segment loads, then Distill's
+reader back button, browser Back and Back/Forward restoration. The book page
+must have no reader scroll locks and must scroll after every exit. WebKit uses
+an iPhone context; this is engine-level coverage, not a physical iOS Chrome run.

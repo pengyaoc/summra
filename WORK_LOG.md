@@ -1,5 +1,17 @@
 # Summra Work Log
 
+## 2026-10-26: Distill iPhone search focus zoom (verified locally)
+
+- User reported iPhone Chrome zooming on focus of the home search field, then allowing sideways panning. Search input was .9rem (14.4px), below iOS's auto-focus-zoom threshold. Set search input and language/category selectors to max(16px, 1rem), retaining accessibility scaling and unrestricted pinch zoom. Viewport meta unchanged.
+- Verified iPhone-emulated WebKit and Chromium at 375px, 390px and 844px: all three controls compute to 16px, focusing/typing preserves viewport scale 1, typeahead appears, and document width equals viewport width (no horizontal overflow). This is browser-engine emulation, not physical iOS Chrome. CSS-only change; no build required. User explicitly authorized committing/pushing both iPhone fixes to main and deploying them; deployment now in progress.
+
+## 2026-10-26: Shared reader exit releases iOS scroll locks (verified locally)
+
+- Distill's reader back button deactivated the reader but bypassed Plainly's app-only scroll cleanup before its full-document navigation. Added shared `leaveContinuousReader`: start the progress save while active, deactivate synchronously, cancel pending wheel/save/completion timers, clear pagination and html/body overflow/classes, and close panels before waiting for persistence/navigation. Plainly now uses the same exit on book selection and other route changes.
+- Shared pagehide cleanup releases locks before WebKit's history snapshot; persisted pageshow restores only a reader document and repaginates at its saved marker. Segment/font loads finishing after exit or replacement cannot render into the destination page. Reader back navigation completes even if saving rejects. Rebuilt Plainly's production bundle.
+- New tests failed first (missing shared exit; delayed load still rendered). All eight shared JS tests now pass. Full suite: 1,067 passed, one skipped, two deselected, using the existing importlib/preloaded-package workaround. Chromium and WebKit/iPhone reader-back suites pass: Plainly browser back, edge swipe and delayed section load; Distill toolbar back, browser Back, forward-to-reader and another Back. Book scroll position reaches 350px, with visible html/body overflow and reader classes removed. WebKit is engine emulation, not a physical iOS Chrome test. Build freshness and diff checks pass.
+- Shared reader/pagination modules and Plainly bundle are ready for deployment; no database changes. Regression commands documented in tests/e2e/README.md. User subsequently authorized commit/push to main and deployment of both fixes; deployment now in progress.
+
 ## 2026-10-26: Shared Chinese paragraph pagination (deployed)
 
 - User reported large blank tails on Distill's Chinese reader pages and requested the same paragraph splitting as Plainly. Confirmed both apps already use `shared/static/js/pagination.js`; its whitespace-only text units made Chinese paragraphs effectively indivisible. Added Unicode Han-character boundaries to that shared splitter while retaining English word and verse line boundaries.

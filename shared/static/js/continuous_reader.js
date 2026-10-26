@@ -164,7 +164,7 @@ export const continuousReaderMixin = {
             this.fetchContinuousSegment(descriptor.id),
             nextDescriptor ? this.fetchContinuousSegment(nextDescriptor.id, true) : null,
         ]);
-        if (!loaded) return;
+        if (!loaded || !reader.active || this.continuousReader !== reader) return;
         // Pages are cut by measuring text, so the reading font must be loaded
         // first. A web font (Figtree) arriving later re-wraps the text and
         // pushes each page's last line under the footer.
@@ -173,6 +173,7 @@ export const continuousReaderMixin = {
             const style = getComputedStyle(content);
             await document.fonts.load(`${style.fontSize} ${style.fontFamily}`).catch(() => {});
         }
+        if (!reader.active || this.continuousReader !== reader) return;
         reader.currentSegmentId = descriptor.id;
         reader.segmentIds = [loaded.id, next?.id].filter(Boolean);
         this.renderContinuousSegments([loaded, next].filter(Boolean), marker, chapterId);
@@ -432,10 +433,11 @@ export const continuousReaderMixin = {
                 : `${wideMode.label} is available on screens ${wideMode.min_width}px wide or larger.`;
         }
         document.getElementById('reader-back-button').onclick = async () => {
-            await this.saveContinuousReader('navigation');
-            reader.active = false;
-            document.getElementById('reading-settings-panel')?.classList.add('hidden');
-            await this.selectBook(this.currentBook);
+            try {
+                await this.leaveContinuousReader();
+            } finally {
+                await this.selectBook(this.currentBook);
+            }
         };
         document.getElementById('reader-toc-button').onclick = () => this.toggleContinuousPanel('reader-toc-panel');
         document.getElementById('reader-settings-button').onclick = () => {
@@ -459,13 +461,47 @@ export const continuousReaderMixin = {
         });
     },
 
+    // Release scrolling synchronously, before waiting for persistence or a
+    // document navigation. Both SPA hosts and full-page hosts use this exit.
+    leaveContinuousReader(cause = 'navigation') {
+        const saving = this.saveContinuousReader(cause);
+        const reader = this.continuousReader;
+        if (reader) {
+            reader.active = false;
+            clearTimeout(reader.settleTimer);
+            clearTimeout(reader.terminalTimer);
+        }
+        this.clearPagination();
+        document.body.classList.remove('on-reader-page', 'on-chapter-page');
+        document.getElementById('reading-settings-panel')?.classList.add('hidden');
+        document.getElementById('reader-toc-panel')?.classList.add('hidden');
+        document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
+        return saving;
+    },
+
     setupContinuousReaderLifecycle() {
         if (this.continuousReaderLifecycleBound) return;
         this.continuousReaderLifecycleBound = true;
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') this.saveContinuousReader('hidden');
         });
-        window.addEventListener('pagehide', () => this.saveContinuousReader('pagehide'));
+        window.addEventListener('pagehide', () => {
+            // WebKit can retain the outgoing document's scroll lock through a
+            // full navigation or its back/forward cache. Release it before the
+            // browser snapshots the reader, just as we do for an in-app exit.
+            this.continuousReaderSuspended = this.currentView === 'reader';
+            this.leaveContinuousReader('pagehide');
+        });
+        window.addEventListener('pageshow', event => {
+            if (!event.persisted || !this.continuousReaderSuspended || this.currentView !== 'reader') return;
+            this.continuousReaderSuspended = false;
+            const reader = this.continuousReader;
+            if (!reader) return;
+            reader.active = true;
+            reader.restoring = true;
+            document.body.classList.add('on-reader-page', 'on-chapter-page');
+            this.loadContinuousReaderAt(reader.currentMarker, reader.currentMarker?.chapter_id);
+        });
         const enforceViewport = () => this.enforceContinuousReaderViewport();
         window.addEventListener('resize', enforceViewport);
         this.readerConfig().modes.filter(mode => mode.min_width).forEach(mode =>

@@ -60,12 +60,14 @@
 .distill-shelf-heading p { color: var(--ink-muted); font-size: .8rem; }
 .distill-filters { display: flex; align-items: stretch; gap: .7rem; margin: .2rem 0 1.8rem; }
 .distill-search { display: flex; flex: 1 1 260px; align-items: center; gap: .65rem; padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; color: var(--ink-muted); }
-.distill-search input { width: 100%; min-width: 0; padding: 0; background: transparent; border: 0; color: var(--ink); font: inherit; font-size: .9rem; }
+/* iOS auto-zooms focused form controls below 16px. Keep text scalable and
+   avoid that focus zoom without restricting the viewport or pinch zoom. */
+.distill-search input { width: 100%; min-width: 0; padding: 0; background: transparent; border: 0; color: var(--ink); font: inherit; font-size: max(16px, 1rem); }
 .distill-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .distill-search input:focus { outline: 0; }
 .distill-filter-select { display: flex; flex-direction: column; justify-content: center; gap: .2rem; min-width: 150px; padding: .4rem .75rem; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; }
 .distill-filter-select > span { color: var(--ink-muted); font-size: .62rem; letter-spacing: .05em; text-transform: uppercase; }
-.distill-filter-select select { max-width: 210px; border: 0; padding: 0 1rem 0 0; background: transparent; color: var(--ink); font: inherit; font-size: .85rem; cursor: pointer; }
+.distill-filter-select select { max-width: 210px; border: 0; padding: 0 1rem 0 0; background: transparent; color: var(--ink); font: inherit; font-size: max(16px, 1rem); cursor: pointer; }
 .distill-filter-submit { padding: .7rem 1rem; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: var(--on-accent); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
 .distill-filter-submit:hover { background: var(--accent-hover); }
 .distill-filter-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: -.8rem 0 1.5rem; color: var(--ink-muted); font-size: .85rem; overflow-wrap: anywhere; }
