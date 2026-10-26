@@ -23,6 +23,41 @@
 - Validation: new tests failed before implementation and now pass; all 158 Distill tests pass. Full suite: 1,096 passed and eight existing Gutenberg network tests failed under restricted DNS; rerunning those eight with network access passed all eight (1,104 passing across the two runs; two deselected). `git diff --check` passes.
 - Browser verified against all 54 local books: Chinese gives six results; Chinese plus Science & technology gives one; Chinese text search combines with both. Logo selection survives reload. Desktop and 390px mobile inspected, with no horizontal overflow. Preview server: http://127.0.0.1:5013/. Production has not been changed. Existing unrelated worktree edits preserved.
 
+## 2026-10-25: Distill missing cover artwork (deployed and verified)
+
+- Exact audit: 27 of 54 books had no cover pointer. Downloaded real edition covers (English editions, including books with Chinese summary titles); decoded and visually checked every cover. Added `images/cover.jpg` and its cover reference to the local import folders under `data/distill_import/run5/`.
+- Inserted 27 image BLOBs and updated only `books.cover_image_id` in the local master. Existing image ids, book metadata, chapter text and reader indexes are unchanged; SHA-256 fingerprints of chapters/reader tables match before and after; SQLite integrity check passes. Local rollback DB: `/tmp/distill-missing-covers/distill.db.before-covers`.
+- Verified production and local DB table fingerprints matched before this change. Deploy uses the existing Distill content-DB snapshot/upload/checksum/swap workflow. Reading progress is in a separate DB and is untouched.
+- Deployment completed on `wordpress-2-vm` using `venv/bin/python -m distill.scripts.deploy_db`. Service active. Production library returns 200 for owner; all 54 cover URLs returned 200, decoded successfully, and retained private caching. Production SQLite integrity and unchanged chapter/reader fingerprints verified. Public library and new cover redirect to sign-in (302); Plainly remains 200. No code deployment or user-progress DB changes.
+- Download provenance:
+  - `the-goal`: ISBN `0884271951` — https://images-na.ssl-images-amazon.com/images/P/0884271951.01.L.jpg
+  - `guns-germs-and-steel`: ISBN `0393317552` — https://images-na.ssl-images-amazon.com/images/P/0393317552.01.L.jpg
+  - `quanqiutongshi-zhangjie-zongjie`: ISBN `0139238972` — https://images-na.ssl-images-amazon.com/images/P/0139238972.01.L.jpg
+  - `a-thousand-brains`: ISBN `1541675819` — https://images-na.ssl-images-amazon.com/images/P/1541675819.01.L.jpg
+  - `abundance`: ISBN `1451614217` — https://images-na.ssl-images-amazon.com/images/P/1451614217.01.L.jpg
+  - `antifragile`: ISBN `1400067820` — https://images-na.ssl-images-amazon.com/images/P/1400067820.01.L.jpg
+  - `blue-ocean-strategy`: ISBN `1591396190` — https://images-na.ssl-images-amazon.com/images/P/1591396190.01.L.jpg
+  - `built-to-last`: ISBN `0060516402` — https://images-na.ssl-images-amazon.com/images/P/0060516402.01.L.jpg
+  - `business-adventures`: ISBN `1497644895` — https://images-na.ssl-images-amazon.com/images/P/1497644895.01.L.jpg
+  - `cell-song`: ISBN `1982117354` — https://images-na.ssl-images-amazon.com/images/P/1982117354.01.L.jpg
+  - `energy-and-civilization`: ISBN `0262035774` — https://images-na.ssl-images-amazon.com/images/P/0262035774.01.L.jpg
+  - `first-break-all-the-rules`: ISBN `0684852861` — https://images-na.ssl-images-amazon.com/images/P/0684852861.01.L.jpg
+  - `good-to-great`: ISBN `0066620996` — https://images-na.ssl-images-amazon.com/images/P/0066620996.01.L.jpg
+  - `growth-smil`: ISBN `0262042835` — https://images-na.ssl-images-amazon.com/images/P/0262042835.01.L.jpg
+  - `how-the-world-really-works-smil`: ISBN `0593297067` — https://images-na.ssl-images-amazon.com/images/P/0593297067.01.L.jpg
+  - `life-3-0`: ISBN `1101946598` — https://images-na.ssl-images-amazon.com/images/P/1101946598.01.L.jpg
+  - `numbers-dont-lie`: ISBN `0143136224` — https://images-na.ssl-images-amazon.com/images/P/0143136224.01.L.jpg
+  - `poor-charlies-almanack`: ISBN `1953953239` — https://images-na.ssl-images-amazon.com/images/P/1953953239.01.L.jpg
+  - `poor-richards-almanack`: ISBN `0486408914` — https://images-na.ssl-images-amazon.com/images/P/0486408914.01.L.jpg
+  - `silent-spring`: ISBN `0618249060` — https://images-na.ssl-images-amazon.com/images/P/0618249060.01.L.jpg
+  - `surely-youre-joking-mr-feynman`: ISBN `0393316041` — https://images-na.ssl-images-amazon.com/images/P/0393316041.01.L.jpg
+  - `the-glory-and-the-dream`: ISBN `0553012908` — https://covers.openlibrary.org/b/id/9740819-L.jpg
+  - `the-intelligent-investor`: ISBN `0060555661` — https://images-na.ssl-images-amazon.com/images/P/0060555661.01.L.jpg
+  - `titan-rockefeller`: ISBN `1400077303` — https://images-na.ssl-images-amazon.com/images/P/1400077303.01.L.jpg
+  - `wealth-of-nations`: ISBN `0553585975` — https://images-na.ssl-images-amazon.com/images/P/0553585975.01.L.jpg
+  - `why-nations-fail`: ISBN `0307719219` — https://images-na.ssl-images-amazon.com/images/P/0307719219.01.L.jpg
+  - `winning-jack-welch`: ISBN `0060753943` — https://images-na.ssl-images-amazon.com/images/P/0060753943.01.L.jpg
+
 ## 2026-10-26: Distill `--deploy` and standalone DB push (complete)
 
 - New `distill/scripts/deploy_db.py` (`deploy_db(db_path, settings, run=subprocess.run)`, `DeployError`, runnable as `python -m distill.scripts.deploy_db`). It checkpoints the WAL, snapshots the VM copy (skipped on a first push), scps to `~/distill.db.new`, compares md5 before touching the service, then stops, swaps, chowns, chmods and starts the unit. It checks `is-active` and a local 401, then prunes to the newest 2 `*.bak-pre-push-*`.
