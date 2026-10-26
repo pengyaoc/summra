@@ -46,6 +46,50 @@ def create_reader_tables(cursor: sqlite3.Cursor) -> None:
         ''')
 
 
+def create_reader_revisions(cursor: sqlite3.Cursor, *, book_columns=(), sections=False) -> None:
+    """Track source edits made by any connection, including import scripts.
+
+    Hosts use books(id) and chapters(book_id), optionally declaring book
+    metadata columns and book_sections. Install after host column migrations.
+    This adds only freshness metadata, leaving versions and unit IDs intact.
+    """
+    cursor.execute('''CREATE TABLE IF NOT EXISTS reader_revision (
+        book_id INTEGER PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+        revision INTEGER NOT NULL DEFAULT 0,
+        indexed_revision INTEGER
+    )''')
+    cursor.execute('INSERT OR IGNORE INTO reader_revision (book_id) SELECT id FROM books')
+    cursor.execute('''CREATE TRIGGER IF NOT EXISTS reader_book_revision_insert AFTER INSERT ON books
+        BEGIN INSERT INTO reader_revision (book_id) VALUES (NEW.id); END''')
+    for event, reference in (('INSERT', 'NEW'), ('DELETE', 'OLD')):
+        cursor.execute(f'''CREATE TRIGGER IF NOT EXISTS reader_chapter_revision_{event.lower()}
+            AFTER {event} ON chapters BEGIN
+            UPDATE reader_revision SET revision = revision + 1
+            WHERE book_id = {reference}.book_id; END''')
+    cursor.execute('''CREATE TRIGGER IF NOT EXISTS reader_chapter_revision_update
+        AFTER UPDATE ON chapters BEGIN
+        UPDATE reader_revision SET revision = revision + 1
+        WHERE book_id IN (OLD.book_id, NEW.book_id); END''')
+    # Identifiers below are host-declared schema names, never request input.
+    if book_columns:
+        columns = ', '.join(book_columns)
+        changed = ' OR '.join(f'OLD.{column} IS NOT NEW.{column}' for column in book_columns)
+        cursor.execute(f'''CREATE TRIGGER IF NOT EXISTS reader_book_revision_update
+            AFTER UPDATE OF {columns} ON books WHEN {changed} BEGIN
+            UPDATE reader_revision SET revision = revision + 1
+            WHERE book_id IN (OLD.id, NEW.id); END''')
+    if sections:
+        for event, references in (('INSERT', ('NEW',)), ('DELETE', ('OLD',)),
+                                  ('UPDATE', ('OLD', 'NEW'))):
+            owners = ', '.join(f'{ref}.book_id' for ref in references)
+            ids = ', '.join(f'{ref}.id' for ref in references)
+            cursor.execute(f'''CREATE TRIGGER IF NOT EXISTS reader_section_revision_{event.lower()}
+                AFTER {event} ON book_sections BEGIN
+                UPDATE reader_revision SET revision = revision + 1
+                WHERE book_id IN ({owners}) OR book_id IN
+                    (SELECT book_id FROM chapters WHERE section_id IN ({ids})); END''')
+
+
 class ReaderIndexMixin:
     """Reader index over a host's content. The host class implements:
 
@@ -62,12 +106,17 @@ class ReaderIndexMixin:
     - _reader_source_checksum(chapters) -> str
     - _reader_structure(conn, book_id) -> list[dict]; the manifest's
       `structure` entries (parts and chapters, in reading order)
+
+    Hosts can install create_reader_revisions() and set
+    _reader_revision_tracking = True to skip source reads for clean indexes.
+    Hosts without SQL revision tracking retain checksum-based validation.
     """
 
     _READER_MODES = ALL_MODES
     _READER_SEGMENT_UNITS = 80
     _READER_SEGMENT_BYTES = 24 * 1024
     _READER_OVERSIZED_BYTES = 64 * 1024
+    _reader_revision_tracking = False
 
     @staticmethod
     def _reader_normalize_quote(text: str) -> str:
@@ -112,22 +161,74 @@ class ReaderIndexMixin:
         so edited chapters are picked up without an operational step."""
         conn = self.get_connection()
         try:
-            book = self._reader_load_book(conn, book_id)
-            if not book:
-                raise ValueError('Book not found')
-            chapters = self._reader_load_chapters(conn, book_id)
-            if not chapters:
-                raise ValueError('Book has no chapters')
-            verse = book['verse']
-            for chapter in chapters:
-                chapter['verse'] = verse
+            if self._reader_revision_tracking:
+                current = self._fresh_reader_version(conn, book_id)
+                if current is not None:
+                    return current
+                # Only dirty books take a write lock. Recheck after acquiring it
+                # so workers cannot publish older content over a newer index.
+                conn.execute('BEGIN IMMEDIATE')
+            with conn:
+                if self._reader_revision_tracking:
+                    current = self._fresh_reader_version(conn, book_id)
+                    if current is not None:
+                        return current
+                version = self._ensure_reader_content(conn, book_id)
+                if self._reader_revision_tracking:
+                    conn.execute('''UPDATE reader_revision SET indexed_revision = revision
+                        WHERE book_id = ?''', (book_id,))
+                return version
+        finally:
+            conn.close()
 
-            checksum = self._reader_source_checksum(chapters)
-            current = conn.execute('SELECT * FROM reader_version WHERE book_id = ?', (book_id,)).fetchone()
-            if current and current['source_checksum'] == checksum:
-                return dict(current)
-            return self._compile_reader_content(
-                conn, book_id, chapters, checksum, verse, current['version'] if current else 0)
+    @staticmethod
+    def _fresh_reader_version(conn, book_id):
+        row = conn.execute('''SELECT v.* FROM reader_version v
+            JOIN reader_revision r ON r.book_id = v.book_id
+            WHERE v.book_id = ? AND r.revision = r.indexed_revision''', (book_id,)).fetchone()
+        return dict(row) if row else None
+
+    def _ensure_reader_content(self, conn, book_id):
+        """Validate source and compile if needed in the caller's transaction."""
+        book = self._reader_load_book(conn, book_id)
+        if not book:
+            raise ValueError('Book not found')
+        chapters = self._reader_load_chapters(conn, book_id)
+        if not chapters:
+            raise ValueError('Book has no chapters')
+        verse = book['verse']
+        for chapter in chapters:
+            chapter['verse'] = verse
+        checksum = self._reader_source_checksum(chapters)
+        current = conn.execute('SELECT * FROM reader_version WHERE book_id = ?', (book_id,)).fetchone()
+        if current and current['source_checksum'] == checksum:
+            return dict(current)
+        return self._compile_reader_content(
+            conn, book_id, chapters, checksum, verse, current['version'] if current else 0)
+
+    def library_word_totals(self, book_ids: List[int]) -> Dict[int, Dict[str, int]]:
+        """Read mode totals in one batch, refreshing only dirty books."""
+        if not book_ids:
+            return {}
+        conn = self.get_connection()
+        try:
+            placeholders = ','.join('?' * len(book_ids))
+            if self._reader_revision_tracking:
+                dirty = [row['book_id'] for row in conn.execute(f'''
+                    SELECT b.id AS book_id FROM books b
+                    LEFT JOIN reader_revision r ON r.book_id = b.id
+                    LEFT JOIN reader_version v ON v.book_id = b.id
+                    WHERE b.id IN ({placeholders}) AND (r.indexed_revision IS NULL
+                        OR r.indexed_revision != r.revision OR v.book_id IS NULL)''', book_ids)]
+            else:
+                dirty = book_ids
+            for book_id in dirty:
+                self.ensure_reader_content(book_id)
+            totals = {}
+            for row in conn.execute(f'''SELECT book_id, mode, SUM(word_count) AS words
+                    FROM reader_unit WHERE book_id IN ({placeholders}) GROUP BY book_id, mode''', book_ids):
+                totals.setdefault(row['book_id'], {})[row['mode']] = row['words']
+            return totals
         finally:
             conn.close()
 
@@ -182,22 +283,21 @@ class ReaderIndexMixin:
 
         version = previous_version + 1
         etag = hashlib.sha256(f'{book_id}:{version}:{checksum}'.encode('utf-8')).hexdigest()
-        with conn:
-            conn.execute('DELETE FROM reader_unit WHERE book_id = ?', (book_id,))
-            conn.executemany('''
-                INSERT INTO reader_unit
-                    (book_id, mode, ordinal, chapter_id, chapter_ordinal, segment,
-                     word_count, word_start, byte_count, gap)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', values)
-            conn.execute('''
-                INSERT INTO reader_version (book_id, version, source_checksum, manifest_etag, verse, plain_coverage)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(book_id) DO UPDATE SET
-                    version = excluded.version, source_checksum = excluded.source_checksum,
-                    manifest_etag = excluded.manifest_etag, verse = excluded.verse,
-                    plain_coverage = excluded.plain_coverage
-            ''', (book_id, version, checksum, etag, int(verse), int(plain_coverage)))
+        conn.execute('DELETE FROM reader_unit WHERE book_id = ?', (book_id,))
+        conn.executemany('''
+            INSERT INTO reader_unit
+                (book_id, mode, ordinal, chapter_id, chapter_ordinal, segment,
+                 word_count, word_start, byte_count, gap)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', values)
+        conn.execute('''
+            INSERT INTO reader_version (book_id, version, source_checksum, manifest_etag, verse, plain_coverage)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(book_id) DO UPDATE SET
+                version = excluded.version, source_checksum = excluded.source_checksum,
+                manifest_etag = excluded.manifest_etag, verse = excluded.verse,
+                plain_coverage = excluded.plain_coverage
+        ''', (book_id, version, checksum, etag, int(verse), int(plain_coverage)))
         return dict(conn.execute('SELECT * FROM reader_version WHERE book_id = ?', (book_id,)).fetchone())
 
     def get_reader_manifest(self, book_id: int) -> Dict:

@@ -10162,3 +10162,84 @@ PWA installability errors, correct /plainly/ worker control and empty Cache
 Storage. Distill's authenticated public PWA was not rechecked in a logged-in
 browser; its authenticated internal manifest/assets/scopes pass, alongside prior
 root/prefix browser verification. No device installation was performed.
+
+## 2026-10-26 — Plainly/Distill sharing review
+
+Reviewed both app shells, PWA routes/scripts/workers, cover rendering, library
+cards, reader-index hooks, cache policies and Kindle adapters. No application
+code or production data changed during this review.
+
+Highest-value opportunities: move Distill's persistent reader freshness and
+batched word totals into shared.reader for both apps; consolidate the duplicated
+PWA registration/install lifecycle and network-only worker with app metadata;
+share static cache policy with explicit public/private visibility and immutable
+caching only for verified content hashes; introduce a common cover-source
+contract and picture renderers across Jinja/JS, keeping storage adapters separate;
+finish library-card sharing by centralizing the client renderer/view-model and
+its server/client parity tests. Existing reader engine, settings, auth, progress,
+base styles and Kindle paging/progress are already shared.
+
+Important constraints: Plainly freshness invalidation must include book verse
+metadata and section-title edits as well as chapter edits. Preserve stable unit
+coordinates and independent user databases. PWA consolidation should retain
+app-specific logos, scopes, access rules, colors and optional iOS guidance.
+Cover URLs must declare available formats explicitly: Plainly currently renders
+WebP/JPEG pairs while Distill has AVIF/WebP/JPEG thumbnails; do not infer AVIF
+availability or replace Plainly's storage with Distill's schema. Library-card
+sharing must preserve Plainly's Finished/Read again/Mark unfinished controls.
+
+Before expanding the shared server setup, replace module-global progress/whoami
+DB handles with app-scoped dependencies; registering a second app in the same
+Python process currently overwrites the first app's bindings. Current separate
+production processes avoid that condition. Keep discovery/grade filters,
+Plain English/audio features, import formats and app-specific TOC semantics in
+the owning apps. Further Kindle route unification is lower value because those
+content and anonymous-resume semantics differ substantially.
+
+This was a source review; no new runtime benchmark or tests were run. Proposed
+implementation order: shared reader fast paths, PWA support, static cache policy,
+cover renderers, then remaining library-card rendering. Use cross-app contract
+tests for revision invalidation, scopes/auth, SSR/JS parity and progress identity.
+
+## 2026-10-26 — Share reader freshness and batched word totals
+
+Implemented review item 1. shared.reader.index now owns revision-table/trigger
+installation, persistent reader freshness checks, and batched library word
+totals. Both content databases opt into the shared implementation; Distill's
+duplicate methods are removed. Plainly now skips full-book source loading and
+checksum work on clean reader requests, and its library projection uses the
+existing batch hook instead of building a full manifest per in-progress book.
+Hosts without revision tracking retain checksum-based validation.
+
+Plainly invalidation covers chapter insert/update/delete/reassignment, poetry
+metadata, and section insert/update/delete (including dangling legacy links).
+Non-content book edits do not invalidate the index. Clean requests stay read-only;
+dirty validation/compilation and freshness publication use one write transaction,
+with a second freshness check after taking the lock. Competing workers therefore
+cannot publish an older index over a newer one; failed compilation rolls back
+both the unit index and freshness state.
+
+Distill upgrades its existing freshness metadata to reader_revision in place,
+preserving revision values, indexed revisions, reader versions and units, then
+removes the retired Distill-only metadata/trigger set. Plainly seeds revisions
+for existing books, validating each existing checksum lazily once; unchanged
+content retains its published version and unit coordinates. Neither app's user
+or progress database is migrated or rewritten. No production deployment yet.
+
+Validation: 350 Distill/shared tests pass; 131 targeted Plainly reader, poetry,
+Kindle, home, API characterization and listing tests pass (one content audit
+deselected). Added cross-app tests for restart persistence without text reads,
+external edits, chapter reassignment/deletion, batched totals and dirty-book
+selection, concurrent compilers, rollback, and upgrades preserving versions,
+units and resolved markers. Added section deletion/restoration and unrelated
+metadata regression tests. The first Plainly collection needed Kindle tests
+listed before tests that import its fixtures relatively; the reordered run
+passes. No production database was used by these test runs.
+
+Benchmark on scratch SQLite backups of local content, warm medians: Plainly's
+largest-book freshness check 45.74ms -> 0.32ms; totals for ten largest books
+309.75ms -> 10.46ms. Totals match the previous per-book manifest results in all
+modes. These measure server-side work, excluding browser/network latency. Distill
+continues using its existing fast path, now shared (0.15ms freshness, 0.55ms totals
+for ten large books in the same local check). Original content/user databases
+were not modified by the benchmark.

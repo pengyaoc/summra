@@ -10,7 +10,7 @@ from typing import Optional, List, Dict
 
 from plainly import config
 from plainly.study_cues import add_book_cues, add_chapter_cues
-from shared.reader.index import ReaderIndexMixin, create_reader_tables
+from shared.reader.index import ReaderIndexMixin, create_reader_revisions, create_reader_tables
 
 # Private column for chapter-list metadata, turned into reading_minutes /
 # reading_time by add_chapter_cues(). Word count is approximated in SQL
@@ -43,6 +43,8 @@ def slugify(text: str) -> str:
 
 class Database(ReaderIndexMixin):
     """Database handler for Plainly"""
+
+    _reader_revision_tracking = True
 
     def __init__(self, db_path: Path = config.DATABASE_PATH):
         self.db_path = db_path
@@ -273,6 +275,7 @@ class Database(ReaderIndexMixin):
         cursor.execute(f"CREATE INDEX IF NOT EXISTS {self._LISTING_INDEX} ON books({', '.join(self._LISTING_COLUMNS)})")
         conn.commit()
 
+        create_reader_revisions(cursor, book_columns=('is_poetry',), sections=True)
         conn.commit()
         conn.close()
 

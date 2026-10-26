@@ -15,7 +15,7 @@ from PIL import Image, ImageOps
 
 from distill import config
 from distill.book_format import block_text, iter_chapters, list_images, load_book, normalize_toc_titles, validate_book, word_count
-from shared.reader.index import ReaderIndexMixin, create_reader_tables
+from shared.reader.index import ReaderIndexMixin, create_reader_revisions, create_reader_tables
 
 _IMAGE_MIMES = {'.jpg': 'image/jpeg', '.png': 'image/png'}
 _COVER_RECIPE = b'cover-v1-320x480-avif60-speed6-webp80-jpeg82'
@@ -41,6 +41,7 @@ def _cover_variants(data: bytes) -> list:
 
 
 class DistillDatabase(ReaderIndexMixin):
+    _reader_revision_tracking = True
 
     def __init__(self, db_path: Path = config.DATABASE_PATH):
         self.db_path = db_path
@@ -103,25 +104,18 @@ class DistillDatabase(ReaderIndexMixin):
             if 'categories' not in {row['name'] for row in conn.execute('PRAGMA table_info(books)')}:
                 conn.execute("ALTER TABLE books ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'")
             create_reader_tables(conn.cursor())
-            # Persist index freshness across requests/workers. SQLite triggers
-            # also catch content edits made by import tools or another process.
-            conn.execute('''CREATE TABLE IF NOT EXISTS distill_reader_revision (
-                book_id INTEGER PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
-                revision INTEGER NOT NULL DEFAULT 0,
-                indexed_revision INTEGER
-            )''')
-            conn.execute('INSERT OR IGNORE INTO distill_reader_revision (book_id) SELECT id FROM books')
-            conn.execute('''CREATE TRIGGER IF NOT EXISTS distill_book_revision_insert AFTER INSERT ON books
-                BEGIN INSERT INTO distill_reader_revision (book_id) VALUES (NEW.id); END''')
-            for event, reference in (('INSERT', 'NEW'), ('DELETE', 'OLD')):
-                conn.execute(f'''CREATE TRIGGER IF NOT EXISTS distill_chapter_revision_{event.lower()}
-                    AFTER {event} ON chapters BEGIN
-                    UPDATE distill_reader_revision SET revision = revision + 1
-                    WHERE book_id = {reference}.book_id; END''')
-            conn.execute('''CREATE TRIGGER IF NOT EXISTS distill_chapter_revision_update
-                AFTER UPDATE ON chapters BEGIN
-                UPDATE distill_reader_revision SET revision = revision + 1
-                WHERE book_id IN (OLD.book_id, NEW.book_id); END''')
+            create_reader_revisions(conn.cursor())
+            # Preserve the already-published Distill index when upgrading to
+            # shared freshness tracking. Remove the retired trigger set once.
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='distill_reader_revision'").fetchone():
+                conn.execute('''UPDATE reader_revision SET
+                    revision = (SELECT revision FROM distill_reader_revision old WHERE old.book_id = reader_revision.book_id),
+                    indexed_revision = (SELECT indexed_revision FROM distill_reader_revision old WHERE old.book_id = reader_revision.book_id)
+                    WHERE book_id IN (SELECT book_id FROM distill_reader_revision)''')
+                for trigger in ('distill_book_revision_insert', 'distill_chapter_revision_insert',
+                                'distill_chapter_revision_delete', 'distill_chapter_revision_update'):
+                    conn.execute(f'DROP TRIGGER IF EXISTS {trigger}')
+                conn.execute('DROP TABLE distill_reader_revision')
         conn.close()
 
     # ------------------------------------------------------------------
@@ -375,29 +369,6 @@ class DistillDatabase(ReaderIndexMixin):
 
     # Library hooks (shared.progress.routes content_db surface)
 
-    def library_word_totals(self, book_ids: List[int]) -> Dict[int, Dict[str, int]]:
-        """Progress needs word totals, not full manifests or chapter text."""
-        if not book_ids:
-            return {}
-        conn = self.get_connection()
-        try:
-            dirty = [r['book_id'] for r in conn.execute(
-                f'''SELECT r.book_id FROM distill_reader_revision r
-                    LEFT JOIN reader_version v ON v.book_id = r.book_id
-                    WHERE r.book_id IN ({','.join('?' * len(book_ids))})
-                    AND (r.indexed_revision IS NULL OR r.indexed_revision != r.revision OR v.book_id IS NULL)''',
-                book_ids)]
-            for book_id in dirty:
-                self.ensure_reader_content(book_id)
-            totals = {}
-            for r in conn.execute(
-                    f'''SELECT book_id, mode, SUM(word_count) AS words FROM reader_unit
-                        WHERE book_id IN ({','.join('?' * len(book_ids))}) GROUP BY book_id, mode''', book_ids):
-                totals.setdefault(r['book_id'], {})[r['mode']] = r['words']
-            return totals
-        finally:
-            conn.close()
-
     def chapter_counts(self, book_ids: List[int]) -> Dict[int, int]:
         if not book_ids:
             return {}
@@ -437,25 +408,6 @@ class DistillDatabase(ReaderIndexMixin):
     # ------------------------------------------------------------------
     # Continuous-reader hooks (shared.reader.ReaderIndexMixin)
     # ------------------------------------------------------------------
-
-    def ensure_reader_content(self, book_id: int) -> Dict:
-        conn = self.get_connection()
-        try:
-            row = conn.execute('''SELECT v.*, r.revision, r.indexed_revision
-                FROM distill_reader_revision r LEFT JOIN reader_version v ON v.book_id = r.book_id
-                WHERE r.book_id = ?''', (book_id,)).fetchone()
-            if row and row['version'] is not None and row['revision'] == row['indexed_revision']:
-                return {k: row[k] for k in row.keys() if k not in ('revision', 'indexed_revision')}
-            revision = row['revision'] if row else None
-            version = super().ensure_reader_content(book_id)
-            if revision is not None:
-                # A concurrent edit must not be marked indexed by this request.
-                with conn:
-                    conn.execute('''UPDATE distill_reader_revision SET indexed_revision = ?
-                        WHERE book_id = ? AND revision = ?''', (revision, book_id, revision))
-            return version
-        finally:
-            conn.close()
 
     @staticmethod
     def _unit_visible_text(text: str) -> str:

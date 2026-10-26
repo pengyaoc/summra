@@ -67,3 +67,39 @@ def test_section_title_change_rebuilds_reader_structure(book):
     second = db.get_reader_manifest(book_id)
     assert second['content_version'] > first['content_version']
     assert any(entry['title'] == 'Part I' for entry in second['structure'])
+
+
+def test_external_section_delete_and_restore_invalidate_reader(book):
+    import sqlite3
+    db, book_id = book
+    with db.get_connection() as conn:
+        section_id = conn.execute('''INSERT INTO book_sections
+            (book_id, section_type, section_number, section_title) VALUES (?, 'PART', 1, 'Part One')''',
+            (book_id,)).lastrowid
+        conn.execute('UPDATE chapters SET section_id = ? WHERE book_id = ?', (section_id, book_id))
+    first = db.get_reader_manifest(book_id)
+    # Legacy import tools can run without FK enforcement. Even dangling or
+    # restored section links must invalidate the same book's cached index.
+    with sqlite3.connect(db.db_path) as conn:
+        conn.execute('DELETE FROM book_sections WHERE id = ?', (section_id,))
+    deleted = db.get_reader_manifest(book_id)
+    assert deleted['content_version'] == first['content_version'] + 1
+    assert not any(e.get('title') == 'Part One' for e in deleted['structure'])
+    with sqlite3.connect(db.db_path) as conn:
+        conn.execute('''INSERT INTO book_sections
+            (id, book_id, section_type, section_number, section_title) VALUES (?, ?, 'PART', 1, 'Restored part')''',
+            (section_id, book_id))
+    restored = db.get_reader_manifest(book_id)
+    assert restored['content_version'] == deleted['content_version'] + 1
+    assert any(e.get('title') == 'Restored part' for e in restored['structure'])
+
+
+def test_unrelated_book_metadata_does_not_reload_reader_content(book, monkeypatch):
+    db, book_id = book
+    first = db.ensure_reader_content(book_id)
+    with db.get_connection() as conn:
+        conn.execute('UPDATE books SET author = ?, is_poetry = is_poetry WHERE id = ?', ('New author', book_id))
+    def forbidden(*args):
+        raise AssertionError('non-content metadata invalidated reader index')
+    monkeypatch.setattr(db, '_reader_load_chapters', forbidden)
+    assert db.ensure_reader_content(book_id) == first

@@ -55,20 +55,30 @@ def test_reader_index_freshness_survives_restart_and_external_edits(db, sample_b
 
 def test_index_freshness_does_not_swallow_concurrent_content_changes(db, sample_book, write_book, monkeypatch):
     bid = db.import_book(write_book(sample_book))
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
     checksum = db._reader_source_checksum
-    changed = False
+    started = Event()
+    pending = []
 
-    def edit_during_checksum(chapters):
-        nonlocal changed
-        if not changed:
-            changed = True
-            with db.get_connection() as conn:
-                conn.execute('UPDATE chapters SET title = ? WHERE id = ?', ('Concurrent title', chapters[1]['id']))
-        return checksum(chapters)
+    def edit(chapter_id):
+        started.set()
+        with db.get_connection() as conn:
+            conn.execute('UPDATE chapters SET title = ? WHERE id = ?', ('Concurrent title', chapter_id))
 
-    monkeypatch.setattr(db, '_reader_source_checksum', edit_during_checksum)
-    old = db.ensure_reader_content(bid)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        def edit_during_checksum(chapters):
+            if not pending:
+                pending.append(pool.submit(edit, chapters[1]['id']))
+                assert started.wait(2)
+            return checksum(chapters)
+
+        monkeypatch.setattr(db, '_reader_source_checksum', edit_during_checksum)
+        old = db.ensure_reader_content(bid)
+        pending[0].result(timeout=5)
     assert db.ensure_reader_content(bid)['version'] == old['version'] + 1
+
 
 
 
