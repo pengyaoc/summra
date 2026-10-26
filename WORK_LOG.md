@@ -10129,3 +10129,36 @@ backend/config files remain untouched. Production Pillow 13.0 already supports
 AVIF/WebP. Apply Distill content migrations to the live content DB in place,
 with a backup and before/after identity/content checks, instead of overwriting
 it with a local DB. Preserve both apps' user/progress databases.
+
+## 2026-10-26 — Production deployment completed
+
+Committed and pushed release e1fbc39 to main, then fast-forwarded the production
+checkout on wordpress-2-vm. Restarted distill.service and summra.service; both
+are active. Host-owned configuration and untracked files were preserved.
+
+Backed up all four production databases under /opt/summra/data using suffix
+.pre-release-20261026T221553Z (an earlier backup set also exists with suffix
+.pre-release-20261026T221204Z). Migrated Distill in place: 254 title repairs,
+54 terminal Source chapters, and 54 covers with AVIF/WebP/JPEG variants; total
+chapters 1,618. All old chapter IDs, ordinals, parts and blocks, original images,
+book metadata, and existing reader-unit coordinates remain identical. Both
+user/progress databases and Plainly content passed before/after fingerprints;
+all four databases pass SQLite integrity checks. TOC/Source migration reruns
+report no further changes. AVIF covers total 794,971 bytes across 54 books.
+
+The first verifier accumulated full database dumps in memory and caused swapping
+on the small VM. Stopped it before content migration, restored service availability,
+then reran with incremental hashing and bounded memory; all preservation checks
+passed. This extended maintenance downtime by several minutes. Future releases
+should use streaming verification from the outset and precompute cover variants
+before stopping services where possible.
+
+Post-deploy authenticated loopback checks pass for Distill home/book/reader,
+favicon, all three cover formats, manifests, icons and scoped workers for both
+apps. Anonymous Distill remains denied internally and redirects to authentication
+on public HTTPS. Warm median loopback home latency: Distill 9.4ms, Plainly 4.5ms
+(excludes network/browser latency). Public HTTPS Chromium reports zero Plainly
+PWA installability errors, correct /plainly/ worker control and empty Cache
+Storage. Distill's authenticated public PWA was not rechecked in a logged-in
+browser; its authenticated internal manifest/assets/scopes pass, alongside prior
+root/prefix browser verification. No device installation was performed.
