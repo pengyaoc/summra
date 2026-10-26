@@ -5,6 +5,7 @@ import os
 from flask import Flask, request
 
 from distill import config
+from distill.kindle_routes import bp as kindle_bp
 from distill.models import DistillDatabase
 from distill.reader_config import DISTILL_READER
 from distill.routes import bp
@@ -35,6 +36,7 @@ def create_app(content_db=None, user_db=None, auth_config=None) -> Flask:
 
     install_reader_platform(app, DISTILL_READER, lambda: app.config['CONTENT_DB'], user_db)
     app.register_blueprint(bp)
+    app.register_blueprint(kindle_bp)
     app.jinja_env.globals['block_element'] = block_element
 
     @app.context_processor

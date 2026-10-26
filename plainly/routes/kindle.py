@@ -15,7 +15,7 @@ progress mutation, and opening a book resumes from that account state.
 """
 import re
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, request
 from markupsafe import Markup, escape
 
 from plainly import models
@@ -26,7 +26,7 @@ from shared.kindle import pages as kindle_pages
 from shared.kindle.pages import (
     cookie_path, font_size, page_number, paginate, register_kindle_pages, url,
 )
-from shared.kindle.progress import record_page
+from shared.kindle.progress import save_progress as shared_save_progress
 from shared.progress import routes as progress_routes
 
 bp = Blueprint('kindle', __name__)
@@ -248,37 +248,26 @@ def reader_page(slug, chapter_number=None):
     )
 
 
-@bp.route('/api/kindle/progress', methods=['POST'])
-def save_progress():
-    """Record the Kindle reader's page as a web-reader progress mutation.
-
-    JSON: book_id, ch (chapter number), p (paragraph index), text
-    (plain|original), forward (arrived by turning forward), seconds (time on
-    the previous page), finished (on the book's last page)."""
-    if not PLAINLY_READER.features.kindle or progress_routes.user_db is None:
-        return jsonify({'error': 'Not found'}), 404
-    user_id = _signed_in_user_id()
-    if user_id is None:
-        return jsonify({'error': 'Authentication required'}), 401
-    data = request.get_json(silent=True) or {}
-    book_id, number, index, text = data.get('book_id'), data.get('ch'), data.get('p'), data.get('text')
-    if not (isinstance(book_id, int) and isinstance(number, int) and isinstance(index, int)
-            and index >= 0 and text in TEXT_MODES):
-        return jsonify({'error': 'Invalid position'}), 400
-    db = common.db
+def _position(db, book_id, number, index, text):
+    """Plainly's side of the shared progress handler: (unit id, quote) of
+    paragraph `index` of chapter `number` in `text`, or None if unknown."""
     book = db.get_book(book_id)
     chapter = db.get_chapter(book_id, number) if book else None
     if not chapter:
-        return jsonify({'error': 'Unknown chapter'}), 400
+        return None
     verse = bool(book.get('is_poetry')) and text == 'original'
     source = chapter.get('modern_english_text' if text == 'plain' else 'chapter_text')
     paragraphs = models.Database._reader_split_paragraphs(source, verse=verse)
     quote = re.sub(r'\s+', ' ', paragraphs[index]).strip()[:180] if index < len(paragraphs) else None
-    payload, status = record_page(
-        progress_routes.user_db, db, user_id, book_id, text,
-        models.Database._reader_unit_id(chapter['id'], index), quote,
-        data.get('forward') is True, data.get('seconds'), data.get('finished') is True)
-    return jsonify(payload), status
+    return models.Database._reader_unit_id(chapter['id'], index), quote
+
+
+@bp.route('/api/kindle/progress', methods=['POST'])
+def save_progress():
+    """Record the Kindle reader's page as a web-reader progress mutation
+    (shared.kindle.progress.save_progress; ch is the chapter number)."""
+    return shared_save_progress(PLAINLY_READER, progress_routes.user_db, common.db,
+                                _signed_in_user_id(), _position)
 
 
 register_kindle_pages(bp, {

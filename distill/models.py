@@ -178,6 +178,26 @@ class DistillDatabase(ReaderIndexMixin):
         finally:
             conn.close()
 
+    def get_chapter_outline(self, book_id: int) -> List[Dict]:
+        """id, ordinal, part_title and title of every chapter, without loading blocks."""
+        conn = self.get_connection()
+        try:
+            return [dict(r) for r in conn.execute(
+                'SELECT id, ordinal, part_title, title FROM chapters WHERE book_id = ? ORDER BY ordinal',
+                (book_id,))]
+        finally:
+            conn.close()
+
+    def get_chapter(self, book_id: int, ordinal: int) -> Optional[Dict]:
+        conn = self.get_connection()
+        try:
+            r = conn.execute('SELECT * FROM chapters WHERE book_id = ? AND ordinal = ?',
+                             (book_id, ordinal)).fetchone()
+            return {'id': r['id'], 'ordinal': r['ordinal'], 'part_title': r['part_title'],
+                    'title': r['title'], 'blocks': json.loads(r['blocks'])} if r else None
+        finally:
+            conn.close()
+
     def get_image(self, book_id: int, name: str) -> Optional[Tuple[str, bytes]]:
         conn = self.get_connection()
         try:

@@ -1,0 +1,41 @@
+{% extends 'shared/kindle/base.html' %}
+{% block title %}Distill{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ url_for('static', filename='css/distill_kindle.css') }}{{ asset_v('css/distill_kindle.css') }}">{% endblock %}
+{% block body_class %}page{% endblock %}
+{% block body %}
+{% include 'shared/kindle/_masthead.html' %}
+
+{% if reading %}
+<section class="reading">
+  <h2 class="section">Reading now</h2>
+  <ul class="list">
+    {% for book in reading %}
+    <li><a href="{{ base_path }}/books/{{ book.slug }}/read">
+      <span class="title">{{ book.title }}</span>
+      <span class="author">{{ book.author }}</span>
+      <span class="progress">{% if book.current_chapter %}{{ book.current_chapter.chapter_title }} &middot; {% endif %}{{ book.furthest_percentage }}%</span>
+      <span class="bar"><span style="width: {{ book.furthest_percentage }}%"></span></span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% if show != 'reading' and reading_count > reading|length %}<p class="see-all"><a class="btn" href="{{ base_path }}/?show=reading">See all {{ reading_count }} &rsaquo;</a></p>{% endif %}
+</section>
+{% endif %}
+
+{% if show != 'reading' %}
+<h2 class="section">All books</h2>
+<ul class="list">
+  {% for book in books %}
+  <li><a href="{{ base_path }}/books/{{ book.slug }}">
+    <span class="title">{{ book.title }}</span>
+    <span class="author">{{ book.author }}</span>
+  </a></li>
+  {% else %}
+  <li class="empty">No books yet.</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% include 'shared/kindle/_pager.html' %}
+{% include 'shared/kindle/_account.html' %}
+<p class="fineprint"><a href="{{ base_path }}/?kindle=0">Full website</a></p>
+{% endblock %}

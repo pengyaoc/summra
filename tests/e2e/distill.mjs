@@ -247,6 +247,67 @@ try {
   await page.screenshot({ path: `${SHOTS}distill_zh.png` });
   const zhLabel = await keypointsLabel(page, KEYPOINTS_ZH_SLUG);
   check(zhLabel === '"要点"', `zh .reader-keypoints::before is ${zhLabel}`);
+
+  // --- Kindle e-ink mode (own context: a second live session on one book makes saves 409) -------
+  const KINDLE_UA = 'Mozilla/5.0 (X11; U; Linux armv7l like Android; en-us) AppleWebKit/531.2+ '
+    + '(KHTML, like Gecko) Version/5.0 Safari/533.2+ Kindle/3.0+';
+  const kp = await newPage({ userAgent: KINDLE_UA, viewport: { width: 758, height: 950 } });
+  await kp.goto(`${BASE}/`, { waitUntil: 'load' });
+  check(await kp.locator('html.kindle').count() === 1, 'Kindle UA gets the Kindle library');
+  check(await kp.locator('script[type="module"]').count() === 0, 'Kindle library loads no module script');
+  check(await kp.locator('.list li a').count() > 0, 'Kindle library lists books');
+  await kp.screenshot({ path: `${SHOTS}distill_kindle_library.png` });
+
+  await kp.goto(`${BASE}/books/${SLUG}`, { waitUntil: 'load' });
+  check(await kp.locator('html.kindle').count() === 1 && await kp.locator('.contents li a').count() > 0, 'Kindle contents are listed');
+  check(await kp.locator('.contents li.part').count() > 0, 'Kindle contents have part headings');
+  await kp.screenshot({ path: `${SHOTS}distill_kindle_book.png` });
+
+  // The first chapter of the book with both a table and an image, found from the Kindle HTML itself.
+  let target = null;
+  for (let ch = 0; ch < 60 && !target; ch++) {
+    const html = await kp.evaluate(async (u) => { const r = await fetch(u); return r.ok ? r.text() : ''; }, `${BASE}/books/${SLUG}/read?ch=${ch}`);
+    if (!html) break;
+    if (html.includes('<table') && html.includes('<figure')) target = ch;
+  }
+  check(target !== null, `a Kindle chapter with a table and an image exists (ch=${target})`);
+
+  if (target !== null) {
+    await kp.goto(`${BASE}/books/${SLUG}/read?ch=${target}`, { waitUntil: 'load' });
+    check(await kp.locator('html.kindle').count() === 1 && await kp.locator('script[src*="kindle.js"]').count() === 1
+      && await kp.locator('script[type="module"]').count() === 0, 'Kindle reader loads kindle.js and no module script');
+    await kp.waitForFunction(() => /\S/.test(document.getElementById('right')?.textContent || ''), null, { timeout: 5000 });
+    const right = () => kp.locator('#right').innerText();
+    const flowLeft = () => kp.evaluate(() => document.getElementById('flow').style.left);
+    check(await kp.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), 'Kindle reader does not scroll');
+
+    // Every table row and figure sits in one column (one page), on a fresh layout.
+    const split = await kp.evaluate(() => {
+      const flow = document.getElementById('flow').getBoundingClientRect();
+      const step = document.getElementById('viewport').offsetWidth + 72;
+      const bad = [];
+      for (const el of document.querySelectorAll('#flow tr, #flow figure')) {
+        const pagesTouched = new Set();
+        for (const r of el.getClientRects()) {
+          pagesTouched.add(Math.floor((r.left - flow.left + 2) / step));
+          pagesTouched.add(Math.floor((r.right - flow.left - 2) / step));
+        }
+        if (pagesTouched.size > 1) bad.push(`${el.tagName} spans pages ${[...pagesTouched]}`);
+      }
+      return { bad, count: document.querySelectorAll('#flow tr, #flow figure').length };
+    });
+    check(split.count > 0 && split.bad.length === 0, `no tr or figure spans two columns (${split.count} checked; ${split.bad.join('; ')})`);
+    const img = await kp.evaluate(() => [...document.querySelectorAll('#flow figure img')].map((i) => [i.complete, i.naturalWidth]));
+    check(img.length > 0 && img.every(([done, w]) => done && w > 0), `Kindle figure images load (naturalWidth>0: ${JSON.stringify(img)})`);
+
+    const before = [await right(), await flowLeft()];
+    await kp.mouse.click(700, 475);
+    await kp.waitForTimeout(150);
+    check((await flowLeft()) !== before[1] && (await right()) !== before[0], `tap at x=700 turns the page (${before} -> ${await right()})`);
+    await kp.screenshot({ path: `${SHOTS}distill_kindle_reader.png` });
+    const table = await kp.evaluate(() => { const t = document.querySelector('#flow table'); return t ? t.getBoundingClientRect().left : null; });
+    check(table !== null, 'Kindle reader renders the table');
+  }
 } catch (e) {
   fail(`unexpected error: ${e.stack || e}`);
 } finally {

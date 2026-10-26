@@ -1,0 +1,7 @@
+{% extends 'shared/kindle/reader_base.html' %}
+{% block lang %}{{ book.lang }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ url_for('static', filename='css/distill_kindle.css') }}{{ asset_v('css/distill_kindle.css') }}">{% endblock %}
+{% block flow_body %}
+    {% for element in flow %}{{ element }}
+    {% endfor %}
+{% endblock %}

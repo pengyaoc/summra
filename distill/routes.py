@@ -37,14 +37,15 @@ def _card_for(book_id):
     return next((c for c in cards['continue_reading'] + cards['finished'] if c['id'] == book_id), None)
 
 
-@bp.route('/')
-@login_required
-def library():
-    db = _db()
-    books = sorted(db.list_books(), key=lambda b: (b['imported_at'] or '', b['id']), reverse=True)
+def newest_first(db):
+    return sorted(db.list_books(), key=lambda b: (b['imported_at'] or '', b['id']), reverse=True)
+
+
+def reading_cards(db, user_id, books):
+    """The reader's books in progress, as library cards whose location line is `progress_label`."""
     by_id = {b['id']: b for b in books}
     reading = []
-    for card in library_cards(g.user_id)['continue_reading']:
+    for card in library_cards(user_id)['continue_reading']:
         book = by_id.get(card['id'])
         if not book:
             continue
@@ -52,7 +53,15 @@ def library():
         # The shared card macro prints current_chapter.chapter_title as its location line.
         reading.append({**card, 'cover_image': book['cover_image'],
                         'current_chapter': {'chapter_title': label} if label else None})
-    return render_template('library.html', reading=reading, books=books)
+    return reading
+
+
+@bp.route('/')
+@login_required
+def library():
+    db = _db()
+    books = newest_first(db)
+    return render_template('library.html', reading=reading_cards(db, g.user_id, books), books=books)
 
 
 @bp.route('/books/<slug>')

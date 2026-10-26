@@ -1,3 +1,22 @@
+{#
+  Kindle reader page, shared. An app's reader.html extends this, fills the
+  `flow_body` block (units carrying data-i), and may add `flow_class` and
+  override the `lang` block (html lang, default en).
+
+  Required context:
+    book           .id .slug .title
+    chapter        .chapter_number .chapter_title (data-ch and the heading)
+    text           the active text mode id (data-text), from reader_config.kindle.text_modes
+    text_urls      {mode: url} of this chapter's text versions (the Text row shows
+                   only when reader_config.kindle has several modes)
+    start          unit index to open at
+    chars_before, chapter_chars, total_chars   character counts for the progress line
+    font_size      1-5 (class fs-N)
+    cookie_path    path for the kindle script's cookies
+    sync_url       progress endpoint, or None when signed out
+    prev_url, next_url, next_title   neighbouring chapters (None at the ends)
+  Also used: base_path, asset_v, reader_config (platform context).
+#}
 {% extends 'shared/kindle/base.html' %}
 {% block html_class %}reading fs-{{ font_size }}{% endblock %}
 {% block title %}{{ chapter.chapter_title or ('Chapter ' ~ chapter.chapter_number) }} — {{ book.title }}{% endblock %}
