@@ -16,13 +16,17 @@ ALLOWED = 'me@example.com'
 HEADERS = {'X-Remote-Email': ALLOWED}
 
 
-@pytest.fixture
-def app_env(tmp_path, monkeypatch, sample_book, write_book):
+def pin_platform_globals(monkeypatch):
     # The reader platform keeps its db handles in module globals (last install
     # wins). Pin them to their current values first so monkeypatch restores
     # them and Plainly tests in the same process are unaffected.
     for module, name in ((progress_routes, 'user_db'), (progress_routes, 'content_db'), (whoami, 'user_db')):
         monkeypatch.setattr(module, name, getattr(module, name))
+
+
+@pytest.fixture
+def app_env(tmp_path, monkeypatch, sample_book, write_book):
+    pin_platform_globals(monkeypatch)
 
     from distill.app_base import create_app
     content_db = DistillDatabase(tmp_path / 'distill.db')
@@ -58,6 +62,8 @@ def test_allowed_email_reads_image_private_cache_and_304(client):
 
     again = client.get('/books/my-book/images/cover.jpg', headers={**HEADERS, 'If-None-Match': etag})
     assert again.status_code == 304
+    assert again.headers['Cache-Control'] == 'private, max-age=3600'
+    assert response.headers['X-Content-Type-Options'] == 'nosniff'
 
     assert client.get('/books/my-book/images/nope.jpg', headers=HEADERS).status_code == 404
     assert client.get('/books/no-such-book/images/cover.jpg', headers=HEADERS).status_code == 404
@@ -125,9 +131,56 @@ def test_progress_globals_owned_by_distill_while_app_lives(app_env):
     assert whoami.user_db is app_env[2]
 
 
-def test_progress_globals_restored_for_plainly():
-    # Runs after the test above (file order): the fixture's monkeypatch must
-    # have handed the globals back, not left Distill's handles installed.
-    for installed in (progress_routes.user_db, whoami.user_db):
-        assert 'user.db' not in str(getattr(installed, 'db_path', ''))
-    assert not hasattr(progress_routes.content_db, 'get_image')
+def test_progress_globals_restored_for_plainly(tmp_path):
+    from distill.app_base import create_app
+    sentinels = {}
+    handles = ((progress_routes, 'user_db'), (progress_routes, 'content_db'), (whoami, 'user_db'))
+    saved = [getattr(module, name) for module, name in handles]
+    try:
+        for module, name in handles:
+            sentinels[(module, name)] = object()
+            setattr(module, name, sentinels[(module, name)])
+        with pytest.MonkeyPatch.context() as mp:
+            pin_platform_globals(mp)
+            create_app(DistillDatabase(tmp_path / 'c.db'), UserDatabase(tmp_path / 'u.db'), AuthConfig(mode='off'))
+            assert progress_routes.user_db is not sentinels[(progress_routes, 'user_db')]
+        for module, name in handles:
+            assert getattr(module, name) is sentinels[(module, name)]
+    finally:
+        for (module, name), value in zip(handles, saved):
+            setattr(module, name, value)
+
+
+def test_create_app_rejects_optional_mode(tmp_path, monkeypatch):
+    from distill.app_base import create_app
+    pin_platform_globals(monkeypatch)
+    optional = AuthConfig(mode='optional', allowed_emails=frozenset({ALLOWED}))
+    with pytest.raises(ValueError, match='optional'):
+        create_app(DistillDatabase(tmp_path / 'c.db'), UserDatabase(tmp_path / 'u.db'), optional)
+
+
+def test_error_responses_default_to_private_no_cache(client):
+    stranger = {'X-Remote-Email': 'stranger@example.com'}
+    for headers, url, status in ((None, '/', 401), (stranger, '/', 403),
+                                 (HEADERS, '/books/my-book/images/nope.jpg', 404)):
+        response = client.get(url, headers=headers)
+        assert response.status_code == status
+        assert response.headers['Cache-Control'] == 'private, no-cache'
+
+
+def test_dev_server_binds_loopback_by_default(monkeypatch):
+    import distill.app as dev
+    calls = []
+
+    class FakeApp:
+        config = {}
+
+        def run(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(dev, 'create_app', lambda: FakeApp())
+    dev.main()
+    assert calls[-1]['host'] == '127.0.0.1'
+    monkeypatch.setattr(dev.config, 'HOST', '0.0.0.0')  # what DISTILL_HOST=0.0.0.0 yields at import
+    dev.main()
+    assert calls[-1]['host'] == '0.0.0.0'

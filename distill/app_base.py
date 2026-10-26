@@ -28,6 +28,8 @@ def create_app(content_db=None, user_db=None, auth_config=None) -> Flask:
     if auth_config is None:
         auth_config = (load_pchauth_config(os.environ, prefix='DISTILL')
                        if os.environ.get('DISTILL_AUTH_MODE') else AuthConfig(mode='off'))
+    if auth_config.mode == 'optional':
+        raise ValueError("Distill is all-private: auth mode 'optional' is not allowed (use 'off' for dev, 'required' for prod)")
     init_pchauth(app, auth_config, upsert_user=lambda identity: user_db.upsert_user_by_email(identity.email))
 
     install_reader_platform(app, DISTILL_READER, lambda: app.config['CONTENT_DB'], user_db)

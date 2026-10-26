@@ -19,5 +19,6 @@ def book_image(slug, name):
     response = make_response(data)
     response.mimetype = mime
     response.headers['Cache-Control'] = 'private, max-age=3600'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
     response.add_etag()
     return response.make_conditional(request)
