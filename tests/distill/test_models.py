@@ -181,3 +181,17 @@ def test_count_chapters_excludes_overview(db, sample_book, write_book):
     sample_book.update(slug='no-overview', overview=[])
     other = db.import_book(write_book(sample_book))
     assert db.count_chapters(other) == 2  # ordinals 0..2: the first chapter sits at ordinal 0
+
+
+def test_categories_round_trip_and_old_schema_migration(tmp_path, sample_book, write_book):
+    import sqlite3
+    path = tmp_path / 'legacy.db'
+    db = DistillDatabase(path)
+    book_id = db.import_book(write_book(sample_book))
+    with sqlite3.connect(path) as conn:
+        conn.execute('ALTER TABLE books DROP COLUMN categories')
+    db = DistillDatabase(path)
+    assert db.get_book(book_id)['categories'] == []
+    sample_book['categories'] = ['Science', 'History']
+    db.import_book(write_book(sample_book))
+    assert db.get_book(book_id)['categories'] == ['Science', 'History']

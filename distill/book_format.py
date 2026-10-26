@@ -130,6 +130,9 @@ def validate_book(book: dict, folder: Path) -> list:
         errors.append('title: required')
     if not isinstance(book.get('lang'), str) or not _LANG_RE.match(book['lang']):
         errors.append('lang: required, two lowercase letters')
+    categories = book.get('categories', [])
+    if not isinstance(categories, list) or any(not isinstance(c, str) or not c.strip() for c in categories):
+        errors.append('categories: must be a list of non-empty strings')
     if book.get('cover') is not None:
         _check_image(book['cover'], 'cover', folder, errors)
     _check_blocks(book.get('overview', []), 'overview', folder, errors)

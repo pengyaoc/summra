@@ -4,6 +4,10 @@
 {% block title %}Library · Distill{% endblock %}
 {% block content %}
 <main class="distill-main">
+    <div class="distill-library-intro">
+        <div><p class="distill-eyebrow">YOUR PERSONAL BOOKSHELF</p><h1>Good ideas stay with you.</h1>
+        <p class="distill-library-subtitle">Find your next read. Come back to what matters.</p></div>
+    </div>
 {% if reading %}
     <section class="distill-section" aria-labelledby="reading-now-heading">
         <h2 id="reading-now-heading">Reading now</h2>
@@ -15,16 +19,138 @@
     </section>
 {% endif %}
     <section class="distill-section" aria-labelledby="all-books-heading">
-        <h2 id="all-books-heading">All books</h2>
+        <div class="distill-shelf-heading"><h2 id="all-books-heading">All books</h2>
+            <p role="status">{{ books|length }}{% if query or language or category %} of {{ total_books }}{% endif %} {{ 'book' if total_books == 1 else 'books' }}</p>
+        </div>
+        <form class="distill-filters" action="{{ base_path }}/" method="get" role="search" aria-label="Find books">
+            <div class="distill-search-wrap">
+            <label class="distill-search"><span class="distill-sr-only">Search books or authors</span>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+                <input type="search" name="q" value="{{ query }}" placeholder="Search books or authors…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="distill-search-options" aria-haspopup="listbox">
+            </label>
+            <div class="distill-search-menu" hidden>
+                <ul id="distill-search-options" role="listbox" aria-label="Suggested books"></ul>
+                <p class="distill-search-feedback" role="status" aria-live="polite"></p>
+            </div>
+            </div>
+            <label class="distill-filter-select"><span>Language</span>
+                <select name="lang"><option value="">All languages</option><option value="en"{% if language == 'en' %} selected{% endif %}>English</option><option value="zh"{% if language == 'zh' %} selected{% endif %}>中文 · Chinese</option></select>
+            </label>
+            <label class="distill-filter-select"><span>Category</span>
+                <select name="category"><option value="">All categories</option>
+                {% for name in categories %}<option value="{{ name }}"{% if category == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+                {% if category and category not in categories %}<option value="{{ category }}" selected>{{ category }}</option>{% endif %}
+                </select>
+            </label>
+            <button class="distill-filter-submit" type="submit">Find books</button>
+        </form>
+        {% if query or language or category %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}</span><a href="{{ base_path }}/">Clear filters</a></div>{% endif %}
         <div class="distill-grid">
 {% for book in books %}
             <a class="distill-tile" href="{{ base_path }}/books/{{ book.slug }}">
                 {{ cover(book) }}
                 <h3>{{ book.title }}</h3>
                 <p>{{ book.author }}</p>
+                <span class="distill-book-meta">{{ '中文' if book.lang == 'zh' else 'English' if book.lang == 'en' else book.lang }} <span aria-hidden="true">·</span> {{ book_categories(book)|first }}</span>
             </a>
+{% else %}
+            <div class="distill-empty"><h3>{{ 'No books match your filters.' if total_books else 'Your bookshelf is ready.' }}</h3>
+            <p>{{ 'Try another title, author, language or category.' if total_books else 'Your imported books will appear here.' }}</p>
+            {% if total_books %}<a href="{{ base_path }}/">Show all books</a>{% endif %}</div>
 {% endfor %}
         </div>
     </section>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script id="distill-search-catalog" type="application/json">{{ search_catalog | tojson }}</script>
+<script>
+(function () {
+    var form = document.querySelector('.distill-filters');
+    if (!form) return;
+    var selects = form.querySelectorAll('select');
+    for (var i = 0; i < selects.length; i++) {
+        selects[i].addEventListener('change', function () { form.submit(); });
+    }
+    var input = form.querySelector('[name="q"]');
+    var menu = form.querySelector('.distill-search-menu');
+    var list = document.getElementById('distill-search-options');
+    var feedback = form.querySelector('.distill-search-feedback');
+    var catalog = JSON.parse(document.getElementById('distill-search-catalog').textContent);
+    var matches = [], active = -1, composing = false;
+    function close() {
+        menu.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        active = -1;
+    }
+    function select(index) {
+        active = index;
+        for (var j = 0; j < list.children.length; j++) {
+            list.children[j].setAttribute('aria-selected', j === active ? 'true' : 'false');
+        }
+        if (active >= 0) {
+            input.setAttribute('aria-activedescendant', list.children[active].id);
+            list.children[active].scrollIntoView({block: 'nearest'});
+        } else input.removeAttribute('aria-activedescendant');
+    }
+    function openBook(index) {
+        if (matches[index]) window.location.assign((window.APP_BASE_PATH || '') + '/books/' + encodeURIComponent(matches[index].slug));
+    }
+    function suggest() {
+        if (composing) return;
+        var query = input.value.trim().toLocaleLowerCase();
+        list.textContent = '';
+        close();
+        if (!query) return;
+        matches = catalog.filter(function (book) {
+            return (book.title + ' ' + book.author).toLocaleLowerCase().indexOf(query) !== -1;
+        }).sort(function (a, b) {
+            // Prefer titles beginning with the query to matches inside a name.
+            return (b.title.toLocaleLowerCase().indexOf(query) === 0 ? 1 : 0) -
+                   (a.title.toLocaleLowerCase().indexOf(query) === 0 ? 1 : 0);
+        }).slice(0, 6);
+        matches.forEach(function (book, index) {
+            var option = document.createElement('li');
+            option.id = 'distill-suggestion-' + index;
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', 'false');
+            var title = document.createElement('strong');
+            title.textContent = book.title;
+            var author = document.createElement('span');
+            author.textContent = book.author;
+            option.appendChild(title);
+            option.appendChild(author);
+            option.addEventListener('mousedown', function (event) { event.preventDefault(); });
+            option.addEventListener('click', function () { openBook(index); });
+            list.appendChild(option);
+        });
+        feedback.textContent = matches.length ? matches.length + ' suggested ' + (matches.length === 1 ? 'book' : 'books') + '. Use arrow keys to choose.' : 'No matching books in the selected filters.';
+        menu.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+    }
+    input.addEventListener('input', suggest);
+    input.addEventListener('focus', suggest);
+    input.addEventListener('compositionstart', function () { composing = true; close(); });
+    input.addEventListener('compositionend', function () { composing = false; suggest(); });
+    input.addEventListener('keydown', function (event) {
+        if (composing || event.isComposing || event.keyCode === 229) return;
+        if (event.key === 'Escape') { close(); return; }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (menu.hidden) suggest();
+            if (!matches.length || menu.hidden) return;
+            select((active + (event.key === 'ArrowDown' ? 1 : active < 0 ? 0 : -1) + matches.length) % matches.length);
+        } else if (event.key === 'Enter' && !menu.hidden && active >= 0) {
+            event.preventDefault();
+            openBook(active);
+        }
+    });
+    input.addEventListener('blur', close);
+    document.addEventListener('click', function (event) {
+        if (!form.querySelector('.distill-search-wrap').contains(event.target)) close();
+    });
+}());
+</script>
 {% endblock %}

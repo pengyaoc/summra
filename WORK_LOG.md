@@ -1,5 +1,26 @@
 # Summra Work Log
 
+## 2026-10-26: Distill search and drop logo deployment (in progress)
+
+- Owner authorized commit, push and deployment. Current branch matches origin/main at 2ea7a86. Production checkout is at f2e82f6 with no tracked edits; existing untracked backend/config files will be preserved.
+- Full suite passed: 1,106 tests, two deselected. All 160 Distill tests pass. Browser checks for typeahead and combined filters completed before this deploy.
+- Code deployment only: fast-forward production, snapshot its Distill content DB before the additive categories migration, restart Distill, verify access controls, filters, static assets, content fingerprints and Plainly health. No user-progress DB copy or shared code changes.
+
+## 2026-10-26: Distill drop logo selected; typeahead (local preview)
+
+- Fixed the header to the selected drop mark and removed the logo picker, alternate marks, preview CSS, and localStorage override. Existing device selections can no longer override the chosen logo.
+- Added instant title/author suggestions from the private library metadata, capped at six results and scoped to the selected language/category. Search catalog remains available when editing a submitted query. Click or arrow keys + Enter opens a book; Escape/blur dismiss, regular Enter still submits search, and Chinese IME composition is respected. Uses textContent for suggestions and Jinja tojson for catalog escaping.
+- Validation: both new regression tests failed before implementation; all 160 Distill tests passed. Browser verified title and author matches, mouse selection, arrow/Enter selection, Chinese suggestions combined with language/category, Escape dismissal, and no-match feedback. Fixed drop visible in library and book detail. `git diff --check` passes.
+- Local preview: http://localhost:5013/. Screenshot: /private/tmp/distill-typeahead-preview.jpg. No production deployment.
+
+## 2026-10-25: Distill search, filters and logo options (local preview)
+
+- Added server-rendered title/author search and combinable Chinese/English and category filters to the web library. GET parameters preserve selections and support sharing/bookmarking; category/language changes submit automatically, with a normal submit button for search and no-JavaScript use. Added result counts, clear filters, empty states, language/category captions and responsive controls.
+- Added optional `categories` metadata to the book format and import path, with a backward-compatible SQLite column migration. Existing 54-book collection uses explicit editorial category assignments by slug; future books may provide their own categories, otherwise appear under Uncategorized. Reader content checksums and progress IDs do not depend on categories.
+- Added three inline SVG logo directions: drop, open book and funnel. The library's Explore logos control previews each and remembers the device's choice in localStorage. Default is the drop. No new asset files or dependencies.
+- Validation: new tests failed before implementation and now pass; all 158 Distill tests pass. Full suite: 1,096 passed and eight existing Gutenberg network tests failed under restricted DNS; rerunning those eight with network access passed all eight (1,104 passing across the two runs; two deselected). `git diff --check` passes.
+- Browser verified against all 54 local books: Chinese gives six results; Chinese plus Science & technology gives one; Chinese text search combines with both. Logo selection survives reload. Desktop and 390px mobile inspected, with no horizontal overflow. Preview server: http://127.0.0.1:5013/. Production has not been changed. Existing unrelated worktree edits preserved.
+
 ## 2026-10-26: Distill `--deploy` and standalone DB push (complete)
 
 - New `distill/scripts/deploy_db.py` (`deploy_db(db_path, settings, run=subprocess.run)`, `DeployError`, runnable as `python -m distill.scripts.deploy_db`). It checkpoints the WAL, snapshots the VM copy (skipped on a first push), scps to `~/distill.db.new`, compares md5 before touching the service, then stops, swaps, chowns, chmods and starts the unit. It checks `is-active` and a local 401, then prunes to the newest 2 `*.bak-pre-push-*`.

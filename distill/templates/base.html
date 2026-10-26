@@ -1,3 +1,9 @@
+{% macro brand_mark() -%}
+<svg class="distill-mark" data-logo-mark="drop" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+    <path d="M20 3C17 10 8 18 8 25a12 12 0 0 0 24 0C32 18 23 10 20 3Z" fill="currentColor"/>
+    <path d="M14 23h12M16 28h8" stroke="var(--surface)" stroke-width="2.3" stroke-linecap="round"/>
+</svg>
+{%- endmacro %}
 <!DOCTYPE html>
 <html lang="{% block lang %}en{% endblock %}">
 <head>
@@ -14,7 +20,10 @@
 <body{% block body_attrs %}{% endblock %}>
 {% block header %}
     <header class="distill-header">
-        <a class="distill-wordmark" href="{{ base_path }}/">Distill</a>
+        <a class="distill-wordmark" href="{{ base_path }}/" aria-label="Distill home">
+            <span id="distill-brand-mark">{{ brand_mark() }}</span><span>Distill<span class="distill-brand-dot">.</span></span>
+        </a>
+        <span class="distill-header-caption">A little reading. A lot to keep.</span>
     </header>
 {% endblock %}
 {% block content %}{% endblock %}

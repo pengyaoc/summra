@@ -52,12 +52,47 @@ def reading_cards(db, user_id, books):
     return reading
 
 
+# Editorial categories for the original imported collection, whose format predates
+# category metadata. New imports can supply their own `categories` list.
+_LEGACY_CATEGORIES = {
+    'Personal growth': 'atomic-habits getting-things-done hbr-10-must-reads-managing-yourself the-one-thing poor-richards-almanack',
+    'Business & leadership': 'the-goal blue-ocean-strategy built-to-last business-adventures first-break-all-the-rules good-to-great measure-what-matters power-pfeffer the-managers-path winning-jack-welch',
+    'Money & investing': 'buy-this-not-that howard-marks-memos-complete-collection poor-charlies-almanack the-intelligent-investor',
+    'History & biography': 'guns-germs-and-steel quanqiutongshi-zhangjie-zongjie better-angels-of-our-nature born-in-blackness energy-and-civilization surely-youre-joking-mr-feynman team-of-rivals the-box the-glory-and-the-dream titan-rockefeller',
+    'Science & technology': 'a-thousand-brains abundance brave-new-words cell-song growth-smil how-the-world-really-works-smil invention-and-innovation life-3-0 numbers-dont-lie phantoms-in-the-brain superintelligence the-tell-tale-brain the-vital-question',
+    'Society & economics': 'abundance-klein-thompson power-to-compete wealth-of-nations why-nations-fail why-were-polarized',
+    'Psychology & philosophy': 'antifragile mans-search-for-meaning thinking-fast-and-slow',
+    'Nature & climate': 'how-to-avoid-a-climate-disaster how-to-feed-the-world silent-spring the-sixth-extinction',
+}
+
+
+def book_categories(book):
+    return book.get('categories') or [category for category, slugs in _LEGACY_CATEGORIES.items()
+                                      if book['slug'] in slugs.split()] or ['Uncategorized']
+
+
 @bp.route('/')
 @login_required
 def library():
     db = _db()
     books = newest_first(db)
-    return render_template('library.html', reading=reading_cards(db, g.user_id, books), books=books)
+    categories = sorted({category for book in books for category in book_categories(book)})
+    query = request.args.get('q', '').strip()
+    language = request.args.get('lang', '')
+    language = language if language in ('zh', 'en') else ''
+    category = request.args.get('category', '')
+    filtered = [book for book in books
+                if (not language or book['lang'] == language)
+                and (not category or category in book_categories(book))]
+    shown = [book for book in filtered
+             if not query or query.casefold() in f"{book['title']} {book.get('author') or ''}".casefold()]
+    # Only searchable metadata is embedded, never chapter content. Keep the whole
+    # selected shelf available when editing a previously submitted search.
+    search_catalog = [{key: book.get(key) or '' for key in ('title', 'author', 'slug')}
+                      for book in filtered]
+    return render_template('library.html', reading=reading_cards(db, g.user_id, books), books=shown,
+                           total_books=len(books), categories=categories, query=query,
+                           language=language, category=category, book_categories=book_categories, search_catalog=search_catalog)
 
 
 @bp.route('/books/<slug>')

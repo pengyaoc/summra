@@ -67,6 +67,9 @@ class DistillDatabase(ReaderIndexMixin):
                     UNIQUE(book_id, name)
                 )
             ''')
+            # Backward-compatible metadata migration; chapter IDs and progress stay intact.
+            if 'categories' not in {row['name'] for row in conn.execute('PRAGMA table_info(books)')}:
+                conn.execute("ALTER TABLE books ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'")
             create_reader_tables(conn.cursor())
         conn.close()
 
@@ -93,15 +96,16 @@ class DistillDatabase(ReaderIndexMixin):
         try:
             with conn:
                 conn.execute('''
-                    INSERT INTO books (slug, title, author, lang, sources, imported_at, content_checksum)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO books (slug, title, author, lang, sources, imported_at, content_checksum, categories)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(slug) DO UPDATE SET
                         title = excluded.title, author = excluded.author, lang = excluded.lang,
                         sources = excluded.sources, imported_at = excluded.imported_at,
-                        content_checksum = excluded.content_checksum
+                        content_checksum = excluded.content_checksum, categories = excluded.categories
                 ''', (book['slug'], book['title'], book.get('author'), book['lang'],
                       json.dumps(book.get('sources', []), ensure_ascii=False),
-                      datetime.now().isoformat(sep=' ', timespec='seconds'), checksum))
+                      datetime.now().isoformat(sep=' ', timespec='seconds'), checksum,
+                      json.dumps([c.strip() for c in book.get('categories', [])], ensure_ascii=False)))
                 book_id = conn.execute('SELECT id FROM books WHERE slug = ?', (book['slug'],)).fetchone()['id']
 
                 for ordinal, (part_title, title, blocks) in enumerate(chapters):
@@ -133,6 +137,7 @@ class DistillDatabase(ReaderIndexMixin):
     def _book_dict(row: sqlite3.Row) -> Dict:
         return {
             'id': row['id'], 'slug': row['slug'], 'title': row['title'], 'author': row['author'],
+            'categories': json.loads(row['categories']),
             'lang': row['lang'], 'sources': json.loads(row['sources'] or '[]'),
             'cover_image_id': row['cover_image_id'], 'cover_image': row['cover_image'],
             'imported_at': row['imported_at'],

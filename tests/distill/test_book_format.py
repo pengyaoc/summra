@@ -142,3 +142,10 @@ def test_list_images_returns_sorted_jpg_and_png_files(tmp_path):
 
 def test_list_images_without_images_dir_is_empty(tmp_path):
     assert bf.list_images(tmp_path) == []
+
+
+@pytest.mark.parametrize('categories', ['Science', [4], [''], ['  '], None])
+def test_invalid_categories_rejected(folder, categories):
+    book = _book()
+    book['categories'] = categories
+    assert any('categories' in error for error in bf.validate_book(book, folder))

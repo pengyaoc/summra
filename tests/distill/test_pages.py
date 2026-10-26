@@ -167,3 +167,52 @@ def test_progress_label_cases():
     assert progress_label({'current_chapter': None}, 12) == ''
     assert progress_label({'current_chapter': {'chapter_number': 0}}, 12) == 'Overview'
     assert progress_label({'current_chapter': {'chapter_number': 3}}, 12) == 'Chapter 3 of 12'
+
+
+def test_library_combines_search_language_and_category(app_env, sample_book, write_book):
+    client, db, _, _ = app_env
+    sample_book.update(slug='chinese-science', title='细胞传', author='悉达多', lang='zh', categories=['Science'])
+    db.import_book(write_book(sample_book))
+    sample_book.update(slug='english-science', title='Cell Biology', lang='en')
+    db.import_book(write_book(sample_book))
+    html = get(client, '/?q=细胞&lang=zh&category=Science').get_data(as_text=True)
+    assert 'href="/books/chinese-science"' in html
+    assert 'href="/books/english-science"' not in html
+    assert 'href="/books/my-book"' not in html
+    assert '1 of 3 books' in html
+    assert 'name="q"' in html and 'name="lang"' in html and 'name="category"' in html
+    assert 'No books match' in get(client, '/?q=nonexistent').get_data(as_text=True)
+    assert 'href="/books/my-book"' in get(client, '/?q=a. WRITER').get_data(as_text=True)
+
+
+def test_library_filter_escapes_query_and_keeps_category_options(client):
+    html = get(client, '/?q=%22%3E%3Cscript%3E&lang=invalid').get_data(as_text=True)
+    assert '<script>' not in html.split('name="q"', 1)[1].split('</form>', 1)[0]
+    assert 'Uncategorized' in html
+
+
+def test_legacy_book_category_mapping():
+    from distill.routes import book_categories
+    assert book_categories({'slug': 'atomic-habits', 'categories': []}) == ['Personal growth']
+    assert book_categories({'slug': 'unknown', 'categories': []}) == ['Uncategorized']
+    assert book_categories({'slug': 'atomic-habits', 'categories': ['Custom']}) == ['Custom']
+
+
+def test_drop_logo_is_fixed_and_picker_removed(client):
+    html = get(client, '/').get_data(as_text=True)
+    assert 'data-logo-mark="drop"' in html
+    assert 'data-logo-mark="book"' not in html
+    assert 'Explore logos' not in html
+    assert 'distill-logo' not in html
+
+
+def test_typeahead_catalog_ignores_query_but_respects_filters(app_env, sample_book, write_book):
+    client, db, _, _ = app_env
+    sample_book.update(slug='science-zh', title='细胞传', lang='zh', categories=['Science'])
+    db.import_book(write_book(sample_book))
+    html = get(client, '/?q=missing&lang=zh&category=Science').get_data(as_text=True)
+    catalog = json.loads(re.search(r'<script id="distill-search-catalog" type="application/json">(.*?)</script>', html, re.S).group(1))
+    assert catalog == [{'title': '细胞传', 'author': 'A. Writer', 'slug': 'science-zh'}]
+    assert 'role="combobox"' in html
+    assert 'role="listbox"' in html
+    assert 'aria-controls="distill-search-options"' in html
