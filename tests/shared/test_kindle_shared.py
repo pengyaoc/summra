@@ -216,6 +216,17 @@ def test_saved_marker_ignores_unlisted_modes(users):
     assert pages_saved(users, content, uid + 1, ('plain',)) is None
 
 
+@pytest.mark.parametrize('field', ['book_id', 'ch', 'p'])
+def test_save_progress_rejects_bool_ints(users, field):
+    uid = users.upsert_user_by_email('a@example.com')
+    body = {'book_id': 1, 'ch': 1, 'p': 1, 'text': 'plain'}
+    body[field] = True
+    with Flask(__name__).test_request_context('/', method='POST', json=body):
+        response, code = progress.save_progress(
+            make_config(), users, FakeContent(), uid, lambda *args: ('1.1', None))
+    assert code == 400 and response.get_json() == {'error': 'Invalid position'}
+
+
 def pages_saved(users, content, uid, modes):
     return pages.saved_marker(users, content, uid, 1, modes)
 

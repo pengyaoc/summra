@@ -62,6 +62,17 @@ def test_private_visibility_marks_manifest_and_segment_private():
     assert seg.headers['Cache-Control'] == 'private, max-age=31536000, immutable'
 
 
+def test_segment_ignores_version_param_but_keeps_etag():
+    """The client appends &v=<content_version> so a re-import changes the URL
+    (and the 1-year cache key); the server serves the same segment either way."""
+    c = client_for(config(), lambda: FakeDB())
+    plain = c.get('/api/reader/books/1/segments/s?mode=original')
+    versioned = c.get('/api/reader/books/1/segments/s?mode=original&v=7')
+    assert versioned.status_code == 200
+    assert versioned.get_json() == plain.get_json()
+    assert versioned.headers['ETag'] == plain.headers['ETag']
+
+
 def test_segment_404_json_on_unknown():
     r = client_for(config(), lambda: FakeDB()).get('/api/reader/books/1/segments/missing?mode=original')
     assert r.status_code == 404 and r.get_json()['success'] is False

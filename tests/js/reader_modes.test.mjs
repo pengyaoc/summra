@@ -273,6 +273,19 @@ test("page_turn_hint off shows no hint", async () => {
     assert.equal(app.pagination.hintShown, undefined);
 });
 
+test("test_segment_url_carries_manifest_content_version", async () => {
+    const urls = [];
+    globalThis.fetch = async url => {
+        urls.push(url);
+        return { ok: true, json: async () => ({ success: true, segment: { id: "s1" } }) };
+    };
+    window.authModule = { cacheReaderSegment: async () => ({ catch() {} }) };
+    const app = makeApp({ apiBase: "/api", currentBook: { id: 7 } });
+    app.continuousReader = { active: true, mode: "summary", manifest: { content_version: 42 } };
+    await app.fetchContinuousSegment("summary.3");
+    assert.equal(urls[0], "/api/reader/books/7/segments/summary.3?mode=summary&v=42");
+});
+
 function splitSelectors() {
     const seen = [];
     const row = { querySelector: selector => { seen.push(selector); return null; } };

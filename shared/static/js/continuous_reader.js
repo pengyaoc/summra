@@ -196,7 +196,7 @@ export const continuousReaderMixin = {
         if (!reader?.active) return null;
         reader.requests ||= new Map();
         if (reader.requests.has(segmentId)) return reader.requests.get(segmentId);
-        const request = fetch(`${this.apiBase}/reader/books/${this.currentBook.id}/segments/${encodeURIComponent(segmentId)}?mode=${reader.mode}`)
+        const request = fetch(`${this.apiBase}/reader/books/${this.currentBook.id}/segments/${encodeURIComponent(segmentId)}?mode=${reader.mode}&v=${encodeURIComponent(reader.manifest.content_version)}`)
             .then(response => response.ok ? response.json() : Promise.reject(new Error('segment unavailable')))
             .then(data => {
                 window.authModule?.cacheReaderSegment?.(this.currentBook.id, data.segment).catch(() => {});

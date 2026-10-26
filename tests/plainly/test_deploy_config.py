@@ -93,6 +93,22 @@ def test_gunicorn_threads_defaults_to_4_and_honours_env_override():
     assert _last_module_globals["threads"] == 8
 
 
+def test_gunicorn_pidfile_and_proc_name_default_to_todays_values():
+    env = {k: v for k, v in os.environ.items() if k not in ("GUNICORN_PIDFILE", "GUNICORN_PROC_NAME")}
+    _run_gunicorn_config_module(env)
+    assert _last_module_globals["pidfile"] == "/tmp/gunicorn.pid"
+    assert _last_module_globals["proc_name"] == "summra"
+
+
+def test_gunicorn_pidfile_and_proc_name_honour_env_override():
+    """A second app (Distill) on the same VM needs its own pidfile, or
+    gunicorn refuses to start beside Plainly's."""
+    env = {**os.environ, "GUNICORN_PIDFILE": "/tmp/distill.pid", "GUNICORN_PROC_NAME": "distill"}
+    _run_gunicorn_config_module(env)
+    assert _last_module_globals["pidfile"] == "/tmp/distill.pid"
+    assert _last_module_globals["proc_name"] == "distill"
+
+
 _last_module_globals = {}
 
 

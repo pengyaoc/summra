@@ -35,11 +35,11 @@ loglevel = 'info'
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
 # Process naming
-proc_name = 'summra'
+proc_name = os.getenv('GUNICORN_PROC_NAME', 'summra')
 
 # Server mechanics
 daemon = False
-pidfile = '/tmp/gunicorn.pid'
+pidfile = os.getenv('GUNICORN_PIDFILE', '/tmp/gunicorn.pid')
 umask = 0
 user = None
 group = None

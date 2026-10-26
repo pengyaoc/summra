@@ -62,7 +62,8 @@ def save_progress(config, user_db, content_db, user_id, position):
         return jsonify({'error': 'Authentication required'}), 401
     data = request.get_json(silent=True) or {}
     book_id, number, index, text = data.get('book_id'), data.get('ch'), data.get('p'), data.get('text')
-    if not (isinstance(book_id, int) and isinstance(number, int) and isinstance(index, int)
+    # type() is int, not isinstance: JSON true must not pass as 1.
+    if not (type(book_id) is int and type(number) is int and type(index) is int
             and index >= 0 and text in [mode for mode, _ in config.kindle.text_modes]):
         return jsonify({'error': 'Invalid position'}), 400
     found = position(content_db, book_id, number, index, text)
