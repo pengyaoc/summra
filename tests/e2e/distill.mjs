@@ -168,7 +168,7 @@ try {
   // --- Library -> book page -> reader -------------------------------------
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   check(await page.locator('.distill-tile').count() > 0, 'library lists books');
-  check(await page.locator('.book-cover-placeholder').count() > 0, 'books without a cover get a placeholder card');
+  check(await page.locator('.distill-tile .distill-cover').count() === await page.locator('.distill-tile').count(), 'every book has a cover image or placeholder');
   await page.screenshot({ path: `${SHOTS}distill_library.png`, fullPage: false });
 
   await page.click(`a.distill-tile[href$="/books/${SLUG}"]`);
@@ -244,6 +244,58 @@ try {
   await page.goto(`${BASE}/books/${ZH_SLUG}/read`, { waitUntil: 'networkidle' });
   await anchorsReady();
   check(await page.evaluate(() => document.documentElement.lang) === 'zh', 'zh reader has lang=zh');
+  // Both apps use this same platform. A no-space Chinese paragraph must fill
+  // the preceding page and continue, retaining formatting, anchors and place.
+  const chineseSplit = await page.evaluate(async () => {
+    const {applyReaderPlatform} = await import('/static/shared/js/platform.js');
+    class Fixture {}
+    applyReaderPlatform(Fixture);
+    const app = new Fixture();
+    app.initReaderPlatform();
+    app.continuousReader = {active: true, mode: 'summary', unitsById: new Map([
+      ['1.0', {word_count: 1}], ['1.1', {word_count: 1}],
+    ])};
+    const container = document.createElement('div');
+    container.className = 'continuous-reader-content';
+    container.style.cssText = 'position:absolute;left:-9999px;width:335px';
+    const short = '本章以鲁道夫菲尔绍的生平开篇。'.repeat(3);
+    const long = '细胞是生命的基本单位，研究者用显微镜发现了隐形的世界。'.repeat(100);
+    container.innerHTML = `<p data-reader-anchor="1.0" data-reader-word-count="1">${short}</p><p data-reader-anchor="1.1" data-reader-word-count="1"><em>${long}</em>𠮷野家DNA</p>`;
+    document.querySelector('#continuous-reader-section').appendChild(container);
+    const style = getComputedStyle(container);
+    const box = `width:${container.offsetWidth}px;padding:${style.padding};box-sizing:${style.boxSizing};font-size:${style.fontSize};line-height:${style.lineHeight}`;
+    app.calculatePages(container);
+    const overflows = [], texts = [], slacks = [], markers = [];
+    let emphasis = true;
+    for (const [index, html] of app.pagination.pages.entries()) {
+      const el = document.createElement('div');
+      el.className = 'pagination-page-container';
+      el.style.cssText = `position:absolute;left:-9999px;${box};height:${app.pagination.containerHeight}px;overflow:hidden`;
+      el.innerHTML = html;
+      container.parentElement.appendChild(el);
+      overflows.push(el.scrollHeight > app.pagination.containerHeight + 1);
+      texts.push(el.textContent.replace(/\s/g, ''));
+      const last = el.lastElementChild;
+      slacks.push(el.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom);
+      const longFragment = el.querySelector('[data-reader-anchor="1.1"]');
+      if (longFragment?.textContent.includes('细胞') && !longFragment.querySelector('em')) emphasis = false;
+      app.pagination.currentPage = index;
+      const anchor = el.querySelector('[data-reader-anchor]');
+      const offset = app.continuousMarkerOffset(anchor);
+      markers.push(app.findContinuousPageForMarker({paragraph_id: anchor.dataset.readerAnchor, offset}) === index);
+      el.remove();
+    }
+    const first = app.pagination.pages[0];
+    container.remove();
+    return {pages: texts.length, allText: texts.join('') === short + long + '𠮷野家DNA',
+      overflows, slacks, markers, emphasis, fillsFirst: first.includes('data-reader-anchor="1.1"')};
+  });
+  check(chineseSplit.pages > 2 && chineseSplit.fillsFirst, 'Chinese paragraph splits and starts in remaining page space');
+  check(chineseSplit.allText && chineseSplit.emphasis, 'Chinese paragraph retains every character, inline markup and anchors');
+  check(!chineseSplit.overflows.some(Boolean), 'Chinese continuation pages never clip content');
+  check(chineseSplit.slacks.slice(0, -1).every(gap => gap < 90), 'Chinese continuation pages fill available height');
+  check(chineseSplit.markers.every(Boolean), 'Chinese saved offsets restore each continuation page');
+
   await page.screenshot({ path: `${SHOTS}distill_zh.png` });
   const zhLabel = await keypointsLabel(page, KEYPOINTS_ZH_SLUG);
   check(zhLabel === '"要点"', `zh .reader-keypoints::before is ${zhLabel}`);

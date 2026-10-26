@@ -96,3 +96,49 @@ for (const ordinal of [0, 80, 160]) {
 """
     subprocess.run(['node', '--input-type=module', '-e', script],
                    cwd=Path(__file__).resolve().parents[2], check=True)
+
+
+def test_pagination_text_units_break_chinese_without_splitting_english_words():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source = fs.readFileSync('shared/static/js/pagination.js', 'utf8');
+const {paginationMixin: app} = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+globalThis.NodeFilter = {SHOW_TEXT: 4};
+globalThis.document = {createTreeWalker(el) {
+    let index = 0;
+    return {nextNode: () => el.nodes[index++] || null};
+}};
+const units = text => app.textUnits({classList: {contains: () => false}, nodes: [{data: text}]}).texts;
+assert.deepEqual(units('An ordinary English paragraph.'), ['An', 'ordinary', 'English', 'paragraph.']);
+const chinese = '细胞是生命的基本单位。1821年，研究DNA与细胞。';
+assert.ok(units(chinese).length > 15, 'Chinese paragraphs must offer breakpoints without spaces');
+assert.equal(units(chinese).join(''), chinese, 'No Chinese text or punctuation lost');
+assert.ok(units(chinese).includes('DNA'), 'Latin words in Chinese remain whole');
+assert.ok(units('𠮷野家').includes('𠮷'), 'Never split a supplementary Han character in half');
+""")
+
+
+def test_chinese_split_paragraph_marker_round_trip():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source = fs.readFileSync('shared/static/js/continuous_reader.js', 'utf8');
+const {continuousReaderMixin} = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const fragments = ['细'.repeat(100), '胞'.repeat(200), '传'.repeat(200)];
+const anchor = text => ({dataset: {readerAnchor: '1.0', readerWordCount: '1'}, textContent: text});
+globalThis.document = {createElement() {
+    return {set innerHTML(value) {this.index = Number(value);},
+        querySelectorAll() {return [anchor(fragments[this.index])];}};
+}};
+const app = {...continuousReaderMixin,
+    readerLayout: () => 'single',
+    continuousReader: {mode: 'summary', unitsById: new Map([['1.0', {word_count: 1}]])},
+    pagination: {pages: ['0','1','2'], currentPage: 1},
+};
+assert.equal(app.continuousMarkerOffset(anchor(fragments[1])), .2);
+app.pagination.currentPage = 2;
+assert.equal(app.continuousMarkerOffset(anchor(fragments[2])), .6);
+assert.equal(app.findContinuousPageForMarker({paragraph_id: '1.0', offset: .2}), 1);
+assert.equal(app.findContinuousPageForMarker({paragraph_id: '1.0', offset: .6}), 2);
+""")

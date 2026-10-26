@@ -323,26 +323,39 @@ export const continuousReaderMixin = {
         });
     },
 
-    findContinuousPageForMarker(marker) {
+    // All visible fragments of a paragraph, measured consistently for saving
+    // and restoring. Chinese uses character fractions: its whitespace word
+    // count can be one even when the paragraph spans many pages. Keep the
+    // existing word-based offsets for English and side-by-side mode switches.
+    continuousParagraphPageSizes(paragraphId) {
         const reader = this.continuousReader;
-        const unit = reader?.unitsById?.get(marker.paragraph_id);
-        const totalWords = unit?.word_count || unit?.canonical_word_count || 0;
-        const targetWords = totalWords * Math.max(0, Math.min(1, Number(marker.offset) || 0));
-        let accumulated = 0;
+        const fragments = [];
         for (let index = 0; index < this.pagination.pages.length; index += 1) {
             const page = document.createElement('div');
             page.innerHTML = this.pagination.pages[index];
-            const fragments = [...page.querySelectorAll('[data-reader-anchor]')]
-                .filter(candidate => candidate.dataset.readerAnchor === marker.paragraph_id);
-            if (!fragments.length) continue;
-            const words = fragments.reduce((sum, candidate) => {
-                const text = this.readerLayout(reader.mode) === 'side_by_side'
+            const text = [...page.querySelectorAll('[data-reader-anchor]')]
+                .filter(candidate => candidate.dataset.readerAnchor === paragraphId)
+                .map(candidate => this.readerLayout(reader.mode) === 'side_by_side'
                     ? (candidate.querySelector(`.side-by-side-cell.${this.readerMode(reader.mode).members[0].cell_class}`)?.textContent || candidate.textContent || '')
-                    : candidate.textContent || '';
-                return sum + text.trim().split(/\s+/).filter(Boolean).length;
-            }, 0);
-            if (!totalWords || targetWords < accumulated + words || index === this.pagination.pages.length - 1) return index;
-            accumulated += words;
+                    : candidate.textContent || '').join('');
+            if (text) fragments.push({ index, text });
+        }
+        const chinese = fragments.some(fragment => /\p{Script=Han}/u.test(fragment.text));
+        const pages = fragments.map(({ index, text }) => ({index, size: chinese
+            ? Array.from(text.replace(/\s/g, '')).length
+            : text.trim().split(/\s+/).filter(Boolean).length}));
+        const unit = reader?.unitsById?.get(paragraphId);
+        const measured = pages.reduce((sum, page) => sum + page.size, 0);
+        return { pages, total: chinese ? measured : (unit?.word_count || unit?.canonical_word_count || measured) };
+    },
+
+    findContinuousPageForMarker(marker) {
+        const { pages, total } = this.continuousParagraphPageSizes(marker.paragraph_id);
+        const target = total * Math.max(0, Math.min(1, Number(marker.offset) || 0));
+        let accumulated = 0;
+        for (const [i, page] of pages.entries()) {
+            if (!total || target < accumulated + page.size || i === pages.length - 1) return page.index;
+            accumulated += page.size;
         }
         return -1;
     },
@@ -366,24 +379,12 @@ export const continuousReaderMixin = {
     },
 
     continuousMarkerOffset(anchor) {
-        const reader = this.continuousReader;
-        const totalWords = Number(anchor?.dataset.readerWordCount) || reader?.unitsById?.get(anchor?.dataset.readerAnchor)?.word_count || 0;
-        if (!anchor || totalWords <= 0 || !this.pagination?.pages?.length) return 0;
-        const countWords = element => {
-            const source = this.readerLayout(reader.mode) === 'side_by_side'
-                ? (element.querySelector(`.side-by-side-cell.${this.readerMode(reader.mode).members[0].cell_class}`)?.textContent || element.textContent || '')
-                : element.textContent || '';
-            return source.trim().split(/\s+/).filter(Boolean).length;
-        };
-        let priorWords = 0;
-        for (let index = 0; index < this.pagination.currentPage; index += 1) {
-            const page = document.createElement('div');
-            page.innerHTML = this.pagination.pages[index];
-            page.querySelectorAll('[data-reader-anchor]').forEach(candidate => {
-                if (candidate.dataset.readerAnchor === anchor.dataset.readerAnchor) priorWords += countWords(candidate);
-            });
-        }
-        return Math.max(0, Math.min(0.99, priorWords / totalWords));
+        if (!anchor || !this.pagination?.pages?.length) return 0;
+        const { pages, total } = this.continuousParagraphPageSizes(anchor.dataset.readerAnchor);
+        if (!total) return 0;
+        const prior = pages.filter(page => page.index < this.pagination.currentPage)
+            .reduce((sum, page) => sum + page.size, 0);
+        return Math.max(0, Math.min(0.99, prior / total));
     },
 
     continuousMarkerWordPosition(marker) {

@@ -485,7 +485,7 @@ export const paginationMixin = {
     },
 
     /**
-     * Where each unit of a text block starts: words, or lines for verse
+     * Where each unit of a text block starts: words, Han characters, or lines for verse
      * (.reader-verse, lines separated by <br>). Slicing between these points
      * with a Range keeps inline markup such as <em>.
      * Returns { starts: [{node, offset}], texts: [string] }.
@@ -503,7 +503,11 @@ export const paginationMixin = {
         } else {
             const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
             for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-                for (const match of node.data.matchAll(/\S+/g)) {
+                // Chinese has no spaces between words. Offer character boundaries
+                // to the same splitter both apps use, retaining Latin words and
+                // Unicode code points (including supplementary Han) intact.
+                const tokens = /\p{Script=Han}\p{Mark}*|[^\s\p{Script=Han}]+/gu;
+                for (const match of node.data.matchAll(tokens)) {
                     starts.push({ node, offset: match.index });
                     texts.push(match[0]);
                 }
@@ -520,7 +524,19 @@ export const paginationMixin = {
         else range.setEnd(units.starts[to].node, units.starts[to].offset);
         if (asText) return range.toString().trim();
         const div = document.createElement('div');
-        div.appendChild(range.cloneContents());
+        let fragment = range.cloneContents();
+        // cloneContents excludes its common ancestor. When both cut points
+        // are inside one <em>/<strong>, restore that inline ancestor chain
+        // so the page fragment keeps the original emphasis.
+        let ancestor = range.commonAncestorContainer;
+        if (ancestor.nodeType !== Node.ELEMENT_NODE) ancestor = ancestor.parentNode;
+        while (ancestor && ancestor !== el) {
+            const wrapper = ancestor.cloneNode(false);
+            wrapper.appendChild(fragment);
+            fragment = wrapper;
+            ancestor = ancestor.parentNode;
+        }
+        div.appendChild(fragment);
         // A verse slice ends with the line break before the next line.
         while (div.lastChild && (div.lastChild.nodeName === 'BR'
             || (div.lastChild.nodeType === Node.TEXT_NODE && !div.lastChild.data.trim()))) {
@@ -531,7 +547,7 @@ export const paginationMixin = {
 
     /**
      * Split paragraph to fit remaining space using binary search (O(log n)),
-     * at a word boundary (a line boundary for verse).
+     * at a word/Han-character boundary (a line boundary for verse).
      * Returns {firstPart: Element, remainder: String} or {firstPart: null}
      */
     splitParagraphToFit(paragraph, pageDiv, pageHeight) {
