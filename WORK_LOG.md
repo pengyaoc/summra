@@ -1,5 +1,16 @@
 # Summra Work Log
 
+## 2026-10-26: Distill phase 6 — old /pages summaries taken down (complete)
+
+I compared VM `/var/www/html/pages` (55 files) with the vault `03-resources/book-summaries/` by name and md5.
+- 50 were identical.
+- 2 differed: `guns-germs-and-steel`, `the-sixth-extinction`. Their VM copies were downloaded into the vault as `<name>.vm-copy-2026-10-26.html`, md5-verified, with nothing overwritten.
+- 3 are not book summaries: `index.php` (the reading tracker), `index.php.bak` and `superlinear-academy-public-guide.html` (in the vault under `02-areas/learn/ai`). They were left on the VM.
+
+Backup: `/home/pengyao/pages-backup-20261026.tar.gz` (28 MB, holds all 53 HTML files plus `/var/lib/pages-progress`).
+
+Deleted the 52 summary pages. No redirects, per the owner.
+
 ## 2026-10-26: Distill phase 4 — deployed to the VM (complete; owner sign-in check pending)
 
 **Plainly.**
