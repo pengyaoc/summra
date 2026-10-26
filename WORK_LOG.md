@@ -1,11 +1,11 @@
 # Summra Work Log
 
-## 2026-10-26: Distill lists and tables flow across reader pages (local)
+## 2026-10-26: Distill lists and tables flow across reader pages (deployed)
 
 - Replaced Distill web-reader list/keypoint containers with numbered or bulleted paragraphs, and tables with stacked cells labeled by their column headers. Long items/cells split through the shared paginator without nested scrolling. Added an opt-in shared flow renderer; Plainly retains its existing rendering, and Kindle keeps semantic tables/lists. Source blocks, unit IDs and content databases are unchanged.
 - All expanded paragraphs retain their source anchors. Saved offsets normalize against displayed flow (including repeated table labels), preserving continuation-page restoration. Inline emphasis, numbering, Chinese keypoint labels, empty/header-only tables and uneven table rows are covered.
 - Full-suite check: 1,122 passed, two deselected, nine failures outside this change: eight Gutenberg network-dependent tests fail in the restricted-network sandbox, and one concurrently edited source-chapter test expects the wrong segment payload shape. These files were left to their separate work.
-- Distill desktop/mobile/Kindle e2e passes. A synthetic long list/table/keypoint fixture spans nine pages with exact text, no clipping, no nested scrolling and correct saved-page restoration. Plainly side-by-side/verse regression passes, including real Tess pages. Build freshness and scoped whitespace checks pass. Local preview: http://localhost:5018; screenshot: /private/tmp/distill-flat-table-preview.jpg. Not committed or deployed.
+- Distill desktop/mobile/Kindle e2e passes. A synthetic long list/table/keypoint fixture spans nine pages with exact text, no clipping, no nested scrolling and correct saved-page restoration. Plainly side-by-side/verse regression passes, including real Tess pages. Build freshness and scoped whitespace checks pass. Local preview: http://localhost:5018; screenshot: /private/tmp/distill-flat-table-preview.jpg. User authorized commit/push/deploy; committed and pushed feb3b4c to main, fast-forwarded production and restarted both apps (shared Python configuration changed). Both services are active. Live owner book/reader responses are 200/private with flat flow enabled; anonymous/stranger responses remain 401/403. Shared JS/CSS served by both apps and the Plainly bundle match tested commit hashes. Public Distill redirects to sign-in (302), Plainly returns 200. No database copy or migration.
 
 ## 2026-10-26: Distill iPhone search focus zoom (deployed)
 
