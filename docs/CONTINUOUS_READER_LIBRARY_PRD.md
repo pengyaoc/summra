@@ -850,7 +850,7 @@ These decisions do not change the product contract and should be resolved in tec
 
 - Existing product PRD: `docs/PRD.md`
 - Existing reading-progress implementation: `shared/auth/user_models.py`, `shared/progress/routes.py`, `plainly/frontend/static/js/auth.js`
-- Existing reader and pagination: `plainly/frontend/static/js/reader.js`, `plainly/frontend/static/js/pagination.js`
+- Existing reader and pagination: `plainly/frontend/static/js/reader.js`, `shared/static/js/pagination.js`
 - [Kindle User's Guide](https://kindle.s3.amazonaws.com/Kindle_User%27s_Guide_English.pdf) — reading progress/location and adjustable presentation precedents
 - [Amazon: Update Your Sync Settings for Kindle](https://digprjsurvey.amazon.com/csad/help/node/GGFEXXS8Z7DPJSTN)
 - [Amazon: Sync Your Kindle E-Reader](https://digprjsurvey.amazon.com/csad/help/node/GDCAMDFMC2LZP6BR)

@@ -20,6 +20,8 @@ This document provides in-depth technical documentation for the Summra project, 
 14. [Blog Header Images & Unsplash Integration](#blog-header-images--unsplash-integration)
 15. [Pagination System](#pagination-system-added-2025-12-19)
 16. [Progressive Web App (PWA) Installability](#progressive-web-app-pwa-installability)
+17. [Reader platform](#reader-platform-shared-reader-2026-10-25)
+18. [Distill app](#distill-app-2026-10-25)
 
 ---
 
@@ -33,16 +35,20 @@ The user-facing name is **Plainly** (renamed from "Summra" on 2026-10-18). Only 
 shared/                  Code both apps use (must not import plainly/ or distill/)
   auth/                  pchauth (trusted-header identity), user_models.py, whoami.py
   progress/routes.py     Reading-progress blueprint
-  reader/index.py        Continuous-reader index mixin
-  web.py, kindle.py      Prefix middleware, gzip, asset versioning; Kindle detection
+  reader/                config.py (ReaderConfig), modes.py, platform.py, routes.py, blocks.py, index.py
+  kindle/                UA detection, page dispatch and helpers, progress recording
+  static/, templates/    static/{css,fonts,js} (reader platform), templates/shared/
+  web.py                 Prefix middleware, gzip, asset versioning, install_shared_ui
 plainly/                 The Plainly app (package `plainly`)
   app_base.py, app.py, app_prod.py, config.py, models.py, routes/, tts_utils.py, ...
   frontend/              Flask static_folder / template_folder (relative to plainly/)
-    static/              css/, js/ (app.min.js is built), covers/, illustrations/, audio/
+    static/              css/, js/ (app.min.js is built), covers/, illustrations/, audio/, shared -> ../../shared/static
     templates/
   scripts/               Ingestion, audits, audio, images (run as `python -m plainly.scripts.<group>.<name>`)
-distill/                 Second app (placeholder)
-tests/{shared,plainly}/  Tests mirror the package layout; tests/e2e is the Playwright harness
+distill/                 Distill, the second app (see "Distill app")
+  app_base.py, routes.py, kindle_routes.py, models.py, book_format.py, reader_config.py, scripts/
+  static/ (shared -> ../../shared/static), templates/
+tests/{shared,plainly,distill}/  Tests mirror the package layout; tests/e2e is the Playwright harness
 ```
 
 `plainly.config.BASE_DIR` is the repository root, so `data/` stays at the top level while
@@ -124,8 +130,8 @@ only, every method still reads/writes `this.*` exactly as if it were still inlin
 | File | Methods |
 |------|---------|
 | `plainly/frontend/static/js/app.js` | The `SummraApp` class itself (routing, book/category/discover/blog page controllers, event setup) + the mixin imports/`Object.assign` calls. |
-| `plainly/frontend/static/js/pagination.js` | The page-based chapter-reading engine (21 methods) — largest subsystem. |
-| `plainly/frontend/static/js/settings.js` | Font/size/theme picker, sticky header, reading-progress (11 methods). |
+| `shared/static/js/pagination.js` | The page-based chapter-reading engine (21 methods) — largest subsystem. |
+| `shared/static/js/settings.js` | Font/size/theme picker, sticky header, reading-progress (11 methods). |
 | `plainly/frontend/static/js/breadcrumbs.js` | Breadcrumb build/render/show/hide (4 methods). |
 | `plainly/frontend/static/js/audio.js` | Persistent audio player + TTS generation flow (14 methods). |
 | `plainly/frontend/static/js/reader.js` | Chapter-reading page controller — markdown/text rendering, the side-by-side view, view-mode switching, `showChapterDetail` (9 methods). |
@@ -1083,7 +1089,7 @@ Converts breadcrumb data to Schema.org BreadcrumbList JSON-LD format for search 
 </nav>
 ```
 
-**Styling:** `plainly/frontend/static/css/style.css:111-159`
+**Styling:** `plainly/frontend/static/css/style.css`
 
 **Features:**
 - First breadcrumb automatically gets back arrow (`← `)
@@ -1303,7 +1309,7 @@ def get_related_books(self, book_id: int, limit: int = 10) -> Dict:
 3. **Navigation Arrows**: Left/right scroll buttons
 4. **Responsive**: Adapts to mobile/tablet/desktop
 
-**Styling:** `plainly/frontend/static/css/style.css:648-774`
+**Styling:** `plainly/frontend/static/css/style.css`
 
 **Card Dimensions:**
 - Desktop: 200px wide, 300px cover height
@@ -5576,7 +5582,7 @@ A series of improvements to enhance navigation consistency, performance, and use
 5. **Header Navigation Styling (Bonus):**
    - **Problem:** Navigation buttons looked like separate UI elements
    - **Solution:** Minimal text-only design with transparent background
-   - **Implementation:** `plainly/frontend/static/css/style.css` lines 74-95
+   - **Implementation:** `plainly/frontend/static/css/style.css` (header rules)
    - **Impact:** Cleaner header appearance, integrated menu items instead of buttons
 
 **Files Modified:**
@@ -5680,7 +5686,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 </div>
 ```
 
-**CSS Implementation:** `plainly/frontend/static/css/style.css:1652-1850`
+**CSS Implementation:** `shared/static/css/reader.css` (settings panel; moved out of `style.css` in the shared-platform change)
 
 ```css
 /* Settings Panel - Slides from right edge */
@@ -9217,7 +9223,7 @@ formatChapterText(text) {
 - `"He _said_ something"` → `"He <em>said</em> something"`
 - `"_vis-à-vis_ the text"` → `"<em>vis-à-vis</em> the text"`
 
-**CSS Styling:** `plainly/frontend/static/css/style.css:1376-1380`
+**CSS Styling:** `plainly/frontend/static/css/style.css`
 ```css
 .full-text-content em {
     font-style: italic;
@@ -9371,9 +9377,9 @@ Gaps between cards also reduce proportionally (1rem → 0.25rem).
 ### Files Modified
 
 - `plainly/frontend/templates/index.html:85-115` - HTML structure
-- `plainly/frontend/static/css/style.css:2065` - Flexbox column layout
-- `plainly/frontend/static/css/style.css:2173-2188` - Carousel responsive styles
-- `plainly/frontend/static/css/style.css:2265-2420` - Mobile breakpoints
+- `plainly/frontend/static/css/style.css` - Flexbox column layout
+- `plainly/frontend/static/css/style.css` - Carousel responsive styles
+- `plainly/frontend/static/css/style.css` - Mobile breakpoints
 
 ---
 
@@ -9514,7 +9520,7 @@ Legacy skeleton classes retained for backward compatibility:
 
 ### Files Modified
 
-- `plainly/frontend/static/css/style.css:556-641` - Loading component styles
+- `plainly/frontend/static/css/style.css` - Loading component styles
 - `plainly/frontend/static/js/app.js:1303-1310` - Loading dismissal
 - `plainly/frontend/static/js/app.js:1327-1365` - Book metadata loading
 - `plainly/frontend/static/js/app.js:1405-1413` - Concise summary loading
@@ -9843,12 +9849,12 @@ const headerImageHTML = this.post.header_image_url ? `
 
 ### CSS Styling
 
-**Thumbnail Cards:** `plainly/frontend/static/css/style.css:4462-4500`
+**Thumbnail Cards:** `plainly/frontend/static/css/style.css`
 - Height: 200px
 - Object-fit: cover (crops to fill)
 - Hover effect: 1.05x scale
 
-**Full Headers:** `plainly/frontend/static/css/style.css:4541-4553`
+**Full Headers:** `plainly/frontend/static/css/style.css`
 - Max height: 400px
 - Object-fit: cover
 - Border radius: 12px
@@ -9912,8 +9918,8 @@ const headerImageHTML = this.post.header_image_url ? `
 **Frontend:**
 - `plainly/frontend/static/js/components/BlogIndex.js:37-43` - Thumbnail display
 - `plainly/frontend/static/js/components/BlogPost.js:46-53` - Full header display
-- `plainly/frontend/static/css/style.css:4462-4500` - Blog card styling
-- `plainly/frontend/static/css/style.css:4541-4553` - Header image styling
+- `plainly/frontend/static/css/style.css` - Blog card styling
+- `plainly/frontend/static/css/style.css` - Header image styling
 
 **Scripts:**
 - `plainly/scripts/blog/assign_blog_header_images.py` - New script for image assignment
@@ -10172,7 +10178,7 @@ Our implementation compared to industry standards:
 
 ### Navigation System (updated 2026-10-17)
 
-All in `plainly/frontend/static/js/pagination.js`; styles in `style.css` next to `.pagination-nav-button`. Controls are chosen by input device with CSS media queries, not by width.
+All in `shared/static/js/pagination.js`; styles in `shared/static/css/reader.css` next to `.pagination-nav-button`. Controls are chosen by input device with CSS media queries, not by width.
 
 1. **Page-turn buttons** (`setupNavigationZones`). Two `<button>`s (`.pagination-nav-prev` / `.pagination-nav-next`) appended to the wrapper.
    - Default (touch): visually hidden with `clip-path: inset(50%)` at 1px, kept for screen readers.
@@ -10232,7 +10238,7 @@ applyFontSize(size) {
 }
 ```
 
-**CSS Changes (style.css lines 1708-2082):**
+**CSS Changes (`shared/static/css/reader.css` and `style.css`):**
 - Removed hardcoded `font-size` from `.chapter-fulltext`
 - Removed hardcoded `font-size` from `.chapter-modern-english`
 - Removed hardcoded `font-size` from `.pagination-page-container`
@@ -10416,7 +10422,7 @@ const hasNextChapter = this.chapters.some(ch => ch.chapter_number === this.curre
 
 ### CSS Classes
 
-**Location:** `plainly/frontend/static/css/style.css` lines 4971-5220
+**Location:** `shared/static/css/reader.css` (pagination system; moved out of `style.css`)
 
 **Key Classes:**
 - `.pagination-wrapper` - Container for all pages (height set by JS)
@@ -10451,11 +10457,11 @@ body.pagination-active {
   - Lines 5091-5092: Chapter navigation fix
 
 **CSS:**
-- `plainly/frontend/static/css/style.css`:
-  - Lines 1708-1710: Removed hardcoded font-size from `.chapter-fulltext`
-  - Lines 1709: Removed hardcoded font-size from `.chapter-modern-english`
-  - Lines 2082: Removed hardcoded font-size from `.pagination-page-container`
-  - Lines 4971-5220: Complete pagination styling
+- `plainly/frontend/static/css/style.css` and `shared/static/css/reader.css` (find rules by selector; line numbers were dropped after the CSS move):
+  - Removed hardcoded font-size from `.chapter-fulltext`
+  - Removed hardcoded font-size from `.chapter-modern-english`
+  - Removed hardcoded font-size from `.pagination-page-container`
+  - Complete pagination styling (now in `reader.css`)
 
 **HTML:**
 - `plainly/frontend/templates/index.html`:
@@ -10587,3 +10593,170 @@ retired version, and grew the database to 0.8–1.2GB.
 ### Shared reader CSS and templates
 
 `shared/static/css/base.css` (font faces, reset, tokens) loads before an app's `style.css`; `shared/static/css/reader.css` (settings panel, pagination system, continuous reader) loads after it. Apps serve them at `/static/shared/css/...` through the `static/shared` symlink. `shared/templates/shared/reader/_continuous_reader.html` and `_settings_panel.html`, and the macro `shared/templates/shared/_library_card.html`, render from `reader_config` (mode selector only when more than one mode is configured; fonts, size range and themes from `reader_config.settings`).
+
+
+---
+
+## Reader platform (shared reader, 2026-10-25)
+
+The continuous reader, its settings, the reader API, progress and the Kindle mode are one **platform** in `shared/`. An app plugs in with a `ReaderConfig` plus two JS hooks. Plainly and Distill are the two apps. Nothing under `shared/` imports from either, and `shared/static` and `shared/templates` never contain an app's name (`tests/shared/test_layering.py`). Labels and copy that differ come from config.
+
+### Config (`shared/reader/config.py`)
+
+One frozen `ReaderConfig` per app, declared in `<app>/reader_config.py` (`PLAINLY_READER`, `DISTILL_READER`). `__post_init__` validates it (`tests/shared/test_reader_config.py`). `to_client()` is the JSON of `window.READER_CONFIG`, rendered by `shared/templates/shared/reader/_config_script.html`; its shape is pinned by a test.
+
+| Field | What it drives |
+|---|---|
+| `app_name` | `app_name` in the template context (page titles, wordmark). |
+| `cache_db_name` | IndexedDB name for cached segments (`summra-reader-v2`, `distill-reader-v1`). Two apps on one origin must differ, because book ids collide. |
+| `cache_visibility` | `public` or `private`: the `Cache-Control` prefix on the manifest and segment responses (blueprint). Distill is `private`. |
+| `modes` | Tuple of `ReaderMode`: the modes the app offers. Every id must be in `ALL_MODES`, no duplicates. |
+| `default_modes` | Mode ids tried in order when the saved `last_mode` is not configured or not in the book's manifest. Must be configured modes. |
+| `features` | `ReaderFeatures`, below. |
+| `settings` | `ReaderSettings`, below. Defaults to `DEFAULT_SETTINGS`. |
+| `kindle` | `KindleOptions`, required when `features.kindle` is on. |
+| `api_base` | Prefix of the reader and progress APIs (`/api`). `platform.js` sets `this.apiBase = withBasePath(api_base)` and `reader_state.js` builds its URLs from it. |
+| `extra_page_blocks` | CSS selector list of extra elements pagination treats as page blocks (Distill: `table.reader-table, figure.reader-figure`). |
+| `hint_keys` | The one-time hints the app's `UserDatabase(valid_hints=...)` accepts. Distill passes `reader_swipe_mobile`, `reader_nav_desktop`. |
+| `inline` | `markdown` (marked when loaded, else regexes; Plainly) or `strict` (escape, then only `**bold**` and `*italic*`; Distill). |
+| `image_base` | Prefix put before an `image` block's `src` (Distill: `''`, so `images/x.jpg` resolves against `/books/<slug>/read`). |
+
+- `ReaderMode(id, label, layout='single', members=(), library_label=None, min_width=None, narrow_fallback=())`. `label` is the selector button and help text. `library_label` is the Library card's mode suffix (falls back to `label`). `layout` is `single` or `side_by_side`. `members` are the `ReaderMember(id, label, cell_class)` columns of a side-by-side mode (they must be `original`, `plain`; `cell_class` is what the row splitter selects). `min_width` is the viewport width a wide mode needs, and `narrow_fallback` lists the modes to use below it. The layout `side_by_side` and the id `side_by_side` go together.
+- `ReaderFeatures(progress=True, illustrations=False, page_turn_hint=True, kindle=True)`. `progress=False` leaves `/api/progress/*` and `/api/auth/check` as 404. `illustrations=False` renders no chapter figure. `page_turn_hint=False` shows no hint. `kindle=False` makes a Kindle user agent get the web page and `/api/kindle/progress` 404 (`tests/distill/test_kindle.py`).
+- `ReaderSettings(fonts, font_default, size_min, size_max, size_default, themes, theme_default)`: the font, size and theme controls the settings panel renders, and what `settings.js` validates a saved choice against.
+- `KindleOptions(text_modes, default_text)`: the Kindle `Text` row and the values `/api/kindle/progress` accepts. Every text mode must be a configured mode, and `default_text` must be one of them.
+
+### Mode registry (`shared/reader/modes.py`)
+
+`ALL_MODES = ('summary', 'original', 'plain', 'side_by_side')` is the one registry. The ids are **storage vocabulary**: the SQL `CHECK` lists on `reader_unit`, `mode_reading_state` and `progress_mutation` spell the same strings, and `ReaderIndexMixin._READER_MODES` and `user_models.VALID_MODES` derive from it. A test pins the `CHECK` strings to the registry, and the stored schema is byte-identical to before. An app picks a subset (Plainly all four, Distill only `summary`). It cannot invent an id without a schema migration.
+
+The mode selector shows only when the book's manifest offers at least two modes that the app also configures. A saved `last_mode` outside that set falls through to `default_modes`, and a mode the manifest offers but config omits is never chosen. For Plainly this hides the selector on 3 of the 90 local books (108, 110 and 114, original text only), a deliberate change (see the PRD). For Distill it is always hidden. Node tests: `tests/js/reader_modes.test.mjs`.
+
+### Plug-in surface
+
+**Python**
+- `ReaderConfig`, declared once in `<app>/reader_config.py`.
+- `install_reader_platform(app, config, get_content_db, user_db)` (`shared/reader/platform.py`). It stores the config in `app.extensions`, adds `reader_config` and `app_name` to the template context, and registers the reader blueprint (manifest, segment, map, recover; the content DB is looked up per request) with the config's cache visibility. When `user_db` is given it points `shared.progress.routes` and `shared.auth.whoami` at it, and registers their blueprints only if `features.progress`. Those two modules' globals are last-install-wins (production runs one app per process), so Distill's tests isolate them with a fixture.
+- A content DB implementing the `ReaderIndexMixin` hooks (`get_connection`, `get_book`, `_reader_load_book`, `_reader_load_chapters`, `_reader_chapter_units`, `_reader_plain_coverage`, `_reader_source_checksum`, `_reader_structure`) and the `shared.progress` library hooks (`library_books`, `chapter_titles`).
+- Kindle page handlers, registered with `register_kindle_pages(bp, handlers, config)`, only when `features.kindle` is on.
+- Kindle progress. The app's `POST /api/kindle/progress` route is a few lines calling `shared.kindle.progress.save_progress(config, user_db, content_db, user_id, position)`. `position(content_db, book_id, ch, p, text) -> (unit_id, quote) | None` is a hook on the content-DB side: it maps the Kindle's chapter key and unit index to a reader-index unit id and a quote, or returns `None` for an unknown book or chapter. `save_progress` does the feature and `user_db` 404, the 401, the validation (`book_id`, `ch`, `p` ints, `p >= 0`, `text` in `kindle.text_modes`) and `record_page`. So the progress endpoint is a shared function plus a thin route per app, not a route registered from config.
+- Kindle reader template: extend `shared/templates/shared/kindle/reader_base.html`. Its header comment lists the context variables: `book`, `chapter`, `text`, `text_urls`, `start`, `chars_before`, `chapter_chars`, `total_chars`, `font_size`, `cookie_path`, `sync_url`, `prev_url`, `next_url`, `next_title`. It also uses `base_path`, `asset_v` and `reader_config` from the platform context, and offers the blocks `flow_body`, `flow_class` and `lang`.
+
+**JS hooks**, methods on the host class passed to `applyReaderPlatform(Host)` (`shared/static/js/platform.js`; it is the only shared file that imports, because the mixin files are loaded alone in tests from a `data:` URL):
+- `classifyUnit(text) -> block` turns one stored unit into a render-vocabulary block. Plainly: text heuristics in `plainly/frontend/static/js/app.js`. Distill: `JSON.parse`. The shared `blocksMixin` supplies `continuousReaderBlock` from it.
+- `selectBook(book)` is where the reader's back button goes.
+
+**Platform defaults**, applied only if the host lacks them: `showOnlySections()` (no-op) and `initReaderPlatform()` (sets `apiBase` and `pagination = createPaginationState()`).
+
+**What the host page must provide**
+- `.hidden { display: none }` and `.main-content` CSS. The shared reader CSS uses `.hidden` to close its panels but never defines it. Plainly gets both from `style.css` and Distill from `distill.css`. Without `.hidden` the settings and contents panels show open.
+- `window.APP_BASE_PATH` (the deploy prefix, `''` at the root) and `window.READER_CONFIG`, both set before any reader script.
+- Script order: `shared/js/base_path.js` first (a classic script that defines the globals `withBasePath` and `summraBasePath`), then `shared/js/reader_state.js` (`window.readerState`; it also defaults `window.authModule` to `{...readerState, initAuth}`), then the app's module. A host with its own auth UI sets a fuller `window.authModule` after `reader_state.js` (Plainly's `auth.js`). Distill uses the default.
+- The reader-shell DOM ids the shared JS looks up. The partials `_continuous_reader.html` and `_settings_panel.html` render them: `continuous-reader-section`, `continuous-reader-content`, `reader-status`, `reader-book-title`, `reader-chapter-title`, `reader-back-button`, `reader-toc-button`, `reader-toc-panel`, `reader-toc-list`, `reader-settings-button`, `reading-settings-panel`, `reader-mode-settings` (with `[data-reader-settings-mode]` buttons), `reader-mode-help`, `continuous-reader-progress`, `reader-progress-fill`, the `[data-reader-close]` buttons, the controls `font-size-slider`, `size-value`, `decrease-size`, `increase-size`, `.font-choice` and `.theme-choice`, and the `.continuous-reader-chrome` and `.continuous-reader-footer` wrappers that pagination measures.
+- Optional: `window.summraApp.openLightbox(src, alt)`. Illustration clicks call it through `?.`, so without it a click does nothing.
+
+### Render vocabulary
+
+The block types, one renderer per language: `shared/static/js/blocks.js` (web reader) and `shared/reader/blocks.py` (Kindle pages, `block_element`). `tests/shared/test_block_parity.py` renders every type in both and requires identical markup (the JS↔Python parity rule), so change one and you change the other.
+
+| Block | Fields | Renders as |
+|---|---|---|
+| `p` (default) | `text` | `<p>` |
+| `h` | `text` | `<h3 class="reader-section-heading">` |
+| `verse` | `lines` | `<p class="reader-verse">`, lines joined with `<br>` |
+| `li` | `text` | `<p class="reader-list-item">` |
+| `quote` | `text` | `<blockquote class="reader-quote">` |
+| `ul`, `ol` | `items` | `<ul>` or `<ol class="reader-list">` of `<li>` |
+| `keypoints` | `items` | `<ul class="reader-keypoints">` (the "Key points" label comes from CSS `::before`) |
+| `table` | `header`?, `rows` | `<table class="reader-table">` with `thead` and `tbody`; cells are inline text |
+| `image` | `src`, `caption`? | `<figure class="reader-figure"><img src="{image_base}{src}" alt="">` plus `figcaption` |
+
+Distill books use `p h ul ol quote keypoints table image` (format v1). `verse` and `li` exist for Plainly's classifier. Inline text is escaped first (spaces become `&nbsp;`) and then formatted per `inline`; `image_base` and `src` are attribute-escaped. A block's content never contains an element the paginator selects as a page block, except a list's own `<li>`. `block_text` (Python) is the text a block shows, used for word counts and quote recovery. The rendered DOM text must equal it, which a test checks for every type including CJK.
+
+Plainly's Kindle pages keep their own `kindle_inline` filter instead of `block_element`, because routing them through the shared renderer would change Plainly's markup. A possible later step is to turn Plainly's chapter illustration into an `image` block.
+
+### Serving and bundling
+
+Shared assets live in `shared/static/` (`css/base.css`, `reader.css`, `kindle.css`; `fonts/`; `js/`). Each app exposes them at `/static/shared/...` through a symlink inside its static folder (`plainly/frontend/static/shared` and `distill/static/shared`, both to `../../shared/static`). `shared/templates/shared/` is a fallback template root added by `install_shared_ui(app)`; an app's own template at the same path wins.
+
+**Apache follows that symlink only with `Options -Indexes +FollowSymLinks` on the static `<Directory>`.** The repo's `deploy/apache/summra.conf` has it, the VM's copy does not. Plainly's next deploy must reinstall that file and confirm `/plainly/static/shared/css/base.css` returns 200 (the static Alias serves it, so Apache gzip applies).
+
+Plainly's `app.min.js` is built by esbuild from `app.js`, which imports `shared/static/js/platform.js`; `npm run build:check` fails if the bundle is stale. Distill loads `platform.js` as a native module and has no bundle.
+
+### Adding a third app
+
+1. Write the content DB: a class with `ReaderIndexMixin` and the library hooks (`library_books`, `chapter_titles`).
+2. Declare a `ReaderConfig` in `<app>/reader_config.py` with a unique `cache_db_name`. Choose modes from `ALL_MODES`.
+3. Call `install_reader_platform(app, config, get_content_db, user_db)` and `install_shared_ui(app)` in the app factory.
+4. Add the `static/shared` symlink (`ln -s ../../shared/static <app static dir>/shared`).
+5. Write the host class with `classifyUnit` and `selectBook` so its units map onto the shared block vocabulary, call `applyReaderPlatform(Host)`, and provide everything under "What the host page must provide" (render the shell with the `_continuous_reader.html` and `_settings_panel.html` partials).
+6. If Kindle is on: write the page handlers and register them with `register_kindle_pages`, add the thin `/api/kindle/progress` route with a `position` hook, and extend `reader_base.html`.
+7. Add an e2e script under `tests/e2e/`.
+
+### Plainly-only reader code that stays in shared
+
+`pagination.js` and `settings.js` moved to `shared/` whole, including Plainly's legacy chapter-page branches (the paged chapter view that predates the continuous reader). They are dead for Distill. The legacy chapter page also calls `authModule.trackPageChange` and `authModule.onChapterComplete` without a guard. That works only because Plainly's `auth.js` defines them, so it is a Plainly-only path.
+
+### Known gaps (backlog)
+
+- A "Key points:" lead paragraph can be left alone at the bottom of a page, apart from its list (shared pagination).
+- The Kindle contents repeat the part heading on a page that starts mid-part.
+- The shared partials hold fixed English UI copy (both apps have an English UI).
+- Library card markup is still duplicated in `renderLibraryCards` (pre-existing).
+
+---
+
+## Distill app (2026-10-25)
+
+Distill is a private reader for book summaries, served at `/distill` behind Apache OIDC. Code: `distill/`. Tests: `tests/distill/`. Design: `docs/superpowers/specs/2026-10-24-distill-design.md`.
+
+### Routes
+
+| Route | Notes |
+|---|---|
+| `GET /` | Library: "Reading now" (from `library_cards`), then "All books", newest import first. |
+| `GET /books/<slug>` | Book page: cover, progress, Start or Continue reading, contents grouped by part, sources. An unknown slug renders `not_found.html` with 404. |
+| `GET /books/<slug>/read` | Reader shell. The JS opens at `?chapter=<chapter id>` or the saved place. |
+| `GET /books/<slug>/images/<name>` | The private image route: `login_required`, `Cache-Control: private, max-age=3600`, ETag and 304, `nosniff`. |
+| `/api/reader/*`, `/api/progress/*`, `/api/auth/check` | From the shared platform. |
+| `POST /api/kindle/progress` | Thin route over `shared.kindle.progress.save_progress` (`ch` is the chapter ordinal). |
+
+Every page and image route is `@login_required`. Kindle pages are served from the same URLs by the shared Kindle dispatch (a `before_app_request` that skips `@login_required`), so `init_pchauth` must run before any blueprint is registered. That order is what keeps Kindle pages private (`test_kindle_pages_and_progress_need_the_allow_list`). An `after_request` hook gives every non-static response without a `Cache-Control` the value `private, no-cache`.
+
+### Auth and environment
+
+- `DISTILL_AUTH_MODE`: `off` (the default when unset; local dev) or `required`. `optional` is rejected, since Distill is all-private. `distill.app_prod` raises unless it is `required`.
+- `DISTILL_ALLOWED_EMAILS`: the allow-list (pchauth, prefix `DISTILL`). A signed-in email not on it gets 403 on a page, an image and a segment. It must be non-empty when the mode is not `off`.
+- `DISTILL_DB` and `DISTILL_USER_DB` (defaults `data/distill.db` and `data/distill_user.db`), `DISTILL_HOST` (default `127.0.0.1`: the dev server runs with auth off, so it binds loopback), `PORT` (5003), `DISTILL_STATIC_DIR_OVERRIDE`.
+- Production entry: `distill.app_prod:app`, served by the env-driven `deploy/gunicorn_config.py`. The VM, Apache and systemd setup for Distill is phase 4 and not written down yet.
+
+### Two databases
+
+- **Content DB** (`data/distill.db`, `DistillDatabase(ReaderIndexMixin)`): `books` (slug, title, author, lang, cover_image_id, sources, imported_at, content_checksum), `chapters` (`book_id`, `ordinal`, `part_title`, `title`, `blocks` JSON), `images` (name, mime, BLOB), plus the reader index tables. Ordinal 0 is the Overview when the book has one. Import with `venv/bin/python -m distill.scripts.push_book <folder> [--dry-run] [--db PATH]`, which validates the folder against `distill/book_format.py` (format v1) first.
+- **User DB** (`data/distill_user.db`, the shared `UserDatabase`): users, reading progress and mutations. It is separate from Plainly's `summra.db`, so a Distill deploy or copy cannot touch Plainly's data.
+
+**Re-import keeps chapter ids by ordinal.** Importing a slug again upserts `chapters` by `(book_id, ordinal)`, so the book id and chapter ids stay the same (saved places carry chapter ids), and chapters past the new count are deleted. A chapter inserted mid-book therefore shifts content under the existing ids: a saved place on chapter 7 now points at whatever is chapter 7. Quote recovery runs only within the marker's own chapter, so it can repair a moved paragraph but cannot follow a chapter that moved. Prefer appending chapters, or accept that readers of that book lose their place.
+
+### Units are block JSON
+
+`_reader_chapter_units` stores each block as a canonical JSON string (`sort_keys`), one reader unit per block, in mode `summary` only. The client's `classifyUnit` is `JSON.parse` and `blocks.js` renders the result. Kindle pages render the same blocks with `shared.reader.blocks.block_element`. Word counts and quote recovery use `block_text` (re-exported by `book_format`). The word count is CJK-aware (per character) via `book_format.word_count`.
+
+### Config
+
+`DISTILL_READER`: `summary` only (so the selector never shows), `cache_db_name='distill-reader-v1'`, `cache_visibility='private'`, `inline='strict'`, `image_base=''`, `illustrations=False`, Kindle on with the single text mode `summary`, and `extra_page_blocks='table.reader-table, figure.reader-figure'`. Page fit is CSS in `distill.css`: a figure image is a fixed `40vh` box with `object-fit: contain`, and tables, lists and keypoints scroll inside a `calc(100dvh - 180px)` box, so nothing is clipped on a 375x667 phone.
+
+### Images
+
+An `image` block's `src` is `images/<name>`. On the web reader `image_base=''` makes it resolve against `/books/<slug>/read` to the image route. The book page and the Kindle pages pass an explicit base (`<base>/books/<slug>/`), since they are at other URLs. Images are never served from a static path, so they need a sign-in.
+
+### Progress label
+
+`distill.routes.progress_label(card, chapter_count)` returns `Overview` at ordinal 0, otherwise `Chapter n of m` where `m` counts chapters excluding the Overview, and an empty string with no place saved. The Library's "Reading now" cards and the book page use it as the location line (cards reuse the shared `library_card` macro, which prints `current_chapter.chapter_title`).
+
+### Kindle mode
+
+`distill/kindle_routes.py`: the library (Reading now, up to 3 on the first page with a "See all" link, then All books at 7 per page), the contents (8 per page, part headings, "You are here") and the reader at the web reader's URL with `?ch=<ordinal>`. A `ch` that is not ASCII digits, or unknown, is a 404. Templates are in `distill/templates/kindle/` and the CSS is `distill/static/css/distill_kindle.css`. There is no Distill JS: the shared ES5 `kindle.js` pages the chapter. The only text is `summary`, so there is no Text row. Progress goes through the shared `save_progress` with Distill's `position` hook (`get_chapter(book_id, ordinal)`; the quote is the block's text, single-spaced and cut to 180 characters, or `None` for a block with no text). `DistillDatabase.get_chapter_outline` and `get_chapter` serve the lists and the reader.
+
+### Tests
+
+`tests/distill/` (pytest), `tests/js/` (node) and `tests/e2e/distill.mjs`. The e2e covers: library to book to reader, no mode selector, image and table chapters without overflow, the `keypoints` label in English and Chinese, reload restores the anchor, Reading now, IndexedDB holds `distill-reader-v1` and not `summra-reader-v2`; a 375x667 mobile pass; and a 758x950 Kindle pass (no module script, no `tr` or `figure` split across columns, a tap turns the page).

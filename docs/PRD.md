@@ -534,7 +534,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
 - **Options:**
   1. **Georgia** (default) - Classic serif font, traditional book feel
   2. **System** - Native system font stack, familiar to user's OS
-  3. **Figtree** - Modern sans-serif, clean and readable. Bundled web font (`plainly/frontend/static/fonts/`), so it looks the same on every device. Replaced Open Sans on 2026-10-17; a saved Open Sans choice opens as Figtree
+  3. **Figtree** - Modern sans-serif, clean and readable. Bundled web font (`shared/static/fonts/`), so it looks the same on every device. Replaced Open Sans on 2026-10-17; a saved Open Sans choice opens as Figtree
 - **UI:** Radio-style buttons with font preview ("Aa")
 - **Labels:** Font names displayed below preview buttons
 - **Application:** Applies to chapter summaries, chapter full text, and medium summaries
@@ -2316,6 +2316,78 @@ A long-form editorial blog for essays, book deep-dives, and topical pieces (e.g.
 - Author profiles linked to author hub pages
 - RSS feed
 - Comments / discussion (would require auth — see Feature 7)
+
+---
+
+## 16. Reader Mode Selector Hides for Single-Mode Books (Plainly, 2026-10-25)
+
+**What changed for readers:** the reader's mode selector (Summary / Original / Plain English / Side-by-Side) now appears only when the book offers at least two of those modes. A book with a single mode opens in it with no selector, instead of showing a selector whose other buttons are disabled.
+
+**Who sees it:** 3 of the 90 books in the local catalog: Douglass's *Narrative* (108), Augustine's *Confessions* (110) and Radcliffe's *Udolpho* (114). These have the original text only. Every other book keeps today's selector.
+
+**Why:** the reader is now a shared platform that another app (Distill) also uses, and "hide the selector when there is nothing to choose" is the general rule. Owner-approved on 2026-10-25.
+
+**Acceptance criteria:**
+- A book with one available mode shows no selector or mode help in the reader settings.
+- A book with two or more available modes shows the selector exactly as before.
+- A saved last-used mode that the book does not offer falls back to the app's default mode.
+
+---
+
+## 17. Distill (Private Book-Summary Reader, 2026-10-25)
+
+Distill is a private app for the owner's book summaries, the second app on the shared reader platform (see ERD "Reader platform"). It is served at `/distill`, apart from Plainly's data and URLs. Design: `docs/superpowers/specs/2026-10-24-distill-design.md`.
+
+### 17.1 Access
+
+**User story:** As the owner, I want my summaries visible only to me, so that I can keep private notes on books I own.
+
+- Everything is behind sign-in. Access is owner-only through an allow-list of email addresses (`DISTILL_ALLOWED_EMAILS`). A signed-in email that is not on the list gets 403 on a page, an image and the reader API.
+- Signed-out visitors see only a sign-in prompt. There is no marketing or pitch page.
+- Sign-in is shared with Plainly: signed in to one means signed in to the other, Kindle included.
+- Book text and images are never publicly cacheable and images are not served from a static path.
+
+### 17.2 Library
+
+**User story:** As the owner, I open Distill and see what I'm in the middle of, and my other books.
+
+- **Reading now** (only when something is in progress): a card per started book, most recent first, with cover (or a title placeholder when the book has none), title, author, a progress bar and a location line ("Overview" or "Chapter n of m").
+- **All books**: a grid of every book, newest import first. A tile links to the book page.
+
+### 17.3 Book page
+
+- Cover, title, author, a progress line ("Chapter 7 of 22 · 31%") when started, and one button: **Start reading** or **Continue reading**.
+- **Contents**: the Overview first, then the chapters grouped under their part headings. A chapter links into the reader at that chapter.
+- **Sources**, when the book lists any.
+- An unknown book shows a not-found page.
+
+### 17.4 Reader
+
+**User story:** As a reader, I want the same page-turning reader as Plainly, with a book summary's structure intact.
+
+- Single mode: the summary. There is **no mode selector** and no Plain English or side-by-side view. Font, size and theme settings are the same as Plainly's.
+- Content is paged like Plainly (tap, swipe or keys), with a contents panel and a progress bar. Headings, lists, key-point boxes, quotes, tables and images are laid out so none is cut off by a page. A list or table taller than a page scrolls inside its own box.
+- **Saved place and progress**: the place is saved per account as you read, and reopening a book resumes at the same paragraph, on any device. Progress reads "Chapter n of m", or "Overview" in the opening section (the count does not include the Overview).
+- Back returns to the book page.
+
+### 17.5 Kindle mode
+
+When the browser is an e-ink Kindle, the same URLs serve the e-ink pages (see 12), signed in as the same account:
+- **Library**: Reading now (up to 3, with "See all") then All books, 7 per page.
+- **Book**: cover, Start or Continue reading, and the contents 8 per page with part headings and a "You are here" mark.
+- **Reader**: fixed pages, tap to turn, resumes at the saved place, and the page you reach is saved to your account, so the web reader picks up where the Kindle stopped.
+- There is one text (the summary), so no Text switch. Tables and figures are never split across pages.
+
+### 17.6 Non-goals (for now)
+
+Server-side summarization, file upload in the browser, multiple users beyond the owner, public reading, a pitch or landing page, a subdomain, audio, study cues, search, highlights or notes. Books are added by running an import command on the owner's computer; the web app has no upload UI.
+
+### 17.7 Acceptance criteria
+
+- A signed-in allow-listed owner sees the library, can open a book and read it, and the reload restores the same paragraph.
+- A non-allow-listed account, or a signed-out visitor, sees no book text, image or reader data.
+- The reader has no mode selector and loads no Plainly cache (IndexedDB `distill-reader-v1`, never `summra-reader-v2`).
+- On a 375x667 phone no block is clipped; on a Kindle no table row or figure spans two columns.
 
 ---
 

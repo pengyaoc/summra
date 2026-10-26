@@ -128,6 +128,13 @@ cd tests/e2e && npm install && npx playwright install chromium
 
 Exit code is non-zero on any non-200, console error, or failed first-party request (third-party analytics is filtered as noise). See `tests/e2e/README.md` for details.
 
+**Distill (second app, port 5003):**
+1. Start it with its own scratch user DB: `DISTILL_USER_DB=$TMPDIR/distill_user_e2e.db PORT=5003 venv/bin/python -m distill.app` (auth is `off` locally; it binds loopback).
+2. `cd tests/e2e && node distill.mjs` (defaults to `http://localhost:5003`) runs three passes: desktop, mobile (375×667) and Kindle (758×950). It exits non-zero on any FAIL or console error.
+3. `reader_style_snapshot.mjs` defaults to `:5001`, so set `BASE_URL` (`MODE=record|compare BASE_URL=http://localhost:5002 node reader_style_snapshot.mjs`). It guards the shared reader's computed styles for Plainly.
+
+The 14 Plainly e2e scripts to run after any change under `shared/` or `plainly/`: `smoke`, `kindle_mode`, `reader_progress`, `reader_themes`, `reader_last_line_visible`, `reader_opens_at_chapter`, `reader_segments_fast_open`, `reader_illustrations`, `reader_font_figtree`, `reader_nav_mouse`, `sxs_row_split`, `text_size_adjust`, `redesign_home`, `redesign_reader` (each `node <name>.mjs` against your Plainly server's `BASE_URL`).
+
 ## Parallel Sessions (Git Worktrees)
 
 Run multiple Claude sessions on this repo by giving each its own git worktree. **Never share a working directory** — sessions will silently overwrite each other's edits.
