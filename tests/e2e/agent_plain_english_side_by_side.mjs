@@ -13,6 +13,12 @@ import { chromium } from 'playwright';
 const BASE = (process.env.BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
 const BOOKS = [
   {
+    id: 93, slug: 'bleak-house', chapter: 1,
+    first: { original: /^London\./, plain: /^London\./ },
+    pairs: [{ chapter: 3, index: 0, original: /^I have a great deal of difficulty/, plain: /Dolly/ }],
+    last: { original: /even supposing—\.$/, plain: /beauty|beautiful/ },
+  },
+  {
     id: 61, slug: 'beyond-good-and-evil', chapter: 1,
     first: { original: /^1\. The Will to Truth/, plain: /^1\..*[Tt]ruth/ },
     pairs: [{ chapter: 4, index: 0, original: /^63\. He who is a thorough teacher/, plain: /^63\..*teacher/ }],

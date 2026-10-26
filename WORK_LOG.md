@@ -160,6 +160,10 @@ Splitting the repo into `shared/`, `plainly/` and `distill/` with Plainly unchan
 - Final review fixes: JS test paths, agent/doc commands moved to `python -m plainly.scripts...` (guard extended to `.claude/agents` and `docs/*.md`), Library SQL moved behind `content_db.library_books`/`chapter_titles`, test-reload leak purged on teardown, `config.STATIC_DIR`, `shared/web.py` env-var name now an explicit argument.
 - Task 1: added empty `shared/` and `distill/` packages, `pyproject.toml` include now `backend*, scripts*, shared*, distill*`, and `tests/shared/test_layering.py` (shared must not import plainly/distill/backend/scripts). Guard test failed first (no `shared/`), then passes.
 
+## 2026-10-24: Distill — design (in progress)
+
+User wants a second app, Distill, at `pengyaochen.com/distill`: a private reader for their own book summaries (made locally by the `book-summary` skill), reusing Plainly's reader, synced progress and Kindle mode, sharing sign-in with Plainly. Decisions from the brainstorm: owner-only and fully behind sign-in; no server-side summarization (1 GB VM); import via a local push command; skill writes a structured `book.json` directly; the 54 existing `/pages` HTML summaries get a one-time conversion, then `/pages` summaries come down; chapter = reader unit; day one is library + reader + progress + Kindle only; repo split into shared / Plainly-only / Distill-only first, with two services and two deploy scripts. WordPress is gone from the VM. Design at `docs/superpowers/specs/2026-10-24-distill-design.md`, approved by the user (content and images in `distill.db`, local master pushed to the VM; progress in a separate `distill_user.db` that the server owns; skill stops producing HTML and drops the Kindle EPUB export; hotlinked images downloaded). Phase 1 plan (repo split into `shared/` / `plainly/` / `distill/`, 7 tasks ending in a VM deploy) at `docs/superpowers/plans/2026-10-24-distill-phase1-repo-split.md`, awaiting review. Plans for phases 2–6 to be written after phase 1 lands. User requirement: web reader code must be heavily shared, not forked. Phase 1 leaves front-end code in Plainly. Phase 3 opens by extracting the common reader components into `shared/` and moving Plainly onto them. No code written yet.
+
 ## 2026-10-19: Kindle home shows books in progress with progress (complete, deployed)
 
 User asked to see the books they were reading, with progress, on the Kindle home page. Signed in, home now starts with *Reading now*: up to 3 books in progress (the website Library's Continue reading list), each with current chapter, a black progress bar and the furthest-point %, linking into the reader; *See all N* opens `/?show=reading`, paginated. Signed out keeps the single cookie-based Continue reading card.
@@ -9832,3 +9836,34 @@ User authorized commit/push and VM update. Production: `wordpress-2-vm`, `us-wes
 Committed and pushed `d59645a` to `origin/main`; VM checkout fast-forwarded to that commit. Updated only the ten book 61 chapter source/Plain English fields, guarded by hashes of the prior production source and verified against the local payload. Full content DB backup: `/opt/summra/data/database.pre-book61-plain-20261019T051032Z.db`. Backup and updated database both pass SQLite quick_check. Unrelated books, user DB and existing untracked VM configuration preserved. No new static assets or dependency changes required.
 
 Restarted the `summra` user service; `systemctl --user is-active summra` returned `active`. Live verification at `https://pengyaochen.com/plainly`: all 14 `agent_plain_english_side_by_side.mjs` checks pass, including every one of 352 paired units, correct first/last anchors, chapter opening, no gaps/overflow and no console errors. Public reader: `https://pengyaochen.com/plainly/books/beyond-good-and-evil/read?mode=side_by_side`.
+
+
+## 2026-10-18 — Bleak House Plain English (in progress)
+
+User requested the same Codex Plain English workflow for book 93. Source has 68 sections and 1,927,392 characters; no existing rewrites. Using GPT 6.1 Sol low effort writers and separate fresh medium effort verifiers, three concurrent children maximum, with durable checkpoints. Backed up full content DB to `data/database.pre-bleak-house-plain-20261018.db` and chapter rows to `data/log/agent_plain_english/book93/chapters-before.json`. Removed redundant title/byline in preface and moved its stranded PREFACE label to the start; retain Dickens’s author notes and all narrative. Will verify locally and deploy through the established GitHub/VM process.
+
+Bleak House checkpoint: sections 0–7 drafted and pass their chapter gates, with no unresolved writer doubts. Fresh medium effort QC started on chapters 4–5. Run plan has 29 disjoint groups, 194 chunks and 7,172 paragraphs; progress and role briefs are persisted in the book93 run directory.
+
+### 2026-10-19 continuation
+
+Prior sitting stopped at the Codex usage limit with groups 1–3 written, groups 1–2 verified (454 pairs, 15 corrections), groups 4–5 partially written, group 3 verification interrupted. User requested continuation; confirmed usage reset and resumed the three existing agents with saved outputs. No chapter rewrites applied to DB yet.
+
+Checkpoint: sections 0–11 now written AND independently verified (1,089 paragraphs, 40 corrected). All chapter gates pass with no remaining warnings or doubts. Writing continues on 12–17. Progress JSON preserves per-group state and review tallies; no rewrites applied before whole-book verification.
+
+Checkpoint: sections 0–17 independently verified (1,831 paragraphs; 73 corrected), all gates clean. Writing 18–23 underway. Reusing a completed low effort writer context for a new disjoint assignment to reduce startup overhead; prior verified outputs are explicitly out of scope. Verification continues to use fresh medium effort agents for every new range.
+
+Checkpoint: sections 0–19 independently verified (2,058 paragraph pairs; 80 corrected). All clean gates, no unresolved doubts. Drafts 20–21 complete and in fresh review; writing 22–25. Checkpoint manifest and original backups intact; library/production still unchanged for Plain English until whole-book QC.
+
+Checkpoint: sections 0–25 independently verified: 2,866 of 7,172 paragraph pairs, 101 paragraphs corrected. All gates clean, no unresolved doubts. Active writers on 26–28 and 29–30 have saved partial outputs. Usage approaching window limit; optional free-reset authorization asked, no answer yet. No rewrite text applied or deployed.
+
+### 2026-10-19 evening continuation
+
+User requested continuation after another usage stop. Confirmed natural reset (0% primary; three free reset credits still unused). Resumed writer groups 13/14 from saved files; started group 15 (31–32) in an existing low effort writer context. Verified checkpoint remains 0–25, 2,866 pairs, 101 corrections. No text applied or deployed.
+
+Checkpoint: all sections 0–30 independently verified, 3,409 paragraph pairs; 129 corrected. Every gate clean with no unresolved doubts. Writing continues 31–36. Source backup and per-chunk artifacts retained; no Plain English applied/published before all 68 sections pass QC.
+
+Checkpoint: all sections 0–36 independently verified, 4,158 of 7,172 pairs; 161 corrected. All gates clean, no unresolved doubts. Writers on 37–44. Original and staged translation files remain separate; no premature apply or deployment.
+
+Checkpoint: all sections 0–44 independently verified, 4,948 of 7,172 paragraph pairs; 190 corrected. All gates pass, no unresolved doubts. Writers on 45–52, final 15 chapters still pending after those assignments. No text applied or deployed before full verification.
+
+Checkpoint: sections 0–47 independently verified (5,278 of 7,172 pairs; 203 corrected), clean gates and no unresolved doubts. Review 48–49 active; writing 50–52 active. Usage near limit, prioritizing existing review work. Optimized pending plan: tiny final chapters66–67 join group25 chapters55–56 (70,527 chars), group29 merged; unique coverage of all68 sections retained. No text applied/deployed.
