@@ -10243,3 +10243,29 @@ modes. These measure server-side work, excluding browser/network latency. Distil
 continues using its existing fast path, now shared (0.15ms freshness, 0.55ms totals
 for ten large books in the same local check). Original content/user databases
 were not modified by the benchmark.
+
+## 2026-10-26 — Shared reader changes deployed
+
+Committed and pushed ac80229, then fast-forwarded wordpress-2-vm and restarted
+both app services. Created SQLite backups of all four databases under
+/opt/summra/data with suffix .pre-shared-reader-20261026T233327Z. Used streaming
+table fingerprints to keep verification memory bounded. All existing content
+tables, reader versions/units, and both progress databases remained identical
+through migration; Distill's revision metadata copied exactly into the shared
+table. All four databases passed integrity checks and acquired no new foreign
+key violations. All 54 Distill indexes stayed clean without loading chapters.
+
+Post-restart validation warmed all 90 existing Plainly indexes and 54 Distill
+indexes; no content versions changed. Both apps' batched totals and clean
+freshness checks then passed with chapter/manifest loading disabled. Warm batch
+totals across the full indexed catalog: Plainly 84.2ms (90 books), Distill 2.5ms
+(54 books). Warm loopback home medians: Plainly 5.0ms, Distill 11.9ms. These
+server-side measurements exclude browser and network time.
+
+Both systemd services are active. Authenticated Distill home/book/reader,
+cover variants, icons, and both apps' manifests/workers pass live checks.
+Public HTTPS returns Plainly 200 and Distill's expected sign-in redirect 302;
+anonymous loopback Distill remains denied. Local Python's certificate-store
+configuration prevented its HTTPS probe; the system curl certificate store
+verified both HTTPS endpoints successfully. Host-owned config/untracked files
+were preserved. No user-device installation or browser UI changes were needed.
