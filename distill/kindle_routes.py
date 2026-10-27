@@ -14,7 +14,7 @@ from distill.reader_config import DISTILL_READER
 from distill.routes import _card_for, _db, newest_first, reading_cards
 from shared.kindle import pages as kindle_pages
 from shared.kindle.pages import (
-    CONTENTS_PAGE_SIZE, LIBRARY_PAGE_SIZE, READING_ON_HOME, account_user_id, cookie_path, font_size,
+    CONTENTS_PAGE_SIZE, LIBRARY_PAGE_SIZE, READING_ON_HOME, account_user_id, cookie_path, font_family, font_size,
     not_found_page, page_number, paginate, register_kindle_pages, render_page, url,
 )
 from shared.kindle.progress import save_progress as shared_save_progress
@@ -128,6 +128,7 @@ def reader_page(slug):
         book=book, chapter={'chapter_number': ordinal, 'chapter_title': chapter['title']},
         text=TEXT, flow=flow, start=start,
         font_size=font_size(),
+        font_family=font_family(),
         chars_before=sum(chars(c) for c in chapters[:position]),
         chapter_chars=chars(chapter),
         total_chars=sum(chars(c) for c in chapters) or 1,

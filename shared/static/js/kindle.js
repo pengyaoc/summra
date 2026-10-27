@@ -218,15 +218,52 @@
   function openMenu() { removeClass(menu, 'hidden'); }
   function closeMenu() { addClass(menu, 'hidden'); }
 
+  function currentSize() {
+    var m = /\bfs-(\d+)\b/.exec(doc.className);
+    return m ? parseInt(m[1], 10) : (num('font-size-default') || 3);
+  }
+
+  function updateSizeControls() {
+    var size = currentSize();
+    var max = num('font-size-max') || 5;
+    var status = byId('font-size-status');
+    if (status) status.innerHTML = size + ' / ' + max;
+    var ids = ['smaller', 'bigger'];
+    for (var i = 0; i < ids.length; i++) {
+      var button = byId(ids[i]);
+      if (!button) continue;
+      var disabled = i === 0 ? size === 1 : size === max;
+      button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+      if (disabled) addClass(button, 'off');
+      else removeClass(button, 'off');
+    }
+  }
+
   function resize(delta) {
-    var size = 3;
-    var m = /fs-(\d)/.exec(doc.className);
-    if (m) size = parseInt(m[1], 10);
-    var nextSize = Math.max(1, Math.min(5, size + delta));
+    var size = currentSize();
+    var nextSize = Math.max(1, Math.min(num('font-size-max') || 5, size + delta));
     if (nextSize === size) return;
     var at = currentParagraph();
-    doc.className = doc.className.replace(/fs-\d/, 'fs-' + nextSize);
+    doc.className = doc.className.replace(/\bfs-\d+\b/, 'fs-' + nextSize);
     setCookie('kfs', nextSize);
+    updateSizeControls();
+    layout();
+    show(pageOfParagraph(at));
+  }
+
+  function changeFont(choice) {
+    if (!/^(system|song|hei)$/.test(choice)) return;
+    var selected = byId('font-' + choice);
+    if (!selected || hasClass(selected, 'on')) return;
+    var at = currentParagraph();
+    doc.className = doc.className.replace(/\bfont-(system|song|hei)\b/, 'font-' + choice);
+    setCookie('kff', choice);
+    var choices = ['system', 'song', 'hei'];
+    for (var i = 0; i < choices.length; i++) {
+      var button = byId('font-' + choices[i]);
+      if (button) removeClass(button, 'on');
+    }
+    addClass(selected, 'on');
     layout();
     show(pageOfParagraph(at));
   }
@@ -248,6 +285,7 @@
     if (menuOpen()) {
       if (target.id === 'smaller') return resize(-1);
       if (target.id === 'bigger') return resize(1);
+      if (target.getAttribute('data-reading-font')) return changeFont(target.getAttribute('data-reading-font'));
       if (link && hasClass(link, 'keep')) {
         // Switching Plain English / Original keeps your paragraph.
         link.href = link.href.split('#')[0] + '#p=' + currentParagraph();
@@ -287,6 +325,7 @@
     }, 200);
   };
 
+  updateSizeControls();
   layout();
   var hash = window.location.hash;
   var m = /^#p=(\d+)$/.exec(hash);

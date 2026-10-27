@@ -141,6 +141,11 @@ button.btn { -webkit-appearance: none; }
 .fs-3 .flow { font-size: 21px; line-height: 1.55; }
 .fs-4 .flow { font-size: 25px; line-height: 1.55; }
 .fs-5 .flow { font-size: 30px; line-height: 1.5; }
+.fs-6 .flow { font-size: 36px; line-height: 1.5; }
+.fs-7 .flow { font-size: 42px; line-height: 1.5; }
+.fs-8 .flow { font-size: 50px; line-height: 1.5; }
+.fs-9 .flow { font-size: 60px; line-height: 1.5; }
+.fs-10 .flow { font-size: 72px; line-height: 1.5; }
 
 /* Paginated once kindle.js runs: the page never scrolls. */
 .js.reading, .js.reading body { height: 100%; overflow: hidden; }

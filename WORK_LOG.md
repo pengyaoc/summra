@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-27: Larger Kindle text and Chinese font choices
+
+- User reported the existing maximum remained too small. Confirmed a shared client/server five-level cap, topping out at 30px. Distill now opts into ten levels (16/18/21/25/30/36/42/50/60/72px), defaulting to36px for unset/invalid preferences. Existing valid size cookies retain their meaning. Plainly keeps its original five-level range/default.
+- Added Distill-only 默认 / 宋体 / 黑体 reader controls. Song uses installed STSong-family glyph fallbacks; Hei requests STHeiti-family fallbacks. Latin retains the standard Kindle faces. Preferences use validated app-scoped year-long cookies. ES5 handlers repaginate at the current paragraph, handle two-digit size classes, show the current level/maximum and mark limits inactive. No font downloads or Kindle system modifications.
+- Read-only SSH inspection on the actual PW3 confirmed STSong and STHeiti (also traditional Chinese variants) in fontconfig. User previously confirmed the deployed phone-assisted stock-browser reading flow works. Backend validation: 387 Distill/shared tests passed. Chromium and WebKit synthetic Chinese-page checks pass for36→72px, limit enforcement, decreasing from level10, font changes, reload persistence, no document overflow and page turns. Screenshots visually inspected. Device font appearance still awaits user comparison after deployment.
+
 ## 2026-10-27: Kindle-only phone-assisted Google sign-in
 
 - Implemented in an isolated worktree from production 87a6afb, preserving unrelated uncommitted iOS icon changes in the primary checkout. User authorized implementation, deployment and a stock-Kindle trial; latest scope limits automatic pairing to Kindle devices.

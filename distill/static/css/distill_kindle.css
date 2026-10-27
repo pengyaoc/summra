@@ -1,3 +1,9 @@
+/* Installed Kindle font family names vary by firmware/language pack. Keep
+   Latin in its usual Kindle face and request CJK families as glyph fallbacks.
+   No font files are downloaded; unavailable faces fall back to serif/sans. */
+.font-song .flow { font-family: Bookerly, "STBShusong", "STSong", "Song S", "Songti SC", "STSongTC", serif; }
+.font-hei .flow { font-family: "Amazon Ember", "STHeiti", "MYing Hei S", "MHei", "Heiti SC", "STHeitiTC", sans-serif; }
+
 /* Distill's block vocabulary on the shared Kindle e-ink pages. No JavaScript here:
    kindle.js paginates .flow into columns, so nothing may be split across one. */
 .flow table, .flow tr, .flow figure { -webkit-column-break-inside: avoid; break-inside: avoid; }

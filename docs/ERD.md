@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## Kindle typography configuration (2026-10-27)
+
+`KindleOptions` now declares `font_size_max`, `font_size_default`, `font_choices` and `font_default`, with bounded/allowlisted validation. Shared cookie readers use the installed app configuration. Distill selects ten sizes through72px, default36px, and system/Song/Hei font choices; Plainly retains five sizes and its21px default. The existing `kfs` cookie preserves levels1–5 and accepts larger levels only in configured apps; `kff` stores a validated font key. Distill's CSS requests local STSong/STHeiti CJK fallback families after the Latin face, with generic fallbacks. Both families were verified via fontconfig on the actual PW3. No webfonts, database schema changes or system font installation. The shared ES5 reader consumes maximum/default data attributes, parses multi-digit size classes, repaginates after size/font changes, updates the level indicator and disables controls at bounds. Existing cookies remain prefix-scoped and expire after a year.
+
 ## Distill Kindle device authentication (2026-10-27)
 
 `distill/device_pairing.py` resolves trusted Apache OIDC identity first, then an allowlisted Kindle-only device cookie. It runs before Kindle dispatch. Apache `OIDCUnAuthAction pass` is conditional on the shared e-reader UA definition; false matches retain Google auth. Public `/pair` and `/pair/qr.png` contain no private content and reject non-Kindle clients; `/pair/approve` and `/pair/devices` always require genuine OIDC, independent of device cookies. UA is a routing signal, never an identity. Explicit display-mode overrides do not enable device authentication.

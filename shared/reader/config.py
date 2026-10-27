@@ -61,6 +61,19 @@ DEFAULT_SETTINGS = ReaderSettings(
 class KindleOptions:
     text_modes: tuple[tuple[str, str], ...]
     default_text: str
+    font_size_max: int = 5
+    font_size_default: int = 3
+    font_choices: tuple[tuple[str, str], ...] = ()
+    font_default: str = 'system'
+
+    def __post_init__(self):
+        if not 1 <= self.font_size_default <= self.font_size_max <= 10:
+            raise ValueError('Kindle font size range must be within 1–10')
+        choices = [key for key, _ in self.font_choices]
+        if any(key not in ('system', 'song', 'hei') for key in choices) or len(set(choices)) != len(choices):
+            raise ValueError('Unknown or duplicate Kindle font choice')
+        if choices and self.font_default not in choices:
+            raise ValueError('Kindle default font is not among choices')
 
 
 @dataclass(frozen=True)

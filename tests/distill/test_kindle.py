@@ -118,6 +118,21 @@ def test_kindle_reader_has_no_text_row(app_env):
     assert 'id="smaller"' in html
 
 
+def test_kindle_large_sizes_and_chinese_fonts_survive_reload(client):
+    html = body(kget(client, '/books/my-book/read'))
+    assert 'fs-6 font-song' in html and 'data-font-size-max="10"' in html
+    assert 'data-reading-font="song"' in html and 'data-reading-font="hei"' in html
+    client.set_cookie('kfs', '10')
+    client.set_cookie('kff', 'hei')
+    html = body(kget(client, '/books/my-book/read'))
+    assert 'fs-10 font-hei' in html and 'class="btn on">黑体' in html
+    # Both cookies are preferences, never raw CSS or markup.
+    client.set_cookie('kfs', '11')
+    client.set_cookie('kff', '<script>')
+    html = body(kget(client, '/books/my-book/read'))
+    assert 'fs-6 font-song' in html and 'font-<script>' not in html
+
+
 def test_kindle_reader_resumes_saved_chapter_and_index(app_env):
     client, _, _, book_id = app_env
     assert 'data-ch="0"' in body(kget(client, '/books/my-book/read'))

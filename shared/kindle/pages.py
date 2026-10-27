@@ -8,7 +8,7 @@ the page templates; paging, cookies, pagination and the account line live here.
 from typing import Any, Callable, Dict, Optional
 from urllib.parse import quote, urlencode
 
-from flask import Blueprint, after_this_request, g, render_template, request
+from flask import Blueprint, after_this_request, current_app, g, render_template, request
 
 from shared.kindle import is_kindle_user_agent
 from shared.reader.config import ReaderConfig
@@ -97,11 +97,24 @@ def paginate(items, size, page):
 
 
 def font_size() -> int:
+    config = current_app.extensions.get('reader_config')
+    options = config.kindle if config else None
+    default = options.font_size_default if options else DEFAULT_FONT_SIZE
+    maximum = options.font_size_max if options else max(FONT_SIZES)
     try:
-        size = int(request.cookies.get('kfs', DEFAULT_FONT_SIZE))
+        size = int(request.cookies.get('kfs', default))
     except ValueError:
-        return DEFAULT_FONT_SIZE
-    return size if size in FONT_SIZES else DEFAULT_FONT_SIZE
+        return default
+    return size if 1 <= size <= maximum else default
+
+
+def font_family() -> str:
+    config = current_app.extensions.get('reader_config')
+    options = config.kindle if config else None
+    if not options or not options.font_choices:
+        return 'system'
+    choice = request.cookies.get('kff', options.font_default)
+    return choice if choice in dict(options.font_choices) else options.font_default
 
 
 def render(template, user_db, user_id, **context):
