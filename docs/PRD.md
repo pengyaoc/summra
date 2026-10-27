@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## Kindle-only phone-assisted sign-in (2026-10-27)
+
+An unauthenticated Kindle e-reader visiting Distill automatically sees a QR code and matching eight-character code. Its stock browser requires no JavaScript: HTML refresh checks every ten seconds, with a manual Check approval link. The owner scans the QR code on a phone (or opens `/distill/pair/approve` and enters the code), completes ordinary Google sign-in there, compares the displayed code and explicitly presses Approve my Kindle. The Kindle then opens the existing Kindle library and shares the owner's existing reading progress. Requests expire in ten minutes; approved access lasts up to 30 days and can be revoked at `/distill/pair/devices` using real Google authentication. Phones/desktops retain their current Google sign-in; Kindle display-mode overrides and Fire/Silk/Android clients do not trigger pairing. Google pages and tokens stay on the phone. Never approve a code that is not on the reader you are pairing. Physical stock-browser compatibility remains subject to the device trial.
+
 ## Distill book actions (2026-10-27)
 
 Continue/Start reading, Read from beginning and Mark unfinished/Mark as read use consistent typography, spacing and touch target sizes. Continue/Start reading remains the filled primary action; the secondary actions share one understated link treatment. Actions wrap without horizontal overflow on phone screens, retain visible keyboard focus and preserve their existing destinations and status behavior.

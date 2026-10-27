@@ -1,5 +1,11 @@
 # Summra - Technical Implementation Details
 
+## Distill Kindle device authentication (2026-10-27)
+
+`distill/device_pairing.py` resolves trusted Apache OIDC identity first, then an allowlisted Kindle-only device cookie. It runs before Kindle dispatch. Apache `OIDCUnAuthAction pass` is conditional on the shared e-reader UA definition; false matches retain Google auth. Public `/pair` and `/pair/qr.png` contain no private content and reject non-Kindle clients; `/pair/approve` and `/pair/devices` always require genuine OIDC, independent of device cookies. UA is a routing signal, never an identity. Explicit display-mode overrides do not enable device authentication.
+
+Separate SQLite `distill_pairing.db`, alongside the configured user DB (override `DISTILL_PAIRING_DB`): `pairing_requests(secret_hash PK, code UNIQUE, created, expires, email, consumed)`, `device_sessions(token_hash PK, id UNIQUE, email, created, expires)` and `pairing_csrf(token_hash PK, email, scope, expires)`. Request and session secrets have 256 bits of randomness and only SHA-256 hashes are stored. Approval identifiers expire after ten minutes; the originating browser secret is required for an atomic, one-time redemption into a 30-day session. `BEGIN IMMEDIATE` serializes concurrent redemption. Request creation is globally bounded to 40 per ten minutes; creation purges expired records. Approval/revocation require one-time email/scope-bound CSRF tokens plus a matching HttpOnly cookie and reject foreign Origin headers. Allowlist checks apply on every authenticated request, including redeemed sessions. Session revocation deletes its hash. Cookies are Secure/HttpOnly/SameSite=Lax and scoped to the mounted app. Pairing responses are no-store, deny framing and restrict external resources. QR codes are generated locally (`qrcode`); the canonical origin defaults to `https://pengyaochen.com` (`DISTILL_PAIRING_ORIGIN` override), never the client Host header. No Google token is copied to a Kindle. Existing content/progress schemas and Plainly authentication are unchanged.
+
 This document provides in-depth technical documentation for the Summra project, including entity relationship diagrams, detailed algorithm implementations, and code-level architecture. This is intended for developers and for providing context to future Claude Code sessions.
 
 ## Table of Contents

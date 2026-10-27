@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-27: Kindle-only phone-assisted Google sign-in
+
+- Implemented in an isolated worktree from production 87a6afb, preserving unrelated uncommitted iOS icon changes in the primary checkout. User authorized implementation, deployment and a stock-Kindle trial; latest scope limits automatic pairing to Kindle devices.
+- Added a JavaScript-free QR/code page, explicit Google-authenticated phone approval, browser-bound one-time redemption, independent 30-day Distill sessions and phone-based revocation. Added separate hashed-secret SQLite storage, short expiry, global request cap, CSRF protection and security headers. Apache routes only e-reader Kindle UAs through app device authentication; phones/desktops retain Google login and phone approval always forces real OIDC. No existing content/progress schema changes or Plainly changes.
+- Final full Distill/shared backend run: 386 passed, including 17 new pairing cases covering prefixes, CSRF, concurrent one-time redemption, expired secrets/sessions, revocation, forged cookies, approval permissions and excluded UAs. Allowlist-removal and API fail-closed regressions also pass. QR dependency installed locally. Deployment and physical trial pending at this checkpoint.
+
 ## 2026-10-27: Consistent book actions and reader continuity release
 
 - User authorized fixing the three book actions, then committing, pushing and deploying both this styling update and the reader backward-section fix below.
