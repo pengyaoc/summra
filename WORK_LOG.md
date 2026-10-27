@@ -10521,3 +10521,34 @@ back up the Distill progress database and Apache fragment, fast-forward the
 checkout, install the matching fragment, validate Apache configuration, restart
 only Distill and reload Apache. Verify public launch/manifest, OIDC login redirect
 and protected content boundaries; record the actual result after verification.
+
+## 2026-10-26 — PWA sign-in and documentation deployed
+
+Committed/pushed adfee9e (PWA sign-in, canonical ERD/PRD/worklog alignment and
+AGENTS.md documentation requirement) and fast-forwarded /opt/summra to that commit.
+Backed up Distill progress online to
+/opt/summra/data/distill_user.db.pre-pwa-login-20261027T024300Z and Apache to
+/etc/apache2/service-locations/distill.conf.pre-pwa-login-20261027T024300Z.
+Installed the matching Apache fragment, passed apache2ctl configtest, restarted
+only Distill and reloaded Apache. Both Distill and Plainly services are active.
+
+Live public HTTPS: launch/manifest/drop icon return 200; login, library, worker,
+reader script and auth API redirect signed-out visitors to OIDC. Verified stable
+manifest identity/scope /distill/ and start URL /distill/launch, plus the visible
+Sign in link without private asset dependencies. Authenticated loopback library,
+auth check, 细胞传 book page and worker return 200; /login redirects to /distill/.
+SQLite integrity passes. All previous progress/mutation/hint rows remain present;
+existing mutation history is unchanged. Concurrent real reading added navigation,
+page-turn and explicit manual_finish mutations (219 to 228 rows at verification),
+so live book/mode state legitimately advanced after the backup rather than being
+byte-identical. No reading markers were reset.
+
+369 shared/Distill regressions passed before release; the preceding full browser
+suite and two-origin login simulation passed. Direct SSH and HTTPS briefly timed
+out during follow-up checks; IAP verified the VM and VM-origin public HTTPS 200.
+An initial external Chromium navigation also timed out, so do not treat that
+attempt as proof of actual device Google sign-in. No Google credentials were
+entered and no user-device installation was modified.
+A fresh external Chromium retry succeeded: the live launch screen's Sign in
+action navigates to accounts.google.com. Authentication completion with the
+owner's credentials remains a device-level check; no credentials were entered.

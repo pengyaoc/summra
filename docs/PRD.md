@@ -2392,6 +2392,7 @@ Server-side summarization, file upload in the browser, multiple users beyond the
 - Reaching the final page on web or Kindle leaves a Distill book in progress. Explicit Read/unfinished actions survive reloads and preserve current/furthest positions; Finished defaults to resume.
 - Import and repair preserve meaningful numbering. Source is the final chapter; title repairs and Source append operations retain existing chapter identities and reading positions.
 - Library/book covers use precomputed AVIF, then WebP, then JPEG fallbacks; Kindle uses JPEG. Reader illustrations retain their originals. Requests do not encode images or recompile unchanged reader content.
+- Deployed to the VM on 2026-10-26 with public launch/manifest, private-route authentication boundaries and authenticated library-return checks verified. Existing installations may retain their old launch URL until the manifest refreshes.
 - A signed-out PWA launch shows a working Sign in action without private asset dependencies; successful authentication returns to the library, while a valid session opens it automatically.
 - Installing Distill uses the drop icon even when the OS fetches metadata without sign-in. Signed-out access to book content and progress remains blocked.
 
