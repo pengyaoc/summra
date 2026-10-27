@@ -10433,3 +10433,21 @@ explicit Read/unfinished actions, first-time manual Read, preserved positions,
 legacy-status conversion and idempotence, and default resume. A fresh browser
 verified that automatic completion leaves the book in progress, explicit marking
 changes its status, and Continue reading resumes the saved terminal chapter.
+
+## 2026-10-26 — Explicit Read policy deployed
+
+Deployed 6d1317e. Backed up Distill user state to
+/opt/summra/data/distill_user.db.pre-explicit-read-20261027T022828Z.
+Reclassified two automatic Finished flags (books 17 and 56) as in progress.
+Verified all users, mode_reading_state rows (including current/furthest markers,
+reading time and revisions), progress_mutation history and hint records remained
+identical through migration. Only completion status/timestamp and book revision
+metadata changed. The migration rerun returned zero changes; SQLite integrity
+passed and both app services are active. A first deployment precheck used the
+wrong hint-table name, aborted before migration and restored the previous code;
+the corrected precheck/migration passed.
+
+Validation: 366 shared/Distill plus 131 targeted Plainly tests pass (497 total),
+with browser verification of explicit Read, unfinished and saved-place resume.
+The bundle freshness check passes. Plainly keeps its existing automatic
+completion setting; the new explicit policy is enabled only for Distill.
