@@ -1,5 +1,10 @@
 # Summra Work Log
 
+## 2026-10-27: Prevent blank-space dragging before/after font banners
+
+- User clarified that the text fits but a touch drag can reveal blank space, including after toggling the font banners. The prior CSS fit fix was insufficient on the physical browser. Added capture-phase, non-passive touchmove/wheel cancellation across the paginated body (including gutters and banners), plus a guarded reset of stale window/document scroll offsets. Ordinary taps remain available. Modern touch-action/overscroll hints supplement legacy event prevention. Font banners are absolute children of a clipped overlay instead of viewport-fixed descendants; opening/closing clears retained offsets, and tapping the backdrop closes the menu.
+- Added touch-drag assertions to the existing Kindle e2e test on initial load, in gutters, with banners open, after A+, and after closing. Previous release fails initial touch-cancellation regression. Chromium/WebKit tests pass those phases, size/Hei changes, repeated toggles, wheel cancellation, simulated legacy blank scroll range and retained-offset correction; Chromium also runs CDP touch drags. Tap navigation still works. All38 focused Distill/shared Kindle backend tests pass. On-device interaction verification and deployment pending at this checkpoint. No database, authentication or saved-preference changes.
+
 ## 2026-10-27: Fit Kindle reading pages to the browser viewport
 
 - User reported horizontal and vertical scrollbars after the typography update. Read-only framebuffer capture confirmed chapter content extending below the actual stock-browser reading area. Replaced window-dimension-based pagination with a fixed CSS reading shell, anchored header/footer and an inset clipped page rectangle measured via clientWidth/clientHeight. Tap zones use the same fitted body dimensions; layout clears retained document scroll offsets. Kindle-only scrollbar styling suppresses legacy scrollbar painting. No font-size reduction, authentication, data or progress-format changes; no-JavaScript scrolling remains available.

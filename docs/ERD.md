@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## Kindle gesture scroll containment (2026-10-27)
+
+The paginated reader cancels touchmove and wheel default actions on the body in capture phase, explicitly non-passive on modern browsers and capture=true on legacy boolean-listener APIs. This covers reading text, gutters and font banners; click/tap navigation is retained. A guarded window scroll listener resets nonzero root/body offsets, and menu open/close also clears stale offsets. The font menu is a clipped, absolutely positioned overlay whose banners are positioned within it, preventing fixed descendants from adding a native blank document range. Modern touch-action/overscroll declarations supplement the legacy JavaScript guard. No persistence schema, auth or progress-format changes.
+
 ## Kindle viewport sizing (2026-10-27)
 
 JavaScript-enabled Kindle reading uses a fixed CSS body anchored to the viewport edges, absolutely positioned header/footer and an inset clipped reading rectangle. Pagination measures that rectangle's clientWidth/clientHeight instead of window.innerWidth/innerHeight, which may include chrome or overflowing content on legacy WebKit. The vertical fallback clears its old explicit height before remeasurement. Tap zones use body dimensions; layout resets document scroll offsets. Legacy WebKit scrollbar styling is limited to paginated reading. Without JavaScript the existing scrolling chapter remains available. No architecture, database or progress-format change. The regression reproduces the prior oversized rectangle with inflated window metrics and verifies the bounded rectangle after the fix.

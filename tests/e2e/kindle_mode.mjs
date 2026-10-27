@@ -55,6 +55,10 @@ const noScroll = await page.evaluate(() => document.documentElement.scrollHeight
 check(noScroll, "reader page does not scroll");
 const footer = async () => (await page.locator("#foot").innerText()).trim();
 const flowLeft = () => page.evaluate(() => document.getElementById("flow").style.left);
+const cancelsDrag = async (selector) => page.locator(selector).evaluate((el) =>
+  !el.dispatchEvent(new Event("touchmove", { bubbles: true, cancelable: true })));
+check(await cancelsDrag("#viewport"), "touch drag cannot pan the document on initial load");
+check(await cancelsDrag("body"), "touch drag in the reader gutter cannot pan the document");
 check(/%/.test(await footer()), "footer shows progress");
 await page.screenshot({ path: join(shots, "kindle_reader_p1.png") });
 
@@ -83,14 +87,17 @@ check(cut === 0, `no text cut at page edges (${cut})`);
 // Menu
 await page.mouse.click(vp.width / 2, 20);
 check(await page.locator("#menu:not(.hidden)").count() === 1, "top tap opens the menu");
+check(await cancelsDrag(".menu-bottom"), "font banner cancels document panning while open");
 await page.screenshot({ path: join(shots, "kindle_menu.png") });
 const pagesBefore = await page.locator("#menu-pos").innerText();
 await page.click("#bigger");
 const pagesAfter = await page.locator("#menu-pos").innerText();
 check(pagesBefore !== pagesAfter, `A+ re-paginates (${pagesBefore} -> ${pagesAfter})`);
+check(await cancelsDrag(".menu-bottom"), "font adjustment keeps touch-drag protection");
 check((await ctx.cookies()).some((c) => c.name === "kfs" && c.value === "4"), "font size remembered");
 await page.click("#close");
 check(await page.locator("#menu.hidden").count() === 1, "close hides the menu");
+check(await cancelsDrag("#viewport"), "closing the font banners keeps touch-drag protection");
 
 // Some legacy Kindle WebKit builds report window dimensions that include
 // chrome/content overflow. The reading rectangle must still fit the CSS viewport.

@@ -53,6 +53,28 @@
 
   addClass(doc, 'js');
 
+  // Older Kindle WebKit can pan into blank document space even when CSS
+  // overflow is hidden. Cancel drags (not taps) across the whole reader,
+  // including the gutters and the settings banners. Old engines interpret
+  // the options object as capture=true; newer ones also honor passive=false.
+  function preventDocumentScroll(e) {
+    e = e || window.event;
+    if (e.preventDefault) e.preventDefault();
+    e.returnValue = false;
+  }
+  var scrollOptions = { capture: true, passive: false };
+  body.addEventListener('touchmove', preventDocumentScroll, scrollOptions);
+  body.addEventListener('wheel', preventDocumentScroll, scrollOptions);
+  body.addEventListener('mousewheel', preventDocumentScroll, true);
+
+  function resetDocumentScroll() {
+    if (window.pageXOffset || window.pageYOffset || doc.scrollTop || doc.scrollLeft || body.scrollTop || body.scrollLeft) {
+      window.scrollTo(0, 0);
+      doc.scrollTop = doc.scrollLeft = body.scrollTop = body.scrollLeft = 0;
+    }
+  }
+  window.addEventListener('scroll', resetDocumentScroll, false);
+
   function setStyle(prop, value) {
     var prefixes = ['webkit', 'Moz', ''];
     for (var i = 0; i < prefixes.length; i++) {
@@ -219,8 +241,8 @@
   }
 
   function menuOpen() { return !hasClass(menu, 'hidden'); }
-  function openMenu() { removeClass(menu, 'hidden'); }
-  function closeMenu() { addClass(menu, 'hidden'); }
+  function openMenu() { removeClass(menu, 'hidden'); resetDocumentScroll(); }
+  function closeMenu() { addClass(menu, 'hidden'); resetDocumentScroll(); }
 
   function currentSize() {
     var m = /\bfs-(\d+)\b/.exec(doc.className);
@@ -296,7 +318,7 @@
         return true;
       }
       if (link) return true;
-      if (target.id === 'close' || !inside(target, menu)) closeMenu();
+      if (target.id === 'close' || target === menu || !inside(target, menu)) closeMenu();
       return false;
     }
     if (link) return true;

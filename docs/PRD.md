@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## Prevent dragging into blank space in Kindle reading (2026-10-27)
+
+A reading page that visually fits must also resist dragging into blank document space. Verify immediately after load, with the font menu open, after changing size/font, and after closing/reopening the banners. Tap-to-turn, font controls, links and close/backdrop actions remain usable. Ordinary scrolling on library/contents pages and the no-JavaScript fallback is unchanged.
+
 ## Kindle pages fit the browser window (2026-10-27)
 
 The paginated Kindle reader must fit its usable browser window without horizontal or vertical page scrolling. Text size and selected font remain intact. Header/footer stay inside the window; page turns remain available via taps, including after font changes and viewport/orientation resizing. This applies to Kindle reading mode; library and contents pages retain ordinary vertical navigation. The no-JavaScript chapter fallback continues to scroll.
