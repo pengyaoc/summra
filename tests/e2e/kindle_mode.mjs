@@ -180,6 +180,24 @@ if (await page.locator("body[data-sync]").count()) {
 
 check(errors.length === 0, `no page errors (${errors.join(" | ")})`);
 
+// Emulate the PW3's *reported* metrics (its visible area is smaller). Real
+// native drag behavior needs the physical device; this guards profile selection.
+const nativeContext = await browser.newContext({
+  userAgent: KINDLE_UA, viewport: { width: 1072, height: 1268 },
+  screen: { width: 1072, height: 1448 }, hasTouch: false,
+});
+const nativePage = await nativeContext.newPage();
+await nativePage.goto(`${base}/books/${SLUG}/read?ch=1&text=plain`);
+check(await nativePage.locator("html.native-pw3").count() === 1, "legacy PW3 selects native viewport workaround");
+const nativeGeometry = await nativePage.evaluate(() => ({
+  width: document.body.clientWidth, height: document.body.clientHeight,
+  shell: document.getElementById("reader-shell").offsetHeight,
+  overflow: getComputedStyle(document.getElementById("reader-shell")).overflow,
+}));
+check(nativeGeometry.width > 1072 && nativeGeometry.height === 1260
+  && nativeGeometry.shell === 1279 && nativeGeometry.overflow === "scroll", "PW3 uses its measured nested viewport");
+await nativeContext.close();
+
 // Desktop is unaffected.
 const desk = await browser.newPage();
 await desk.goto(`${base}/`);

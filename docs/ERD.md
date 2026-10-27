@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## Native PW3 viewport profile (2026-10-27)
+
+`kindle.js` places the existing reading nodes inside a dynamic `reader-shell`. The general browser path keeps its100% clipped shell. A narrow runtime profile detects no-touch legacy WebKit, a1072×1448 screen and1072px document width, then enables `native-pw3`: a104%-wide,1260px relative body contains a1279px native scroll shell. The inner scrollbar gutter is clipped and the native view stops panning into blank space. Exact dimensions were derived/tested on PW3 firmware5.16.2.1.1; this is a portrait-only profile, not a generic screen-size formula. DOM touch listeners cannot constrain this browser because it exposes no touch events; they remain useful on modern engines. Root scroll-reset logic does not control the PW3's separate native pan. Dynamic wrapping leaves the no-JavaScript fallback unchanged. No persistence, content or auth changes. Temporary geometry beacons are diagnostic only and excluded from the clean release.
+
 ## Kindle gesture scroll containment (2026-10-27)
 
 The paginated reader cancels touchmove and wheel default actions on the body in capture phase, explicitly non-passive on modern browsers and capture=true on legacy boolean-listener APIs. This covers reading text, gutters and font banners; click/tap navigation is retained. A guarded window scroll listener resets nonzero root/body offsets, and menu open/close also clears stale offsets. The font menu is a clipped, absolutely positioned overlay whose banners are positioned within it, preventing fixed descendants from adding a native blank document range. Modern touch-action/overscroll declarations supplement the legacy JavaScript guard. No persistence schema, auth or progress-format changes.

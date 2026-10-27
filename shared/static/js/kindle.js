@@ -51,10 +51,16 @@
   var starts = [];    // page each paragraph starts on
   var ends = [];      // page each paragraph ends on
 
+  // Keep native panning inside an isolated container. Moving the existing
+  // nodes preserves their listeners and leaves the no-JavaScript page alone.
+  var shell = document.createElement('div');
+  shell.id = 'reader-shell';
+  var shellParts = [head, viewport, foot, menu];
+  for (var s = 0; s < shellParts.length; s++) shell.appendChild(shellParts[s]);
+  body.appendChild(shell);
   addClass(doc, 'js');
 
-  // Older Kindle WebKit can pan into blank document space even when CSS
-  // overflow is hidden. Cancel drags (not taps) across the whole reader,
+  // Where DOM touch events are available, cancel drags (not taps) across the reader,
   // including the gutters and the settings banners. Old engines interpret
   // the options object as capture=true; newer ones also honor passive=false.
   function preventDocumentScroll(e) {
@@ -94,6 +100,14 @@
   }
 
   function layout() {
+    // The native PW3 browser reports a 1268px viewport, but only 1231px is
+    // visible. It also exposes no touch events or writable root pan offset.
+    // Use the on-device-tested nested viewport only for this legacy profile;
+    // desktop/modern browsers and other screen sizes keep the normal shell.
+    var pw3 = !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
+      window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth === 1072;
+    if (pw3) addClass(doc, 'native-pw3');
+    else removeClass(doc, 'native-pw3');
     viewport.style.top = head.offsetHeight + 'px';
     viewport.style.bottom = foot.offsetHeight + 'px';
     viewport.style.height = '';

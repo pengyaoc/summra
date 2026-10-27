@@ -154,6 +154,14 @@ button.btn { -webkit-appearance: none; }
    or overflowing content. Anchor the reading shell to CSS viewport edges;
    pagination measures this clipped rectangle instead of window dimensions. */
 .js.reading body { position: fixed; top: 0; right: 0; bottom: 0; left: 0; width: auto; height: auto; overflow: hidden; }
+.js #reader-shell { position: relative; width: 100%; height: 100%; overflow: hidden; }
+/* PW3 portrait WebKit pans outside the DOM viewport and emits no touch
+   events. A slightly wider body with a nested native scroll container stops
+   that pan. Its 20px internal scrollbar gutter is clipped by the body.
+   Measured and drag-tested on 1072x1448 / firmware 5.16.2.1.1. Related test:
+   https://github.com/th0rgall/kindle-browser-tests/tree/main/tests/scrollbar */
+.js.reading.native-pw3 body { position: relative; top: 0; left: 0; right: auto; bottom: auto; width: 104%; height: 1260px; }
+.js.native-pw3 #reader-shell { height: 1279px; overflow: scroll; }
 .js .runhead { position: absolute; top: 0; right: 0; left: 0; }
 .js .runfoot { position: absolute; right: 0; bottom: 0; left: 0; }
 .js #viewport { position: absolute; top: 36px; right: 36px; bottom: 36px; left: 36px; margin: 0; overflow: hidden; }

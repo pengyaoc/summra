@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## Physical PW3 reading fit (2026-10-27)
+
+The older PW3 stock browser requires its own nested reading surface to prevent dragging into blank space; CSS overflow and touch handlers alone are insufficient. The profile retains saved font and size choices, with slight native fit scaling, and keeps header/footer and font banners inside the visible screen. Apply it only to the verified portrait device/engine combination. Other Kindles and normal browsers keep the general reader layout. Real-device tests must cover fresh load, font-menu open, adjustments, and closing/reopening; initial-load/open-menu drags are physically verified, with remaining phases still pending at this checkpoint.
+
 ## Prevent dragging into blank space in Kindle reading (2026-10-27)
 
 A reading page that visually fits must also resist dragging into blank document space. Verify immediately after load, with the font menu open, after changing size/font, and after closing/reopening the banners. Tap-to-turn, font controls, links and close/backdrop actions remain usable. Ordinary scrolling on library/contents pages and the no-JavaScript fallback is unchanged.
