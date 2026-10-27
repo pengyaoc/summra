@@ -9977,7 +9977,9 @@ python plainly/scripts/audits/audit_chapter_text.py
 
 ### Overview
 
-Summra can be installed to a device's home screen for an app-like launch experience (standalone window, no browser chrome). This is limited to installability metadata — there is no offline caching or service worker. **Offline support (service worker, IndexedDB book caching, the "Save for Offline" button, and the offline fallback page) was removed 2026-09-07**: the app assumes an internet connection is always available, and every feature that existed solely to work around missing connectivity was deleted along with it. See `WORK_LOG.md` for the removal entry.
+Plainly and Distill are independently installable standalone apps. As of 2026-10-26, both register network-only service workers at `/sw.js`, scoped to their deployment prefix. They provide a navigation-failure retry page without putting pages, books or progress in Cache Storage. September's offline downloads and durable local progress queue remain removed. The shared reader separately caches manifests/segments in per-app IndexedDB; progress always reads/writes the server.
+
+Plainly's manifest identity/start URL/scope is `/plainly/`, with book-and-spark icons (192px, 512px and a separate maskable 512px icon), theme `#8A2E2E` and background `#F6F1E7`. Distill's drop branding, public installation metadata and private worker are described under Distill below.
 
 ### Web App Manifest
 
@@ -10597,7 +10599,7 @@ retired version, and grew the database to 0.8–1.2GB.
 
 ---
 
-## Reader platform (shared reader, 2026-10-25)
+## Reader platform (shared reader, 2026-10-25; updated 2026-10-26)
 
 The continuous reader, its settings, the reader API, progress and the Kindle mode are one **platform** in `shared/`. An app plugs in with a `ReaderConfig` plus two JS hooks. Plainly and Distill are the two apps. Nothing under `shared/` imports from either, and `shared/static` and `shared/templates` never contain an app's name (`tests/shared/test_layering.py`). Labels and copy that differ come from config.
 
@@ -10622,7 +10624,7 @@ One frozen `ReaderConfig` per app, declared in `<app>/reader_config.py` (`PLAINL
 | `image_base` | Prefix put before an `image` block's `src` (Distill: `''`, so `images/x.jpg` resolves against `/books/<slug>/read`). |
 
 - `ReaderMode(id, label, layout='single', members=(), library_label=None, min_width=None, narrow_fallback=())`. `label` is the selector button and help text. `library_label` is the Library card's mode suffix (falls back to `label`). `layout` is `single` or `side_by_side`. `members` are the `ReaderMember(id, label, cell_class)` columns of a side-by-side mode (they must be `original`, `plain`; `cell_class` is what the row splitter selects). `min_width` is the viewport width a wide mode needs, and `narrow_fallback` lists the modes to use below it. The layout `side_by_side` and the id `side_by_side` go together.
-- `ReaderFeatures(progress=True, illustrations=False, page_turn_hint=True, kindle=True)`. `progress=False` leaves `/api/progress/*` and `/api/auth/check` as 404. `illustrations=False` renders no chapter figure. `page_turn_hint=False` shows no hint. `kindle=False` makes a Kindle user agent get the web page and `/api/kindle/progress` 404 (`tests/distill/test_kindle.py`).
+- `ReaderFeatures(progress=True, illustrations=False, page_turn_hint=True, kindle=True, automatic_completion=True)`. `automatic_completion=False` disables terminal-page completion in web, Kindle and the server mutation handler; Distill opts out, Plainly retains the default. Explicit Read actions are independent of this flag. `progress=False` leaves `/api/progress/*` and `/api/auth/check` as 404. `illustrations=False` renders no chapter figure. `page_turn_hint=False` shows no hint. `kindle=False` makes a Kindle user agent get the web page and `/api/kindle/progress` 404 (`tests/distill/test_kindle.py`).
 - `ReaderSettings(fonts, font_default, size_min, size_max, size_default, themes, theme_default)`: the font, size and theme controls the settings panel renders, and what `settings.js` validates a saved choice against.
 - `KindleOptions(text_modes, default_text)`: the Kindle `Text` row and the values `/api/kindle/progress` accepts. Every text mode must be a configured mode, and `default_text` must be one of them.
 
@@ -10679,7 +10681,7 @@ Plainly's Kindle pages keep their own `kindle_inline` filter instead of `block_e
 
 Shared assets live in `shared/static/` (`css/base.css`, `reader.css`, `kindle.css`; `fonts/`; `js/`). Each app exposes them at `/static/shared/...` through a symlink inside its static folder (`plainly/frontend/static/shared` -> `../../../shared/static`, `distill/static/shared` -> `../../shared/static`; the depth differs because Plainly's static folder is one level deeper). `shared/templates/shared/` is a fallback template root added by `install_shared_ui(app)`; an app's own template at the same path wins.
 
-**Apache follows that symlink only with `Options -Indexes +FollowSymLinks` on the static `<Directory>`.** The repo's `deploy/apache/summra.conf` has it, the VM's copy does not. Plainly's next deploy must reinstall that file and confirm `/plainly/static/shared/css/base.css` returns 200 (the static Alias serves it, so Apache gzip applies).
+**Apache follows that symlink only with `Options -Indexes +FollowSymLinks` on the static `<Directory>`.** Keep that option when installing `deploy/apache/summra.conf` and confirm `/plainly/static/shared/css/base.css` returns 200 (the static Alias serves it, so Apache gzip applies).
 
 Segment URLs carry the manifest's content version (`.../segments/<id>?mode=<m>&v=<content_version>`). The server ignores `v`; it exists so a re-imported book (same book id, bumped `reader_version.version`) misses the 1-year `immutable` HTTP cache. The IndexedDB cache is keyed on `[book_id, content_version, mode, segment_id]`, so it is invalidated by the same version bump.
 
@@ -10719,7 +10721,7 @@ Plainly's `app.min.js` is built by esbuild from `app.js`, which imports `shared/
 
 ---
 
-## Distill app (2026-10-25)
+## Distill app (2026-10-25; updated 2026-10-26)
 
 Distill is a private reader for book summaries, served at `/distill` behind Apache OIDC. Code: `distill/`. Tests: `tests/distill/`. Design: `docs/superpowers/specs/2026-10-24-distill-design.md`.
 
@@ -10727,23 +10729,23 @@ Distill is a private reader for book summaries, served at `/distill` behind Apac
 
 | Route | Notes |
 |---|---|
-| `GET /` | Library: "Reading now" (from `library_cards`), then "All books", newest import first. |
-| `GET /books/<slug>` | Book page: cover, progress, Start or Continue reading, contents grouped by part (built from `get_chapter_outline` and `count_chapters`, so no chapter blocks are loaded), sources. An unknown slug renders `not_found.html` with 404. |
+| `GET /` | Library: Reading now, Finished, then All books; six-card expandable shelves, status badges, filters, sorting and estimated reading times. |
+| `GET /books/<slug>` | Book page: cover, progress, Start or Continue reading, contents grouped by part (built from `get_chapter_outline` and `count_chapters`, so no chapter blocks are loaded). Source is the final chapter; explicit Read/unfinished and separate restart controls preserve saved-place resume. An unknown slug renders `not_found.html` with 404. |
 | `GET /books/<slug>/read` | Reader shell. The JS opens at `?chapter=<chapter id>` or the saved place. The Kindle reader at the same URL takes `?ch=<ordinal>` and also maps `?chapter=<id>` to its ordinal (an explicit `ch` wins), so a web contents link works on a Kindle. |
 | `GET /books/<slug>/images/<name>` | The private image route: `login_required`, `Cache-Control: private, max-age=3600`, ETag and 304, `nosniff`. |
 | `/api/reader/*`, `/api/progress/*`, `/api/auth/check` | From the shared platform. |
 | `POST /api/kindle/progress` | Thin route over `shared.kindle.progress.save_progress` (`ch` is the chapter ordinal). |
 
-Every page and image route is `@login_required`. Kindle pages are served from the same URLs by the shared Kindle dispatch (a `before_app_request` that skips `@login_required`), so `init_pchauth` must run before any blueprint is registered. That order is what keeps Kindle pages private (`test_kindle_pages_and_progress_need_the_allow_list`). An `after_request` hook gives every non-static response without a `Cache-Control` the value `private, no-cache`.
+Book pages, book images, reader assets, APIs and the service worker require authentication. The content-free PWA launch screen, installation metadata and named branding assets are the narrow public exceptions described below. Kindle pages are served from the same URLs by the shared Kindle dispatch (a `before_app_request` that skips `@login_required`), so `init_pchauth` must run before any blueprint is registered. That order is what keeps Kindle pages private (`test_kindle_pages_and_progress_need_the_allow_list`). An `after_request` hook gives every non-static response without a `Cache-Control` the value `private, no-cache`.
 
 ### Auth and environment
 
-- `DISTILL_AUTH_MODE`: `off` (the default when unset; local dev) or `required`. `optional` is rejected, since Distill is all-private. `distill.app_prod` raises unless it is `required`.
+- `DISTILL_AUTH_MODE`: `off` (the default when unset; local dev) or `required`. `optional` is rejected, since Distill content is private. `distill.app_prod` raises unless it is `required`.
 - `DISTILL_ALLOWED_EMAILS`: the allow-list (pchauth, prefix `DISTILL`). A signed-in email not on it gets 403 on a page, an image and a segment. It must be non-empty when the mode is not `off`.
 - `DISTILL_DB` and `DISTILL_USER_DB` (defaults `data/distill.db` and `data/distill_user.db`), `DISTILL_HOST` (default `127.0.0.1`: the dev server runs with auth off, so it binds loopback), `PORT` (5003), `DISTILL_STATIC_DIR_OVERRIDE`.
 - **Sign-in prompt comes from Apache, not the app.** The app itself returns raw JSON 401 (no identity) or 403 (email not on the allow-list; the body names the email, acceptable for one owner). The browser redirect to Google is Apache's `OIDCUnAuthAction auth` on `/distill/`. Verifying that a signed-out visit to `/distill/` redirects to sign-in is a phase 4 deploy check.
 - **Accepted risk: same-origin XSS.** Plainly and Distill share an origin, so script running on a `/plainly` page could `fetch('/distill/...')` with the owner's OIDC cookie. Plainly renders only owner-controlled content with escaped values, so the risk is accepted. A later hardening step is a `Content-Security-Policy` on `/distill/`, or moving Distill to its own subdomain.
-- Production entry: `distill.app_prod:app`, served by the env-driven `deploy/gunicorn_config.py` (`GUNICORN_BIND`, `GUNICORN_WORKERS`, `GUNICORN_PIDFILE`, `GUNICORN_PROC_NAME`: a second app on the VM must set its own bind, pidfile and proc name or gunicorn refuses to start beside Plainly's). The VM, Apache and systemd setup for Distill is phase 4 and not written down yet.
+- Production entry: `distill.app_prod:app`, served by the env-driven `deploy/gunicorn_config.py` (`GUNICORN_BIND`, `GUNICORN_WORKERS`, `GUNICORN_PIDFILE`, `GUNICORN_PROC_NAME`: a second app on the VM must set its own bind, pidfile and proc name or gunicorn refuses to start beside Plainly's). Production runs in `/opt/summra` under the `distill.service` user unit on loopback port 5002; Plainly uses `summra.service` on port 5001. Apache routes `/distill/` using `deploy/distill/distill.conf`. Host environment files and content/user databases remain deployment-owned.
 
 ### Two databases
 
@@ -10758,19 +10760,78 @@ Every page and image route is `@login_required`. Kindle pages are served from th
 
 ### Config
 
-`DISTILL_READER`: `summary` only (so the selector never shows), `cache_db_name='distill-reader-v1'`, `cache_visibility='private'`, `inline='strict'`, `image_base=''`, `illustrations=False`, Kindle on with the single text mode `summary`, and `extra_page_blocks='table.reader-table, figure.reader-figure'`. Page fit is CSS in the shared `reader.css` (the block vocabulary styles); only the "Key points" / "要点" label is in `distill.css`. A figure image is a fixed `40vh` box with `object-fit: contain`, and tables, lists and keypoints scroll inside a `calc(100dvh - 180px)` box, so nothing is clipped on a 375x667 phone.
+`DISTILL_READER`: `summary` only (so the selector never shows), `cache_db_name='distill-reader-v1'`, `cache_visibility='private'`, `inline='strict'`, `image_base=''`, `illustrations=False`, `automatic_completion=False`, Kindle on with the single text mode `summary`, and `extra_page_blocks='table.reader-table, figure.reader-figure'`. Page fit is CSS in the shared `reader.css` (the block vocabulary styles); only the "Key points" / "要点" label is in `distill.css`. A figure image is a fixed `40vh` box with `object-fit: contain`, and tables, lists and keypoints scroll inside a `calc(100dvh - 180px)` box, so nothing is clipped on a 375x667 phone.
+
+### TOC import and repair
+
+`book_format.normalize_toc_titles` runs during import: remove duplicated chapter/parent prefixes while preserving meaningful numbers, distinguish opening overviews from Introductions, and use concise section-overview labels. `DistillDatabase.repair_toc(dry_run=True)` previews existing-title repairs; `dry_run=False` updates titles in place without replacing chapter IDs or blocks.
+
+`iter_chapters` appends Source from the book's source blocks. `append_source_chapters(dry_run=True)` previews an idempotent terminal Source append/update for existing books. Source remains in book metadata as well. The deployed backfill added 54 terminal chapters, taking the collection from 1,564 to 1,618 chapters without renumbering existing IDs. These targeted repairs preserve positions; arbitrary middle-of-book re-imports retain the ordinal limitation above.
+
+### Derived content schema and freshness
+
+The following relationships are in the content database; account progress remains in the separate user database. `reader_revision` is shared by Plainly and Distill; `cover_thumbnails` is Distill-specific.
+
+```mermaid
+erDiagram
+    books ||--o| reader_revision : tracks_freshness
+    books ||--o{ images : owns
+    images ||--o{ cover_thumbnails : derives
+    reader_revision {
+        INTEGER book_id PK,FK
+        INTEGER revision
+        INTEGER indexed_revision "nullable until validated"
+    }
+    cover_thumbnails {
+        INTEGER image_id PK,FK
+        TEXT format PK
+        TEXT token
+        TEXT source_checksum
+        TEXT mime
+        BLOB data
+    }
+```
+
+`create_reader_revisions` installs SQL triggers for book inserts and chapter inserts/updates/deletes, including both books when a chapter moves. Plainly additionally tracks `is_poetry` and book-section changes, including linked books. Both hosts enable `_reader_revision_tracking`. Distill migrates legacy `distill_reader_revision` values and removes the legacy table/triggers, retaining reader versions and unit IDs.
+
+A clean `ensure_reader_content` joins revision/version metadata without loading source content or writing. A dirty check acquires `BEGIN IMMEDIATE`, rechecks freshness, validates the source checksum, recompiles only if changed, and publishes `indexed_revision` in the same transaction. Failures roll back; competing workers cannot publish a stale index. Hosts without revision tracking retain checksum checks. Source text remains in host chapter storage; the index contains coordinates and counts.
+
+`library_word_totals(book_ids)` refreshes dirty books and groups indexed counts by book/mode instead of loading each manifest. Library projections and chapter counts are batched; book-page progress lookups are scoped to the selected book. Identity/allow-list checks still occur each request, while unchanged user identity avoids a login timestamp write within five minutes. Production warm all-book totals measured about 80ms for 90 Plainly books and 2.7ms for 54 Distill books; these are observed measurements, not latency guarantees.
+
+### Explicit Read status and progress preservation
+
+`POST /api/progress/v2/books/<book_id>/status` requires authentication and JSON `status: "read"` or `"reading"`. It resolves the authoritative saved marker/mode (or a first readable marker when no state exists), then calls the existing revision-checked mutation path with `manual_finish` or `manual_unfinish`. Accepted actions return 200; conflicts return 409. No new progress tables or columns were added.
+
+Read sets `book_reading_state.status=finished`; unfinished sets `in_progress`. Preserve current/furthest markers, accumulated reading time and existing mutation history. Distill disables automatic completion in both clients and server validation, so stale terminal-page clients cannot finish a book. Plainly keeps automatic completion enabled.
+
+On platform installation for hosts opting out, `UserDatabase.clear_automatic_completions()` changes finished records without an accepted `manual_finish` history to `in_progress`, clears `finished_at`, and advances book `revision` and `completion_revision`. It does not change mode rows or delete history; reruns leave explicit Read records intact. The deployed conversion changed two automatic flags after an online user-DB backup and verified mode rows/history unchanged.
+
+Reader exit waits at most 250ms for a pending save; keepalive requests can continue through navigation. Save/conflict feedback and retry/reload controls expose failures. Finished cards and book pages resume the current marker by default; only the separate `restart=1` action starts from the beginning. Return URLs must be internal and prefix-scoped; session scroll restoration and back-forward-cache refresh retain library context.
+
+### Installation and cache boundaries
+
+- `/launch`, `/manifest.webmanifest`, `/favicon.ico` and `/app-icons/<name>` are public. Icon names are limited to favicon.svg, favicon.ico and icon-32/180/192/512.png. `init_pchauth(public_endpoints=...)` exempts exact endpoints without upserting identity; Apache has matching narrow exceptions and strips the trusted identity header on those public paths.
+- Manifest `id` and `scope` retain the live prefix (`/distill/`); `start_url` is `/distill/launch`. The manifest uses standalone display, drop icons and colors `#8A2E2E` / `#FBF8F1`. Head/manifest links use the public app-icon paths so anonymous OS fetches receive the drop rather than an authentication redirect. Existing installed icons can remain OS-cached until reinstall; account progress is unaffected.
+- `/launch` renders only inline sign-in controls and public branding, with `Cache-Control: no-store`; it requires no private JS/CSS or account identity. A credentialed, no-store session check uses manual redirect handling, so an expired OIDC session leaves the Sign in link visible rather than fetching the identity provider as an API response. A valid session replaces the launch URL with the library. Returning to the launch screen rechecks the session.
+- `/login` remains protected by Apache OIDC and the app allow-list. A top-level Sign in navigation performs the gateway flow and returns to this route, which redirects to the private library. No passwords, tokens or progress are stored by the launch screen. Existing installations may retain the previous root start URL until their manifest updates; root visits still trigger OIDC normally.
+- `/sw.js` remains authenticated, `private, no-cache`, with `Service-Worker-Allowed` set to the live prefix. The worker is network-only, with a scoped navigation retry fallback and no Cache Storage persistence.
+- Matching content-hashed static URLs are `private, max-age=31536000, immutable`; bare native-module URLs are `private, no-cache`. Shared reader content IndexedDB remains app-namespaced. Neither workers nor IndexedDB provide durable local progress.
 
 ### Images
 
-An `image` block's `src` is `images/<name>`. On the web reader `image_base=''` makes it resolve against `/books/<slug>/read` to the image route. The book page and the Kindle pages pass an explicit base (`<base>/books/<slug>/`), since they are at other URLs. Images are never served from a static path, so they need a sign-in.
+An `image` block's `src` is `images/<name>`. On the web reader `image_base=''` makes it resolve against `/books/<slug>/read` to the image route. The book page and the Kindle pages pass an explicit base (`<base>/books/<slug>/`), since they are at other URLs. Book images are never served from a static path and require sign-in; public branding icons are separate.
+
+Cover derivatives are encoded during import/backfill, before the write transaction, never in a request. `generate_cover_thumbnails()` is idempotent. EXIF orientation is applied, transparency receives a white backing, and size is bounded to 320×480 without upscaling. Formats: AVIF quality 60/speed 6, WebP quality 80 and optimized JPEG quality 82 (Pillow with AVIF support required).
+
+`GET /books/<slug>/cover/<token>.<format>` authenticates, checks the stored token/format, and serves an ETag with `private, max-age=31536000, immutable`; unknown tokens/formats return 404. Library/book-page `<picture>` prefers AVIF then WebP then JPEG; shelf covers are lazy-loaded, book-page covers eager, Kindle uses JPEG. Original images and reader illustrations are unchanged. The deployed 54-cover/162-variant backfill reduced AVIF bytes from 3,840,055 original bytes to 794,971 (about 79%).
 
 ### Progress label
 
-`distill.routes.progress_label(card, chapter_count)` returns `Overview` at ordinal 0, otherwise `Chapter n of m` where `m` counts chapters excluding the Overview, and an empty string with no place saved. The Library's "Reading now" cards and the book page use it as the location line (cards reuse the shared `library_card` macro, which prints `current_chapter.chapter_title`).
+`distill.routes.progress_label(card, chapter_count)` returns `Overview` at ordinal 0, `Source` for the terminal Source chapter, otherwise `Chapter n of m` where `m` counts chapters excluding the Overview, and an empty string with no place saved. The Library's "Reading now" cards and the book page use it as the location line (cards reuse the shared `library_card` macro, which prints `current_chapter.chapter_title`).
 
 ### Kindle mode
 
-`distill/kindle_routes.py`: the library (Reading now, up to 3 on the first page with a "See all" link, then All books at 7 per page), the contents (8 per page, part headings, "You are here") and the reader at the web reader's URL with `?ch=<ordinal>`. A `ch` that is not ASCII digits, or unknown, is a 404. Templates are in `distill/templates/kindle/` and the CSS is `distill/static/css/distill_kindle.css`. There is no Distill JS: the shared ES5 `kindle.js` pages the chapter. The only text is `summary`, so there is no Text row. Progress goes through the shared `save_progress` with Distill's `position` hook (`get_chapter(book_id, ordinal)`; the quote is the block's text, single-spaced and cut to 180 characters, or `None` for a block with no text). `DistillDatabase.get_chapter_outline` and `get_chapter` serve the lists and the reader.
+`distill/kindle_routes.py`: the library (Reading now, up to 3 on the first page with a "See all" link, then All books at 7 per page), the contents (8 per page, part headings, "You are here") and the reader at the web reader's URL with `?ch=<ordinal>`. A `ch` that is not ASCII digits, or unknown, is a 404. Templates are in `distill/templates/kindle/` and the CSS is `distill/static/css/distill_kindle.css`. The shared ES5 `kindle.js` pages the chapter; a small book-page XHR handler posts explicit Read/unfinished actions. The only text is `summary`, so there is no Text row. Progress goes through the shared `save_progress` with Distill's `position` hook (`get_chapter(book_id, ordinal)`; the quote is the block's text, single-spaced and cut to 180 characters, or `None` for a block with no text). `DistillDatabase.get_chapter_outline` and `get_chapter` serve the lists and the reader.
 
 ### Tests
 

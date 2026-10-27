@@ -2161,11 +2161,13 @@ Automated audit system to verify data integrity of chapter text stored in the da
 
 **Feature Owner:** Engineering Team
 **Priority:** Medium
-**Status:** ✅ Implemented — installability only (offline support removed 2026-09-07)
+**Status:** Implemented — Plainly and Distill standalone installation; updated 2026-10-26
 
 ### Overview
 
-Plainly can be installed to a device's home screen for a native, browser-chrome-free launch experience. It has no offline mode: the app assumes an internet connection is always available. The previous "Progressive Web App" offering (service worker, automatic page caching, "Save for Offline" book downloads, an offline fallback page) was removed — it caused more problems (stale-cache bugs, iOS cache-eviction workarounds, sync complexity) than it solved. See `WORK_LOG.md` for the removal entry.
+Plainly and Distill can each be installed as a separate standalone app. Their manifests, identities and service-worker scopes follow their deployment prefixes (`/plainly/` and `/distill/`). Plainly uses its book-and-spark icon; Distill uses its drop logo.
+
+Network-only service workers were reintroduced for installation in October 2026. They do not cache pages, books or progress in Cache Storage; failed navigation shows a small retry page. An internet connection remains required. The reader's per-app IndexedDB caches contain manifests and segments, not durable progress or an offline mutation queue. Progress remains authoritative on the server.
 
 ### User Stories
 
@@ -2199,20 +2201,17 @@ Plainly can be installed to a device's home screen for a native, browser-chrome-
 - [✅] Manifest.json with app metadata
 - [✅] Icons (192x192, 512x512 PNG)
 - [✅] Standalone display mode
-- [✅] Theme color (#1a1a1a)
+- [✅] Theme color (#8A2E2E); app-specific background and branding
 - [✅] App opens full-screen when launched from home screen
 - [✅] iOS install banner, dismissible (`localStorage.installBannerDismissed`), doesn't reappear once dismissed or once installed
 
 ### Technical Implementation
 
-**Files:**
-- `plainly/frontend/templates/manifest.json` - Web app manifest (Jinja-rendered for `base_path`/asset versioning)
-- `plainly/frontend/templates/index.html` - Manifest link, iOS meta tags, install banner
-- `plainly/frontend/static/js/app.js` - `setupInstallPrompt()` (iOS banner + Android `beforeinstallprompt`)
-- `plainly/frontend/static/css/style.css` - iOS banner styles
-
-**Flask Route:**
-- `/manifest.json` - Serves the manifest with correct content type (`plainly/routes/system.py`)
+- Plainly: `/manifest.json`, book-and-spark 192px/512px icons plus a separate 512px maskable icon, and `/sw.js` scoped to its deployment prefix.
+- Distill: `/manifest.webmanifest`, drop favicon and 180px/192px/512px icons, and authenticated `/sw.js` scoped to `/distill/`.
+- Both apps offer an install action when `beforeinstallprompt` is available, respond to `appinstalled`, and show dismissible iPhone/iPad Home Screen instructions when appropriate. Installed standalone windows suppress installation prompts; unavailable browser storage must not break the UI.
+- Distill starts at `/distill/launch`: show **Sign in** when no session exists, or open the library automatically when already authenticated. Sign in uses the existing Google/OIDC gateway and returns to the private library. Keep the stable app identity `/distill/` and preserve account progress.
+- Distill's content-free launch screen, manifest, favicon and exact named branding icons are public so OS installation services can fetch them without OIDC cookies. Books, covers, reader assets, APIs and the worker remain private. The stable app identity is retained; an existing OS-cached shortcut icon may require reinstalling the shortcut without resetting account progress.
 
 ---
 
@@ -2334,7 +2333,7 @@ A long-form editorial blog for essays, book deep-dives, and topical pieces (e.g.
 
 ---
 
-## 17. Distill (Private Book-Summary Reader, 2026-10-25)
+## 17. Distill (Private Book-Summary Reader, 2026-10-25; updated 2026-10-26)
 
 Distill is a private app for the owner's book summaries, the second app on the shared reader platform (see ERD "Reader platform"). It is served at `/distill`, apart from Plainly's data and URLs. Design: `docs/superpowers/specs/2026-10-24-distill-design.md`.
 
@@ -2342,39 +2341,41 @@ Distill is a private app for the owner's book summaries, the second app on the s
 
 **User story:** As the owner, I want my summaries visible only to me, so that I can keep private notes on books I own.
 
-- Everything is behind sign-in. Access is owner-only through an allow-list of email addresses (`DISTILL_ALLOWED_EMAILS`). A signed-in email that is not on the list gets 403 on a page, an image and the reader API.
+- Book content and account data are behind sign-in. The content-free launch screen, manifest, favicon and allow-listed app branding icons are public for installation and sign-in. Content access is owner-only through an allow-list of email addresses (`DISTILL_ALLOWED_EMAILS`). A signed-in email that is not on the list gets 403 on a page, an image and the reader API.
 - Signed-out visitors see only a sign-in prompt. There is no marketing or pitch page. The prompt comes from Apache OIDC (`OIDCUnAuthAction auth` redirects to Google); the app itself returns 401 (signed out) or 403 (email not on the allow-list) as JSON.
 - Sign-in is shared with Plainly: signed in to one means signed in to the other, Kindle included.
 - Book text and images are never publicly cacheable and images are not served from a static path.
 
 ### 17.2 Library
 
-**User story:** As the owner, I open Distill and see what I'm in the middle of, and my other books.
+**User story:** As the owner, I can see my saved reading places, explicitly completed books and the full collection.
 
-- **Reading now** (only when something is in progress): a card per started book, most recent first, with cover (or a title placeholder when the book has none), title, author, a progress bar and a location line ("Overview" or "Chapter n of m").
-- **All books**: a grid of every book, newest import first. A tile links to the book page.
+- **Reading now**: started books most recent first, with cover, progress and saved location. Show six cards initially, with an expandable remainder.
+- **Finished**, above All books: books explicitly marked Read, six initially with an expandable remainder. Finished cards resume the saved place.
+- **All books**: status badges, language/category/status filters and newest/title/author/shortest sorting. Preserve filters and scroll position when returning from a book; refresh server progress when returning through the browser's back-forward cache.
+- Show approximate reading times using 220 English words or 400 CJK characters per minute.
 
 ### 17.3 Book page
 
-- Cover, title, author, a progress line ("Chapter 7 of 22 · 31%") when started, and one button: **Start reading** or **Continue reading**.
-- **Contents**: the Overview first, then the chapters grouped under their part headings. A chapter links into the reader at that chapter.
-- **Sources**, when the book lists any.
+- Show cover, title, author, progress and saved chapter, including for Finished books. **Start reading** or **Continue reading** opens the saved place; **Read from beginning** is a separate action.
+- **Mark as read** explicitly moves a book to Finished; **Mark unfinished** moves it back to Reading now. Neither action discards current/furthest positions or accumulated reading time. A book can be marked Read before reading begins.
+- Contents start with the Overview, retain meaningful chapter numbering and part headings, and avoid duplicated number prefixes. Section overviews have concise distinct labels. Source material appears as the final ordinary **Source** chapter, with the same reading/navigation behavior as other chapters, rather than a separate section below Contents.
 - An unknown book shows a not-found page.
 
 ### 17.4 Reader
 
-**User story:** As a reader, I want the same page-turning reader as Plainly, with a book summary's structure intact.
-
-- Single mode: the summary. There is **no mode selector** and no Plain English or side-by-side view. Font, size and theme settings are the same as Plainly's.
-- Content is paged like Plainly (tap, swipe or keys), with a contents panel and a progress bar. Headings, lists, key-point boxes, quotes, tables and images are laid out so none is cut off by a page. A list or table taller than a page scrolls inside its own box.
-- **Saved place and progress**: the place is saved per account as you read, and reopening a book resumes at the same paragraph, on any device. Progress reads "Chapter n of m", or "Overview" in the opening section (the count does not include the Overview).
-- Back returns to the book page.
+- Summary is the only mode; no mode selector. Font, size and theme settings are shared with Plainly. Tap, swipe and keyboard page navigation preserve headings, lists, key points, quotes, tables and images; oversized blocks scroll within their page.
+- Current place and furthest progress are separate account-backed values. Reopening resumes the current paragraph across devices. Locations show Overview, Chapter n of m (excluding the Overview), or Source.
+- **Distill never moves a book to Finished merely because its last page/chapter was reached.** Only an explicit Read action finishes it, on web and Kindle. Plainly retains its automatic completion behavior.
+- Existing automatically finished Distill books return to Reading now unless an accepted explicit Read action exists. Preserve all saved mode positions, reading time and mutation history during this conversion.
+- Show Saving, Saved, Not saved or Updated on another device feedback. Loading failures provide retry and reload/sign-in recovery. Contents retains part headings and highlights the current chapter; contents/settings dialogs support keyboard focus, Tab and Escape.
+- Back navigation remains responsive: a final save can continue during navigation, with at most 250ms waiting for it. Preserve the validated library return URL and filters through the book page. A failed content-cache operation falls back to the network.
 
 ### 17.5 Kindle mode
 
 When the browser is an e-ink Kindle, the same URLs serve the e-ink pages (see 12), signed in as the same account:
 - **Library**: Reading now (up to 3, with "See all") then All books, 7 per page.
-- **Book**: cover, Start or Continue reading, and the contents 8 per page with part headings and a "You are here" mark.
+- **Book**: cover, saved-place resume, separate Read from beginning, Mark as read / Mark unfinished controls, and contents 8 per page with part headings and a "You are here" mark.
 - **Reader**: fixed pages, tap to turn, resumes at the saved place, and the page you reach is saved to your account, so the web reader picks up where the Kindle stopped.
 - There is one text (the summary), so no Text switch. Tables and figures are never split across pages.
 
@@ -2388,6 +2389,11 @@ Server-side summarization, file upload in the browser, multiple users beyond the
 - A non-allow-listed account, or a signed-out visitor, sees no book text, image or reader data.
 - The reader has no mode selector and loads no Plainly cache (IndexedDB `distill-reader-v1`, never `summra-reader-v2`).
 - On a 375x667 phone no block is clipped; on a Kindle no table row or figure spans two columns.
+- Reaching the final page on web or Kindle leaves a Distill book in progress. Explicit Read/unfinished actions survive reloads and preserve current/furthest positions; Finished defaults to resume.
+- Import and repair preserve meaningful numbering. Source is the final chapter; title repairs and Source append operations retain existing chapter identities and reading positions.
+- Library/book covers use precomputed AVIF, then WebP, then JPEG fallbacks; Kindle uses JPEG. Reader illustrations retain their originals. Requests do not encode images or recompile unchanged reader content.
+- A signed-out PWA launch shows a working Sign in action without private asset dependencies; successful authentication returns to the library, while a valid session opens it automatically.
+- Installing Distill uses the drop icon even when the OS fetches metadata without sign-in. Signed-out access to book content and progress remains blocked.
 
 ---
 
@@ -2410,6 +2416,6 @@ When updating the PRD or ERD for a feature-flagged subsystem, always note the fl
 ---
 
 **Document Version:** 2.2
-**Last Updated:** 2026-05-30
+**Last Updated:** 2026-10-26
 **Author:** Plainly Team
 **Status:** Living Document

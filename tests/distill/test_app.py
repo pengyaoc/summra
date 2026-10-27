@@ -27,7 +27,8 @@ def test_pwa_manifest_scope_credentials_and_icons(app_env, prefix):
     assert response.headers['Cache-Control'] == 'public, no-cache'
     manifest = response.get_json()
     assert manifest['name'] == 'Distill' and manifest['display'] == 'standalone'
-    assert manifest['id'] == manifest['scope'] == manifest['start_url'] == prefix + '/'
+    assert manifest['id'] == manifest['scope'] == prefix + '/'
+    assert manifest['start_url'] == prefix + '/launch'
     assert {i['sizes'] for i in manifest['icons']} == {'192x192', '512x512'}
     for icon in manifest['icons']:
         assert icon['src'].startswith(prefix + '/app-icons/')
@@ -268,3 +269,21 @@ def test_installation_services_can_fetch_only_public_branding_without_cookies(cl
     text = (ROOT / 'deploy/distill/distill.conf').read_text()
     assert 'AuthType None' in text and 'app-icons/' in text
     assert 'RequestHeader unset X-Remote-Email' in text
+
+
+@pytest.mark.parametrize('prefix', ['', '/distill', '/apps/distill'])
+def test_pwa_launch_is_public_and_login_retains_authentication(client, prefix):
+    headers = {'X-Forwarded-Prefix': prefix}
+    response = client.get('/launch', headers=headers)
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    html = response.get_data(as_text=True)
+    assert f'href="{prefix}/login"' in html
+    assert 'Sign in to open your library' in html
+    assert 'redirect: \'manual\'' in html
+    assert 'distill.css' not in html and 'js/pwa.js' not in html
+    assert 'My Book' not in html
+    assert client.get('/login', headers=headers).status_code == 401
+    assert client.get('/login', headers={**headers, 'X-Remote-Email': 'stranger@example.com'}).status_code == 403
+    login = client.get('/login', headers={**headers, **HEADERS})
+    assert login.status_code == 302 and login.headers['Location'] == prefix + '/'

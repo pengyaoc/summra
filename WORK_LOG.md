@@ -10451,3 +10451,73 @@ Validation: 366 shared/Distill plus 131 targeted Plainly tests pass (497 total),
 with browser verification of explicit Read, unfinished and saved-place resume.
 The bundle freshness check passes. Plainly keeps its existing automatic
 completion setting; the new explicit policy is enabled only for Distill.
+
+## 2026-10-26 — Canonical ERD and PRD aligned with deployed reader
+
+Updated [ERD](docs/ERD.md) and [PRD](docs/PRD.md) to cover the deployed
+Distill/shared-reader changes: TOC normalization and terminal Source chapters,
+precomputed AVIF/WebP/JPEG covers, revision-triggered index freshness and batched
+library totals, bounded navigation saves, library filters/shelves and recovery
+controls. Added the reader_revision and cover_thumbnails relationships and fields
+to the ERD, plus explicit status endpoint and migration semantics.
+
+Documented the Distill-only explicit Read policy, saved-place resume for Finished
+books and preservation of current/furthest markers, reading time and mutation
+history. Plainly retains automatic completion. Corrected the obsolete claim that
+PWA installation has no worker: both apps now use scoped network-only workers;
+per-app reader content caches remain distinct from server-only progress.
+Recorded the narrow public Distill branding exception that allows OS icon fetches
+without exposing books, covers, APIs or the worker.
+
+Validation: checked documented configuration, routes, SQL fields, image encoder
+settings and migration behavior against their implementations; reviewed the diff,
+Markdown fences and local document links; git diff --check passes. Documentation
+only; no application code, database migration or service restart in this update.
+Historical superseded continuous-reader designs remain unchanged.
+
+## 2026-10-26 — Distill PWA sign-in entry
+
+Added a public, content-free /launch screen and made it the manifest start URL,
+retaining the stable /distill/ identity and scope. The screen uses inline styling
+and script plus public drop branding; it never depends on protected reader assets.
+A credentialed no-store session check with manual redirect handling opens the
+library for an authenticated owner, or leaves a clear Sign in link when signed
+out. Visibility/bfcache returns recheck the session. The protected /login route
+uses the existing Apache Google/OIDC challenge and redirects to the library after
+authentication. Extended only the exact public launch exception in Flask/Apache;
+books, progress, other assets and the worker remain protected. No progress reset.
+
+The existing worker already passed a desktop cross-origin redirect test; this
+change provides a deliberate installed-app entry rather than assuming its cookie
+jar shares a Safari/Chrome sign-in. Existing installations can retain the previous
+root start URL until their manifest refreshes; root authentication remains valid.
+
+Validation: 369 shared/Distill tests pass, including root/nested deployment
+prefixes, anonymous launch and protected login. Full Distill web/mobile/Kindle
+browser regression passes with signed-out launch and authenticated relaunch checks.
+A separate two-origin gateway simulation verified the actual launch HTML with an
+active Distill worker, sign-in navigation, callback cookie, return to the private
+library and authenticated relaunch. Real Google authentication on an installed
+user device was not exercised. ERD and PRD updated; git diff --check passes.
+These changes remain local; production needs the matching Apache fragment as well
+as the app code before the public launch URL can work.
+
+## 2026-10-26 — Required documentation before commits
+
+Updated AGENTS.md to require ERD, PRD and worklog updates after every coding
+update and before committing. The pre-commit check must confirm all three reflect
+the final implementation and are included in the commit. Changes without an
+architectural or product impact must explicitly record that assessment rather
+than skip a document. This instruction update changes no application behavior
+or data model.
+
+## 2026-10-26 — PWA sign-in release preparation
+
+Reviewed the PWA login changes and all three canonical documents before commit,
+including the new AGENTS.md documentation requirement. Re-ran shared/Distill
+regressions: 369 passed. The VM is at 4443d50 with no tracked changes; its Apache
+fragment matches the repository and both app services are active. Deployment will
+back up the Distill progress database and Apache fragment, fast-forward the
+checkout, install the matching fragment, validate Apache configuration, restart
+only Distill and reload Apache. Verify public launch/manifest, OIDC login redirect
+and protected content boundaries; record the actual result after verification.

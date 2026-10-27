@@ -4,7 +4,7 @@ import hashlib
 import math
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, current_app, g, jsonify, make_response, render_template, request, send_from_directory, url_for
+from flask import Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 
 from shared.auth.pchauth.flask_adapter import login_required
 from shared.progress.routes import library_cards
@@ -25,7 +25,7 @@ def manifest():
     response = jsonify({
         'id': root, 'name': 'Distill', 'short_name': 'Distill',
         'description': 'A little reading. A lot to keep. Your personal book-summary library.',
-        'start_url': root, 'scope': root, 'display': 'standalone',
+        'start_url': url_for('distill.launch'), 'scope': root, 'display': 'standalone',
         'background_color': '#FBF8F1', 'theme_color': '#8A2E2E',
         'icons': [icon(192, 'any'), icon(512, 'any maskable')],
         'categories': ['books', 'education'], 'prefer_related_applications': False,
@@ -33,6 +33,21 @@ def manifest():
     response.mimetype = 'application/manifest+json'
     response.headers['Cache-Control'] = 'public, no-cache'
     return response
+
+
+@bp.route('/launch')
+def launch():
+    # Public, content-free shell: installed apps may have an independent cookie jar.
+    response = make_response(render_template('base.html', pwa_launch=True))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@bp.route('/login')
+@login_required
+def login():
+    # Apache's OIDC challenge returns here, then we enter the private library.
+    return redirect(url_for('distill.library'))
 
 
 @bp.route('/sw.js')

@@ -35,7 +35,7 @@ def create_app(content_db=None, user_db=None, auth_config=None) -> Flask:
     # Must stay before any blueprint: the Kindle dispatch (a before_app_request) skips
     # @login_required, so Flask running this auth hook first is what keeps Kindle pages private.
     init_pchauth(app, auth_config, upsert_user=lambda identity: user_db.upsert_user_by_email(identity.email),
-                 public_endpoints=frozenset({'distill.manifest', 'distill.favicon', 'distill.app_icon'}))
+                 public_endpoints=frozenset({'distill.manifest', 'distill.favicon', 'distill.app_icon', 'distill.launch'}))
 
     install_reader_platform(app, DISTILL_READER, lambda: app.config['CONTENT_DB'], user_db)
     app.register_blueprint(bp)

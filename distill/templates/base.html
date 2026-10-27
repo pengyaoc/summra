@@ -20,15 +20,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('distill.app_icon', name='icon-32.png') }}{{ asset_v('images/icon-32.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('distill.app_icon', name='icon-180.png') }}{{ asset_v('images/icon-180.png') }}">
     <link rel="manifest" href="{{ url_for('distill.manifest') }}" crossorigin="use-credentials">
+    {% if pwa_launch %}
+    <style>body{margin:0;background:#FBF8F1;color:#302b26;font:18px/1.6 system-ui}.distill-login{max-width:440px;margin:12vh auto;padding:24px}.distill-mark{width:52px;height:52px;color:#8A2E2E}.distill-login h1{font:700 36px Georgia,serif}.distill-login a{display:inline-block;padding:10px 24px;border-radius:8px;background:#8A2E2E;color:white;text-decoration:none}:focus-visible{outline:3px solid #302b26;outline-offset:4px}</style>
+    {% else %}
     <script>window.APP_BASE_PATH = {{ (base_path | default('')) | tojson }};</script>
     {% include 'shared/reader/_config_script.html' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/base.css') }}{{ asset_v('shared/css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='shared/css/reader.css') }}{{ asset_v('shared/css/reader.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/distill.css') }}{{ asset_v('css/distill.css') }}">
     <script defer src="{{ url_for('static', filename='js/pwa.js') }}{{ asset_v('js/pwa.js') }}"></script>
+    {% endif %}
 </head>
 <body{% block body_attrs %}{% endblock %}>
 {% block header %}
+{% if not pwa_launch %}
     <header class="distill-header">
         <a class="distill-wordmark" href="{{ base_path }}/" aria-label="Distill home">
             <span id="distill-brand-mark">{{ brand_mark() }}</span><span>Distill<span class="distill-brand-dot">.</span></span>
@@ -36,12 +41,49 @@
         <span class="distill-header-caption">A little reading. A lot to keep.</span>
         <button id="distill-install-button" class="distill-install-action" type="button" hidden>Install app</button>
     </header>
+{% endif %}
 {% endblock %}
+{% if not pwa_launch %}
 <aside id="distill-ios-install" class="distill-install-guide" hidden aria-label="Install Distill">
     <p>Keep Distill on your Home Screen. In Safari, tap Share, then Add to Home Screen.</p>
     <button type="button" aria-label="Dismiss installation guide">Dismiss</button>
 </aside>
-{% block content %}{% endblock %}
+{% endif %}
+{% block content %}
+{% if pwa_launch %}
+<main class="distill-login">
+    {{ brand_mark() }}
+    <h1>Distill</h1>
+    <p>Your private book-summary library.</p>
+    <p id="distill-login-status" role="status">Sign in to open your library and resume reading.</p>
+    <a href="{{ url_for('distill.login') }}">Sign in</a>
+</main>
+<script>
+(() => {
+    let checking = false;
+    async function checkSession() {
+        if (checking) return;
+        checking = true;
+        try {
+            const response = await fetch({{ (base_path + '/api/auth/check') | tojson }}, {
+                credentials: 'same-origin', redirect: 'manual', cache: 'no-store',
+            });
+            if (response.ok && (await response.json()).authenticated) {
+                window.location.replace({{ (base_path + '/') | tojson }});
+            } else if (response.status === 403) {
+                document.getElementById('distill-login-status').textContent = 'This account does not have access to Distill. Sign in with an allowed account.';
+            }
+        } catch (_) {
+            document.getElementById('distill-login-status').textContent = 'Connect to the internet, then sign in to open your library.';
+        } finally { checking = false; }
+    }
+    checkSession();
+    window.addEventListener('pageshow', event => { if (event.persisted) checkSession(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkSession(); });
+})();
+</script>
+{% endif %}
+{% endblock %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

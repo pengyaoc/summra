@@ -39,6 +39,20 @@ async function newPage(options) {
 }
 const page = await newPage({ viewport: { width: 1280, height: 900 } });
 
+// An installed app must render its sign-in entry without an account cookie.
+// Simulate the gateway's expired session, then use the local authenticated login.
+await page.route('**/api/auth/check', route => route.fulfill({status: 200, contentType: 'application/json', body: '{"authenticated":false}'}));
+await page.goto(`${BASE}/launch`);
+check(await page.locator('a', {hasText: 'Sign in'}).isVisible(), 'PWA launch offers sign-in with an expired session');
+check(await page.locator('link[rel="stylesheet"],script[src]').count() === 0, 'signed-out launch requires no private assets');
+await page.unroute('**/api/auth/check');
+await page.locator('a', {hasText: 'Sign in'}).click();
+await page.waitForURL(`${BASE}/`);
+check(new URL(page.url()).pathname === '/', 'sign-in returns to the library');
+await page.goto(`${BASE}/launch`);
+await page.waitForURL(`${BASE}/`);
+check(new URL(page.url()).pathname === '/', 'PWA launch resumes an authenticated session');
+
 const anchorsReady = (pg = page) => pg.waitForSelector('#continuous-reader-content [data-reader-anchor]', { timeout: 15000 });
 
 // The first anchored block on the current page: what "where I am" means after a reload.
