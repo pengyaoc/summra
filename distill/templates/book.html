@@ -46,7 +46,7 @@ unfinished?.addEventListener('click', async () => {
         const state = await (await fetch(`${root}/api/progress/v2/books/${id}`, {cache:'no-store'})).json();
         const mode = state.projection.modes.find(item => item.mode === state.projection.book.last_mode);
         const response = await fetch(`${root}/api/progress/v2/mutations`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-            book_id:id, mode:mode.mode, current_marker:mode.current_marker, base_revision:mode.revision,
+            book_id:id, mode:mode.mode, current_marker:{...mode.current_marker, mode:mode.mode}, base_revision:mode.revision,
             mutation_id:crypto.randomUUID(), device_id:'distill-book-' + crypto.randomUUID(), device_sequence:1, event_cause:'manual_unfinish'
         })});
         if (!response.ok) throw new Error();

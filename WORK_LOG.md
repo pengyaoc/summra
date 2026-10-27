@@ -10360,8 +10360,9 @@ hint configuration. Production deployment is pending these final checks.
 Final pre-deploy checks: the corrected full Distill browser scenario passes,
 including desktop/mobile pagination, list/table/figure integrity, Chinese
 continuations and restored offsets, structured/current/focus-aware TOC, and
-Kindle navigation. Separate browser checks confirm Read again opens Overview
-and Mark unfinished succeeds via the existing mutation API. All 361
+Kindle navigation. A separate browser check confirmed Read again opens Overview. The manual-unfinish
+check exposed a missing mode field in the marker copied from the projection;
+corrected the request to include that mode before final deployment validation. All 361
 shared/Distill and 147 targeted Plainly tests pass; bundle freshness passes.
 The deployed Apache fragment matches the repository version before modification,
 so the narrow branding exception can be applied without replacing host edits.

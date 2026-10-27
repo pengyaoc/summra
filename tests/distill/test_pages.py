@@ -287,3 +287,18 @@ def test_finished_book_has_history_read_again_and_source_location(app_env):
     assert 'id="finished-heading"' in home and 'Read again' in home
     from distill.routes import progress_label
     assert progress_label({'current_chapter': {'chapter_number': 4, 'chapter_title': 'Source'}}, 4) == 'Source'
+
+
+def test_unfinish_accepts_projection_marker_with_its_mode(app_env):
+    client, db, _, bid = app_env
+    chapter = db.get_chapters(bid)[1]
+    payload = _mutation(bid, chapter['id'])
+    client.post('/api/progress/v2/mutations', json=payload, headers=HEADERS)
+    projection = get(client, f'/api/progress/v2/books/{bid}').get_json()['projection']
+    mode = projection['modes'][0]
+    payload.update(mutation_id='unfinish-review', device_id='unfinish-device',
+                   base_revision=mode['revision'], event_cause='manual_unfinish',
+                   current_marker={**mode['current_marker'], 'mode': mode['mode']})
+    response = client.post('/api/progress/v2/mutations', json=payload, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.get_json()['projection']['book']['status'] == 'in_progress'
