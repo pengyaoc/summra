@@ -1,8 +1,12 @@
 # Plainly - Product Requirements Document
 
+## Kindle pages fit the browser window (2026-10-27)
+
+The paginated Kindle reader must fit its usable browser window without horizontal or vertical page scrolling. Text size and selected font remain intact. Header/footer stay inside the window; page turns remain available via taps, including after font changes and viewport/orientation resizing. This applies to Kindle reading mode; library and contents pages retain ordinary vertical navigation. The no-JavaScript chapter fallback continues to scroll.
+
 ## Distill Kindle text size and Chinese fonts (2026-10-27)
 
-The Kindle reader offers ten text sizes, extending the old30px maximum to72px. New readers start at36px; saved valid sizes are preserved. The top-tap menu shows the current size level and maximum, with inactive controls at either end. Font choices are 默认 (existing fallback), 宋体 (Song) and 黑体 (Hei); the reader saves the choice and repaginates around the current paragraph. Fonts use installed Kindle faces, keeping downloads light. Song/Hei are confirmed installed on the tested PW3, but the user's visual comparison of the new choices is pending. Plainly's original size limits and font UI are retained.
+The Kindle reader offers ten text sizes, extending the old30px maximum to72px. New readers start at36px; saved valid sizes are preserved. The top-tap menu shows the current size level and maximum, with inactive controls at either end. Font choices are 默认 (existing fallback), 宋体 (Song) and 黑体 (Hei); the reader saves the choice and repaginates around the current paragraph. Fonts use installed Kindle faces, keeping downloads light. Song/Hei are confirmed installed on the tested PW3, but the user confirmed larger text works and 黑体 looks good on the physical stock-browser Kindle. Plainly's original size limits and font UI are retained.
 
 ## Kindle-only phone-assisted sign-in (2026-10-27)
 

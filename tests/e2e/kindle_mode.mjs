@@ -92,6 +92,32 @@ check((await ctx.cookies()).some((c) => c.name === "kfs" && c.value === "4"), "f
 await page.click("#close");
 check(await page.locator("#menu.hidden").count() === 1, "close hides the menu");
 
+// Some legacy Kindle WebKit builds report window dimensions that include
+// chrome/content overflow. The reading rectangle must still fit the CSS viewport.
+await page.evaluate(() => {
+  window.__kindleWindowDimensions = {
+    innerWidth: Object.getOwnPropertyDescriptor(window, "innerWidth"),
+    innerHeight: Object.getOwnPropertyDescriptor(window, "innerHeight"),
+  };
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 9000 });
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 4000 });
+  window.dispatchEvent(new Event("resize"));
+});
+await page.waitForTimeout(300);
+const fitsViewport = await page.evaluate(({ width, height }) => {
+  const reading = document.getElementById("viewport").getBoundingClientRect();
+  const footer = document.getElementById("foot").getBoundingClientRect();
+  return reading.width > 0 && reading.height > 0 && reading.left >= 0 && reading.right <= width
+    && reading.top >= 0 && reading.bottom <= footer.top + 1 && footer.bottom <= height + 1;
+}, vp);
+check(fitsViewport, "reader and footer fit even when window dimensions are misleading");
+await page.evaluate(() => {
+  Object.defineProperties(window, window.__kindleWindowDimensions);
+  delete window.__kindleWindowDimensions;
+  window.dispatchEvent(new Event("resize"));
+});
+await page.waitForTimeout(300);
+
 // Paging past the last page opens the next chapter.
 for (let i = 0; i < 200 && page.url().includes("ch=1&"); i++) {
   await page.mouse.click(vp.width * 0.8, vp.height / 2);

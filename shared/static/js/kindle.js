@@ -72,9 +72,13 @@
   }
 
   function layout() {
-    var width = viewport.offsetWidth;
-    var height = (window.innerHeight || doc.clientHeight) - head.offsetHeight - foot.offsetHeight;
-    viewport.style.height = height + 'px';
+    viewport.style.top = head.offsetHeight + 'px';
+    viewport.style.bottom = foot.offsetHeight + 'px';
+    viewport.style.height = '';
+    var width = Math.max(1, viewport.clientWidth);
+    var height = Math.max(1, viewport.clientHeight);
+    // Discard a scroll offset retained by the browser across chapter loads.
+    window.scrollTo(0, 0);
     flow.style.left = '0px';
     flow.style.top = '0px';
     rows = false;
@@ -298,8 +302,8 @@
     if (link) return true;
     var x = e.clientX;
     var y = e.clientY;
-    var w = window.innerWidth || doc.clientWidth;
-    var h = window.innerHeight || doc.clientHeight;
+    var w = body.clientWidth || doc.clientWidth;
+    var h = body.clientHeight || doc.clientHeight;
     if (y < h * 0.12) openMenu();
     else if (x < w / 3) prev();
     else next();

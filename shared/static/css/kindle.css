@@ -148,9 +148,16 @@ button.btn { -webkit-appearance: none; }
 .fs-10 .flow { font-size: 72px; line-height: 1.5; }
 
 /* Paginated once kindle.js runs: the page never scrolls. */
-.js.reading, .js.reading body { height: 100%; overflow: hidden; }
-.js #viewport { position: relative; overflow: hidden; }
+.js.reading { height: 100%; overflow: hidden; }
+/* Old Kindle WebKit can report window.innerHeight including browser chrome
+   or overflowing content. Anchor the reading shell to CSS viewport edges;
+   pagination measures this clipped rectangle instead of window dimensions. */
+.js.reading body { position: fixed; top: 0; right: 0; bottom: 0; left: 0; width: auto; height: auto; overflow: hidden; }
+.js .runhead { position: absolute; top: 0; right: 0; left: 0; }
+.js .runfoot { position: absolute; right: 0; bottom: 0; left: 0; }
+.js #viewport { position: absolute; top: 36px; right: 36px; bottom: 36px; left: 36px; margin: 0; overflow: hidden; }
 .js .flow { position: absolute; top: 0; left: 0; }
+.js.reading::-webkit-scrollbar, .js.reading body::-webkit-scrollbar, .js #viewport::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 /* Without JavaScript the chapter scrolls and the menu sits below it. */
 .menu { font-family: "Amazon Ember", Helvetica, Arial, sans-serif; padding: 12px 36px; border-top: 3px solid #000; }

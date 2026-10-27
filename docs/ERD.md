@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## Kindle viewport sizing (2026-10-27)
+
+JavaScript-enabled Kindle reading uses a fixed CSS body anchored to the viewport edges, absolutely positioned header/footer and an inset clipped reading rectangle. Pagination measures that rectangle's clientWidth/clientHeight instead of window.innerWidth/innerHeight, which may include chrome or overflowing content on legacy WebKit. The vertical fallback clears its old explicit height before remeasurement. Tap zones use body dimensions; layout resets document scroll offsets. Legacy WebKit scrollbar styling is limited to paginated reading. Without JavaScript the existing scrolling chapter remains available. No architecture, database or progress-format change. The regression reproduces the prior oversized rectangle with inflated window metrics and verifies the bounded rectangle after the fix.
+
 ## Kindle typography configuration (2026-10-27)
 
 `KindleOptions` now declares `font_size_max`, `font_size_default`, `font_choices` and `font_default`, with bounded/allowlisted validation. Shared cookie readers use the installed app configuration. Distill selects ten sizes through72px, default36px, and system/Song/Hei font choices; Plainly retains five sizes and its21px default. The existing `kfs` cookie preserves levels1–5 and accepts larger levels only in configured apps; `kff` stores a validated font key. Distill's CSS requests local STSong/STHeiti CJK fallback families after the Latin face, with generic fallbacks. Both families were verified via fontconfig on the actual PW3. No webfonts, database schema changes or system font installation. The shared ES5 reader consumes maximum/default data attributes, parses multi-digit size classes, repaginates after size/font changes, updates the level indicator and disables controls at bounds. Existing cookies remain prefix-scoped and expire after a year.
