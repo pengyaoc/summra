@@ -10552,3 +10552,19 @@ entered and no user-device installation was modified.
 A fresh external Chromium retry succeeded: the live launch screen's Sign in
 action navigates to accounts.google.com. Authentication completion with the
 owner's credentials remains a device-level check; no credentials were entered.
+
+## 2026-10-26 — Whole-card saved-place navigation
+
+Distill Reading now and Finished cards now wrap the complete card in one native
+reader link, including cover, title, progress and whitespace. The Continue/Resume
+visual is a span inside that link, avoiding nested interactive elements. Added a
+visible keyboard focus outline and retained saved-place and library-return URLs.
+Plainly's JS-controlled cards without read_href keep their existing markup. No
+schema or progress-storage changes; ERD and PRD updated before any commit.
+
+Validation: 369 Distill/shared tests pass in the established Distill-then-shared
+order. Browser checks on the rendered shared template verify cover, title, author,
+location, progress, Continue action, empty space and Tab/Enter all navigate to the
+same saved-place reader URL. An initial reverse-order suite exposed the already
+documented shared app-global isolation limitation; the established order passes.
+git diff --check passes. Changes remain local and uncommitted; no deployment.

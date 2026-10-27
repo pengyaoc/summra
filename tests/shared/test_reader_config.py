@@ -204,7 +204,9 @@ def test_library_card_hides_mode_label_for_single_mode_app():
     multi = _render(src, make(), book=book)
     assert 'Beginning · Original' in multi
     linked = _render(src.replace("book, cover)", "book, cover, read_href='/r/7')"), make(), book=book)
-    assert '<a class="library-read-action" href="/r/7">' in linked and 'data-library-read' not in linked
+    assert '<a class="library-card library-card-link" href="/r/7"' in linked
+    assert linked.count('<a ') == 1 and '<span class="library-read-action">' in linked
+    assert 'data-library-read' not in linked
 
 
 def test_distill_flattens_complex_blocks_only_in_web_reader():
