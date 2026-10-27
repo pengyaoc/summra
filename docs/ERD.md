@@ -37,6 +37,8 @@ The user-facing name is **Plainly** (renamed from "Summra" on 2026-10-18). Only 
 
 The shared web reader uses the first/last IDs in `continuousReader.segmentIds` as its rendered window edges. Backward section navigation opens the previous section's final page (`shouldGoToLastPage`); forward navigation opens the section after the last rendered section on its first page (`shouldResetToPage1`). Navigation replaces the window IDs, and button availability uses the same edges. In-flight section turns ignore repeated input, release their lock on every exit, and discard responses after reader exit, replacement or mode change. This fixes multi-chapter backward skips such as the reported 细胞传 jump and prevents replaying a prefetched section going forward. No architecture, schema, content, marker or API changes; Plainly and Distill share the behavior, with Plainly's bundle rebuilt.
 
+Deployment verification: both the reader continuity and Distill book-action styling shipped in e6cb60f. Both apps are active; live served assets match the tested files. No database migration.
+
 ## Repository layout (post repo split, 2026-10-24)
 
 ```text
