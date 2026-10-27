@@ -10366,3 +10366,32 @@ corrected the request to include that mode before final deployment validation. A
 shared/Distill and 147 targeted Plainly tests pass; bundle freshness passes.
 The deployed Apache fragment matches the repository version before modification,
 so the narrow branding exception can be applied without replacing host edits.
+
+## 2026-10-26 — Distill fixes deployed and verified
+
+Released e15e240 plus bfa1434 (manual-unfinish marker correction) to the VM.
+Backed up all four production DBs online with suffix
+.pre-distill-ui-20261027T020747Z. Backed up the live Apache fragment to
+/etc/apache2/service-locations/distill.conf.pre-drop-icons-20261027, installed
+the narrow public-branding exception, passed apache2ctl configtest, and reloaded
+Apache. Both app services restarted successfully; no content/progress schema
+migration or reading-position reset was performed.
+
+Public HTTPS now returns 200 for the Distill manifest, 180/512px app icons and
+favicon, with exact SHA-256 matches to the repository's drop PNGs. Manifest
+identity/scope remain /distill/. Signed-out home, worker, app JS and library API
+still redirect to authentication (302). Authenticated book/reader/assets and
+both apps' manifests/workers pass live checks. Reader indexes retained all 90
+Plainly and 54 Distill content versions; no stale indexes needed recompilation.
+Warm loopback home medians: Distill 13.7ms, Plainly 7.5ms.
+
+Final targeted API regression passes for the mode-bearing unfinish marker;
+the corrected browser request returned 200, and a fresh page confirms in-progress
+state with finished controls removed. Local Chromium reports zero installability
+errors using the new branding metadata. The full Distill browser suite passes;
+362 distinct shared/Distill tests and 147 targeted Plainly tests pass across the
+final suite runs (509 total). Production bundle freshness passes. A diagnostic
+browser wait on an outgoing response body stalled after a successful navigation;
+server results and a fresh-browser state check independently confirmed the action.
+Existing OS-cached shortcut icons may still need removal/reinstallation; server
+progress survives that operation. No user-device shortcut was removed remotely.
