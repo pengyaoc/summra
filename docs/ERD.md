@@ -972,7 +972,7 @@ box.className = 'chapter-box' + (isCompleted ? ' completed' : '');
 - `GET /api/progress/chapters/<book_id>` - Completed chapter numbers for a book
 - `POST /api/progress/sync` - Sync offline progress
 
-**Authentication Required:** every progress endpoint above (`@login_required`, pchauth's Flask adapter) 401s an anonymous request. That's the entire enforcement boundary — there is no session to steal or CSRF-protect, since there's no session.
+**Authentication Required:** every progress endpoint above (`@login_required`, pchauth's Flask adapter) 401s an anonymous request. Plainly uses the trusted Apache identity; Distill additionally accepts browser-bound Kindle sessions as described above. Pairing approval/revocation has its own one-time CSRF protection.
 
 ### Security Considerations
 
@@ -10710,7 +10710,7 @@ Plainly's `app.min.js` is built by esbuild from `app.js`, which imports `shared/
 1. Write the content DB: a class with `ReaderIndexMixin` and the library hooks (`library_books`, `chapter_titles`).
 2. Declare a `ReaderConfig` in `<app>/reader_config.py` with a unique `cache_db_name`. Choose modes from `ALL_MODES`.
 3. In the app factory, in this order:
-   1. `init_pchauth(app, auth_config, upsert_user=...)` **first, before any blueprint is registered.** The Kindle dispatch is a `before_app_request` that skips `@login_required`, so if a Kindle blueprint is registered before pchauth's `before_request`, Flask runs the Kindle hook first and serves Kindle pages to anyone. `test_kindle_pages_and_progress_need_the_allow_list` (Distill) guards this order.
+   1. Install authentication **first, before any blueprint is registered** (`init_pchauth` for Plainly; `install_pairing` for Distill). The Kindle dispatch is a `before_app_request` that skips `@login_required`, so if a Kindle blueprint is registered before pchauth's `before_request`, Flask runs the Kindle hook first and serves Kindle pages to anyone. `test_kindle_pages_and_progress_need_the_allow_list` (Distill) guards this order.
    2. `install_reader_platform(app, config, get_content_db, user_db)`, then the app's blueprints.
    3. For a private app, an `after_request` hook that gives every non-static response without a `Cache-Control` the value `private, no-cache` (as `distill/app_base.py` does).
    4. `install_web_basics(app, '<APP>_STATIC_DIR_OVERRIDE')`: it installs `PrefixMiddleware` (the `X-Forwarded-Prefix` deploy prefix, without which every URL breaks under `/prefix`), gzip, and the `asset_v` template helper that the shared templates call.
@@ -10752,14 +10752,14 @@ Distill is a private reader for book summaries, served at `/distill` behind Apac
 | `/api/reader/*`, `/api/progress/*`, `/api/auth/check` | From the shared platform. |
 | `POST /api/kindle/progress` | Thin route over `shared.kindle.progress.save_progress` (`ch` is the chapter ordinal). |
 
-Book pages, book images, reader assets, APIs and the service worker require authentication. The content-free PWA launch screen, installation metadata and named branding assets are the narrow public exceptions described below. Kindle pages are served from the same URLs by the shared Kindle dispatch (a `before_app_request` that skips `@login_required`), so `init_pchauth` must run before any blueprint is registered. That order is what keeps Kindle pages private (`test_kindle_pages_and_progress_need_the_allow_list`). An `after_request` hook gives every non-static response without a `Cache-Control` the value `private, no-cache`.
+Book pages, book images, reader assets, APIs and the service worker require authentication. The content-free PWA launch screen, installation metadata, named branding assets and Kindle pairing bootstrap are the narrow public exceptions described below. Kindle pages are served from the same URLs by the shared Kindle dispatch (a `before_app_request` that skips `@login_required`), so Distill’s `install_pairing` authentication hook must run before any blueprint is registered. That order is what keeps Kindle pages private (`test_kindle_pages_and_progress_need_the_allow_list`). An `after_request` hook gives every non-static response without a `Cache-Control` the value `private, no-cache`.
 
 ### Auth and environment
 
 - `DISTILL_AUTH_MODE`: `off` (the default when unset; local dev) or `required`. `optional` is rejected, since Distill content is private. `distill.app_prod` raises unless it is `required`.
 - `DISTILL_ALLOWED_EMAILS`: the allow-list (pchauth, prefix `DISTILL`). A signed-in email not on it gets 403 on a page, an image and a segment. It must be non-empty when the mode is not `off`.
 - `DISTILL_DB` and `DISTILL_USER_DB` (defaults `data/distill.db` and `data/distill_user.db`), `DISTILL_HOST` (default `127.0.0.1`: the dev server runs with auth off, so it binds loopback), `PORT` (5003), `DISTILL_STATIC_DIR_OVERRIDE`.
-- **Sign-in prompt comes from Apache, not the app.** The app itself returns raw JSON 401 (no identity) or 403 (email not on the allow-list; the body names the email, acceptable for one owner). The browser redirect to Google is Apache's `OIDCUnAuthAction auth` on `/distill/`. Verifying that a signed-out visit to `/distill/` redirects to sign-in is a phase 4 deploy check.
+- **Normal browser sign-in comes from Apache.** Phones/desktops use its Google OIDC redirect; Kindle e-reader UAs pass through to Distill’s device-auth hook and HTML navigation redirects to `/pair` when unauthenticated. Other unauthenticated requests return JSON 401; unlisted OIDC emails return 403. The device session is Distill-only and the phone approval/revocation routes always force Google OIDC. Verify both device classes at the public gateway after deployment.
 - **Accepted risk: same-origin XSS.** Plainly and Distill share an origin, so script running on a `/plainly` page could `fetch('/distill/...')` with the owner's OIDC cookie. Plainly renders only owner-controlled content with escaped values, so the risk is accepted. A later hardening step is a `Content-Security-Policy` on `/distill/`, or moving Distill to its own subdomain.
 - Production entry: `distill.app_prod:app`, served by the env-driven `deploy/gunicorn_config.py` (`GUNICORN_BIND`, `GUNICORN_WORKERS`, `GUNICORN_PIDFILE`, `GUNICORN_PROC_NAME`: a second app on the VM must set its own bind, pidfile and proc name or gunicorn refuses to start beside Plainly's). Production runs in `/opt/summra` under the `distill.service` user unit on loopback port 5002; Plainly uses `summra.service` on port 5001. Apache routes `/distill/` using `deploy/distill/distill.conf`. Host environment files and content/user databases remain deployment-owned.
 
@@ -10826,7 +10826,7 @@ Reader exit waits at most 250ms for a pending save; keepalive requests can conti
 
 ### Installation and cache boundaries
 
-- `/launch`, `/manifest.webmanifest`, `/favicon.ico` and `/app-icons/<name>` are public. Icon names are limited to favicon.svg, favicon.ico and icon-32/180/192/512.png. `init_pchauth(public_endpoints=...)` exempts exact endpoints without upserting identity; Apache has matching narrow exceptions and strips the trusted identity header on those public paths.
+- `/launch`, `/manifest.webmanifest`, `/favicon.ico` and `/app-icons/<name>` are public. Icon names are limited to favicon.svg, favicon.ico and icon-32/180/192/512.png. Distill’s authentication hook exempts these exact endpoints; Apache has matching narrow exceptions and strips the trusted identity header on those public paths.
 - Manifest `id` and `scope` retain the live prefix (`/distill/`); `start_url` is `/distill/launch`. The manifest uses standalone display, drop icons and colors `#8A2E2E` / `#FBF8F1`. Head/manifest links use the public app-icon paths so anonymous OS fetches receive the drop rather than an authentication redirect. Existing installed icons can remain OS-cached until reinstall; account progress is unaffected.
 - `/launch` renders only inline sign-in controls and public branding, with `Cache-Control: no-store`; it requires no private JS/CSS or account identity. A credentialed, no-store session check uses manual redirect handling, so an expired OIDC session leaves the Sign in link visible rather than fetching the identity provider as an API response. A valid session replaces the launch URL with the library. Returning to the launch screen rechecks the session.
 - Deployment verified 2026-10-26: public HTTPS launch/manifest return 200; private routes redirect signed-out requests to OIDC. Authenticated loopback checks confirm the library, book, worker and login return. Apache configuration validation and both service health checks pass.
