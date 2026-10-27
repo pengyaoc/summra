@@ -172,7 +172,7 @@ try {
   check(await page.locator('.distill-tile .distill-cover').count() === await page.locator('.distill-tile').count(), 'every book has a cover image or placeholder');
   await page.screenshot({ path: `${SHOTS}distill_library.png`, fullPage: false });
 
-  await page.click(`a.distill-tile[href$="/books/${SLUG}"]`);
+  await page.click(`a.distill-tile[href*="/books/${SLUG}?"]`);
   await page.waitForSelector('h1');
   check(/\/books\/[^/]+$/.test(new URL(page.url()).pathname) && (await page.locator('h1').innerText()).length > 0, 'library leads to the book page with an h1');
   check(await page.locator('.toc-part-title').count() > 0, 'book page has part headings');
@@ -187,6 +187,14 @@ try {
   check(!(await page.locator('#reader-toc-panel').isVisible()) && !(await page.locator('#reading-settings-panel').isVisible()),
     'contents and settings panels start closed');
   await page.screenshot({ path: `${SHOTS}distill_reader.png` });
+  await page.click('#reader-toc-button');
+  check(await page.locator('.reader-toc-part').count() > 0, 'reader TOC preserves part headings');
+  check(await page.locator('#reader-toc-list [aria-current="location"]').count() === 1, 'reader TOC marks the current chapter');
+  check(await page.evaluate(() => document.getElementById('reader-toc-panel').contains(document.activeElement)), 'opening Contents transfers focus');
+  await page.keyboard.press('Escape');
+  check(!(await page.locator('#reader-toc-panel').isVisible()), 'Escape closes Contents');
+  check(await page.evaluate(() => document.activeElement.id === 'reader-toc-button'), 'closing Contents restores focus');
+
 
   // --- Find a chapter with both an image and a table, via the API ---------
   const found = await scanBlocks(page);
@@ -233,7 +241,7 @@ try {
 
   // --- Library shows it under Reading now ---------------------------------
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
-  check(await page.locator(`.library-card a.library-read-action[href$="/books/${SLUG}/read"]`).count() === 1, 'library lists the book under Reading now');
+  check(await page.locator(`.library-card a.library-read-action[href*="/books/${SLUG}/read?"]`).count() === 1, 'library lists the book under Reading now');
   check(/Chapter \d+ of \d+|Overview/.test(await page.locator('.library-card-location').first().innerText()), 'Reading now card shows the progress label');
   await page.screenshot({ path: `${SHOTS}distill_library_reading_now.png` });
 

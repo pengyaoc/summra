@@ -104,3 +104,14 @@
 .distill-search-menu strong { display: block; font-family: var(--font-serif); font-size: .95rem; line-height: 1.35; }
 .distill-search-menu [role="option"] span { display: block; margin-top: .2rem; color: var(--ink-muted); font-size: .75rem; }
 .distill-search-feedback { margin: 0; padding: .6rem .75rem; color: var(--ink-muted); font-size: .7rem; }
+
+/* Library state, reading estimates and installation guidance. */
+.distill-filters { flex-wrap: wrap; }
+.distill-filter-select { flex: 1 1 140px; }
+.distill-more { margin-top: 1rem; }
+.distill-more summary { color: var(--accent); cursor: pointer; margin-bottom: 1rem; }
+.distill-unfinish { margin-left: .6rem; padding: .5rem; color: var(--accent); background: transparent; border: 0; text-decoration: underline; cursor: pointer; font: inherit; }
+.toc-list [aria-current] { color: var(--accent); font-weight: 700; border-left: 3px solid var(--accent); padding-left: .6rem; }
+.distill-install-guide { max-width: 1040px; margin: 1rem auto 0; padding: 1rem 1.25rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
+.distill-install-guide[hidden] { display: none; }
+.distill-install-guide button { margin-top: .5rem; color: var(--accent); border: 0; background: none; font: inherit; cursor: pointer; }

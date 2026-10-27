@@ -1,6 +1,8 @@
 """Distill's own routes: the pages (library, book, reader) and the private
 image route. The reader API, progress and sign-in come from the shared platform."""
 import hashlib
+import math
+from urllib.parse import urlsplit
 
 from flask import Blueprint, abort, current_app, g, jsonify, make_response, render_template, request, send_from_directory, url_for
 
@@ -11,14 +13,13 @@ bp = Blueprint('distill', __name__)
 
 
 @bp.route('/manifest.webmanifest')
-@login_required
 def manifest():
     root = request.script_root + '/'
     asset_v = current_app.jinja_env.globals['asset_v']
 
     def icon(size, purpose):
         filename = f'images/icon-{size}.png'
-        return {'src': url_for('static', filename=filename) + asset_v(filename),
+        return {'src': url_for('distill.app_icon', name=f'icon-{size}.png') + asset_v(filename),
                 'sizes': f'{size}x{size}', 'type': 'image/png', 'purpose': purpose}
 
     response = jsonify({
@@ -30,7 +31,7 @@ def manifest():
         'categories': ['books', 'education'], 'prefer_related_applications': False,
     })
     response.mimetype = 'application/manifest+json'
-    response.headers['Cache-Control'] = 'private, no-cache'
+    response.headers['Cache-Control'] = 'public, no-cache'
     return response
 
 
@@ -44,10 +45,20 @@ def service_worker():
 
 
 @bp.route('/favicon.ico')
-@login_required
 def favicon():
     response = send_from_directory(current_app.static_folder, 'images/favicon.ico', mimetype='image/vnd.microsoft.icon')
-    response.headers['Cache-Control'] = 'private, max-age=86400'
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
+
+
+@bp.route('/app-icons/<name>')
+def app_icon(name):
+    # Only branding is public: installation services may fetch without cookies.
+    if name not in {'favicon.svg', 'favicon.ico', 'icon-32.png', 'icon-180.png', 'icon-192.png', 'icon-512.png'}:
+        abort(404)
+    response = send_from_directory(current_app.static_folder + '/images', name)
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 
 
@@ -59,6 +70,8 @@ def progress_label(card, chapter_count) -> str:
         return ''
     if chapter['chapter_number'] == 0:
         return 'Overview'
+    if chapter.get('chapter_title') == 'Source':
+        return 'Source'
     return f"Chapter {chapter['chapter_number']} of {chapter_count}"
 
 
@@ -80,11 +93,11 @@ def newest_first(db):
     return sorted(db.list_books(), key=lambda b: (b['imported_at'] or '', b['id']), reverse=True)
 
 
-def reading_cards(db, user_id, books):
+def reading_cards(db, user_id, books, cards=None):
     """The reader's books in progress, as library cards whose location line is `progress_label`."""
     by_id = {b['id']: b for b in books}
     reading = []
-    cards = library_cards(user_id)['continue_reading']
+    cards = cards if cards is not None else library_cards(user_id)['continue_reading']
     counts = db.chapter_counts([c['id'] for c in cards])
     for card in cards:
         book = by_id.get(card['id'])
@@ -117,6 +130,25 @@ def book_categories(book):
                                       if book['slug'] in slugs.split()] or ['Uncategorized']
 
 
+def reading_estimates(db, books):
+    totals = db.library_word_totals([book['id'] for book in books])
+    return {book['id']: max(1, math.ceil(totals.get(book['id'], {}).get('summary', 0)
+                                      / (400 if book['lang'] == 'zh' else 220))) for book in books}
+
+
+def library_return():
+    """Accept only this app's library URL, never an external redirect."""
+    root = request.script_root + '/'
+    value = request.args.get('return', root)
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return root
+    if parsed.scheme or parsed.netloc or parsed.path != root or '\\' in value:
+        return root
+    return value
+
+
 @bp.route('/')
 @login_required
 def library():
@@ -127,16 +159,30 @@ def library():
     language = request.args.get('lang', '')
     language = language if language in ('zh', 'en') else ''
     category = request.args.get('category', '')
+    status = request.args.get('status', '')
+    status = status if status in ('unread', 'reading', 'finished') else ''
+    sort = request.args.get('sort', 'newest')
+    sort = sort if sort in ('newest', 'title', 'author', 'shortest') else 'newest'
+    cards = library_cards(g.user_id)
+    states = {card['id']: ('finished' if card['status'] == 'finished' else 'reading')
+              for card in cards['continue_reading'] + cards['finished']}
+    minutes = reading_estimates(db, books)
     filtered = [book for book in books
                 if (not language or book['lang'] == language)
-                and (not category or category in book_categories(book))]
+                and (not category or category in book_categories(book))
+                and (not status or states.get(book['id'], 'unread') == status)]
     shown = [book for book in filtered
              if not query or query.casefold() in f"{book['title']} {book.get('author') or ''}".casefold()]
+    if sort != 'newest':
+        shown.sort(key=lambda book: (minutes[book['id']] if sort == 'shortest'
+                                    else (book.get(sort) or '').casefold(), book['title'].casefold()))
     # Only searchable metadata is embedded, never chapter content. Keep the whole
     # selected shelf available when editing a previously submitted search.
     search_catalog = [{key: book.get(key) or '' for key in ('title', 'author', 'slug')}
                       for book in filtered]
-    return render_template('library.html', reading=reading_cards(db, g.user_id, books), books=shown,
+    return render_template('library.html', reading=reading_cards(db, g.user_id, books, cards['continue_reading']),
+                           finished=[{**card, **next(book for book in books if book['id'] == card['id'])} for card in cards['finished']], states=states, minutes=minutes, status=status, sort=sort,
+                           return_url=request.script_root + request.full_path.rstrip('?'), books=shown,
                            total_books=len(books), categories=categories, query=query,
                            language=language, category=category, book_categories=book_categories, search_catalog=search_catalog)
 
@@ -157,14 +203,15 @@ def book_page(slug):
     return render_template(
         'book.html', book=book, toc=toc, card=card,
         label=progress_label(card, _db().count_chapters(book['id'])),
-        percent=card['furthest_percentage'] if card else 0)
+        percent=card['furthest_percentage'] if card else 0, return_url=library_return(),
+        minutes=reading_estimates(_db(), [book])[book['id']])
 
 
 @bp.route('/books/<slug>/read')
 @login_required
 def reader(slug):
     book = _db().get_book_by_slug(slug)
-    return render_template('reader.html', book=book) if book else _not_found_page()
+    return render_template('reader.html', book=book, return_url=library_return()) if book else _not_found_page()
 
 
 @bp.route('/books/<slug>/images/<name>')

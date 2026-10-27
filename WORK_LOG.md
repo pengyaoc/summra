@@ -10269,3 +10269,99 @@ anonymous loopback Distill remains denied. Local Python's certificate-store
 configuration prevented its HTTPS probe; the system curl certificate store
 verified both HTTPS endpoints successfully. Host-owned config/untracked files
 were preserved. No user-device installation or browser UI changes were needed.
+
+## 2026-10-26 — Distill product and reliability review
+
+Reviewed current library/book/reader/PWA routes, templates, styles and shared
+reader behavior, then exercised an isolated local copy of Distill's 54-book
+content DB with a scratch user DB. Production content/progress were not touched.
+Desktop 1440px and mobile 390px layouts had no horizontal overflow, and normal
+navigation produced no JavaScript page errors. Inspected desktop reader/TOC and
+mobile library screenshots. No application code changed during this review.
+
+Verified findings, prioritized for follow-up:
+- Reader exit still awaits progress persistence before navigating. Holding the
+  mutation response for 3s kept the reader open for ~3091ms after Back; fast
+  backend pages alone cannot remove this delay. Bound the exit wait/use suitable
+  keepalive persistence, retaining conflict handling and clear save feedback.
+- A failed first manifest fetch renders 'Unable to open this book. Retry.' with
+  no retry control. Back is also unwired at that point because chrome handlers
+  are installed only after manifest/state success. Wire escape navigation early
+  and provide functional retry/re-auth/error recovery actions.
+- Reader Contents flattens the manifest to chapters only. Winning has five part
+  headings on its book page, but zero in the reader panel, so repeated 'Section
+  overview' entries lose context. Preserve part headings, mark the current
+  chapter, and scroll its row into view on opening.
+- Finished state is stored correctly but not represented in Distill's library.
+  A scratch completion yielded status finished; the book page nevertheless
+  displayed 'Chapter 27 of 27 · 100%' and 'Continue reading', while the shelf
+  had no Finished section or badge. Add completion-aware actions/history and
+  label Source by its title rather than treating its storage ordinal as a
+  numbered content chapter.
+- Returning via the book page's Library link discards language/category/search
+  context. Reproduced filtered library -> book -> Library returning to bare /.
+  Preserve a validated return URL and the prior shelf position.
+- TOC overlay does not close on Escape or transfer focus into its panel;
+  reproduced focus remaining on reader-toc-button with the panel still open.
+  Define panel keyboard/focus behavior, restore focus on close, and prevent
+  background page-turn shortcuts while interacting with a panel.
+
+Secondary product opportunities: capped/expandable Reading now, Finished/Unread
+filters and shelf sorting, reading-time estimates on book cards/pages, and iOS
+Add to Home Screen guidance (Distill currently has no equivalent of Plainly's
+banner). Several reliability/accessibility fixes belong to the shared reader
+and would benefit Plainly too. This review used browser smoke/fault injection,
+not a full regression-suite rerun or a production latency benchmark.
+
+## 2026-10-26 — Distill review fixes and installation branding
+
+Implemented all reviewed items. Shared reader Back now waits at most 250ms for
+progress persistence; mutation requests use fetch keepalive and preserve the
+existing server-side validation/conflict rules. Added visible save status and
+conflict/failure feedback. Back is wired before book/auth loading, load failures
+have actionable retry/sign-in recovery, and failed segment requests can be
+retried instead of retaining a failed promise. Authentication and manifest
+loading begin in parallel. No reading-progress format or content IDs changed.
+
+Reader Contents retains part headings, marks/reveals the current chapter,
+transfers/restores focus, closes on Escape, traps Tab within an open panel and
+suspends underlying page-turn controls. Settings gets the same focus behavior.
+Finished books now have a history shelf and badges, Read again starts at the
+beginning without erasing saved progress, and Mark unfinished uses the existing
+mutation API. Source is labeled by title. Library links retain validated,
+prefix-aware search/filter/sort return URLs and restore prior shelf scroll.
+Added Unread/Reading/Finished filters, newest/title/author/shortest sorting,
+batched reading-time estimates (220 English words or 400 Chinese characters per
+minute), and six-card Reading now with expandable remainder. Added dismissible,
+standalone-aware iPhone/iPad installation guidance.
+
+Investigated the portrait PWA icon: live anonymous requests for the manifest
+and icon returned Google authentication redirects instead of branding. Changed
+the manifest and icon links to dedicated public app-icons URLs, retaining the
+stable app ID/scope and original drop artwork. Added a narrow Apache exception
+and exact Flask endpoint exemptions for the manifest/favicon/named icons only;
+books, reader code, images, progress and the worker remain protected. No user
+identity is resolved/upserted for these public requests. Existing installed
+shortcuts may retain an OS-cached icon until refreshed/reinstalled; no app-ID
+change or progress reset is needed.
+
+Validation so far: 361 shared/Distill tests and 147 targeted Plainly tests pass;
+Plainly production bundle rebuilt and freshness checked. Updated the intentional
+shared-shell accessibility snapshot. Added tests for public branding/private
+content boundaries, validated return paths, status filtering, finished actions,
+Source labels, navigation deadline/keepalive and failed-segment retry. Desktop
+and mobile fault-injection checks verified initial-load retry, filtered returns,
+TOC parts/current/focus/Escape, dismissed iOS guidance and no horizontal overflow
+or JavaScript errors. A delayed 3s save now exits in ~336ms. The first full
+browser scenario passed its visual/content assertions but found missing valid
+hint keys in the scratch server configuration; rerunning with production-equivalent
+hint configuration. Production deployment is pending these final checks.
+
+Final pre-deploy checks: the corrected full Distill browser scenario passes,
+including desktop/mobile pagination, list/table/figure integrity, Chinese
+continuations and restored offsets, structured/current/focus-aware TOC, and
+Kindle navigation. Separate browser checks confirm Read again opens Overview
+and Mark unfinished succeeds via the existing mutation API. All 361
+shared/Distill and 147 targeted Plainly tests pass; bundle freshness passes.
+The deployed Apache fragment matches the repository version before modification,
+so the narrow branding exception can be applied without replacing host edits.

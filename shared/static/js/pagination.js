@@ -36,6 +36,7 @@ export const paginationMixin = {
     setupPagination() {
         // Setup keyboard navigation
         document.addEventListener('keydown', (e) => {
+            if (this.continuousPanelOpen?.()) return;
             // The continuous reader preserves the established page-turn keys.
             const chapterSection = document.getElementById('chapter-detail-section');
             const continuousActive = this.continuousReader?.active;
@@ -77,6 +78,7 @@ export const paginationMixin = {
 
         // Handle wheel events for scroll-to-turn-page
         const handleWheel = (e) => {
+            if (this.continuousPanelOpen?.()) return;
             const chapterSection = document.getElementById('chapter-detail-section');
             if ((!chapterSection || chapterSection.classList.contains('hidden')) && !this.continuousReader?.active) {
                 return;
@@ -966,6 +968,7 @@ export const paginationMixin = {
      * Navigate to previous page
      */
     navigateToPreviousPage() {
+        if (this.continuousPanelOpen?.()) return;
         if (this.pagination.isNavigating) {
             return;
         }
@@ -994,6 +997,7 @@ export const paginationMixin = {
      * Navigate to next page
      */
     navigateToNextPage() {
+        if (this.continuousPanelOpen?.()) return;
         if (this.pagination.isNavigating) {
             return;
         }

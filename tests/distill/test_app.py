@@ -24,13 +24,13 @@ def test_pwa_manifest_scope_credentials_and_icons(app_env, prefix):
     headers = {**HEADERS, 'X-Forwarded-Prefix': prefix}
     response = client.get('/manifest.webmanifest', headers=headers)
     assert response.status_code == 200 and response.mimetype == 'application/manifest+json'
-    assert response.headers['Cache-Control'] == 'private, no-cache'
+    assert response.headers['Cache-Control'] == 'public, no-cache'
     manifest = response.get_json()
     assert manifest['name'] == 'Distill' and manifest['display'] == 'standalone'
     assert manifest['id'] == manifest['scope'] == manifest['start_url'] == prefix + '/'
     assert {i['sizes'] for i in manifest['icons']} == {'192x192', '512x512'}
     for icon in manifest['icons']:
-        assert icon['src'].startswith(prefix + '/static/')
+        assert icon['src'].startswith(prefix + '/app-icons/')
         image_response = client.get(icon['src'], headers=headers)
         assert image_response.status_code == 200
         with Image.open(io.BytesIO(image_response.data)) as image:
@@ -41,10 +41,10 @@ def test_pwa_manifest_scope_credentials_and_icons(app_env, prefix):
     assert 'js/pwa.js' in html and 'Install app' in html
 
 
-def test_pwa_worker_and_favicon_are_private_and_scoped(client):
+def test_pwa_branding_is_public_but_worker_stays_private_and_scoped(client):
     import io
     from PIL import Image
-    for path in ('/manifest.webmanifest', '/sw.js', '/favicon.ico'):
+    for path in ('/sw.js',):
         assert client.get(path).status_code == 401
         assert client.get(path, headers={'X-Remote-Email': 'stranger@example.com'}).status_code == 403
     worker = client.get('/sw.js', headers={**HEADERS, 'X-Forwarded-Prefix': '/distill'})
@@ -247,3 +247,21 @@ def test_dev_server_binds_loopback_by_default(monkeypatch):
     monkeypatch.setattr(dev.config, 'HOST', '0.0.0.0')  # what DISTILL_HOST=0.0.0.0 yields at import
     dev.main()
     assert calls[-1]['host'] == '0.0.0.0'
+
+
+def test_installation_services_can_fetch_only_public_branding_without_cookies(client):
+    manifest = client.get('/manifest.webmanifest').get_json()
+    assert manifest['id'] == '/'
+    for icon in manifest['icons']:
+        response = client.get(icon['src'])
+        assert response.status_code == 200
+        assert response.mimetype == 'image/png'
+        assert response.headers['Cache-Control'].startswith('public')
+    for name in ['favicon.svg', 'icon-32.png', 'icon-180.png']:
+        assert client.get('/app-icons/' + name).status_code == 200
+    assert client.get('/app-icons/secrets.env').status_code == 404
+    for path in ['/', '/sw.js', '/static/js/pwa.js', '/static/images/icon-512.png', '/api/library']:
+        assert client.get(path).status_code == 401, path
+    text = (ROOT / 'deploy/distill/distill.conf').read_text()
+    assert 'AuthType None' in text and 'app-icons/' in text
+    assert 'RequestHeader unset X-Remote-Email' in text

@@ -9,13 +9,13 @@
 <article class="library-card" data-reader-book="{{ book.id }}">
     <div class="library-card-cover-frame">{{ cover_html }}</div>
     <div class="library-card-body">
-        <div class="library-card-meta">{% if pct %}<span>Continue reading</span><span>{{ pct }}%</span>{% else %}<span>Just started</span>{% endif %}</div>
+        <div class="library-card-meta">{% if book.status == 'finished' %}<span>Finished</span><span>100%</span>{% elif pct %}<span>Continue reading</span><span>{{ pct }}%</span>{% else %}<span>Just started</span>{% endif %}</div>
         <h3>{{ book.title }}</h3>
         <p class="library-card-author">{{ book.author }}</p>
         <p class="library-card-location">{{ book.current_chapter.chapter_title if book.current_chapter and book.current_chapter.chapter_title else ('Chapter ' ~ book.current_chapter.chapter_number if book.current_chapter else 'Beginning') }}{% if reader_config.modes|length > 1 %} · {{ mode.library_label or mode.label }}{% endif %}</p>
         <div class="library-card-foot">
             {% if pct %}<div class="library-card-progress" aria-label="{{ pct }}% read"><span style="width: {{ pct }}%"></span></div>{% endif %}
-            <div class="library-card-actions">{% if read_href %}<a class="library-read-action" href="{{ read_href }}">Continue<span aria-hidden="true">→</span></a>{% else %}<button class="library-read-action" type="button" data-library-read="{{ book.id }}">Continue<span aria-hidden="true">→</span></button>{% endif %}</div>
+            <div class="library-card-actions">{% if read_href %}<a class="library-read-action" href="{{ read_href }}">{{ 'Read again' if book.status == 'finished' else 'Continue' }}<span aria-hidden="true">→</span></a>{% else %}<button class="library-read-action" type="button" data-library-read="{{ book.id }}">{{ 'Read again' if book.status == 'finished' else 'Continue' }}<span aria-hidden="true">→</span></button>{% endif %}</div>
         </div>
     </div>
 </article>

@@ -4,16 +4,19 @@
 {% block title %}{{ book.title }} · Distill{% endblock %}
 {% block content %}
 <main class="distill-main distill-book">
-    <a class="distill-back" href="{{ base_path }}/">← Library</a>
+    <a class="distill-back" href="{{ return_url }}">← Library</a>
     <section class="distill-book-head">
         {{ cover(book, eager=True) }}
         <div>
             <h1>{{ book.title }}</h1>
             <p class="distill-author">{{ book.author }}</p>
-{% if label %}
+            <p class="distill-author">About {{ minutes }} min read</p>
+{% if card and card.status == 'finished' %}<p class="distill-progress">Finished · 100%</p>
+{% elif label %}
             <p class="distill-progress">{{ label }}{% if percent %} · {{ percent }}%{% endif %}</p>
 {% endif %}
-            <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read">{{ 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
+            <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}{% if card and card.status == 'finished' %}&amp;restart=1{% endif %}">{{ 'Read again' if card and card.status == 'finished' else 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
+{% if card and card.status == 'finished' %}<button type="button" class="distill-unfinish" data-book-id="{{ book.id }}">Mark unfinished</button><p id="distill-book-status" role="status"></p>{% endif %}
         </div>
     </section>
     <section class="distill-toc" aria-labelledby="toc-heading">
@@ -24,10 +27,31 @@
 {% endif %}
         <ol class="toc-list">
 {% for chapter in chapters %}
-            <li><a href="{{ base_path }}/books/{{ book.slug }}/read?chapter={{ chapter.id }}">{{ chapter.title }}</a></li>
+            <li><a{% if card and card.current_chapter and card.current_chapter.id == chapter.id %} aria-current="location"{% endif %} href="{{ base_path }}/books/{{ book.slug }}/read?chapter={{ chapter.id }}&amp;return={{ return_url|urlencode }}">{{ chapter.title }}</a></li>
 {% endfor %}
         </ol>
 {% endfor %}
     </section>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const unfinished = document.querySelector('.distill-unfinish');
+unfinished?.addEventListener('click', async () => {
+    unfinished.disabled = true;
+    try {
+        const root = window.APP_BASE_PATH || '';
+        const id = Number(unfinished.dataset.bookId);
+        const state = await (await fetch(`${root}/api/progress/v2/books/${id}`, {cache:'no-store'})).json();
+        const mode = state.projection.modes.find(item => item.mode === state.projection.book.last_mode);
+        const response = await fetch(`${root}/api/progress/v2/mutations`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+            book_id:id, mode:mode.mode, current_marker:mode.current_marker, base_revision:mode.revision,
+            mutation_id:crypto.randomUUID(), device_id:'distill-book-' + crypto.randomUUID(), device_sequence:1, event_cause:'manual_unfinish'
+        })});
+        if (!response.ok) throw new Error();
+        location.reload();
+    } catch (_) { document.getElementById('distill-book-status').textContent = 'Could not update this book. Please try again.'; unfinished.disabled = false; }
+});
+</script>
 {% endblock %}

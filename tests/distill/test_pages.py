@@ -1,6 +1,8 @@
 import json
 import re
 
+import pytest
+
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.user_models import UserDatabase
 
@@ -27,7 +29,7 @@ def test_library_lists_books_newest_first(app_env, sample_book, write_book):
     content_db.import_book(write_book(sample_book))
     html = get(client, '/').get_data(as_text=True)
     assert 'All books' in html
-    assert html.index('/books/newer-book"') < html.index('/books/my-book"')
+    assert html.index('/books/newer-book?') < html.index('/books/my-book?')
     # A book with no cover gets a title placeholder instead of a broken image.
     assert 'book-cover-placeholder' in html
     token = content_db.get_book_by_slug('my-book')['cover_thumbnail_token']
@@ -55,7 +57,7 @@ def test_library_reading_now_shows_progress_label(app_env):
     html = get(client, '/').get_data(as_text=True)
     assert 'Reading now' in html
     assert 'Chapter 1 of 4' in html
-    assert 'href="/books/my-book/read"' in html
+    assert 'href="/books/my-book/read?return=/"' in html
     assert html.index('Reading now') < html.index('All books')
 
 
@@ -90,8 +92,8 @@ def test_book_page_toc_grouped_by_part_and_overview_first(app_env):
     chapters = content_db.get_chapters(book_id)
     html = get(client, '/books/my-book').get_data(as_text=True)
     assert '<h1' in html and 'My Book' in html and 'A. Writer' in html
-    assert 'Start reading' in html and 'href="/books/my-book/read"' in html
-    links = re.findall(r'href="/books/my-book/read\?chapter=(\d+)"', html)
+    assert 'Start reading' in html and 'href="/books/my-book/read?return=/"' in html
+    links = re.findall(r'href="/books/my-book/read\?chapter=(\d+)&amp;return=/"', html)
     assert links == [str(c['id']) for c in chapters]
     assert html.index('Overview') < html.index('Part One') < html.index('1. First') < html.index('3. Third')
     # The untitled part gets no heading of its own.
@@ -126,7 +128,7 @@ def test_sources_are_a_final_reader_chapter_instead_of_a_separate_section(app_en
     content_db.import_book(write_book(sample_book))
     html = get(client, '/books/my-book').get_data(as_text=True)
     source = content_db.get_chapters(book_id)[-1]
-    assert f'read?chapter={source["id"]}">Source</a>' in html
+    assert f'read?chapter={source["id"]}&amp;return=/">Source</a>' in html
     assert 'distill-sources' not in html and 'src <strong>bold</strong>' not in html
     assert source['title'] == 'Source' and source['part_title'] is None
     manifest = get(client, f'/api/reader/books/{book_id}/manifest').get_json()['manifest']
@@ -150,7 +152,7 @@ def test_reader_shell_has_platform_partials_and_no_mode_selector(app_env):
     assert 'reader-mode-settings' not in html and 'data-reader-settings-mode' not in html
     assert 'window.APP_BASE_PATH' in html
     book = json.loads(re.search(r'window\.DISTILL_BOOK = (\{.*?\});', html).group(1))
-    assert book == {'id': 1, 'slug': 'my-book', 'title': 'My Book', 'author': 'A. Writer'}
+    assert book == {'id': 1, 'slug': 'my-book', 'title': 'My Book', 'author': 'A. Writer', 'return_url': '/'}
     names = [s.split('?')[0] for s in re.findall(r'<script[^>]*src="([^"]+)"', html)]
     assert names.index('/static/shared/js/base_path.js') < names.index('/static/shared/js/reader_state.js') \
         < names.index('/static/js/distill_reader.js')
@@ -204,13 +206,13 @@ def test_library_combines_search_language_and_category(app_env, sample_book, wri
     sample_book.update(slug='english-science', title='Cell Biology', lang='en')
     db.import_book(write_book(sample_book))
     html = get(client, '/?q=细胞&lang=zh&category=Science').get_data(as_text=True)
-    assert 'href="/books/chinese-science"' in html
+    assert 'href="/books/chinese-science?return=' in html
     assert 'href="/books/english-science"' not in html
-    assert 'href="/books/my-book"' not in html
+    assert 'href="/books/my-book?return=' not in html
     assert '1 of 3 books' in html
     assert 'name="q"' in html and 'name="lang"' in html and 'name="category"' in html
     assert 'No books match' in get(client, '/?q=nonexistent').get_data(as_text=True)
-    assert 'href="/books/my-book"' in get(client, '/?q=a. WRITER').get_data(as_text=True)
+    assert 'href="/books/my-book?return=' in get(client, '/?q=a. WRITER').get_data(as_text=True)
 
 
 def test_library_filter_escapes_query_and_keeps_category_options(client):
@@ -244,3 +246,44 @@ def test_typeahead_catalog_ignores_query_but_respects_filters(app_env, sample_bo
     assert 'role="combobox"' in html
     assert 'role="listbox"' in html
     assert 'aria-controls="distill-search-options"' in html
+
+
+@pytest.mark.parametrize('value', ['https://evil.example/', '//evil.example/', '/other/', '//[', '/\\evil.example/'])
+def test_library_return_rejects_external_or_malformed_destinations(client, value):
+    html = get(client, '/books/my-book', query_string={'return': value}).get_data(as_text=True)
+    assert 'class="distill-back" href="/"' in html
+
+
+def test_library_status_sort_estimates_and_safe_return(app_env, sample_book, write_book):
+    client, db, _, bid = app_env
+    chapter = db.get_chapters(bid)[1]
+    client.post('/api/progress/v2/mutations', json=_mutation(bid, chapter['id']), headers=HEADERS)
+    sample_book.update(slug='another-book', title='Another Book')
+    db.import_book(write_book(sample_book))
+    html = get(client, '/?sort=title&status=unread').get_data(as_text=True)
+    # Only the All books grid is filtered; Reading now remains available above it.
+    grid = html.split('<div class="distill-grid">')[1].split('</section>')[0]
+    assert '/books/another-book?' in grid and '/books/my-book?' not in grid
+    assert 'About ' in grid and ' min' in grid
+    url = '/?lang=en&sort=title&q=Book'
+    html = get(client, '/books/my-book', query_string={'return': url}).get_data(as_text=True)
+    assert 'href="/?lang=en&amp;sort=title&amp;q=Book"' in html
+    prefixed = client.get('/?sort=title', headers={**HEADERS, 'X-Forwarded-Prefix': '/distill'}).get_data(as_text=True)
+    assert 'return=/distill/%3Fsort%3Dtitle' in prefixed
+
+
+def test_finished_book_has_history_read_again_and_source_location(app_env):
+    client, db, _, bid = app_env
+    manifest = db.get_reader_manifest(bid)
+    terminal = next(m for m in manifest['modes'] if m['mode'] == 'summary')['terminal_paragraph_id']
+    chapter_id, unit = map(int, terminal.split('.'))
+    mutation = _mutation(bid, chapter_id, unit)
+    mutation.update(event_cause='completion', terminal_dwell_ms=2000, sequential_terminal_entry=True)
+    assert client.post('/api/progress/v2/mutations', json=mutation, headers=HEADERS).status_code == 200
+    html = get(client, '/books/my-book').get_data(as_text=True)
+    assert 'Finished · 100%' in html and 'Read again' in html and 'Mark unfinished' in html
+    assert 'restart=1' in html
+    home = get(client, '/').get_data(as_text=True)
+    assert 'id="finished-heading"' in home and 'Read again' in home
+    from distill.routes import progress_label
+    assert progress_label({'current_chapter': {'chapter_number': 4, 'chapter_title': 'Source'}}, 4) == 'Source'

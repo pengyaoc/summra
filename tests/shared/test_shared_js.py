@@ -264,3 +264,57 @@ const offset=app.continuousMarkerOffset(anchor(texts[2]));
 assert.equal(offset,2/3);
 assert.equal(app.findContinuousPageForMarker({paragraph_id:'1.0',offset}),2);
 """)
+
+
+def test_reader_back_has_a_deadline_and_allows_reentry():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/continuous_reader.js','utf8');
+const {continuousReaderMixin}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const button={disabled:true};
+globalThis.document={getElementById:()=>button};
+let navigated=false, resolveSave;
+const app={...continuousReaderMixin,currentBook:{id:1},
+    leaveContinuousReader:()=>new Promise(resolve=>{resolveSave=resolve;}),
+    selectBook:async book=>{assert.equal(book.id,1);navigated=true;}};
+app.setupContinuousReaderExit();assert.equal(button.disabled,false);
+await button.onclick();assert.equal(navigated,true);
+resolveSave();
+app.setupContinuousReaderExit();assert.equal(button.disabled,false);
+""")
+
+
+def test_failed_reader_segment_is_retryable():
+    _node(r"""
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/continuous_reader.js','utf8');
+const {continuousReaderMixin}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+globalThis.window={authModule:{getCachedReaderSegment:async()=>null}};
+let calls=0;
+globalThis.fetch=async()=>{if(++calls===1)throw new Error('offline');return {ok:true,json:async()=>({segment:{id:'summary.0'}})};};
+const app={...continuousReaderMixin,currentBook:{id:1},apiBase:'/api',setContinuousReaderStatus(){},
+    continuousReader:{active:true,mode:'summary',manifest:{content_version:1}}};
+assert.equal(await app.fetchContinuousSegment('summary.0'),null);
+assert.equal(app.continuousReader.requests.has('summary.0'),false);
+assert.equal((await app.fetchContinuousSegment('summary.0')).id,'summary.0');
+assert.equal(calls,2);
+""")
+
+
+def test_progress_mutations_survive_document_navigation():
+    _node(r"""
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
+const source=fs.readFileSync('shared/static/js/reader_state.js','utf8');let mutation;
+const sandbox={window:{APP_BASE_PATH:'',READER_CONFIG:{}},Date,Set,Promise,
+    fetch:async(url,options)=>{
+        if(url.endsWith('/auth/check'))return {json:async()=>({authenticated:true,user:{id:1}})};
+        mutation=options;return {status:200,json:async()=>({success:true,result:'accepted',projection:{}})};
+    }};
+vm.createContext(sandbox);vm.runInContext(source,sandbox);
+await sandbox.window.readerState.checkAuthStatus();
+await sandbox.window.readerState.queueReaderMutation({book_id:1});
+assert.equal(mutation.keepalive,true);
+assert.equal(mutation.credentials,'include');
+""")

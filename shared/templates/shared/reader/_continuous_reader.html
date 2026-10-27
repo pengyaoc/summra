@@ -17,7 +17,7 @@
                         </button>
                     </div>
                 </header>
-                <aside class="reader-panel hidden" id="reader-toc-panel" aria-label="Table of contents">
+                <aside class="reader-panel hidden" id="reader-toc-panel" role="dialog" aria-modal="true" aria-label="Table of contents">
                     <div class="reader-panel-header">
                         <h2>Contents</h2>
                         <button type="button" class="reader-panel-close" data-reader-close="reader-toc-panel" aria-label="Close contents">✕</button>
@@ -28,6 +28,7 @@
                 <div class="continuous-reader-content" id="continuous-reader-content" tabindex="-1"></div>
                 <div class="continuous-reader-footer" role="status" aria-label="Reading progress">
                     <div class="reader-progress-track" aria-hidden="true"><span id="reader-progress-fill" style="width: 0%"></span></div>
+                    <span id="reader-save-status" class="reader-save-status" aria-live="polite"></span>
                     <span id="continuous-reader-progress">0%</span>
                 </div>
             </section>

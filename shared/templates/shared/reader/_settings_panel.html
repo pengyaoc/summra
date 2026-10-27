@@ -2,10 +2,10 @@
    shows when more than one mode is configured; fonts, text size and themes
    come from reader_config.settings. #}
 {% set settings = reader_config.settings %}
-            <div class="reading-settings-panel hidden" id="reading-settings-panel">
+            <div class="reading-settings-panel hidden" id="reading-settings-panel" role="dialog" aria-modal="true" aria-label="Reading settings">
                 <div class="reading-settings-header">
                     <h3>Reading settings</h3>
-                    <button class="reading-settings-close" id="reading-settings-close">✕</button>
+                    <button class="reading-settings-close" id="reading-settings-close" type="button" aria-label="Close reading settings">✕</button>
                 </div>
 {% if reader_config.modes|length > 1 %}
 

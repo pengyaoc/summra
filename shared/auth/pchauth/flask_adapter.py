@@ -26,9 +26,13 @@ def login_required(view_func: Callable) -> Callable:
     return wrapped
 
 
-def init_pchauth(app: Flask, config: AuthConfig, upsert_user: Callable[[Identity], int | None]) -> None:
+def init_pchauth(app: Flask, config: AuthConfig, upsert_user: Callable[[Identity], int | None],
+                public_endpoints: frozenset[str] = frozenset()) -> None:
     @app.before_request
     def _resolve_user():
+        if request.endpoint in public_endpoints:
+            g.user_id = None
+            return None
         if config.mode == "off":
             g.user_id = upsert_user(_OFF_MODE_IDENTITY)
             return None

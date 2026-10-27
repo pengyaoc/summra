@@ -65,7 +65,7 @@ async function queueReaderMutation(input) {
     };
     try {
         const response = await fetch(`${API_BASE}/progress/v2/mutations`, {
-            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', credentials: 'include', keepalive: true, headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
         const data = await response.json().catch(() => null);

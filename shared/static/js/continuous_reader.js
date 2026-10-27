@@ -14,6 +14,8 @@ export const continuousReaderMixin = {
         }
         this.currentBook = book;
         this.currentView = 'reader';
+        this.setupContinuousReaderExit();
+        for (const id of ['reader-toc-button', 'reader-settings-button']) { const button = document.getElementById(id); if (button) button.disabled = true; }
         this.clearAllPaginationData();
         this.showOnlySections('continuous-reader-section');
         const status = document.getElementById('reader-status');
@@ -25,22 +27,26 @@ export const continuousReaderMixin = {
         const skeletonTimer = setTimeout(() => {
             if (content && !content.childElementCount) content.innerHTML = this.readerSkeletonHtml();
         }, 250);
-        let manifest = null;
+        const authReady = window.authModule?.initAuth?.();
+        let manifest = null, authExpired = false;
         try {
             const manifestResponse = await fetch(`${this.apiBase}/reader/books/${book.id}/manifest`);
+            authExpired = manifestResponse.status === 401 || manifestResponse.status === 403;
             const manifestData = await manifestResponse.json();
             if (manifestResponse.ok && manifestData.success) {
                 manifest = manifestData.manifest;
                 window.authModule?.cacheReaderManifest?.(manifest).catch(() => {});
             }
         } catch (_) { /* use the durable segment cache below */ }
-        manifest ||= await window.authModule?.getCachedReaderManifest?.(book.id);
+        if (!authExpired) manifest ||= await Promise.resolve(window.authModule?.getCachedReaderManifest?.(book.id)).catch(() => null);
         if (!manifest) {
             clearTimeout(skeletonTimer);
             if (content) content.innerHTML = '';
-            this.setContinuousReaderStatus('Unable to open this book. Retry.');
+            this.setContinuousReaderStatus(authExpired ? 'Please sign in again to open this book.' : 'Unable to open this book. Check your connection and try again.',
+                authExpired ? () => location.reload() : () => this.showContinuousReader(book, options), authExpired ? 'Reload and sign in' : 'Retry');
             return;
         }
+        await authReady;
         const state = await window.authModule?.getReaderState?.(book.id) || { book: null, modes: [] };
         const available = this.readerAvailableModes(manifest);
         const requestedMode = options.mode;
@@ -54,7 +60,7 @@ export const continuousReaderMixin = {
             return;
         }
         const modeState = state.modes?.find(item => item.mode === mode);
-        let restoredMarker = modeState?.current_marker || null;
+        let restoredMarker = options.restart ? null : modeState?.current_marker || null;
         if (restoredMarker && restoredMarker.content_version !== manifest.content_version) {
             const recovered = await this.recoverContinuousMarker(restoredMarker, mode);
             if (recovered) {
@@ -164,7 +170,12 @@ export const continuousReaderMixin = {
             this.fetchContinuousSegment(descriptor.id),
             nextDescriptor ? this.fetchContinuousSegment(nextDescriptor.id, true) : null,
         ]);
-        if (!loaded || !reader.active || this.continuousReader !== reader) return;
+        if (!reader.active || this.continuousReader !== reader) return;
+        if (!loaded) {
+            this.setContinuousReaderStatus('This section needs a connection.', () => this.loadContinuousReaderAt(marker, chapterId));
+            return;
+        }
+        document.getElementById('reader-status')?.classList.add('hidden');
         // Pages are cut by measuring text, so the reading font must be loaded
         // first. A web font (Figtree) arriving later re-wraps the text and
         // pushes each page's last line under the footer.
@@ -211,12 +222,13 @@ export const continuousReaderMixin = {
                     if (!prefetch) this.setContinuousReaderStatus('The next section needs a connection.');
                     return null;
                 }
-                return cachedPromise.then(cached => {
+                return cachedPromise.catch(() => null).then(cached => {
                     if (cached) return cached;
                     if (!prefetch) this.setContinuousReaderStatus('The next section needs a connection.');
                     return null;
                 });
             });
+        request.then(segment => { if (!segment) reader.requests.delete(segmentId); }, () => reader.requests.delete(segmentId));
         reader.requests.set(segmentId, request);
         return request;
     },
@@ -439,29 +451,19 @@ export const continuousReaderMixin = {
                 ? `${wideMode.label} is unavailable for this book.`
                 : `${wideMode.label} is available on screens ${wideMode.min_width}px wide or larger.`;
         }
-        document.getElementById('reader-back-button').onclick = async () => {
-            try {
-                await this.leaveContinuousReader();
-            } finally {
-                await this.selectBook(this.currentBook);
-            }
-        };
+        this.setupContinuousReaderExit();
+        for (const id of ['reader-toc-button', 'reader-settings-button']) document.getElementById(id).disabled = false;
         document.getElementById('reader-toc-button').onclick = () => this.toggleContinuousPanel('reader-toc-panel');
-        document.getElementById('reader-settings-button').onclick = () => {
-            document.getElementById('reader-toc-panel')?.classList.add('hidden');
-            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
-            document.getElementById('reading-settings-panel')?.classList.remove('hidden');
-        };
-        document.querySelectorAll('[data-reader-close]').forEach(button => button.onclick = () => {
-            document.getElementById(button.dataset.readerClose)?.classList.add('hidden');
-            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
-        });
+        document.getElementById('reader-settings-button').onclick = () => this.toggleContinuousPanel('reading-settings-panel');
+        document.querySelectorAll('[data-reader-close]').forEach(button => button.onclick = () => this.closeContinuousPanel(button.dataset.readerClose));
+        const settingsClose = document.getElementById('reading-settings-close');
+        if (settingsClose) settingsClose.onclick = () => this.closeContinuousPanel('reading-settings-panel');
         const toc = document.getElementById('reader-toc-list');
-        toc.innerHTML = reader.manifest.structure.filter(entry => entry.kind === 'chapter').map(entry =>
-            `<button type="button" data-reader-chapter-target="${entry.chapter_id}">${this.escapeHtml(entry.title)}</button>`).join('');
+        toc.innerHTML = reader.manifest.structure.map(entry => entry.kind === 'chapter'
+            ? `<button type="button" data-reader-chapter-target="${entry.chapter_id}">${this.escapeHtml(entry.title)}</button>`
+            : `<h3 class="reader-toc-part">${this.escapeHtml(entry.title)}</h3>`).join('');
         toc.querySelectorAll('[data-reader-chapter-target]').forEach(button => button.onclick = async () => {
-            document.getElementById('reader-toc-panel').classList.add('hidden');
-            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', 'false');
+            this.closeContinuousPanel('reader-toc-panel');
             reader.restoring = true;
             await this.loadContinuousReaderAt(null, button.dataset.readerChapterTarget);
             await this.saveContinuousReader('toc');
@@ -522,11 +524,69 @@ export const continuousReaderMixin = {
         }, 15000);
     },
 
+    setupContinuousReaderExit() {
+        const button = document.getElementById('reader-back-button');
+        if (!button) return;
+        button.disabled = false;
+        button.onclick = async () => {
+            button.disabled = true;
+            const saving = Promise.resolve(this.leaveContinuousReader()).catch(() => {});
+            // keepalive persistence continues after navigation; a slow save
+            // cannot hold the exit indefinitely.
+            await Promise.race([saving, new Promise(resolve => setTimeout(resolve, 250))]);
+            await this.selectBook(this.currentBook);
+        };
+    },
+
+    continuousPanelOpen() {
+        return ['reader-toc-panel', 'reading-settings-panel'].some(id => {
+            const panel = document.getElementById(id);
+            return panel && !panel.classList.contains('hidden');
+        });
+    },
+
+    closeContinuousPanel(id) {
+        document.getElementById(id)?.classList.add('hidden');
+        const button = document.getElementById(id === 'reader-toc-panel' ? 'reader-toc-button' : 'reader-settings-button');
+        button?.setAttribute('aria-expanded', 'false');
+        button?.focus();
+    },
+
+    updateContinuousToc() {
+        const current = this.continuousReader?.currentMarker?.chapter_id;
+        (document.querySelectorAll?.('[data-reader-chapter-target]') || []).forEach(button => {
+            if (Number(button.dataset.readerChapterTarget) === Number(current)) button.setAttribute('aria-current', 'location');
+            else button.removeAttribute('aria-current');
+        });
+    },
+
     toggleContinuousPanel(id) {
         const panel = document.getElementById(id);
-        panel?.classList.toggle('hidden');
-        if (id === 'reader-toc-panel') {
-            document.getElementById('reader-toc-button')?.setAttribute('aria-expanded', panel?.classList.contains('hidden') ? 'false' : 'true');
+        if (!panel) return;
+        if (!panel.classList.contains('hidden')) { this.closeContinuousPanel(id); return; }
+        for (const other of ['reader-toc-panel', 'reading-settings-panel']) {
+            if (other !== id) document.getElementById(other)?.classList.add('hidden');
+        }
+        panel.classList.remove('hidden');
+        const opener = document.getElementById(id === 'reader-toc-panel' ? 'reader-toc-button' : 'reader-settings-button');
+        opener?.setAttribute('aria-expanded', 'true');
+        this.updateContinuousToc();
+        const active = panel.querySelector('[aria-current="location"]');
+        (active || panel.querySelector('button'))?.focus();
+        active?.scrollIntoView({block:'nearest'});
+        if (!this.readerPanelKeyboardBound) {
+            this.readerPanelKeyboardBound = true;
+            document.addEventListener('keydown', event => {
+                const open = ['reader-toc-panel', 'reading-settings-panel'].map(key => document.getElementById(key)).find(el => el && !el.classList.contains('hidden'));
+                if (!open) return;
+                if (event.key === 'Escape') { event.preventDefault(); this.closeContinuousPanel(open.id); }
+                if (event.key === 'Tab') {
+                    const items = [...open.querySelectorAll('button:not([disabled]), a[href], input, select, [tabindex="0"]')].filter(el => el.getClientRects().length);
+                    const first = items[0], last = items[items.length - 1];
+                    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+                }
+            });
         }
     },
 
@@ -583,6 +643,7 @@ export const continuousReaderMixin = {
         const chapter = reader.manifest.structure.find(item => Number(item.chapter_id) === marker.chapter_id);
         document.getElementById('reader-chapter-title').textContent = chapter?.title || '';
         this.updateContinuousReaderProgress();
+        this.updateContinuousToc();
         clearTimeout(reader.settleTimer);
         reader.settleTimer = setTimeout(() => this.saveContinuousReader('page_turn', sequential ? 1 : 0, activeSeconds), 600);
         const modeManifest = reader.manifest.modes.find(item => item.mode === reader.mode);
@@ -604,6 +665,8 @@ export const continuousReaderMixin = {
             ? currentMarker : null;
         if (qualified) reader.furthestMarker = qualified;
         let modeState = reader.state?.modes?.find(item => item.mode === mode);
+        const saveStatus = document.getElementById('reader-save-status');
+        if (saveStatus) saveStatus.textContent = 'Saving…';
         const mutation = await window.authModule?.queueReaderMutation?.({
             book_id: this.currentBook.id, mode, current_marker: currentMarker,
             qualified_furthest_marker: qualified, event_cause: cause,
@@ -611,6 +674,7 @@ export const continuousReaderMixin = {
             base_revision: modeState?.revision ?? 0,
             ...extra,
         });
+        if (saveStatus) saveStatus.textContent = mutation?.conflict ? 'Updated on another device' : mutation ? 'Saved' : 'Not saved — check connection';
         // Keep the in-memory (this tab only) projection in step with the save
         // just made, so switching modes mid-session reflects it immediately
         // instead of the marker fetched when the reader first opened. The
@@ -646,7 +710,7 @@ export const continuousReaderMixin = {
         const marker = reader?.currentMarker || reader?.furthestMarker;
         const wordPosition = this.continuousMarkerWordPosition(marker);
         const percentage = mode?.total_word_count && marker
-            ? Math.min(99, Math.max(0, Math.round(wordPosition * 100 / mode.total_word_count)))
+            ? (reader.state?.book?.status === 'finished' && marker.paragraph_id === mode.terminal_paragraph_id ? 100 : Math.min(99, Math.max(0, Math.round(wordPosition * 100 / mode.total_word_count))))
             : 0;
         const text = document.getElementById('continuous-reader-progress');
         if (text) text.textContent = `${percentage}%`;
@@ -654,9 +718,17 @@ export const continuousReaderMixin = {
         if (fill) fill.style.width = `${percentage}%`;
     },
 
-    setContinuousReaderStatus(message) {
+    setContinuousReaderStatus(message, retry = null, label = 'Retry') {
         const status = document.getElementById('reader-status');
-        if (status) { status.textContent = message; status.classList.remove('hidden'); }
+        if (!status) return;
+        status.textContent = message;
+        if (retry) {
+            const button = document.createElement('button');
+            button.type = 'button'; button.textContent = label;
+            button.onclick = () => { button.disabled = true; Promise.resolve(retry()).catch(() => { button.disabled = false; }); };
+            status.appendChild(button);
+        }
+        status.classList.remove('hidden');
     },
 
     async navigateContinuousSegment(direction) {

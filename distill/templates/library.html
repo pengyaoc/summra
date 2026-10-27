@@ -12,15 +12,18 @@
     <section class="distill-section" aria-labelledby="reading-now-heading">
         <h2 id="reading-now-heading">Reading now</h2>
         <div class="library-cards">
-{% for card in reading %}
-            {{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read') }}
+{% for card in reading[:6] %}
+            {{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?return=' ~ (return_url|urlencode)) }}
 {% endfor %}
         </div>
+{% if reading|length > 6 %}<details class="distill-more"><summary>Show {{ reading|length - 6 }} more books in progress</summary><div class="library-cards">
+{% for card in reading[6:] %}{{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?return=' ~ (return_url|urlencode)) }}{% endfor %}
+</div></details>{% endif %}
     </section>
 {% endif %}
     <section class="distill-section" aria-labelledby="all-books-heading">
         <div class="distill-shelf-heading"><h2 id="all-books-heading">All books</h2>
-            <p role="status">{{ books|length }}{% if query or language or category %} of {{ total_books }}{% endif %} {{ 'book' if total_books == 1 else 'books' }}</p>
+            <p role="status">{{ books|length }}{% if query or language or category or status or sort != 'newest' %} of {{ total_books }}{% endif %} {{ 'book' if total_books == 1 else 'books' }}</p>
         </div>
         <form class="distill-filters" action="{{ base_path }}/" method="get" role="search" aria-label="Find books">
             <div class="distill-search-wrap">
@@ -42,16 +45,22 @@
                 {% if category and category not in categories %}<option value="{{ category }}" selected>{{ category }}</option>{% endif %}
                 </select>
             </label>
+            <label class="distill-filter-select"><span>Status</span><select name="status">
+                {% for value, text in [('', 'All books'), ('unread', 'Unread'), ('reading', 'Reading'), ('finished', 'Finished')] %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ text }}</option>{% endfor %}
+            </select></label>
+            <label class="distill-filter-select"><span>Sort</span><select name="sort">
+                {% for value, text in [('newest', 'Newest first'), ('title', 'Title'), ('author', 'Author'), ('shortest', 'Shortest read')] %}<option value="{{ value }}"{% if sort == value %} selected{% endif %}>{{ text }}</option>{% endfor %}
+            </select></label>
             <button class="distill-filter-submit" type="submit">Find books</button>
         </form>
-        {% if query or language or category %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}</span><a href="{{ base_path }}/">Clear filters</a></div>{% endif %}
+        {% if query or language or category or status or sort != 'newest' %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}{% if status %} · {{ {'unread': 'Unread', 'reading': 'Reading', 'finished': 'Finished'}[status] }}{% endif %}{% if sort != 'newest' %} · {{ {'title': 'Title order', 'author': 'Author order', 'shortest': 'Shortest first'}[sort] }}{% endif %}</span><a href="{{ base_path }}/">Clear filters</a></div>{% endif %}
         <div class="distill-grid">
 {% for book in books %}
-            <a class="distill-tile" href="{{ base_path }}/books/{{ book.slug }}">
+            <a class="distill-tile" href="{{ base_path }}/books/{{ book.slug }}?return={{ return_url|urlencode }}">
                 {{ cover(book) }}
                 <h3>{{ book.title }}</h3>
                 <p>{{ book.author }}</p>
-                <span class="distill-book-meta">{{ '中文' if book.lang == 'zh' else 'English' if book.lang == 'en' else book.lang }} <span aria-hidden="true">·</span> {{ book_categories(book)|first }}</span>
+                <span class="distill-book-meta">{{ '中文' if book.lang == 'zh' else 'English' if book.lang == 'en' else book.lang }} <span aria-hidden="true">·</span> {{ book_categories(book)|first }} · About {{ minutes[book.id] }} min{% if states.get(book.id) == 'finished' %} · <strong>Finished</strong>{% elif states.get(book.id) == 'reading' %} · Reading{% endif %}</span>
             </a>
 {% else %}
             <div class="distill-empty"><h3>{{ 'No books match your filters.' if total_books else 'Your bookshelf is ready.' }}</h3>
@@ -60,6 +69,10 @@
 {% endfor %}
         </div>
     </section>
+{% if finished and not (query or language or category or status) %}<section class="distill-section" aria-labelledby="finished-heading"><h2 id="finished-heading">Finished</h2><div class="library-cards">
+{% for card in finished[:6] %}{% set book = card %}
+{% if book %}{{ library_card(card, cover(book), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?restart=1&return=' ~ (return_url|urlencode)) }}{% endif %}{% endfor %}
+</div></section>{% endif %}
 </main>
 {% endblock %}
 
@@ -67,6 +80,16 @@
 <script id="distill-search-catalog" type="application/json">{{ search_catalog | tojson }}</script>
 <script>
 (function () {
+    try {
+        var key = 'distill-shelf:' + location.pathname + location.search;
+        if (sessionStorage.getItem('distill-restore-shelf') === key) {
+            sessionStorage.removeItem('distill-restore-shelf');
+            requestAnimationFrame(function () { scrollTo(0, Number(sessionStorage.getItem(key)) || 0); });
+        }
+        document.querySelectorAll('a[href*="/books/"]').forEach(function (link) {
+            link.addEventListener('click', function () { sessionStorage.setItem(key, String(scrollY)); sessionStorage.setItem('distill-restore-shelf', key); });
+        });
+    } catch (_) {}
     var form = document.querySelector('.distill-filters');
     if (!form) return;
     var selects = form.querySelectorAll('select');
@@ -96,7 +119,7 @@
         } else input.removeAttribute('aria-activedescendant');
     }
     function openBook(index) {
-        if (matches[index]) window.location.assign((window.APP_BASE_PATH || '') + '/books/' + encodeURIComponent(matches[index].slug));
+        if (matches[index]) window.location.assign((window.APP_BASE_PATH || '') + '/books/' + encodeURIComponent(matches[index].slug) + '?return=' + encodeURIComponent(location.pathname + location.search));
     }
     function suggest() {
         if (composing) return;

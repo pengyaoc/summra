@@ -3,7 +3,7 @@ import { applyReaderPlatform } from '../shared/js/platform.js';
 
 class DistillReader {
     classifyUnit(text) { return JSON.parse(text); }
-    selectBook(book) { location.assign(withBasePath(`/books/${book.slug}`)); }
+    selectBook(book) { location.assign(withBasePath(`/books/${book.slug}`) + '?return=' + encodeURIComponent(book.return_url || withBasePath('/'))); }
 }
 applyReaderPlatform(DistillReader);
 
@@ -12,7 +12,9 @@ reader.initReaderPlatform();
 reader.setupReadingSettings();
 reader.loadReadingPreferences();
 reader.setupPagination();
-await window.authModule.initAuth(); // the shared default module: one memoised checkAuthStatus()
+reader.currentBook = window.DISTILL_BOOK;
+reader.setupContinuousReaderExit();
 await reader.showContinuousReader(window.DISTILL_BOOK, {
     chapter: new URLSearchParams(location.search).get('chapter'),
+    restart: new URLSearchParams(location.search).get('restart') === '1',
 });

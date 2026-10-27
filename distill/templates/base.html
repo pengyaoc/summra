@@ -16,9 +16,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Distill">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}{{ asset_v('images/favicon.svg') }}">
-    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icon-32.png') }}{{ asset_v('images/icon-32.png') }}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icon-180.png') }}{{ asset_v('images/icon-180.png') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('distill.app_icon', name='favicon.svg') }}{{ asset_v('images/favicon.svg') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('distill.app_icon', name='icon-32.png') }}{{ asset_v('images/icon-32.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('distill.app_icon', name='icon-180.png') }}{{ asset_v('images/icon-180.png') }}">
     <link rel="manifest" href="{{ url_for('distill.manifest') }}" crossorigin="use-credentials">
     <script>window.APP_BASE_PATH = {{ (base_path | default('')) | tojson }};</script>
     {% include 'shared/reader/_config_script.html' %}
@@ -37,6 +37,10 @@
         <button id="distill-install-button" class="distill-install-action" type="button" hidden>Install app</button>
     </header>
 {% endblock %}
+<aside id="distill-ios-install" class="distill-install-guide" hidden aria-label="Install Distill">
+    <p>Keep Distill on your Home Screen. In Safari, tap Share, then Add to Home Screen.</p>
+    <button type="button" aria-label="Dismiss installation guide">Dismiss</button>
+</aside>
 {% block content %}{% endblock %}
 {% block scripts %}{% endblock %}
 </body>
