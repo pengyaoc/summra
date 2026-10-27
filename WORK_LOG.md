@@ -10568,3 +10568,18 @@ location, progress, Continue action, empty space and Tab/Enter all navigate to t
 same saved-place reader URL. An initial reverse-order suite exposed the already
 documented shared app-global isolation limitation; the established order passes.
 git diff --check passes. Changes remain local and uncommitted; no deployment.
+
+## 2026-10-26 — Whole-card navigation deployed
+
+Committed/pushed 6293e57 with the card changes and ERD/PRD/worklog updates, then
+fast-forwarded /opt/summra and restarted Distill. Both Distill and Plainly services
+are active. Authenticated production library HTML verifies all three live shelf
+cards are complete native anchors to reader URLs, retain the library-return query
+and do not force restart. Continue/Resume visuals are spans, with no separate
+button-only click target; the deployed CSS contains the visible focus outline.
+No Apache configuration, database migration or progress reset was required.
+
+The preceding 369-test suite and browser checks cover every card region and
+Tab/Enter; all 19 reader-config/template regressions passed again before commit.
+Updated ERD and PRD with the live verification result. Documentation-only follow-up
+requires a VM fast-forward, with no further service restart.
