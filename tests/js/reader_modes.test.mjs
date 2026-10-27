@@ -302,3 +302,72 @@ test("side-by-side row splitting finds its cells by the configured cell_class", 
     window.READER_CONFIG = config([single("summary", "Summary")], ["summary"]);
     assert.deepEqual(splitSelectors(), [".side-by-side-cell.original", ".side-by-side-cell.modern"]);
 });
+
+// A section can span many chapters: crossing its boundary must be one page.
+function boundaryApp(segmentIds = ["summary.2", "summary.3"]) {
+    const segments = Array.from({ length: 5 }, (_, i) => ({
+        id: `summary.${i}`, previous_segment_id: i ? `summary.${i - 1}` : null,
+        next_segment_id: i < 4 ? `summary.${i + 1}` : null,
+    }));
+    const renders = [];
+    const app = makeApp({
+        pagination: { isNavigating: false },
+        fetchContinuousSegment: async id => segments.find(segment => segment.id === id),
+        renderContinuousSegments(loaded) {
+            renders.push({ ids: loaded.map(segment => segment.id),
+                last: this.pagination.shouldGoToLastPage,
+                first: this.pagination.shouldResetToPage1 });
+        },
+    });
+    app.continuousReader = { active: true, currentSegmentId: segmentIds[0], segmentIds };
+    return { app, renders };
+}
+
+test("backward section turn opens the preceding section's last page", async () => {
+    const { app, renders } = boundaryApp();
+    await app.navigateContinuousSegment(-1);
+    assert.equal(renders[0].last, true);
+    assert.deepEqual(renders[0].ids, ["summary.1"]);
+    assert.deepEqual(app.continuousReader.segmentIds, ["summary.1"]);
+    assert.equal(app.pagination.isNavigating, false);
+});
+
+test("forward section turn moves past every rendered section", async () => {
+    const { app, renders } = boundaryApp();
+    await app.navigateContinuousSegment(1);
+    assert.deepEqual(renders[0].ids, ["summary.4"]);
+    assert.equal(renders[0].first, true);
+    assert.deepEqual(app.continuousReader.segmentIds, ["summary.4"]);
+    assert.equal(app.continuousReader.forwardTurn, true);
+});
+
+test("boundary turns ignore repeated input while the section loads", async () => {
+    const { app, renders } = boundaryApp();
+    await Promise.all([app.navigateContinuousSegment(-1), app.navigateContinuousSegment(-1)]);
+    assert.equal(renders.length, 1);
+});
+
+test("a section finishing after reader exit cannot render", async () => {
+    const { app, renders } = boundaryApp();
+    const fetchSegment = app.fetchContinuousSegment;
+    app.fetchContinuousSegment = async id => {
+        const result = await fetchSegment(id);
+        app.continuousReader.active = false;
+        return result;
+    };
+    await app.navigateContinuousSegment(-1);
+    assert.equal(renders.length, 0);
+    assert.equal(app.pagination.isNavigating, false);
+});
+
+test("last rendered section controls forward availability", () => {
+    const { app } = boundaryApp(["summary.3", "summary.4"]);
+    Object.assign(app, { pageTurnAvailability: paginationMixin.pageTurnAvailability });
+    app.pagination.currentPage = 9;
+    app.pagination.totalPages = 10;
+    app.continuousReader.mode = "summary";
+    app.continuousReader.manifest = { segments: Array.from({ length: 5 }, (_, ordinal) => ({
+        id: `summary.${ordinal}`, mode: "summary", ordinal,
+    })) };
+    assert.deepEqual(app.pageTurnAvailability(), { hasPrevious: true, hasNext: false });
+});

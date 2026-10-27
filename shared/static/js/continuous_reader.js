@@ -733,15 +733,31 @@ export const continuousReaderMixin = {
 
     async navigateContinuousSegment(direction) {
         const reader = this.continuousReader;
-        if (!reader?.active) return;
-        const segment = await this.fetchContinuousSegment(reader.currentSegmentId);
-        const id = direction > 0 ? segment?.next_segment_id : segment?.previous_segment_id;
-        if (!id) return;
-        reader.restoring = false;
-        const loaded = await this.fetchContinuousSegment(id);
-        if (!loaded) return;
-        reader.currentSegmentId = id;
-        if (direction > 0) reader.forwardTurn = true;
-        this.renderContinuousSegments([loaded], null);
+        if (!reader?.active || this.pagination.isNavigating) return;
+        const mode = reader.mode;
+        this.pagination.isNavigating = true;
+        try {
+            // Opening renders the target section and its prefetched neighbor.
+            // Navigate from the visible window's edge, not always its first section.
+            const ids = reader.segmentIds?.length ? reader.segmentIds : [reader.currentSegmentId];
+            const edgeId = direction > 0 ? ids[ids.length - 1] : ids[0];
+            const segment = await this.fetchContinuousSegment(edgeId);
+            if (!reader.active || this.continuousReader !== reader || reader.mode !== mode) return;
+            const id = direction > 0 ? segment?.next_segment_id : segment?.previous_segment_id;
+            if (!id) return;
+            const loaded = await this.fetchContinuousSegment(id);
+            if (!loaded || !reader.active || this.continuousReader !== reader || reader.mode !== mode) return;
+            reader.currentSegmentId = id;
+            reader.segmentIds = [id];
+            reader.restoring = false;
+            reader.forwardTurn = direction > 0;
+            // A backward turn must land immediately before the page we left,
+            // even when the preceding section contains several chapters.
+            this.pagination.shouldGoToLastPage = direction < 0;
+            this.pagination.shouldResetToPage1 = direction > 0;
+            this.renderContinuousSegments([loaded], null);
+        } finally {
+            this.pagination.isNavigating = false;
+        }
     },
 };

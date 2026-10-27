@@ -1,5 +1,13 @@
 # Plainly - Product Requirements Document
 
+## Distill book actions (2026-10-27)
+
+Continue/Start reading, Read from beginning and Mark unfinished/Mark as read use consistent typography, spacing and touch target sizes. Continue/Start reading remains the filled primary action; the secondary actions share one understated link treatment. Actions wrap without horizontal overflow on phone screens, retain visible keyboard focus and preserve their existing destinations and status behavior.
+
+## Reader page continuity (2026-10-27)
+
+In both Plainly and Distill, turning backward across a loaded section boundary must show the immediately preceding page, even when that section spans multiple chapters. Turning forward must continue after all currently rendered sections without repeating prefetched content. Navigation controls reflect the entire rendered window, and repeated taps during section loading must not trigger duplicate transitions. This corrects the reported 细胞传 backward jump from chapter 21 to 14; book text and saved-progress formats are unchanged.
+
 ## Product Vision
 
 Plainly makes public-domain classics easier to read. The headline feature is a **sentence-by-sentence rewrite of every chapter into modern English**, displayed side-by-side with the original. Summaries (short and full), chapter-by-chapter breakdowns, AI illustrations, and audio narration round out the experience.

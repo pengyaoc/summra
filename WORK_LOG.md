@@ -1,5 +1,19 @@
 # Summra Work Log
 
+## 2026-10-27: Consistent book actions and reader continuity release
+
+- User authorized fixing the three book actions, then committing, pushing and deploying both this styling update and the reader backward-section fix below.
+- Grouped Distill's primary reading, restart and read-status controls into a wrapping row. All share font family, .9rem/600 typography, line-height, padding and at least 44px height; both secondary actions have matching styling. Primary remains filled. Destinations, status handling and live announcements are unchanged. Updated ERD/PRD; no architecture, schema or product-flow changes.
+- Browser checks pass in Chromium and WebKit at widths 1280, 390 and 375: identical computed typography/padding, 44px targets and no horizontal overflow. Finished labels/restart link were added to the local page DOM for these visual checks, without modifying saved progress. All 251 Distill/shared-reader backend tests pass. The earlier five navigation regressions and real-book desktop/mobile browser checks pass; two unrelated JavaScript suite failures are recorded below. Build freshness passes.
+- Production preflight: both services active at 5e028f3; no tracked production edits. Existing untracked backend and environment files will be preserved. No database copy or migration. Release pending commit/push/deploy; unrelated iOS icon changes remain outside this release.
+
+## 2026-10-27: Reader backward section skips (local fix)
+
+- Investigated the reported 细胞传 chapter 21 → 14 jump: backward section navigation rendered the previous multi-chapter section at page zero. It now opens that section's last page. Forward navigation and button availability use the last rendered section, preventing repetition of the second section prefetched on open. Rendered section IDs stay aligned after a boundary turn.
+- Section loads lock repeated input and discard responses after reader exit, replacement or mode change. No source text, index, marker format, database schema or API changes. Rebuilt Plainly's production bundle because both apps share the fix. Preserved existing unrelated Distill template/test and documentation edits.
+- Five new regression tests failed before the implementation and pass afterward. Real cell-song Chromium/WebKit checks pass at 1280×900 and 390×844: backward lands on page 20/20 or 40/40 at unit 83, forward returns to unit 84, and forward after the prefetched window reaches unit 120. These are browser engine checks, not a physical iPhone test.
+- JavaScript suite: 63/65 pass; existing failures are the side-by-side selector spy expecting one call instead of two and the mode-switch test lacking a document stub. All 45 focused shared reader backend tests pass (using importlib collection with app packages preloaded and the tests helper path). Build freshness and scoped whitespace checks pass. Local preview on port 5019. Not committed, pushed or deployed.
+
 ## 2026-10-26: Distill lists and tables flow across reader pages (deployed)
 
 - Replaced Distill web-reader list/keypoint containers with numbered or bulleted paragraphs, and tables with stacked cells labeled by their column headers. Long items/cells split through the shared paginator without nested scrolling. Added an opt-in shared flow renderer; Plainly retains its existing rendering, and Kindle keeps semantic tables/lists. Source blocks, unit IDs and content databases are unchanged.

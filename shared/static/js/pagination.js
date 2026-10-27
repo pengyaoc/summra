@@ -1127,10 +1127,13 @@ export const paginationMixin = {
         const notFirstPage = this.pagination.currentPage > 0;
         const notLastPage = this.pagination.currentPage < this.pagination.totalPages - 1;
         if (this.continuousReader?.active) {
-            const descriptor = this.continuousReader.manifest.segments.find(item => item.id === this.continuousReader.currentSegmentId);
+            const reader = this.continuousReader;
+            const ids = reader.segmentIds?.length ? reader.segmentIds : [reader.currentSegmentId];
+            const first = reader.manifest.segments.find(item => item.id === ids[0]);
+            const last = reader.manifest.segments.find(item => item.id === ids[ids.length - 1]);
             return {
-                hasPrevious: notFirstPage || Boolean(descriptor && descriptor.ordinal > 0),
-                hasNext: notLastPage || Boolean(descriptor && this.continuousReader.manifest.segments.some(item => item.mode === this.continuousReader.mode && item.ordinal === descriptor.ordinal + 1)),
+                hasPrevious: notFirstPage || Boolean(first && first.ordinal > 0),
+                hasNext: notLastPage || Boolean(last && reader.manifest.segments.some(item => item.mode === reader.mode && item.ordinal === last.ordinal + 1)),
             };
         }
         // Previous/next chapters (handles preface at chapter 0)

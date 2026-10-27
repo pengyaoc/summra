@@ -29,6 +29,14 @@ This document provides in-depth technical documentation for the Summra project, 
 
 The user-facing name is **Plainly** (renamed from "Summra" on 2026-10-18). Only text a reader sees changed: page titles and meta tags (`plainly/routes/*.py`, `index.html`, JS `updatePageTitle` calls), the header logo and footer, `manifest.json`, `robots.txt`, the audio player's album name, and the blog's default author (`'Plainly Team'`). These deliberately keep the old name: the `SummraApp` class and `window.summraApp`, `SUMMRA_*` env vars, `summra.db`, deploy/systemd/Apache file names, the repo name and the production domain. The production URL moved from `pengyaochen.com/summrabook` to `pengyaochen.com/plainly` the same day: the host vhost now has `Define SUMMRA_PREFIX /plainly`, and `deploy/apache/summra.conf` 301s `/summrabook(/...)` to the same path under the new prefix, keeping the query string (`tests/test_apache_conf.py`). The app itself is prefix-agnostic (it reads `X-Forwarded-Prefix`). `tests/test_brand_name.py` fails if a quoted "Summra" string comes back in the JS, the routes or `app.min.js`.
 
+## Distill book action styling (2026-10-27)
+
+`distill/templates/book.html` groups the primary reading link, restart link and read-status button in `.distill-book-actions`. App-scoped CSS gives all three the same inherited font family, .9rem size, 600 weight, 1.4 line-height, padding and minimum 44px height. A wrapping flex row supplies shared spacing; the primary action keeps its filled treatment and both secondary actions share underline/hover/focus styling. The live status announcement remains outside the action row. Presentation only; no architectural, data-model, route or progress behavior changes.
+
+## Reader section boundary navigation (2026-10-27)
+
+The shared web reader uses the first/last IDs in `continuousReader.segmentIds` as its rendered window edges. Backward section navigation opens the previous section's final page (`shouldGoToLastPage`); forward navigation opens the section after the last rendered section on its first page (`shouldResetToPage1`). Navigation replaces the window IDs, and button availability uses the same edges. In-flight section turns ignore repeated input, release their lock on every exit, and discard responses after reader exit, replacement or mode change. This fixes multi-chapter backward skips such as the reported 细胞传 jump and prevents replaying a prefetched section going forward. No architecture, schema, content, marker or API changes; Plainly and Distill share the behavior, with Plainly's bundle rebuilt.
+
 ## Repository layout (post repo split, 2026-10-24)
 
 ```text

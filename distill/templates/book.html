@@ -16,9 +16,12 @@
 {% elif label %}
             <p class="distill-progress">{{ label }}{% if percent %} · {{ percent }}%{% endif %}</p>
 {% endif %}
+            <div class="distill-book-actions">
             <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}">{{ 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
 {% if card and card.status == 'finished' %}<a class="distill-restart" href="{{ base_path }}/books/{{ book.slug }}/read?restart=1&amp;return={{ return_url|urlencode }}">Read from beginning</a>{% endif %}
-            <button type="button" class="distill-unfinish" data-book-id="{{ book.id }}" data-reading-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button><p id="distill-book-status" role="status"></p>
+            <button type="button" class="distill-unfinish" data-book-id="{{ book.id }}" data-reading-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button>
+            </div>
+            <p id="distill-book-status" role="status"></p>
         </div>
     </section>
     <section class="distill-toc" aria-labelledby="toc-heading">
