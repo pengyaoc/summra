@@ -109,7 +109,7 @@ def test_plainly_to_client_is_pinned_exactly():
                          {'id': 'plain', 'label': 'Plain English', 'cell_class': 'modern'}],
                 library_label='Side by side', min_width=1024, narrow_fallback=['plain', 'original']),
         ],
-        'features': {'progress': True, 'illustrations': True, 'page_turn_hint': True, 'kindle': True},
+        'features': {'progress': True, 'illustrations': True, 'page_turn_hint': True, 'kindle': True, 'automatic_completion': True},
         'settings': {
             'fonts': [['georgia', 'Reader Serif'], ['system', 'System'], ['figtree', 'Figtree']],
             'font_default': 'georgia', 'size_min': 12, 'size_max': 24, 'size_default': 16,

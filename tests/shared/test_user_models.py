@@ -193,3 +193,23 @@ def test_completion_and_manual_unfinish_preserve_mode_marker(test_db_path):
     assert completed["projection"]["book"]["status"] == "finished"
     assert unfinished["projection"]["book"]["status"] == "in_progress"
     assert unfinished["projection"]["modes"][0]["current_marker"]["paragraph_id"] == "paragraph-9"
+
+
+def test_explicit_completion_migration_keeps_markers_and_manual_read_status(test_db_path):
+    db = UserDatabase(test_db_path)
+    uid = db.upsert_user_by_email('me@example.com')
+    automatic = db.apply_mutation(uid, _mutation(1, cause='completion', boundaries=2),
+                                  _marker(8), _marker(9), completion_allowed=True)
+    assert automatic['projection']['book']['status'] == 'finished'
+    modes = automatic['projection']['modes']
+    assert db.clear_automatic_completions() == 1
+    projection = db.get_book_projection(uid, 7)
+    assert projection['modes'] == modes
+    assert projection['book']['status'] == 'in_progress'
+    assert projection['book']['finished_at'] is None
+    assert db.clear_automatic_completions() == 0
+    marked = db.apply_mutation(uid, _mutation(2, cause='manual_finish', base_revision=modes[0]['revision']),
+                               _marker(8), None)
+    assert marked['projection']['book']['status'] == 'finished'
+    assert db.clear_automatic_completions() == 0
+    assert db.get_book_projection(uid, 7)['modes'][0]['furthest_marker'] == modes[0]['furthest_marker']

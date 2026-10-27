@@ -177,7 +177,7 @@ def test_kindle_progress_completion_on_last_block_forward_only(app_env):
     save(client, book_id=book_id, ch=2, p=0, forward=True, finished=True)
     assert projection(user_db, book_id)['book']['status'] != 'finished'
     save(client, book_id=book_id, ch=4, p=0, forward=True, finished=True)
-    assert projection(user_db, book_id)['book']['status'] == 'finished'
+    assert projection(user_db, book_id)['book']['status'] != 'finished'
 
 
 def test_kindle_off_switch_serves_web_pages(app_env):

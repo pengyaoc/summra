@@ -12,11 +12,13 @@
             <p class="distill-author">{{ book.author }}</p>
             <p class="distill-author">About {{ minutes }} min read</p>
 {% if card and card.status == 'finished' %}<p class="distill-progress">Finished · 100%</p>
+{% if card.current_chapter %}<p class="distill-saved-place">Saved place: {{ card.current_chapter.chapter_title }}</p>{% endif %}
 {% elif label %}
             <p class="distill-progress">{{ label }}{% if percent %} · {{ percent }}%{% endif %}</p>
 {% endif %}
-            <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}{% if card and card.status == 'finished' %}&amp;restart=1{% endif %}">{{ 'Read again' if card and card.status == 'finished' else 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
-{% if card and card.status == 'finished' %}<button type="button" class="distill-unfinish" data-book-id="{{ book.id }}">Mark unfinished</button><p id="distill-book-status" role="status"></p>{% endif %}
+            <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}">{{ 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
+{% if card and card.status == 'finished' %}<a class="distill-restart" href="{{ base_path }}/books/{{ book.slug }}/read?restart=1&amp;return={{ return_url|urlencode }}">Read from beginning</a>{% endif %}
+            <button type="button" class="distill-unfinish" data-book-id="{{ book.id }}" data-reading-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button><p id="distill-book-status" role="status"></p>
         </div>
     </section>
     <section class="distill-toc" aria-labelledby="toc-heading">
@@ -43,12 +45,7 @@ unfinished?.addEventListener('click', async () => {
     try {
         const root = window.APP_BASE_PATH || '';
         const id = Number(unfinished.dataset.bookId);
-        const state = await (await fetch(`${root}/api/progress/v2/books/${id}`, {cache:'no-store'})).json();
-        const mode = state.projection.modes.find(item => item.mode === state.projection.book.last_mode);
-        const response = await fetch(`${root}/api/progress/v2/mutations`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-            book_id:id, mode:mode.mode, current_marker:{...mode.current_marker, mode:mode.mode}, base_revision:mode.revision,
-            mutation_id:crypto.randomUUID(), device_id:'distill-book-' + crypto.randomUUID(), device_sequence:1, event_cause:'manual_unfinish'
-        })});
+        const response = await fetch(`${root}/api/progress/v2/books/${id}/status`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:unfinished.dataset.readingStatus})});
         if (!response.ok) throw new Error();
         location.reload();
     } catch (_) { document.getElementById('distill-book-status').textContent = 'Could not update this book. Please try again.'; unfinished.disabled = false; }

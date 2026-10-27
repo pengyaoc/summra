@@ -11,7 +11,8 @@ import uuid
 from flask import jsonify, request
 
 
-def record_page(user_db, content_db, user_id, book_id, mode, paragraph_id, quote, forward, seconds, finished):
+def record_page(user_db, content_db, user_id, book_id, mode, paragraph_id, quote, forward, seconds, finished,
+                automatic_completion=True):
     """Apply one page turn. `paragraph_id` is the reader-index unit id,
     `quote` the unit's text (or None), `forward` whether the reader arrived
     by turning forward, `seconds` the time on the previous page, `finished`
@@ -24,7 +25,7 @@ def record_page(user_db, content_db, user_id, book_id, mode, paragraph_id, quote
     if quote is not None:
         marker['quote'] = quote
 
-    finished = finished and forward
+    finished = finished and forward and automatic_completion
     terminal = next((m['terminal_paragraph_id'] for m in content_db.get_reader_manifest(book_id)['modes']
                      if m['mode'] == mode), None)
     state = next((m for m in user_db.get_book_projection(user_id, book_id)['modes']
@@ -72,5 +73,6 @@ def save_progress(config, user_db, content_db, user_id, position):
     unit_id, quote = found
     payload, status = record_page(
         user_db, content_db, user_id, book_id, text, unit_id, quote,
-        data.get('forward') is True, data.get('seconds'), data.get('finished') is True)
+        data.get('forward') is True, data.get('seconds'), data.get('finished') is True,
+        automatic_completion=config.features.automatic_completion)
     return jsonify(payload), status

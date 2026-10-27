@@ -648,7 +648,7 @@ export const continuousReaderMixin = {
         reader.settleTimer = setTimeout(() => this.saveContinuousReader('page_turn', sequential ? 1 : 0, activeSeconds), 600);
         const modeManifest = reader.manifest.modes.find(item => item.mode === reader.mode);
         clearTimeout(reader.terminalTimer);
-        if (modeManifest?.terminal_paragraph_id === marker.paragraph_id && sequential) {
+        if (this.readerConfig().features?.automatic_completion !== false && modeManifest?.terminal_paragraph_id === marker.paragraph_id && sequential) {
             reader.terminalTimer = setTimeout(() => this.saveContinuousReader('completion', 0, 2, {
                 terminal_dwell_ms: 2000, sequential_terminal_entry: true,
             }), 2000);

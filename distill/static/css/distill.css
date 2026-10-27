@@ -115,3 +115,6 @@
 .distill-install-guide { max-width: 1040px; margin: 1rem auto 0; padding: 1rem 1.25rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
 .distill-install-guide[hidden] { display: none; }
 .distill-install-guide button { margin-top: .5rem; color: var(--accent); border: 0; background: none; font: inherit; cursor: pointer; }
+
+.distill-saved-place { margin: 0 0 1rem; color: var(--ink-muted); font-size: .9rem; }
+.distill-restart { display: inline-block; margin: .6rem 0 .6rem .6rem; color: var(--accent); font-size: .9rem; }

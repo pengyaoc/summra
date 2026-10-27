@@ -169,12 +169,15 @@ def test_page_turn_hint_key_accepted(client):
 
 
 def _import_app_prod(auth_mode):
-    env = {k: v for k, v in os.environ.items() if not k.startswith('DISTILL_')}
-    env.update(PYTHONPATH=str(ROOT), DISTILL_DB=':memory:', DISTILL_USER_DB=':memory:')
-    if auth_mode:
-        env.update(DISTILL_AUTH_MODE=auth_mode, DISTILL_ALLOWED_EMAILS=ALLOWED)
-    return subprocess.run([sys.executable, '-c', 'import distill.app_prod'], env=env,
-                          capture_output=True, text=True, cwd=ROOT)
+    import tempfile
+    with tempfile.TemporaryDirectory() as root:
+        env = {k: v for k, v in os.environ.items() if not k.startswith('DISTILL_')}
+        env.update(PYTHONPATH=str(ROOT), DISTILL_DB=str(Path(root) / 'content.db'),
+                   DISTILL_USER_DB=str(Path(root) / 'users.db'))
+        if auth_mode:
+            env.update(DISTILL_AUTH_MODE=auth_mode, DISTILL_ALLOWED_EMAILS=ALLOWED)
+        return subprocess.run([sys.executable, '-c', 'import distill.app_prod'], env=env,
+                              capture_output=True, text=True, cwd=ROOT)
 
 
 @pytest.mark.parametrize('mode', [None, 'off', 'optional'])

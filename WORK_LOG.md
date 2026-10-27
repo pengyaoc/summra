@@ -10395,3 +10395,41 @@ browser wait on an outgoing response body stalled after a successful navigation;
 server results and a fresh-browser state check independently confirmed the action.
 Existing OS-cached shortcut icons may still need removal/reinstallation; server
 progress survives that operation. No user-device shortcut was removed remotely.
+
+## 2026-10-26 — Explicit Read status and saved-progress visibility
+
+Investigated the reported missing progress for 细胞传 against production using
+read-only queries. Its state was present: current place in 第四章, furthest place
+in the afterword, 685 active seconds, 53 forward boundaries and 123 accepted
+mutations. It was automatically marked Finished by an earlier completion event.
+That hid it from Reading now; the Finished shelf was below the 54-book grid and
+its default Read again link forced restart=1 despite the newer saved location.
+No existing reading markers were lost.
+
+User explicitly requires marking a book Read before it enters Finished.
+Distill now sets automatic_completion=False in the shared reader configuration;
+web and Kindle APIs ignore automatic last-page completion for this host, while
+Plainly retains its existing setting. Added authenticated, JSON-only book-status
+actions using the existing mutation model (manual_finish/manual_unfinish), with
+Mark as read / Mark unfinished controls on web and Kindle book pages. Explicit
+status changes retain current/furthest positions; books without prior progress
+can also be marked Read. Stale clients cannot auto-finish via the server API.
+
+On adopting this policy, clear_automatic_completions reclassifies only Finished
+records without an accepted manual_finish as in_progress. It clears the automatic
+finished timestamp and advances the book revision; all mode markers, furthest
+positions, reading time and mutation history remain untouched. The operation is
+idempotent and never clears explicitly marked Read books on subsequent startups.
+Deploy with a progress DB backup and before/after coordinate/history checks.
+
+Finished books now default to resuming their saved place; Read from beginning
+is a separate action. Their saved chapter is visible, and the Finished shelf
+moves above All books with an expandable remainder. Library bfcache returns
+refresh the server projection while retaining scroll position. No automatic
+reading-position reset is performed.
+
+Validation: 366 shared/Distill tests pass, covering last-page non-completion,
+explicit Read/unfinished actions, first-time manual Read, preserved positions,
+legacy-status conversion and idempotence, and default resume. A fresh browser
+verified that automatic completion leaves the book in progress, explicit marking
+changes its status, and Continue reading resumes the saved terminal chapter.

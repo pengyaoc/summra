@@ -278,13 +278,14 @@ def test_finished_book_has_history_read_again_and_source_location(app_env):
     terminal = next(m for m in manifest['modes'] if m['mode'] == 'summary')['terminal_paragraph_id']
     chapter_id, unit = map(int, terminal.split('.'))
     mutation = _mutation(bid, chapter_id, unit)
-    mutation.update(event_cause='completion', terminal_dwell_ms=2000, sequential_terminal_entry=True)
+    mutation.update(event_cause='manual_finish', terminal_dwell_ms=2000, sequential_terminal_entry=True)
     assert client.post('/api/progress/v2/mutations', json=mutation, headers=HEADERS).status_code == 200
     html = get(client, '/books/my-book').get_data(as_text=True)
-    assert 'Finished · 100%' in html and 'Read again' in html and 'Mark unfinished' in html
+    assert 'Finished · 100%' in html and 'Read from beginning' in html and 'Mark unfinished' in html
     assert 'restart=1' in html
     home = get(client, '/').get_data(as_text=True)
-    assert 'id="finished-heading"' in home and 'Read again' in home
+    assert 'id="finished-heading"' in home and 'Resume' in home
+    assert home.index('id="finished-heading"') < home.index('id="all-books-heading"')
     from distill.routes import progress_label
     assert progress_label({'current_chapter': {'chapter_number': 4, 'chapter_title': 'Source'}}, 4) == 'Source'
 
@@ -302,3 +303,70 @@ def test_unfinish_accepts_projection_marker_with_its_mode(app_env):
     response = client.post('/api/progress/v2/mutations', json=payload, headers=HEADERS)
     assert response.status_code == 200
     assert response.get_json()['projection']['book']['status'] == 'in_progress'
+
+
+def test_finished_book_default_action_keeps_newer_saved_place(app_env):
+    client, db, _, bid = app_env
+    manifest = db.get_reader_manifest(bid)
+    terminal = next(mode for mode in manifest['modes'] if mode['mode'] == 'summary')['terminal_paragraph_id']
+    chapter_id, unit = map(int, terminal.split('.'))
+    payload = _mutation(bid, chapter_id, unit)
+    payload.update(event_cause='manual_finish', terminal_dwell_ms=2000, sequential_terminal_entry=True)
+    assert client.post('/api/progress/v2/mutations', json=payload, headers=HEADERS).status_code == 200
+    projection = get(client, f'/api/progress/v2/books/{bid}').get_json()['projection']
+    # Rereading updates the current place while preserving completion history.
+    chapter = db.get_chapters(bid)[1]
+    payload = _mutation(bid, chapter['id'])
+    payload.update(mutation_id='reread', device_sequence=2, base_revision=projection['modes'][0]['revision'])
+    assert client.post('/api/progress/v2/mutations', json=payload, headers=HEADERS).status_code == 200
+    before = get(client, f'/api/progress/v2/books/{bid}').get_json()['projection']
+    assert before['book']['status'] == 'finished'
+    html = get(client, '/books/my-book').get_data(as_text=True)
+    primary = re.search(r'class="library-read-action" href="([^"]+)"', html).group(1)
+    assert 'restart=' not in primary
+    assert 'Continue reading' in html and 'Saved place: 1. First' in html
+    assert 'Read from beginning' in html and 'restart=1' in html
+    home = get(client, '/').get_data(as_text=True)
+    history = home.split('id="finished-heading"')[1].split('id="all-books-heading"')[0]
+    assert 'Resume' in history and '1. First' in history and 'restart=1' not in history
+    assert get(client, f'/api/progress/v2/books/{bid}').get_json()['projection'] == before
+
+
+def test_last_page_does_not_mark_distill_read_and_explicit_action_preserves_place(app_env):
+    client, db, users, bid = app_env
+    manifest = db.get_reader_manifest(bid)
+    terminal = next(mode for mode in manifest['modes'] if mode['mode'] == 'summary')['terminal_paragraph_id']
+    chapter_id, unit = map(int, terminal.split('.'))
+    payload = _mutation(bid, chapter_id, unit)
+    payload.update(event_cause='completion', terminal_dwell_ms=2000, sequential_terminal_entry=True)
+    response = client.post('/api/progress/v2/mutations', json=payload, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.get_json()['projection']['book']['status'] == 'in_progress'
+    before = get(client, f'/api/progress/v2/books/{bid}').get_json()['projection']['modes'][0]
+    html = get(client, '/books/my-book').get_data(as_text=True)
+    assert 'Mark as read' in html
+    response = client.post(f'/api/progress/v2/books/{bid}/status', json={'status': 'read'}, headers=HEADERS)
+    assert response.status_code == 200
+    projection = response.get_json()['projection']
+    assert projection['book']['status'] == 'finished'
+    assert projection['modes'][0]['current_marker'] == before['current_marker']
+    assert projection['modes'][0]['furthest_marker'] == before['furthest_marker']
+    assert users.clear_automatic_completions() == 0
+    assert get(client, f'/api/progress/v2/books/{bid}').get_json()['projection']['book']['status'] == 'finished'
+    response = client.post(f'/api/progress/v2/books/{bid}/status', json={'status': 'reading'}, headers=HEADERS)
+    assert response.status_code == 200
+    assert response.get_json()['projection']['book']['status'] == 'in_progress'
+
+
+def test_mark_as_read_works_without_prior_reader_state_and_requires_json_identity(app_env):
+    client, db, _, bid = app_env
+    path = f'/api/progress/v2/books/{bid}/status'
+    assert client.post(path, json={'status': 'read'}).status_code == 401
+    assert client.post(path, data='status=read', headers=HEADERS).status_code == 400
+    assert client.post(path, json={'status': 'invalid'}, headers=HEADERS).status_code == 400
+    response = client.post(path, json={'status': 'read'}, headers=HEADERS)
+    assert response.status_code == 200
+    projection = response.get_json()['projection']
+    assert projection['book']['status'] == 'finished'
+    assert projection['modes'][0]['current_marker']['chapter_id'] == db.get_chapters(bid)[0]['id']
+    assert 'Mark unfinished' in get(client, '/books/my-book').get_data(as_text=True)

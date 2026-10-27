@@ -13,9 +13,29 @@
     <p class="author">{{ book.author }}</p>
     <div class="actions">
       <a class="btn primary" href="{{ base_path }}/books/{{ book.slug }}/read">{{ 'Continue reading' if saved else 'Start reading' }}</a>
+      <button id="book-read-status" class="btn" type="button" data-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button>
+      <span id="book-read-message"></span>
     </div>
+    {% if card and card.status == 'finished' %}<p>Finished</p>{% endif %}
   </div>
 </div>
+<script>
+(function () {
+  var button = document.getElementById('book-read-status');
+  button.onclick = function () {
+    button.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', {{ (base_path ~ '/api/progress/v2/books/' ~ book.id ~ '/status')|tojson }}, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status === 200) location.reload();
+      else { button.disabled = false; document.getElementById('book-read-message').innerHTML = 'Could not save. Please try again.'; }
+    };
+    xhr.send(JSON.stringify({status: button.getAttribute('data-status')}));
+  };
+}());
+</script>
 
 <h2 class="section">Contents</h2>
 <ul class="list contents">

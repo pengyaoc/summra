@@ -15,7 +15,7 @@ from shared.reader.modes import ALL_MODES
 VALID_MODES = set(ALL_MODES)
 VALID_CAUSES = {
     'page_turn', 'mode_exit', 'toc', 'hidden', 'pagehide', 'navigation',
-    'completion', 'manual_unfinish',
+    'completion', 'manual_finish', 'manual_unfinish',
 }
 
 
@@ -245,6 +245,28 @@ class UserDatabase:
         finally:
             conn.close()
 
+    def clear_automatic_completions(self) -> int:
+        """Adopt explicit completion without losing any saved reading markers.
+
+        Only hosts opting out of automatic completion call this migration.
+        Historical completion mutations remain as an audit trail; subsequent
+        accepted manual_finish actions are never reclassified on restart.
+        """
+        conn = self.get_connection()
+        try:
+            with conn:
+                cursor = conn.execute('''UPDATE book_reading_state SET
+                    status = 'in_progress', finished_at = NULL,
+                    completion_revision = revision + 1, revision = revision + 1
+                    WHERE status = 'finished' AND NOT EXISTS (
+                        SELECT 1 FROM progress_mutation m
+                        WHERE m.user_id = book_reading_state.user_id
+                          AND m.book_id = book_reading_state.book_id
+                          AND m.event_cause = 'manual_finish' AND m.result = 'accepted')''')
+                return cursor.rowcount
+        finally:
+            conn.close()
+
     def get_library_projection(self, user_id: int, book_id: Optional[int] = None) -> List[Dict]:
         conn = self.get_connection()
         try:
@@ -412,7 +434,7 @@ class UserDatabase:
                 transition = None
                 if cause == 'manual_unfinish':
                     status, transition = 'in_progress', 'unfinished'
-                elif completion_allowed and cause == 'completion':
+                elif cause == 'manual_finish' or (completion_allowed and cause == 'completion'):
                     status, transition = 'finished', 'finished'
                 elif book['status'] == 'finished':
                     status = 'finished'

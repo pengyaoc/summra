@@ -36,6 +36,7 @@ class ReaderFeatures:
     illustrations: bool = False
     page_turn_hint: bool = True
     kindle: bool = True
+    automatic_completion: bool = True
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,7 @@ class ReaderConfig:
                 'illustrations': self.features.illustrations,
                 'page_turn_hint': self.features.page_turn_hint,
                 'kindle': self.features.kindle,
+                'automatic_completion': self.features.automatic_completion,
             },
             'settings': {
                 'fonts': [list(f) for f in settings.fonts],

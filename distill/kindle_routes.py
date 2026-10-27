@@ -11,7 +11,7 @@ import re
 from flask import Blueprint, request
 
 from distill.reader_config import DISTILL_READER
-from distill.routes import _db, newest_first, reading_cards
+from distill.routes import _card_for, _db, newest_first, reading_cards
 from shared.kindle import pages as kindle_pages
 from shared.kindle.pages import (
     CONTENTS_PAGE_SIZE, LIBRARY_PAGE_SIZE, READING_ON_HOME, account_user_id, cookie_path, font_size,
@@ -80,7 +80,7 @@ def book_page(slug):
     cover = book.get('cover_image')
     return render_page(
         'book.html',
-        book=book, rows=rows, page=page, pages=pages, saved=saved,
+        book=book, rows=rows, page=page, pages=pages, saved=saved, card=_card_for(book['id']),
         cover_url=(url(f'/books/{slug}/cover/{book["cover_thumbnail_token"]}.jpg')
                    if book.get('cover_thumbnail_token') else url(f'/books/{slug}/images/{cover}') if cover else None),
         prev_url=page_url(page - 1) if page > 1 else None,

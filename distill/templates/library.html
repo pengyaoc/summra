@@ -21,6 +21,18 @@
 </div></details>{% endif %}
     </section>
 {% endif %}
+{% if finished and not (query or language or category or status) %}
+    <section class="distill-section" aria-labelledby="finished-heading">
+        <h2 id="finished-heading">Finished</h2>
+        <p class="distill-saved-place">Your reading is saved. Resume where you left off, or open a book to read from the beginning.</p>
+        <div class="library-cards">
+{% for card in finished[:6] %}{{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?return=' ~ (return_url|urlencode), read_label='Resume') }}{% endfor %}
+        </div>
+{% if finished|length > 6 %}<details class="distill-more"><summary>Show {{ finished|length - 6 }} more finished books</summary><div class="library-cards">
+{% for card in finished[6:] %}{{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?return=' ~ (return_url|urlencode), read_label='Resume') }}{% endfor %}
+</div></details>{% endif %}
+    </section>
+{% endif %}
     <section class="distill-section" aria-labelledby="all-books-heading">
         <div class="distill-shelf-heading"><h2 id="all-books-heading">All books</h2>
             <p role="status">{{ books|length }}{% if query or language or category or status or sort != 'newest' %} of {{ total_books }}{% endif %} {{ 'book' if total_books == 1 else 'books' }}</p>
@@ -69,10 +81,7 @@
 {% endfor %}
         </div>
     </section>
-{% if finished and not (query or language or category or status) %}<section class="distill-section" aria-labelledby="finished-heading"><h2 id="finished-heading">Finished</h2><div class="library-cards">
-{% for card in finished[:6] %}{% set book = card %}
-{% if book %}{{ library_card(card, cover(book), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?restart=1&return=' ~ (return_url|urlencode)) }}{% endif %}{% endfor %}
-</div></section>{% endif %}
+
 </main>
 {% endblock %}
 
@@ -90,6 +99,11 @@
             link.addEventListener('click', function () { sessionStorage.setItem(key, String(scrollY)); sessionStorage.setItem('distill-restore-shelf', key); });
         });
     } catch (_) {}
+    window.addEventListener('pageshow', function (event) {
+        if (!event.persisted) return;
+        try { sessionStorage.setItem(key, String(scrollY)); sessionStorage.setItem('distill-restore-shelf', key); } catch (_) {}
+        location.reload();
+    });
     var form = document.querySelector('.distill-filters');
     if (!form) return;
     var selects = form.querySelectorAll('select');

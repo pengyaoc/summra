@@ -24,6 +24,8 @@ def install_reader_platform(
     app.register_blueprint(make_reader_blueprint(get_content_db, config.cache_visibility))
 
     if user_db is not None:
+        if not config.features.automatic_completion:
+            user_db.clear_automatic_completions()
         progress_routes.user_db = user_db
         progress_routes.content_db = get_content_db()
         whoami.user_db = user_db

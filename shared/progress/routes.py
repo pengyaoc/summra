@@ -12,8 +12,9 @@ the app. `content_db` is duck-typed; the surface used here is:
 """
 
 import logging
+import uuid
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 from shared.auth.pchauth.flask_adapter import login_required
 
@@ -58,7 +59,8 @@ def apply_progress_mutation():
 
     manifest = content_db.get_reader_manifest(book_id)
     mode_manifest = next((item for item in manifest['modes'] if item['mode'] == payload.get('mode')), None)
-    completion_allowed = bool(
+    config = current_app.extensions.get('reader_config')
+    completion_allowed = (config is None or config.features.automatic_completion) and bool(
         payload.get('event_cause') == 'completion'
         and payload.get('terminal_dwell_ms', 0) >= 2000
         and payload.get('sequential_terminal_entry') is True
@@ -73,6 +75,40 @@ def apply_progress_mutation():
         return jsonify({'error': str(error)}), 400
     status = 409 if result['result'] == 'conflict' else 200
     return jsonify({'success': True, **result}), status
+
+
+@progress_bp.route('/progress/v2/books/<int:book_id>/status', methods=['POST'])
+@login_required
+def set_book_status(book_id):
+    """Explicit book-level read/unread action; preserve the reader's place."""
+    payload = request.get_json(silent=True)
+    if not _validate_book(book_id):
+        return jsonify({'error': 'Unknown book'}), 404
+    if not isinstance(payload, dict) or payload.get('status') not in ('read', 'reading'):
+        return jsonify({'error': 'Status must be read or reading'}), 400
+    state = user_db.get_book_projection(g.user_id, book_id)
+    mode_state = next((m for m in state['modes'] if m['mode'] == (state['book'] or {}).get('last_mode')), None)
+    mode = mode_state['mode'] if mode_state else None
+    marker = content_db.resolve_reader_marker(book_id, {**mode_state['current_marker'], 'mode': mode}) if mode_state and mode_state.get('current_marker') else None
+    if not marker:
+        manifest = content_db.get_reader_manifest(book_id)
+        config = current_app.extensions.get('reader_config')
+        preferred = config.default_modes if config else ('summary', 'plain', 'original')
+        available = [m for m in manifest['modes'] if m['first_segment_id']]
+        selected = next((m for key in preferred for m in available if m['mode'] == key), None)
+        if not selected:
+            return jsonify({'error': 'Book has no readable content'}), 400
+        mode = selected['mode']
+        segment = content_db.get_reader_segment(book_id, selected['first_segment_id'], mode)
+        marker = content_db.resolve_reader_marker(book_id, {'mode': mode, 'paragraph_id': segment['units'][0]['id']})
+        mode_state = next((m for m in state['modes'] if m['mode'] == mode), None)
+    identity = uuid.uuid4().hex
+    mutation = {'book_id': book_id, 'mode': mode, 'mutation_id': identity,
+                'device_id': 'book-status-' + identity, 'device_sequence': 1,
+                'base_revision': mode_state['revision'] if mode_state else 0,
+                'event_cause': 'manual_finish' if payload['status'] == 'read' else 'manual_unfinish'}
+    result = user_db.apply_mutation(g.user_id, mutation, marker, None)
+    return jsonify({'success': True, **result}), 409 if result['result'] == 'conflict' else 200
 
 
 @progress_bp.route('/progress/v2/books/<int:book_id>', methods=['GET'])
