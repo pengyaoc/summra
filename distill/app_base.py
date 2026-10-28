@@ -11,7 +11,7 @@ from distill.reader_config import DISTILL_READER
 from distill.routes import bp
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
-from distill.device_pairing import install_pairing
+from shared.auth.device_pairing import install_pairing
 from shared.auth.user_models import UserDatabase
 from shared.reader.blocks import block_element
 from shared.reader.platform import install_reader_platform
@@ -34,7 +34,12 @@ def create_app(content_db=None, user_db=None, auth_config=None) -> Flask:
         raise ValueError("Distill is all-private: auth mode 'optional' is not allowed (use 'off' for dev, 'required' for prod)")
     # Must stay before any blueprint: the Kindle dispatch (a before_app_request) skips
     # @login_required, so Flask running this auth hook first is what keeps Kindle pages private.
-    install_pairing(app, auth_config, user_db)
+    install_pairing(
+        app, auth_config, user_db, app_id='distill', app_name='Distill', env_prefix='DISTILL',
+        library_endpoint='distill.library', login_endpoint='distill.login',
+        public_endpoints={'distill.manifest', 'distill.favicon', 'distill.app_icon', 'distill.launch'},
+        launch_endpoint='distill.launch',
+    )
 
     install_reader_platform(app, DISTILL_READER, lambda: app.config['CONTENT_DB'], user_db)
     app.register_blueprint(bp)

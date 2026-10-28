@@ -20,10 +20,6 @@ from shared.kindle import is_kindle_user_agent
 
 PAIR_TTL = 600
 SESSION_TTL = 30 * 86400
-PAIR_COOKIE = 'distill_pair'
-DEVICE_COOKIE = 'distill_device'
-CSRF_COOKIE = 'distill_pair_csrf'
-PUBLIC = {'distill.manifest', 'distill.favicon', 'distill.app_icon', 'distill.launch'}
 
 
 def digest(value):
@@ -134,9 +130,21 @@ class PairingStore:
                               (email, self.clock())).fetchall()
 
 
-def install_pairing(app, config, user_db):
-    store = PairingStore(os.environ.get('DISTILL_PAIRING_DB') or Path(user_db.db_path).with_name('distill_pairing.db'))
-    app.extensions['distill_pairing'] = store
+def install_pairing(app, config, user_db, *, app_id, app_name, env_prefix,
+                    library_endpoint, login_endpoint, public_endpoints=frozenset(),
+                    launch_endpoint=None):
+    """Install one auth boundary for required/private or optional/public readers.
+
+    Stores and cookies are app-specific; Distill's existing names/schema stay
+    unchanged so deployed Kindle sessions survive this shared-code extraction.
+    """
+    pair_cookie = app_id + '_pair'
+    device_cookie = app_id + '_device'
+    csrf_cookie = app_id + '_pair_csrf'
+    origin = os.environ.get(env_prefix + '_PAIRING_ORIGIN', 'https://pengyaochen.com').rstrip('/')
+    store = PairingStore(os.environ.get(env_prefix + '_PAIRING_DB') or
+                         Path(user_db.db_path).with_name(app_id + '_pairing.db'))
+    app.extensions[app_id + '_pairing'] = store
     bp = Blueprint('pairing', __name__)
 
     def kindle():
@@ -157,7 +165,7 @@ def install_pairing(app, config, user_db):
             return jsonify(error='not on the allowlist', email=g.oidc_identity.email), 403
         identity = g.oidc_identity
         if identity is None and kindle():
-            identity = store.identity(request.cookies.get(DEVICE_COOKIE, ''))
+            identity = store.identity(request.cookies.get(device_cookie, ''))
             if identity and not is_allowed(identity.email, config):
                 identity = None
         if config.mode == 'off':
@@ -165,17 +173,19 @@ def install_pairing(app, config, user_db):
         if identity is not None:
             g.user_id = user_db.upsert_user_by_email(identity.email)
         # Kindle-only automatic entry, including the otherwise-public PWA launch.
-        if request.endpoint == 'distill.launch' and kindle():
-            return redirect(url_for('distill.library' if g.user_id is not None else 'pairing.start'))
-        if request.endpoint in PUBLIC or request.blueprint == 'pairing':
+        if launch_endpoint and request.endpoint == launch_endpoint and kindle():
+            return redirect(url_for(library_endpoint if g.user_id is not None else 'pairing.start'))
+        if request.endpoint in public_endpoints or request.blueprint == 'pairing':
             return None
-        if g.user_id is None:
+        if g.user_id is None and request.endpoint == login_endpoint and kindle():
+            return redirect(url_for('pairing.start'))
+        if g.user_id is None and config.mode == 'required':
             if kindle() and request.method == 'GET' and request.accept_mimetypes.accept_html:
                 return redirect(url_for('pairing.start'))
             return jsonify(error='not authenticated'), 401
 
     def page(**context):
-        return render_template('pairing.html', **context)
+        return render_template('shared/kindle/pairing.html', pairing_app_name=app_name, **context)
 
     def phone_identity():
         # A device session can never approve another device or manage sessions.
@@ -185,28 +195,28 @@ def install_pairing(app, config, user_db):
 
     def check_csrf():
         token = request.form.get('csrf', '')
-        cookie = request.cookies.get(CSRF_COOKIE, '')
+        cookie = request.cookies.get(csrf_cookie, '')
         if not token or not secrets.compare_digest(token, cookie):
             abort(403)
-        origin = request.headers.get('Origin')
-        if origin and origin != os.environ.get('DISTILL_PAIRING_ORIGIN', 'https://pengyaochen.com').rstrip('/'):
+        request_origin = request.headers.get('Origin')
+        if request_origin and request_origin != origin:
             abort(403)
         return token
 
     @bp.route('/pair')
     def start():
         if not kindle():
-            return redirect(url_for('distill.login'))
+            return redirect(url_for(login_endpoint))
         if g.user_id is not None:
-            return redirect(url_for('distill.library'))
-        secret = request.cookies.get(PAIR_COOKIE, '')
+            return redirect(url_for(library_endpoint))
+        secret = request.cookies.get(pair_cookie, '')
         row = store.pending(secret)
         if row and row['email']:
             token = store.redeem(secret, config)
             if token:
-                response = redirect(url_for('distill.library'))
-                set_cookie(response, DEVICE_COOKIE, token, SESSION_TTL)
-                response.delete_cookie(PAIR_COOKIE, path=cookie_path())
+                response = redirect(url_for(library_endpoint))
+                set_cookie(response, device_cookie, token, SESSION_TTL)
+                response.delete_cookie(pair_cookie, path=cookie_path())
                 return response
         if not row:
             secret = store.create()
@@ -214,20 +224,20 @@ def install_pairing(app, config, user_db):
                 return page(error='Too many pairing attempts. Try again in ten minutes.'), 429
             row = store.pending(secret)
         code = row['code']
-        phone_url = os.environ.get('DISTILL_PAIRING_ORIGIN', 'https://pengyaochen.com').rstrip('/') + url_for('pairing.approve', code=code)
+        phone_url = origin + url_for('pairing.approve', code=code)
         response = app.make_response(page(mode='kindle', code=code[:4] + '-' + code[4:], phone_url=phone_url))
-        set_cookie(response, PAIR_COOKIE, secret, PAIR_TTL)
+        set_cookie(response, pair_cookie, secret, PAIR_TTL)
         return response
 
     @bp.route('/pair/qr.png')
     def qr():
         if not kindle():
             abort(404)
-        row = store.pending(request.cookies.get(PAIR_COOKIE, ''))
+        row = store.pending(request.cookies.get(pair_cookie, ''))
         if not row:
             abort(404)
         import qrcode
-        target = os.environ.get('DISTILL_PAIRING_ORIGIN', 'https://pengyaochen.com').rstrip('/') + url_for('pairing.approve', code=row['code'])
+        target = origin + url_for('pairing.approve', code=row['code'])
         data = BytesIO()
         qrcode.make(target, box_size=6, border=4).save(data, format='PNG')
         data.seek(0)
@@ -249,7 +259,7 @@ def install_pairing(app, config, user_db):
             return page(mode='approved')
         csrf = store.csrf(email, scope)
         response = app.make_response(page(mode='approve', code=code, display_code=code[:4] + '-' + code[4:], csrf=csrf, email=email))
-        set_cookie(response, CSRF_COOKIE, csrf, PAIR_TTL)
+        set_cookie(response, csrf_cookie, csrf, PAIR_TTL)
         return response
 
     @bp.route('/pair/devices', methods=['GET', 'POST'])
@@ -262,7 +272,7 @@ def install_pairing(app, config, user_db):
             return redirect(url_for('pairing.devices'))
         csrf = store.csrf(email, 'revoke')
         response = app.make_response(page(mode='devices', devices=store.devices(email), csrf=csrf))
-        set_cookie(response, CSRF_COOKIE, csrf, PAIR_TTL)
+        set_cookie(response, csrf_cookie, csrf, PAIR_TTL)
         return response
 
     @bp.after_request

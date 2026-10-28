@@ -1,5 +1,15 @@
 # Summra Work Log
 
+## 2026-10-27: Version Kindle launchers, share pairing with Plainly, audit VM disk
+
+- Added `deploy/kindle/` as authoritative source for the installed Distill/Plainly fullscreen launchers, shared restore/runtime, embedded covers and PNG/SVG source assets. README covers prerequisites, USB installation, startup handoff, recovery, known limitations and QR login. Copied current working device sources without modifying runtime behavior. Private SSH material, logs and retired browser images excluded.
+- Moved Distill's pairing store/routes to `shared/auth/device_pairing.py` and its screen to `shared/templates/shared/kindle/pairing.html`. Both apps use the same auth boundary with explicit app configuration. Distill's cookie/DB names and records remain unchanged; Plainly has isolated `plainly_*` cookies and `plainly_pairing.db`. No content/progress schema change. Google header identity and allowlist still govern approval and revocation.
+- Plainly keeps public reading; Kindle Sign in and `/login` enter QR pairing. Non-Kindle sign-in keeps Apache Google authentication. Removed Plainly's Location-level proxy remapping so `/login` reaches Flask, and protected phone-only approval/device-management with explicit OIDC. Added QR runtime dependency for Plainly/production.
+- Validation: 75 focused pairing/auth/Kindle tests pass, including real Plainly phone approval, CSRF/origin rejection, single-use approval, QR, cookie flags, prefixes, app isolation, desktop rejection and revocation. Full regression: 1,204 passed in the sandbox; all 8 network-dependent failures passed when rerun with network access (5 Gutenberg TOC + 3 cover URLs), for 1,212 passing cases total; 2 opt-in cases deselected. All copied shell scripts pass `sh -n`; installer leaves device state untouched. Existing device launchers/covers were physically verified before copying; no fresh device installation needed for unchanged scripts.
+- Read-only VM audit: root 37% used (11/30 GB, 18 GB free), `/opt/summra` 3.6 GB. 26 top-level backup files total 2,146,037,760 bytes; live content databases 174 MB Plainly/160 MB Distill; Git 676 MB; static audio 332 MB. Plainly chapters are 138 MB and Distill image blobs 146 MB. Only 4/1 free SQLite pages: VACUUM will not meaningfully shrink them. Detailed audit and retention recommendations in `deploy/README.md`. No backups, media, data or history deleted.
+- Production deployment pending. Git commit/push requested; no secrets or unrelated changes included.
+
+
 ## 2026-10-27: Native fullscreen installed and physically verified
 
 - Installed Kindle library entries **Distill Fullscreen** (existing documents/distill.sh, prior disabled version preserved) and **Restore Distill Toolbar**. Normal appmgr launch opens the authenticated library, then changes only the existing browser window's PC:TS title to PC:N. It hides status/URL bars and expands1072×1232 at y216 to1072×1448 at y0. No browser/root-filesystem edits, alternate browser, remount, disabled sleep or autostart.

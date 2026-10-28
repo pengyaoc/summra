@@ -1,5 +1,35 @@
 # Summra - Technical Implementation Details
 
+## Shared Kindle pairing and launcher source (2026-10-27)
+
+`shared/auth/device_pairing.py` now owns the existing SQLite pairing request,
+CSRF and device-session model plus request identity middleware for both apps.
+App configuration supplies id/name, environment prefix, library/login endpoints,
+public exceptions and optional launch endpoint. Required mode keeps Distill
+private; optional mode preserves Plainly's anonymous content and existing
+login-required progress APIs. Only e-reader Kindle UAs can redeem device cookies.
+Google's trusted header identity is always required for approval/revocation;
+paired credentials cannot authorize another device. Cookie paths and names and
+SQLite stores remain app-isolated; Distill's existing `distill_pairing.db` and
+`distill_*` cookies are compatible, Plainly uses `plainly_pairing.db` beside its
+user DB and `plainly_*` cookies. No existing table/schema migration is required.
+
+Pairing HTML is shared at `shared/templates/shared/kindle/pairing.html` with
+app branding. Plainly `/login` has a real Flask redirect route rather than an
+Apache remapping to `/`; Kindle sign-in links go directly to `/pair`, while
+normal browsers retain Google OIDC. Apache explicitly challenges the phone-only
+`/pair/approve` and `/pair/devices` endpoints for both apps.
+
+`deploy/kindle/` is the authoritative version-controlled native launcher and
+cover source; runtime state remains in Kindle RAM and scripts remain under
+`/mnt/us/distill-fullscreen/native/`. The imported scripts retain the verified
+Home handoff, single-browser lock, title ownership checks and recovery behavior.
+SSH keys and experimental images stay outside Git. This is a browser-window
+launcher, not an alternate engine. Disk audit in `deploy/README.md` attributes
+most avoidable VM usage to retained deployment DB backups; live DBs have almost
+no free pages, so no schema/VACUUM or deletion is justified by this audit alone.
+
+
 ## Verified native fullscreen architecture (2026-10-27)
 
 The installed jailbroken-Kindle launcher uses normal appmgr browser startup and the existing native X11 window; PC:TS→PC:N hides the status/search chrome without a custom engine or browser-file changes. Record the exact original window title and restore only the matching owned fullscreen title. A separate power/sleep-event waiter restores it independently of the main loop, with a four-hour ceiling; app exit, process traps and the restore shortcut use the same restoration routine. State is in `/tmp/distill-native-fullscreen`, persistent scripts in `/mnt/us/distill-fullscreen/native/`, source backup on the Mac in `~/.local/share/distill-kindle/native-fullscreen/`. No autostart or sleep-prevention setting is installed.

@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 {% if mode == 'kindle' %}<meta http-equiv="refresh" content="10">{% endif %}
-<title>Distill — Kindle sign-in</title>
+<title>{{ pairing_app_name }} — Kindle sign-in</title>
 <style>body{font:22px Georgia,serif;color:#000;background:#fff;margin:24px auto;padding:0 20px;max-width:600px}h1{font-size:30px}button,input{font:inherit;padding:12px;margin:8px 0;border:2px solid #000;background:#fff;color:#000}a{color:#000}img{display:block;max-width:100%;height:auto;margin:16px auto}.code{font:32px monospace;letter-spacing:3px}small{font-size:17px}</style></head>
-<body><h1>Distill Kindle sign-in</h1>
+<body><h1>{{ pairing_app_name }} Kindle sign-in</h1>
 {% if error %}<p>{{ error }}</p><p><a href="{{ url_for('pairing.start') }}">Return to Kindle pairing</a></p>
 {% elif mode == 'kindle' %}
 <p>Scan this code with your phone, sign in with Google, and approve this Kindle.</p>
@@ -15,7 +15,7 @@
 {% elif mode == 'enter' %}<form method="get"><label>Code on your Kindle<br><input name="code" required autocomplete="off"></label><br><button>Continue</button></form>
 {% elif mode == 'approve' %}
 <p>Signed in as {{ email }}.</p><p>Does your Kindle show this code?</p><p class="code">{{ display_code }}</p>
-<p>Only approve a request you started on your own Kindle. This gives it access to your private Distill library for 30 days.</p>
+<p>Only approve a request you started on your own Kindle. This gives it access to your {{ pairing_app_name }} account and synced reading progress for 30 days.</p>
 <form method="post"><input type="hidden" name="code" value="{{ code }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Approve my Kindle</button></form>
 {% elif mode == 'approved' %}<p>Approved. Your Kindle will open your library shortly. You can also tap “Check approval” on the Kindle.</p><p><a href="{{ url_for('pairing.devices') }}">Manage paired Kindles</a></p>
 {% elif mode == 'devices' %}<p>Paired Kindles have access for up to 30 days. Revoking access takes effect on their next request.</p>

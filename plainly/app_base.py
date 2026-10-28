@@ -25,7 +25,7 @@ from shared.reader.platform import install_reader_platform
 from shared.web import install_shared_ui, install_web_basics
 from shared.auth.pchauth.config import AuthConfig
 from shared.auth.pchauth.config import load_config as load_pchauth_config
-from shared.auth.pchauth.flask_adapter import init_pchauth
+from shared.auth.device_pairing import install_pairing
 
 # Configure logging
 logging.basicConfig(
@@ -39,10 +39,8 @@ app = Flask(__name__,
             static_folder='frontend/static',
             template_folder='frontend/templates')
 
-# No SECRET_KEY / session cookie config needed: trusted_header mode reads
-# an already-verified identity from a header on every request, it doesn't
-# mint or read a cookie of its own. (self_oidc, if ever built, would need
-# this back — see pchauth's spec.)
+# Google identity comes from Apache's trusted header. Kindle pairing uses
+# separate opaque, database-backed cookies; Flask sessions need no SECRET_KEY.
 CORS(app, supports_credentials=True)
 
 # Initialize databases
@@ -68,14 +66,13 @@ if config.FEATURE_AUTH:
         pchauth_config = load_pchauth_config(os.environ, prefix='SUMMRA')
     else:
         pchauth_config = AuthConfig(mode='off')
-    init_pchauth(
-        app,
-        pchauth_config,
-        upsert_user=lambda identity: user_db.upsert_user_by_email(identity.email),
+    install_pairing(
+        app, pchauth_config, user_db, app_id='plainly', app_name='Plainly', env_prefix='SUMMRA',
+        library_endpoint='pages.index', login_endpoint='pages.login',
     )
 
 # Reader API, plus the progress/whoami globals and (under FEATURE_AUTH) their
-# blueprints. Runs after init_pchauth so the auth middleware is in place.
+# blueprints. Runs after install_pairing so the auth middleware is in place.
 install_reader_platform(app, PLAINLY_READER, lambda: common.db, user_db)
 
 app.register_blueprint(system.bp)

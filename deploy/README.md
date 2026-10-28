@@ -123,3 +123,59 @@ matches what the Apache/nginx fragment proxies to, and that the unit is actually
 **Out of memory:** check `journalctl --user -u summra` for OOM kills, then raise
 `~/.config/systemd/user/summra.service.d/override.conf`'s `MemoryMax` — see
 `systemd/override.example.conf` for the standalone-vs-cohosted guidance.
+
+
+## Kindle launchers and phone-assisted login
+
+See [kindle/README.md](kindle/README.md) for the version-controlled Home shortcut
+scripts, monochrome covers, installation, recovery and sign-in instructions.
+These files deploy to the Kindle, not to the web server's runtime.
+
+Both Flask apps install `shared.auth.device_pairing.install_pairing` before
+reader dispatch. Kindle-only opaque device sessions supplement Apache's Google
+identity. Plainly retains optional authentication/public reading; Distill stays
+private. Phone approval and device management must always be protected by OIDC
+in both Apache fragments. Plainly's `/login` now reaches its Flask route via the
+flat proxy rather than being remapped to `/` by a Location ProxyPass.
+
+Pairing storage defaults beside each user database: `distill_pairing.db` and
+`plainly_pairing.db`. Overrides: `DISTILL_PAIRING_DB` / `SUMMRA_PAIRING_DB` and
+`DISTILL_PAIRING_ORIGIN` / `SUMMRA_PAIRING_ORIGIN` (default
+`https://pengyaochen.com`, origin only; proxy supplies the app prefix). Secure,
+HttpOnly, SameSite=Lax cookies have app-specific names and paths. Existing
+Distill cookies, database and session records remain compatible. There is no
+schema migration or sharing of login tokens between apps. QR PNG generation
+requires `qrcode` and Pillow in the common production virtualenv.
+
+## Disk audit: wordpress-2-vm, 2026-10-27
+
+Read-only `df`, `du`, file-size and SQLite `dbstat` inspection found:
+
+| Storage | Observed usage | Explanation |
+|---|---:|---|
+| Entire root filesystem | 11 GB of 30 GB, 37%; 18 GB available | No immediate capacity pressure |
+| `/opt/summra` | 3.6 GB | Shared checkout, data and runtime for both apps |
+| `data/` | 2.4 GB | Mostly repeated deployment backups |
+| 26 top-level backup files | 2,146,037,760 bytes (2.00 GiB) | `.pre-*`, `.bak-*`, plus sidecars; additional small backups under `data/backups/` |
+| Live Plainly content DB | 174,051,328 bytes | 138 MB chapter text, 20 MB reader units, 13 MB reader index |
+| Live Distill content DB | 159,563,776 bytes | 146 MB image blobs, 9 MB chapters, 4 MB thumbnails |
+| `.git/` | 676 MB | 633 MiB packed history plus 41 MiB loose objects |
+| Plainly static assets | 408 MB | 332 MB audio, 47 MB illustrations, 25 MB covers |
+| `docs/` | 84 MB | 82 MB redesign assets |
+| `venv/` | 96 MB | Small relative to data/history |
+| Service user's pip cache | 40 MB | Download cache outside the checkout |
+
+The live content DBs have only 4 and 1 free SQLite pages respectively: VACUUM
+would reclaim essentially nothing. Disk use is retained data, media and Git
+history, not an abnormally large Python runtime or active browser process.
+Do not delete live DBs or audio: they serve the apps. No cleanup was performed.
+
+Recommended follow-up: inventory and verify rollback snapshots, copy historical
+backups to a compressed off-VM archive, then agree a bounded retention policy
+(e.g. last known-good plus recent daily backups). Most immediate reclaimable
+space is the 2 GiB of accumulated deployment snapshots. A shallow production
+checkout could reduce Git history, after verifying deployment/rollback needs;
+normal Git maintenance preserves history and cannot promise equivalent savings.
+Avoid taking another full pair of content-DB backups for code-only deployments
+that do not migrate those databases. Auth pairing changes need only a small
+consistent backup of the pairing DB if one is desired.

@@ -6,7 +6,7 @@ Moved out of app_base.py as part of the blueprint split (2026-09 refactor).
 import re
 import time
 
-from flask import Blueprint, g, redirect, render_template, request
+from flask import Blueprint, g, jsonify, redirect, render_template, request, url_for
 
 from shared.progress import routes as progress_routes
 from plainly.routes import common
@@ -556,3 +556,11 @@ def all_books():
     """The full listing was folded into Discover (same books, plus filters);
     keep old links and search results working."""
     return redirect(f'{request.script_root}/discover', code=301)
+
+
+@bp.route('/login')
+def login():
+    """Apache challenges normal browsers; Kindle sign-in uses shared pairing."""
+    if g.get('user_id') is None:
+        return jsonify(error='Authentication required'), 401
+    return redirect(url_for('pages.index'))

@@ -6,9 +6,13 @@ import re
 import pytest
 from PIL import Image
 
-from distill.device_pairing import DEVICE_COOKIE, PAIR_COOKIE, PAIR_TTL, SESSION_TTL, digest
+from shared.auth.device_pairing import PAIR_TTL, SESSION_TTL, digest
+
 from shared.auth.pchauth.config import AuthConfig
 from .conftest import ALLOWED, HEADERS
+
+DEVICE_COOKIE = 'distill_device'
+PAIR_COOKIE = 'distill_pair'
 
 KINDLE = 'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/531.2+ Kindle/3.0+'
 KH = {'User-Agent': KINDLE, 'Accept': 'text/html', 'X-Forwarded-Prefix': '/distill'}
@@ -161,7 +165,7 @@ def test_creation_rate_limit(client):
 
 def test_allowlist_removal_invalidates_paired_reader(client, monkeypatch):
     pair(client)
-    monkeypatch.setattr('distill.device_pairing.is_allowed', lambda email, config: False)
+    monkeypatch.setattr('shared.auth.device_pairing.is_allowed', lambda email, config: False)
     assert get(client, '/').status_code == 302
 
 

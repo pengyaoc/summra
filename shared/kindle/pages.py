@@ -67,13 +67,15 @@ def account_context(user_db, user_id) -> dict:
         user_id = None
     user = user_db.get_user_by_id(user_id) if user_id is not None else None
     login = f'{request.script_root}/login'
+    kindle_pairing = (is_kindle_user_agent(request.user_agent.string) and
+                      'pairing.start' in current_app.view_functions)
     return {
         'auth_enabled': user_db is not None,
         'account_email': user['email'] if user else None,
         'signed_in': user_id is not None,
         # Same round trip as the web reader's signinUrl(): logout first, so a
         # stale wrong-account session can't stick.
-        'signin_url': f"{login}?logout={quote(login, safe='')}",
+        'signin_url': url('/pair') if kindle_pairing else f"{login}?logout={quote(login, safe='')}",
     }
 
 

@@ -90,3 +90,70 @@ def test_authenticated_identity_response_is_never_http_cached(monkeypatch):
     assert response.status_code == 200
     assert response.cache_control.no_store
     assert response.cache_control.private
+
+
+KINDLE_UA = 'Mozilla/5.0 AppleWebKit/531.2+ Kindle/3.0+'
+
+
+@pytest.fixture
+def pairing_client(monkeypatch, tmp_path):
+    monkeypatch.setenv('SUMMRA_PAIRING_DB', str(tmp_path / 'plainly_pairing.db'))
+    return _reload_app_base(monkeypatch, feature_auth=True, auth_mode='optional',
+                            allowed_emails='me@example.com')
+
+
+@pytest.mark.parametrize('prefix', ['', '/plainly', '/apps/plainly'])
+def test_plainly_kindles_pair_with_phone_and_revoke(pairing_client, prefix):
+    import re
+    client = pairing_client
+    kh = {'User-Agent': KINDLE_UA, 'X-Forwarded-Prefix': prefix}
+    ph = {'User-Agent': 'iPhone', 'X-Forwarded-Prefix': prefix,
+          'X-Remote-Email': 'me@example.com'}
+    def get(browser, path, headers=kh):
+        return browser.get(prefix + path, headers=headers, base_url='https://localhost')
+    def csrf(response):
+        return re.search(rb'name="csrf" value="([^"]+)"', response.data)[1].decode()
+    # Public reading stays public; only choosing sign-in starts pairing.
+    assert get(client, '/').status_code == 200
+    assert get(client, '/login').location == prefix + '/pair'
+    response = get(client, '/pair')
+    assert response.status_code == 200 and b'Plainly Kindle sign-in' in response.data
+    assert 'no-store' in response.headers['Cache-Control']
+    code = re.search(rb'class="code">([A-Z2-9-]+)', response.data)[1].decode().replace('-', '')
+    cookie = client.get_cookie('plainly_pair', path=prefix + '/')
+    assert cookie.secure and cookie.http_only and cookie.same_site == 'Lax'
+    assert get(client, '/pair/qr.png').mimetype == 'image/png'
+    phone = client.application.test_client()
+    response = get(phone, '/pair/approve?code=' + code, ph)
+    token = csrf(response)
+    def approve(headers):
+        return phone.post(prefix + '/pair/approve', data={'code': code, 'csrf': token},
+                          headers=headers, base_url='https://localhost')
+    assert approve({**ph, 'Origin': 'https://evil.example'}).status_code == 403
+    assert approve(ph).status_code == 200
+    assert approve(ph).status_code == 403  # one-time approval/CSRF
+    assert get(client, '/pair').location == prefix + '/'
+    assert client.get_cookie('plainly_device', path=prefix + '/')
+    assert get(client, '/api/auth/check').json['authenticated'] is True
+    # Paired readers cannot approve other readers/manage sessions, nor can a
+    # copied Distill cookie or a desktop UA authenticate through this path.
+    assert get(client, '/pair/devices').status_code == 401
+    assert get(client, '/api/auth/check', {**kh, 'User-Agent': 'Chrome'}).json['authenticated'] is False
+    other = client.application.test_client()
+    other.set_cookie('distill_device', client.get_cookie('plainly_device', path=prefix + '/').value,
+                     path=prefix + '/')
+    assert get(other, '/api/auth/check').json['authenticated'] is False
+    response = get(phone, '/pair/devices', ph)
+    device = re.search(rb'name="device" value="([^"]+)"', response.data)[1].decode()
+    assert phone.post(prefix + '/pair/devices', data={'device': device, 'csrf': csrf(response)},
+                      headers=ph, base_url='https://localhost').status_code == 302
+    assert get(client, '/api/auth/check').json['authenticated'] is False
+    assert get(client, '/').status_code == 200
+
+
+@pytest.mark.parametrize('ua', ['iPhone', 'Chrome/149', 'Kindle Fire', 'Kindle/3.0 Silk/3'])
+def test_plainly_pairing_is_kindle_only(pairing_client, ua):
+    response = pairing_client.get('/pair', headers={'User-Agent': ua})
+    assert response.location == '/login'
+    assert pairing_client.get('/pair/qr.png', headers={'User-Agent': ua}).status_code == 404
+    assert pairing_client.get('/login', headers={'User-Agent': ua}).status_code == 401

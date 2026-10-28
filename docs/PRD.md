@@ -1,5 +1,28 @@
 # Plainly - Product Requirements Document
 
+## Plainly Kindle phone sign-in and maintainable shortcuts (2026-10-27)
+
+Plainly now offers the same Kindle-only phone-assisted Google login as Distill:
+choose Sign in, scan the QR code, compare the displayed code and approve your
+Kindle on your phone. The Kindle checks every ten seconds without modern
+JavaScript. Sessions last up to 30 days and can be revoked from the phone's
+paired-device page. Plainly public reading remains available without login;
+signing in enables the existing account/progress sync. Distill stays private.
+The apps pair independently and label their approval screens by app name.
+Desktop/phone/Fire browser login remains the ordinary Google flow.
+
+The working Distill Fullscreen, Plainly Fullscreen and shared Restore Distill
+Toolbar shortcuts, matching book covers and installation/recovery instructions
+now live in `deploy/kindle/`. They launch the existing stock browser and preserve
+normal sleep. Runtime behavior is unchanged by importing their sources into Git.
+The old Mac folder is a local copy rather than the authoritative source. Private
+SSH material and retired Chromium trial assets are excluded.
+
+VM storage investigation is documented with measured sizes and recommendations
+in `deploy/README.md`. Retained rollback DB snapshots account for about 2 GiB;
+no user data, media, backups or Git history is removed as part of this work.
+
+
 ## Verified Distill Fullscreen shortcut (2026-10-27)
 
 On the tested jailbroken PW3, open **Distill Fullscreen** from the Kindle library for an app-style view of the existing signed-in Distill site. Both URL and status bars are hidden and the reader uses the reclaimed216px. Existing font, library and reading progress remain available. The actual Home shortcut, library-to-book navigation, font-menu interaction and all four drag directions have been physically checked. Final setting remains size8/10+黑体.

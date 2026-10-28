@@ -213,7 +213,7 @@ def unit_id(client, chapter_number, ordinal):
 def test_signed_out_library_and_book_page_link_to_sign_in(client):
     for path in ('/', '/books/moby-dick'):
         html = body(kget(client, path))
-        assert 'href="/login?logout=%2Flogin"' in html, path
+        assert 'href="/pair"' in html, path
         assert 'Sign in' in html
 
 
