@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## 2026-10-27: Use native fullscreen browser space
+
+A reversible X11 window-title request (`PC:N` versus normal `PC:TS`) hides the PW3's native status/URL bars without replacing the authenticated browser or editing its files. Physical screenshot confirms1072×1448 at y0 instead of1072×1232 at y216. The native reader now adds any reported viewport-height increase above1268px to its measured1260px body/1279px scroll shell; reversing fullscreen restores normal height. Only the existing matched legacy PW3 profile uses this correction. Added enter/exit height regression coverage. No data/auth/progress schema changes. Launcher and full-height physical verification pending.
+
 ## Verified physical Kindle reading behavior (2026-10-27)
 
 The tested PW3 portrait stock browser now keeps the reading page inside the visible area after load/reload, opening settings, increasing/decreasing font size, changing Chinese font and closing settings. Physical up/down/left/right drags produce no blank-space pan or reading-region movement in these cases. Size8/10 and黑体 were restored with the menu closed after verification. Keep this measured native behavior limited to the matching legacy device/engine; other devices retain the general reader. Its slight native fit scaling preserves saved size/font choices. The phone-assisted login, library, content and progress formats are unchanged. Earlier pending/unsuccessful trial entries below are historical and superseded by this verification.

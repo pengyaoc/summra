@@ -94,6 +94,13 @@
   }
 
   function layout() {
+    // PW3 fullscreen removes 216px of native chrome. Its reported viewport
+    // grows by the same amount; retain the measured normal-mode correction.
+    if (nativePW3 && shell) {
+      var extraHeight = Math.max(0, doc.clientHeight - 1268);
+      body.style.height = (1260 + extraHeight) + 'px';
+      shell.style.height = (1279 + extraHeight) + 'px';
+    }
     viewport.style.top = head.offsetHeight + 'px';
     viewport.style.bottom = foot.offsetHeight + 'px';
     viewport.style.height = '';

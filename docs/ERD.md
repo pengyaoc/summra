@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## 2026-10-27: Use native fullscreen browser space
+
+A reversible X11 window-title request (`PC:N` versus normal `PC:TS`) hides the PW3's native status/URL bars without replacing the authenticated browser or editing its files. Physical screenshot confirms1072×1448 at y0 instead of1072×1232 at y216. The native reader now adds any reported viewport-height increase above1268px to its measured1260px body/1279px scroll shell; reversing fullscreen restores normal height. Only the existing matched legacy PW3 profile uses this correction. Added enter/exit height regression coverage. No data/auth/progress schema changes. Launcher and full-height physical verification pending.
+
 ## Verified native PW3 implementation (2026-10-27)
 
 This final implementation supersedes the trial architecture entries below. Only no-touch WebKit531–534 on a1072×1448 screen with portrait document proportions receives `native-pw3`, selected once during startup. Finish ordinary pagination first, then move the existing header/viewport/footer/menu nodes into a dynamically created shell with explicit inline native geometry:104% relative body,1260px body height,1279px scrolling shell. Repaginate after200ms, preserving explicit startup anchors. The native browser requires this initialization/style sequence; class-only geometry and extra reflows did not reliably constrain fresh-load panning. Font relayout does not reevaluate/remove the profile. Other browsers retain the original unwrapped layout; no-JS fallback is untouched. No schema/auth/content changes. Final deployed62e3f39 physically passes all four drag directions after load/reload, size changes, Song→Hei and menu close. Temporary geometry probes removed; normal device sleep restored.

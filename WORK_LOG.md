@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-27: Use native fullscreen browser space
+
+A reversible X11 window-title request (`PC:N` versus normal `PC:TS`) hides the PW3's native status/URL bars without replacing the authenticated browser or editing its files. Physical screenshot confirms1072×1448 at y0 instead of1072×1232 at y216. The native reader now adds any reported viewport-height increase above1268px to its measured1260px body/1279px scroll shell; reversing fullscreen restores normal height. Only the existing matched legacy PW3 profile uses this correction. Added enter/exit height regression coverage. No data/auth/progress schema changes. Launcher and full-height physical verification pending.
+
 ## 2026-10-27: Final physical Kindle verification complete
 
 - Deployed reader implementation62e3f39 passes real evdev up/down/left/right drags after fresh load, repeat refresh, open font banners with size8→9, size9→8 with Song→Hei, and closed banners. Each phase's reading-region framebuffer is pixel-identical before/after every drag. Restored size8/10+Hei, menu closed, original chapter/page and normal sleep behavior (`preventScreenSaver=0`). All synthetic touch contacts were released. Removed unused native diagnostic file; no website geometry beacons remain.

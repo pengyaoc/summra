@@ -203,6 +203,12 @@ await nativePage.evaluate(() => {
 });
 await nativePage.waitForTimeout(300);
 check(await nativePage.locator("html.native-pw3").count() === 1, "native auto-fit width retains PW3 profile after relayout");
+await nativePage.setViewportSize({ width: 1072, height: 1484 });
+await nativePage.waitForTimeout(300);
+check(await nativePage.locator("body").evaluate((el) => el.clientHeight) === 1476, "native fullscreen uses reclaimed chrome height");
+await nativePage.setViewportSize({ width: 1072, height: 1268 });
+await nativePage.waitForTimeout(300);
+check(await nativePage.locator("body").evaluate((el) => el.clientHeight) === 1260, "native fullscreen exit restores normal height");
 await nativeContext.close();
 
 // Desktop is unaffected.
