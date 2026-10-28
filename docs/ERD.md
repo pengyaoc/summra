@@ -1,5 +1,11 @@
 # Summra - Technical Implementation Details
 
+## Verified native fullscreen architecture (2026-10-27)
+
+The installed jailbroken-Kindle launcher uses normal appmgr browser startup and the existing native X11 window; PC:TS→PC:N hides the status/search chrome without a custom engine or browser-file changes. Record the exact original window title and restore only the matching owned fullscreen title. A separate power/sleep-event waiter restores it independently of the main loop, with a four-hour ceiling; app exit, process traps and the restore shortcut use the same restoration routine. State is in `/tmp/distill-native-fullscreen`, persistent scripts in `/mnt/us/distill-fullscreen/native/`, source backup on the Mac in `~/.local/share/distill-kindle/native-fullscreen/`. No autostart or sleep-prevention setting is installed.
+
+The verified PW3 reports outerHeight1232 normally and1448 fullscreen, but retains1268 for innerHeight/clientHeight. Its existing native-only layout adds216px to body/shell in fullscreen and checks outer-height changes at1Hz, with no reflow when unchanged. Returning native chrome retains an otherwise uncontrollable pan offset, so replace the fragment with the current paragraph and reload the reader. Current font/login/paragraph persist. Other device profiles retain the existing layout. Manual/timeout restoration and physical drag containment in fullscreen/menu/normal-exit all pass; power-event subscription is installed but no physical power cycle was performed in this run. No auth, data or schema change. Earlier viewport-height assumptions below are superseded.
+
 ## 2026-10-27: Clear native pan on fullscreen exit
 
 Fullscreen/full-height menu drags and installed timeout restoration physically pass. Returning native chrome retains a pan offset outside DOM scroll coordinates even after remeasurement. On the matched PW3's fullscreen→normal outer-height transition, replace the current fragment with the current paragraph and reload the reader to reset native pan. Fullscreen entry still repaginates locally. The current URL/history entry, font, login and paragraph are retained; exiting fullscreen now requires a page reload. No schema/auth changes. Physical exit verification pending.

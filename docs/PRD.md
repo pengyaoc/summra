@@ -1,5 +1,11 @@
 # Plainly - Product Requirements Document
 
+## Verified Distill Fullscreen shortcut (2026-10-27)
+
+On the tested jailbroken PW3, open **Distill Fullscreen** from the Kindle library for an app-style view of the existing signed-in Distill site. Both URL and status bars are hidden and the reader uses the reclaimed216px. Existing font, library and reading progress remain available. The actual Home shortcut, library-to-book navigation, font-menu interaction and all four drag directions have been physically checked. Final setting remains size8/10+黑体.
+
+Power/sleep, leaving the browser, **Restore Distill Toolbar**, or the four-hour ceiling end fullscreen. Reopen the fullscreen shortcut for another session. Returning the bars reloads the reader at the same paragraph to clear this old browser's retained pan. Normal sleep remains enabled. Manual/timeout recovery and subsequent normal-mode drag containment were physically verified; the power listener is configured but was not exercised through a physical power press in this run. This is a native launcher for the existing browser, with no additional Google sign-in, alternate browser or iOS-style PWA installation requirement.
+
 ## 2026-10-27: Clear native pan on fullscreen exit
 
 Fullscreen/full-height menu drags and installed timeout restoration physically pass. Returning native chrome retains a pan offset outside DOM scroll coordinates even after remeasurement. On the matched PW3's fullscreen→normal outer-height transition, replace the current fragment with the current paragraph and reload the reader to reset native pan. Fullscreen entry still repaginates locally. The current URL/history entry, font, login and paragraph are retained; exiting fullscreen now requires a page reload. No schema/auth changes. Physical exit verification pending.
