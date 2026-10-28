@@ -8,7 +8,7 @@ from PIL import Image
 
 from distill.device_pairing import DEVICE_COOKIE, PAIR_COOKIE, PAIR_TTL, SESSION_TTL, digest
 from shared.auth.pchauth.config import AuthConfig
-from tests.distill.conftest import ALLOWED, HEADERS
+from .conftest import ALLOWED, HEADERS
 
 KINDLE = 'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/531.2+ Kindle/3.0+'
 KH = {'User-Agent': KINDLE, 'Accept': 'text/html', 'X-Forwarded-Prefix': '/distill'}
