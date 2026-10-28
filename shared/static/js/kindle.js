@@ -373,10 +373,22 @@
 
   // Build the native scroll surface after the first pagination/reflow. The
   // PW3 otherwise retains a root pan range from initial document layout.
-  var initialParagraph = currentParagraph();
   var shellParts = [head, viewport, foot, menu];
   for (var s = 0; s < shellParts.length; s++) shell.appendChild(shellParts[s]);
   body.appendChild(shell);
   layout();
-  show(pageOfParagraph(initialParagraph));
+  if (hash === '#fwd') show(0);
+  else if (hash === '#end') show(pages - 1);
+  else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
+  else show(pageOfParagraph(num('start')));
+
+  // Native scroll ranges settle after the page load, later than DOM layout.
+  window.addEventListener('load', function () {
+    if (!hasClass(doc, 'native-pw3')) return;
+    setTimeout(function () {
+      var at = currentParagraph();
+      layout();
+      show(hash === '#end' ? pages - 1 : pageOfParagraph(at));
+    }, 1000);
+  }, false);
 })();

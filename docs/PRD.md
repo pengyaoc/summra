@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## 2026-10-27: Reconcile native scroll range after load
+
+Startup geometry confirms the PW3 profile is selected, but its native scroll range settles later than synchronous DOM layout. Remeasure only this profile one second after window load. Preserve explicit end-of-chapter startup across wrapping/remeasurement. Temporary startup metrics excluded from release. Physical reload verification pending.
+
 ## 2026-10-27: Initialize native scroll surface after pagination
 
 Font adjustment/closed-menu drags passed, but a fresh native load retained its initial root pan range. Defer wrapping existing reader nodes until after the first pagination/reflow, then remeasure at the current paragraph, matching the successful physical trial initialization order. No content/auth/storage changes. Fresh-load verification pending.
