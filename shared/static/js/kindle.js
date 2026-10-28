@@ -105,7 +105,7 @@
     // Use the on-device-tested nested viewport only for this legacy profile;
     // desktop/modern browsers and other screen sizes keep the normal shell.
     var pw3 = !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
-      window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth === 1072;
+      window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth < doc.clientHeight;
     if (pw3) addClass(doc, 'native-pw3');
     else removeClass(doc, 'native-pw3');
     viewport.style.top = head.offsetHeight + 'px';

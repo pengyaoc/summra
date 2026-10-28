@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-27: Preserve native profile after font relayout
+
+The physical PW3 passed settled-load/menu drags but changing size exposed an unstable exact document-width check: native auto-fit can change CSS document width. Keep the legacy no-touch 1072×1448 device match, using portrait document proportions instead of exact width during relayout. This retains the workaround across font changes. No data or authentication changes. Final on-device adjustment/close verification pending.
+
 ## 2026-10-27: Native PW3 blank-pan workaround (physical verification)
 
 - Actual-device tests showed that24376cd's DOM touch prevention did not stop native panning. The real page reports1072×1268, while only1072×1231 is visible below the toolbar, and exposes no DOM touch events. Root DOM offsets remain zero while the native view pans. Related first-party empirical research on the same model/firmware: https://thorgalle.me/notes/documentation-for-the-kindle-browser and its linked scrollbar tests. Used the behavior as a reference, without copying application code.

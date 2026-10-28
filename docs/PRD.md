@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## 2026-10-27: Preserve native profile after font relayout
+
+The physical PW3 passed settled-load/menu drags but changing size exposed an unstable exact document-width check: native auto-fit can change CSS document width. Keep the legacy no-touch 1072×1448 device match, using portrait document proportions instead of exact width during relayout. This retains the workaround across font changes. No data or authentication changes. Final on-device adjustment/close verification pending.
+
 ## Physical PW3 reading fit (2026-10-27)
 
 The older PW3 stock browser requires its own nested reading surface to prevent dragging into blank space; CSS overflow and touch handlers alone are insufficient. The profile retains saved font and size choices, with slight native fit scaling, and keeps header/footer and font banners inside the visible screen. Apply it only to the verified portrait device/engine combination. Other Kindles and normal browsers keep the general reader layout. Real-device tests must cover fresh load, font-menu open, adjustments, and closing/reopening; initial-load/open-menu drags are physically verified, with remaining phases still pending at this checkpoint.

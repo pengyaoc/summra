@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## 2026-10-27: Preserve native profile after font relayout
+
+The physical PW3 passed settled-load/menu drags but changing size exposed an unstable exact document-width check: native auto-fit can change CSS document width. Keep the legacy no-touch 1072×1448 device match, using portrait document proportions instead of exact width during relayout. This retains the workaround across font changes. No data or authentication changes. Final on-device adjustment/close verification pending.
+
 ## Native PW3 viewport profile (2026-10-27)
 
 `kindle.js` places the existing reading nodes inside a dynamic `reader-shell`. The general browser path keeps its100% clipped shell. A narrow runtime profile detects no-touch legacy WebKit, a1072×1448 screen and1072px document width, then enables `native-pw3`: a104%-wide,1260px relative body contains a1279px native scroll shell. The inner scrollbar gutter is clipped and the native view stops panning into blank space. Exact dimensions were derived/tested on PW3 firmware5.16.2.1.1; this is a portrait-only profile, not a generic screen-size formula. DOM touch listeners cannot constrain this browser because it exposes no touch events; they remain useful on modern engines. Root scroll-reset logic does not control the PW3's separate native pan. Dynamic wrapping leaves the no-JavaScript fallback unchanged. No persistence, content or auth changes. Temporary geometry beacons are diagnostic only and excluded from the clean release.
