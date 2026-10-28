@@ -2,6 +2,11 @@
 
 ## Shared Kindle pairing and launcher source (2026-10-27)
 
+Deployment verified: `eb89c5f` is live for both apps. Apache syntax, service health,
+Kindle QR/bootstrap, normal Google login, phone-only route challenges and
+public/private library boundaries pass live HTTPS checks. Complete approval and
+revocation flows pass integration tests; on-device phone approval remains a user check.
+
 `shared/auth/device_pairing.py` now owns the existing SQLite pairing request,
 CSRF and device-session model plus request identity middleware for both apps.
 App configuration supplies id/name, environment prefix, library/login endpoints,

@@ -2,6 +2,11 @@
 
 ## Plainly Kindle phone sign-in and maintainable shortcuts (2026-10-27)
 
+Deployment verified: `eb89c5f` is live for both apps. Apache syntax, service health,
+Kindle QR/bootstrap, normal Google login, phone-only route challenges and
+public/private library boundaries pass live HTTPS checks. Complete approval and
+revocation flows pass integration tests; on-device phone approval remains a user check.
+
 Plainly now offers the same Kindle-only phone-assisted Google login as Distill:
 choose Sign in, scan the QR code, compare the displayed code and approve your
 Kindle on your phone. The Kindle checks every ten seconds without modern
