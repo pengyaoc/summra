@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-27: Match measured native surface initialization
+
+Use the physically successful trial sequence directly: finish normal pagination, wrap only the matched PW3 reader nodes, explicitly set native shell/body styles, then repaginate after 200ms. The profile is selected once, so font relayout cannot remove it. Other browsers retain their original unwrapped layout. Earlier class-based/extra-reflow attempts did not pass fresh-load drags and are superseded. No content/auth/storage changes. Final physical verification pending.
+
 ## 2026-10-27: Reconcile native scroll range after load
 
 Startup geometry confirms the PW3 profile is selected, but its native scroll range settles later than synchronous DOM layout. Remeasure only this profile one second after window load. Preserve explicit end-of-chapter startup across wrapping/remeasurement. Temporary startup metrics excluded from release. Physical reload verification pending.

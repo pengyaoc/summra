@@ -51,13 +51,10 @@
   var starts = [];    // page each paragraph starts on
   var ends = [];      // page each paragraph ends on
 
-  // Keep native panning inside an isolated container. Moving the existing
-  // nodes preserves their listeners and leaves the no-JavaScript page alone.
-  var shell = document.createElement('div');
-  shell.id = 'reader-shell';
   addClass(doc, 'js');
 
-  // Where DOM touch events are available, cancel drags (not taps) across the reader,
+  // Older Kindle WebKit can pan into blank document space even when CSS
+  // overflow is hidden. Cancel drags (not taps) across the whole reader,
   // including the gutters and the settings banners. Old engines interpret
   // the options object as capture=true; newer ones also honor passive=false.
   function preventDocumentScroll(e) {
@@ -97,14 +94,6 @@
   }
 
   function layout() {
-    // The native PW3 browser reports a 1268px viewport, but only 1231px is
-    // visible. It also exposes no touch events or writable root pan offset.
-    // Use the on-device-tested nested viewport only for this legacy profile;
-    // desktop/modern browsers and other screen sizes keep the normal shell.
-    var pw3 = shell.parentNode && !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
-      window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth < doc.clientHeight;
-    if (pw3) addClass(doc, 'native-pw3');
-    else removeClass(doc, 'native-pw3');
     viewport.style.top = head.offsetHeight + 'px';
     viewport.style.bottom = foot.offsetHeight + 'px';
     viewport.style.height = '';
@@ -371,24 +360,26 @@
   else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
   else show(pageOfParagraph(num('start')));
 
-  // Build the native scroll surface after the first pagination/reflow. The
-  // PW3 otherwise retains a root pan range from initial document layout.
-  var shellParts = [head, viewport, foot, menu];
-  for (var s = 0; s < shellParts.length; s++) shell.appendChild(shellParts[s]);
-  body.appendChild(shell);
-  layout();
-  if (hash === '#fwd') show(0);
-  else if (hash === '#end') show(pages - 1);
-  else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
-  else show(pageOfParagraph(num('start')));
-
-  // Native scroll ranges settle after the page load, later than DOM layout.
-  window.addEventListener('load', function () {
-    if (!hasClass(doc, 'native-pw3')) return;
+  // PW3 native panning ignores DOM touch/scroll controls. Install its scroll
+  // surface after initial pagination, with explicit styles as verified on-device.
+  var nativePW3 = !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
+    window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth < doc.clientHeight;
+  if (nativePW3) {
+    var shell = document.createElement('div');
+    shell.id = 'reader-shell';
+    shell.style.cssText = 'position:relative;width:100%;height:1279px;overflow:scroll';
+    var parts = [head, viewport, foot, menu];
+    for (var n = 0; n < parts.length; n++) shell.appendChild(parts[n]);
+    body.appendChild(shell);
+    body.style.cssText = 'position:relative;top:0;left:0;right:auto;bottom:auto;width:104%;height:1260px;overflow:hidden';
+    addClass(doc, 'native-pw3');
     setTimeout(function () {
-      var at = currentParagraph();
       layout();
-      show(hash === '#end' ? pages - 1 : pageOfParagraph(at));
-    }, 1000);
-  }, false);
+      if (hash === '#fwd') show(0);
+      else if (hash === '#end') show(pages - 1);
+      else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
+      else show(pageOfParagraph(num('start')));
+    }, 200);
+  }
+
 })();
