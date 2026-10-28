@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-27: Clear native pan on fullscreen exit
+
+Fullscreen/full-height menu drags and installed timeout restoration physically pass. Returning native chrome retains a pan offset outside DOM scroll coordinates even after remeasurement. On the matched PW3's fullscreen→normal outer-height transition, replace the current fragment with the current paragraph and reload the reader to reset native pan. Fullscreen entry still repaginates locally. The current URL/history entry, font, login and paragraph are retained; exiting fullscreen now requires a page reload. No schema/auth changes. Physical exit verification pending.
+
 ## 2026-10-27: Detect measured fullscreen outer height
 
 Physical geometry proves that fullscreen changes outerHeight1232→1448 while innerHeight/clientHeight stay1268. Use the matched PW3's outerHeight equal to screen.height to add216px to the native body/shell. A once-per-second native-only check repaginates only when outerHeight changes, covering builds that omit DOM resize. Regression emulates the real fixed-inner-height behavior. Restore shortcut now validates the exact standard browser title as well as titles with extra fields; manual restoration returns1232px and removes session state. Normal Home scriptlet launch successfully opens the authenticated fullscreen library. Direct browser LIPC `go` caused a Mesquite crash and is excluded; recovery dismissed its dialog and reopened via normal launch. Temporary geometry diagnostic will be removed during clean deployment. No native browser/root-filesystem edits or auth/data changes.

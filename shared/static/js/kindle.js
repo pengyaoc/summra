@@ -392,8 +392,16 @@
     var nativeOuterHeight = window.outerHeight;
     setInterval(function () {
       if (window.outerHeight === nativeOuterHeight) return;
+      var leavingFullscreen = nativeOuterHeight === screen.height && window.outerHeight !== screen.height;
       nativeOuterHeight = window.outerHeight;
       var at = currentParagraph();
+      if (leavingFullscreen) {
+        // Reintroducing native chrome retains a pan offset outside the DOM.
+        // A fresh page clears it; retain the paragraph without a history entry.
+        window.location.replace('#p=' + at);
+        window.location.reload();
+        return;
+      }
       layout();
       show(pageOfParagraph(at));
     }, 1000);
