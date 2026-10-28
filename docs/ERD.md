@@ -1,5 +1,9 @@
 # Summra - Technical Implementation Details
 
+## Verified native PW3 implementation (2026-10-27)
+
+This final implementation supersedes the trial architecture entries below. Only no-touch WebKit531–534 on a1072×1448 screen with portrait document proportions receives `native-pw3`, selected once during startup. Finish ordinary pagination first, then move the existing header/viewport/footer/menu nodes into a dynamically created shell with explicit inline native geometry:104% relative body,1260px body height,1279px scrolling shell. Repaginate after200ms, preserving explicit startup anchors. The native browser requires this initialization/style sequence; class-only geometry and extra reflows did not reliably constrain fresh-load panning. Font relayout does not reevaluate/remove the profile. Other browsers retain the original unwrapped layout; no-JS fallback is untouched. No schema/auth/content changes. Final deployed62e3f39 physically passes all four drag directions after load/reload, size changes, Song→Hei and menu close. Temporary geometry probes removed; normal device sleep restored.
+
 ## 2026-10-27: Match measured native surface initialization
 
 Use the physically successful trial sequence directly: finish normal pagination, wrap only the matched PW3 reader nodes, explicitly set native shell/body styles, then repaginate after 200ms. The profile is selected once, so font relayout cannot remove it. Other browsers retain their original unwrapped layout. Earlier class-based/extra-reflow attempts did not pass fresh-load drags and are superseded. No content/auth/storage changes. Final physical verification pending.

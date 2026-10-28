@@ -1,5 +1,9 @@
 # Plainly - Product Requirements Document
 
+## Verified physical Kindle reading behavior (2026-10-27)
+
+The tested PW3 portrait stock browser now keeps the reading page inside the visible area after load/reload, opening settings, increasing/decreasing font size, changing Chinese font and closing settings. Physical up/down/left/right drags produce no blank-space pan or reading-region movement in these cases. Size8/10 and黑体 were restored with the menu closed after verification. Keep this measured native behavior limited to the matching legacy device/engine; other devices retain the general reader. Its slight native fit scaling preserves saved size/font choices. The phone-assisted login, library, content and progress formats are unchanged. Earlier pending/unsuccessful trial entries below are historical and superseded by this verification.
+
 ## 2026-10-27: Match measured native surface initialization
 
 Use the physically successful trial sequence directly: finish normal pagination, wrap only the matched PW3 reader nodes, explicitly set native shell/body styles, then repaginate after 200ms. The profile is selected once, so font relayout cannot remove it. Other browsers retain their original unwrapped layout. Earlier class-based/extra-reflow attempts did not pass fresh-load drags and are superseded. No content/auth/storage changes. Final physical verification pending.

@@ -1,5 +1,11 @@
 # Summra Work Log
 
+## 2026-10-27: Final physical Kindle verification complete
+
+- Deployed reader implementation62e3f39 passes real evdev up/down/left/right drags after fresh load, repeat refresh, open font banners with size8→9, size9→8 with Song→Hei, and closed banners. Each phase's reading-region framebuffer is pixel-identical before/after every drag. Restored size8/10+Hei, menu closed, original chapter/page and normal sleep behavior (`preventScreenSaver=0`). All synthetic touch contacts were released. Removed unused native diagnostic file; no website geometry beacons remain.
+- Final architecture supersedes earlier trial implementations below: only the matched no-touch legacy WebKit1072×1448 portrait PW3 gets a wrapper after normal pagination, explicit104%/1260px body styles and1279px native scroll shell, followed by200ms repagination. Select the profile once; font/resize layout cannot remove it. Other devices retain the original unwrapped layout. Native fit slightly scales the view. Preserve explicit #end/#fwd/paragraph startup.
+- Chromium/WebKit profile and auto-fit retention checks, viewport/72px/font/tap/resize checks, and load/menu/adjust/close gesture regressions all pass. Earlier38 focused backend cases passed; final changes are JS/CSS only. Public served asset hashes match the deployed release. No database, auth, Apache or native browser-file change. Unrelated local iOS icon edits remain outside this release.
+
 ## 2026-10-27: Match measured native surface initialization
 
 Use the physically successful trial sequence directly: finish normal pagination, wrap only the matched PW3 reader nodes, explicitly set native shell/body styles, then repaginate after 200ms. The profile is selected once, so font relayout cannot remove it. Other browsers retain their original unwrapped layout. Earlier class-based/extra-reflow attempts did not pass fresh-load drags and are superseded. No content/auth/storage changes. Final physical verification pending.
