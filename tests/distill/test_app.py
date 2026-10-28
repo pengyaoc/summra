@@ -38,7 +38,10 @@ def test_pwa_manifest_scope_credentials_and_icons(app_env, prefix):
             assert f'{image.width}x{image.height}' == icon['sizes'] and image.format == 'PNG'
     html = client.get('/', headers=headers).get_data(as_text=True)
     assert f'href="{prefix}/manifest.webmanifest" crossorigin="use-credentials"' in html
-    assert 'apple-touch-icon' in html and 'apple-mobile-web-app-capable' in html
+    assert f'rel="apple-touch-icon" sizes="512x512" href="{prefix}/app-icons/icon-512.png?v=' in html
+    assert 'apple-mobile-web-app-capable' in html
+    launch = client.get('/launch', headers=headers).get_data(as_text=True)
+    assert f'rel="apple-touch-icon" sizes="512x512" href="{prefix}/app-icons/icon-512.png?v=' in launch
     assert 'js/pwa.js' in html and 'Install app' in html
 
 

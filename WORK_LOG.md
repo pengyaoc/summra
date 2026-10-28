@@ -10667,3 +10667,33 @@ The preceding 369-test suite and browser checks cover every card region and
 Tab/Enter; all 19 reader-config/template regressions passed again before commit.
 Updated ERD and PRD with the live verification result. Documentation-only follow-up
 requires a VM fast-forward, with no further service restart.
+
+## 2026-10-26 — Higher-resolution iOS Home Screen icon
+
+Investigated Distill's icon assets: the existing 512×512 drop PNG is sharp and
+fully opaque, but apple-touch-icon explicitly selected the separate 180×180 PNG.
+iOS prefers the Apple touch link over manifest icons, so the manifest's 512px
+entry alone did not change this selection. Pointed the shared Distill web base
+(including public launch) to the existing public 512px drop with accurate sizes
+and its content hash, changing the requested URL from icon-180 to icon-512.
+No raster upscaling or new asset is involved. No data-model, app identity,
+authentication or progress changes. ERD and PRD updated. This improves the supplied
+source resolution; actual device appearance and OS icon-cache refresh still need
+iOS verification. Existing installs may need re-adding after deployment.
+
+Validation: all 28 Distill app tests pass, including public icon decoding and
+Apple-touch selection on library/launch at root, /distill and nested prefixes.
+git diff --check passes. Local changes only; not yet committed or deployed.
+
+## 2026-10-27 — CI repaired after pairing tests landed
+
+CI on main had failed for 8 pushes, starting with the Kindle pairing commit.
+pytest stopped at collection: `tests/distill/test_pairing.py` imported
+`tests.distill.conftest`, and `tests/` is not a package under CI's plain `pytest`.
+It now uses a relative import, as `test_app.py` does. This exposed two more
+problems. First, the Kindle reader golden had not been updated for the
+font-size data attributes added in 497f761, so it was regenerated. Second,
+CI never installed `distill/requirements.txt`, so `qrcode` was missing and the
+QR route returned HTML. That install is now in `ci.yml`. Run 40623715697 passed
+(1205 tests). The local venv's editable install was stale (it mapped the
+pre-split `backend`/`scripts`) and was reinstalled with `pip install -e .`.
