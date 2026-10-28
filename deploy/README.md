@@ -295,3 +295,22 @@ untouched. Existing remote code must already include the new helper. Optional
 Old/unused media is intentionally retained for rollback references: do not prune
 objects without considering every retained metadata snapshot. Generated data
 must stay ignored and outside Git, including future imports.
+
+
+### Verified migration:2026-10-28
+
+`ca07abe` passed CI and is live. Original image count886 and thumbnail count162
+are unchanged;1,043 unique files (146,541,246 bytes) live under the private media
+root. Every production file hash matched the original BLOB, metadata/reader
+records and account/pairing files stayed unchanged, and foreign-key/integrity
+checks passed. The DB compacted159,563,776→9,986,048 bytes. Production-copy
+rehearsal verified all1,048 authenticated image HTTP responses;11 live sampled
+image/variant responses and anonymous401 checks also passed. Both apps healthy.
+
+The single Distill metadata archive is now3,520,797 bytes, versus about148MB
+before extraction; Plainly's archive remains54,065,818 bytes. The Mac authoring
+DB also migrated/compacted to9,986,048 bytes and its current archive is3,422,405
+bytes. Temporary rehearsal/rollback copies and tooling were removed after
+verification. Preserve the private media store separately when backing up or
+moving the metadata DB; old BLOB backups are no longer retained as a second
+backup set. Existing user/account/progress/pairing DBs were never replaced.

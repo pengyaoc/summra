@@ -1,5 +1,17 @@
 # Summra - Technical Implementation Details
 
+## File-media migration verified live (2026-10-28)
+
+Production and the Mac authoring content DB now use the file-backed schema
+below. The live DB is9,986,048 bytes with no `data`/BLOB image columns;886
+original-image and162 thumbnail records reference1,043 verified private files
+(146,541,246 bytes). Full production-copy HTTP verification and live file/hash,
+foreign-key, content/reader-state and sampled authenticated HTTP checks passed.
+Account/progress/pairing DB files were not changed by extraction. The current
+Distill metadata archive is3,520,797 bytes and no longer embeds image bytes;
+restore metadata together with the separate private media store.
+
+
 ## Distill image files and metadata schema (2026-10-27)
 
 Distill `images` now stores `(id, book_id, name, mime, storage_key)`;

@@ -1,5 +1,16 @@
 # Plainly - Product Requirements Document
 
+## Distill image migration deployed (2026-10-28)
+
+Existing original images and cover thumbnails now serve from private files,
+with their previous URLs, appearance, sign-in protection and reading state
+preserved. Production migration and live image checks passed; Plainly remained
+available. Distill's content database shrank from159.6MB to10.0MB and its current
+database backup from about148MB to3.5MB. Images remain intact on the VM, with
+no reauthentication or image regeneration required. The Mac authoring database
+uses the same storage so future book imports/deploys retain this behavior.
+
+
 ## Distill image storage outside the database (2026-10-27)
 
 Original Distill images and generated cover thumbnails now live as private
