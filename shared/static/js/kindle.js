@@ -55,9 +55,6 @@
   // nodes preserves their listeners and leaves the no-JavaScript page alone.
   var shell = document.createElement('div');
   shell.id = 'reader-shell';
-  var shellParts = [head, viewport, foot, menu];
-  for (var s = 0; s < shellParts.length; s++) shell.appendChild(shellParts[s]);
-  body.appendChild(shell);
   addClass(doc, 'js');
 
   // Where DOM touch events are available, cancel drags (not taps) across the reader,
@@ -104,7 +101,7 @@
     // visible. It also exposes no touch events or writable root pan offset.
     // Use the on-device-tested nested viewport only for this legacy profile;
     // desktop/modern browsers and other screen sizes keep the normal shell.
-    var pw3 = !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
+    var pw3 = shell.parentNode && !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
       window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth < doc.clientHeight;
     if (pw3) addClass(doc, 'native-pw3');
     else removeClass(doc, 'native-pw3');
@@ -373,4 +370,13 @@
   else if (hash === '#end') show(pages - 1);
   else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
   else show(pageOfParagraph(num('start')));
+
+  // Build the native scroll surface after the first pagination/reflow. The
+  // PW3 otherwise retains a root pan range from initial document layout.
+  var initialParagraph = currentParagraph();
+  var shellParts = [head, viewport, foot, menu];
+  for (var s = 0; s < shellParts.length; s++) shell.appendChild(shellParts[s]);
+  body.appendChild(shell);
+  layout();
+  show(pageOfParagraph(initialParagraph));
 })();

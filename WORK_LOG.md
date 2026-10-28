@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-27: Initialize native scroll surface after pagination
+
+Font adjustment/closed-menu drags passed, but a fresh native load retained its initial root pan range. Defer wrapping existing reader nodes until after the first pagination/reflow, then remeasure at the current paragraph, matching the successful physical trial initialization order. No content/auth/storage changes. Fresh-load verification pending.
+
 ## 2026-10-27: Preserve native profile after font relayout
 
 The physical PW3 passed settled-load/menu drags but changing size exposed an unstable exact document-width check: native auto-fit can change CSS document width. Keep the legacy no-touch 1072×1448 device match, using portrait document proportions instead of exact width during relayout. This retains the workaround across font changes. No data or authentication changes. Final on-device adjustment/close verification pending.

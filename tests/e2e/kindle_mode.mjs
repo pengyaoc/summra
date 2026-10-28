@@ -196,6 +196,13 @@ const nativeGeometry = await nativePage.evaluate(() => ({
 }));
 check(nativeGeometry.width > 1072 && nativeGeometry.height === 1260
   && nativeGeometry.shell === 1279 && nativeGeometry.overflow === "scroll", "PW3 uses its measured nested viewport");
+// Native auto-fit can widen the CSS document during a font relayout.
+await nativePage.evaluate(() => {
+  Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, get: () => 1114 });
+  window.dispatchEvent(new Event("resize"));
+});
+await nativePage.waitForTimeout(300);
+check(await nativePage.locator("html.native-pw3").count() === 1, "native auto-fit width retains PW3 profile after relayout");
 await nativeContext.close();
 
 // Desktop is unaffected.
