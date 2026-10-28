@@ -2,6 +2,12 @@
 
 ## Generated media lives outside Git (2026-10-27)
 
+Verified on production: generated media stayed in place with all 634 hashes
+unchanged; Plainly audio/images and authenticated Distill library/book/cover
+requests pass. Both services remain active. Published main and remaining local
+branch/stash/checkpoint references are cleaned; non-media saved work is preserved.
+CI passed for the rewrite. This is a storage/deployment policy change only.
+
 Generated Plainly audio, covers, chapter illustrations and guide images are
 runtime/deployment assets, not source-controlled blobs. Their existing paths
 under `plainly/frontend/static/{audio,covers,illustrations,guides}/` and all

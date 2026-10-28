@@ -227,3 +227,24 @@ per app at `data/backups/distill-latest.tar.gz` (147,581,980 bytes) and
 and pairing databases. Removed 28 older database backup files; net reclaimed
 1,946,896,714 bytes. Both services and public launch pages remained healthy.
 These database archives do not contain the separate static media library.
+
+
+### Completed transition verification
+
+Rewritten main `9cca549` passed GitHub CI. The existing VM checkout was migrated
+with media intact: all 634 files/509,981,225 bytes match the pre-transition hashes.
+Public Plainly audio, covers, illustrations and guide images pass HTTP range
+requests with matching bytes; an authenticated Distill library/book/cover check
+passes too. Both user services remain active, without needing an app restart.
+VM-only old branch/stash and Mac saved stash/tree checkpoints were filtered as
+well, preserving their non-media content and stash structure. After expiring old
+reflogs and garbage collection, packed Git storage is 11.24MiB on the VM and
+11.29MiB on the Mac (small differences reflect local saved work). The temporary
+VM media safety copy and isolated rewrite mirror were removed after final hash
+verification; the live media remains in its original serving directories.
+
+The Distill database backup is larger than Plainly's compressed archive because
+Distill embeds about 146MB of image blobs, which compress little. Plainly's
+content database is mostly compressible text; its static audio/images are
+outside the database archives. A backup-size comparison therefore does not
+compare the apps' complete media libraries.

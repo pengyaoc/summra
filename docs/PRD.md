@@ -2,6 +2,12 @@
 
 ## Generated media repository policy (2026-10-27)
 
+Verified on production: generated media stayed in place with all 634 hashes
+unchanged; Plainly audio/images and authenticated Distill library/book/cover
+requests pass. Both services remain active. Published main and remaining local
+branch/stash/checkpoint references are cleaned; non-media saved work is preserved.
+CI passed for the rewrite. This is a storage/deployment policy change only.
+
 Book covers, chapter illustrations, guide images and pre-generated audio are
 managed as deployment data instead of Git source/history. Readers keep the same
 media URLs and functionality; production copies stay on the VM. Logos, UI icons
