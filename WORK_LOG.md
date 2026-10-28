@@ -1,5 +1,13 @@
 # Summra Work Log
 
+## 2026-10-27: Remove generated media from published Git history
+
+- At the user's explicit request, rewrote the sole published branch (`main`; no tags or open PRs) using git-filter-repo. Removed generated audio, book covers, chapter illustrations and guide images under both historical `frontend/static/` and current `plainly/frontend/static/` roots, plus generated redesign/e2e screenshot directories. App branding/icons and Kindle launcher covers remain versioned.
+- Removed634 currently tracked generated files. Before documentation edits, all516 remaining current files matched their original Git modes/blob IDs exactly. Verified no targeted paths remain in any rewritten reachable commit. Fresh mirror packed history shrank from624.71MiB to11.50MiB. GitHub may update its storage statistics asynchronously; commit IDs change throughout rewritten history.
+- Added matching ignore rules. Generated content is deployment data, transferred separately from source. The code and media URLs are unchanged. A fresh clone needs separately supplied content DBs and generated media; deployment must not delete ignored media. Current VM media is preserved in place, with634 files/509,981,225 bytes hash-verified in a temporary independent snapshot before transition.
+- Full regression: 1,211 cases passed; one layout assertion required a generated covers directory to exist in a fresh clone. Updated that characterization to require its versioned static parent while retaining the exact configured media path; targeted layout checks pass (3 cases), yielding 1,212 passing cases across the suite and rerun, 2 opt-in cases deselected. Guarded publication/VM transition pending. No application schema/auth/reader behavior changes. Existing archives in `data/backups/` continue to hold one verified content/accounts/pairing backup set per app; those database archives do not include static media.
+
+
 ## 2026-10-27: Version Kindle launchers, share pairing with Plainly, audit VM disk
 
 - Added `deploy/kindle/` as authoritative source for the installed Distill/Plainly fullscreen launchers, shared restore/runtime, embedded covers and PNG/SVG source assets. README covers prerequisites, USB installation, startup handoff, recovery, known limitations and QR login. Copied current working device sources without modifying runtime behavior. Private SSH material, logs and retired browser images excluded.

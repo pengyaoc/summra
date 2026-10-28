@@ -1,5 +1,25 @@
 # Summra - Technical Implementation Details
 
+## Generated media lives outside Git (2026-10-27)
+
+Generated Plainly audio, covers, chapter illustrations and guide images are
+runtime/deployment assets, not source-controlled blobs. Their existing paths
+under `plainly/frontend/static/{audio,covers,illustrations,guides}/` and all
+application/database URL references remain unchanged. Historical paths under
+`frontend/static/` and generated redesign/e2e screenshots were removed from Git
+history too. Ignore rules prevent reintroduction. Branding/UI icons and Kindle
+shortcut covers remain source-controlled; Distill's image blobs remain in its
+separately managed content SQLite database.
+
+Deployment supplies these assets separately, preserving ignored files during
+code updates. A fresh clone contains source and branding, not a complete media
+library. Git history rewrite changes commit identities, not database schema,
+API contracts or reader/auth logic. Existing clones must be explicitly migrated
+or recloned; merging old history would reintroduce the removed objects. VM
+transition preserves media paths/bytes and can update HEAD/index without deleting
+the working media. See `deploy/README.md` for operational requirements.
+
+
 ## Shared Kindle pairing and launcher source (2026-10-27)
 
 Deployment verified: `eb89c5f` is live for both apps. Apache syntax, service health,

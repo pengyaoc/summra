@@ -179,3 +179,51 @@ normal Git maintenance preserves history and cannot promise equivalent savings.
 Avoid taking another full pair of content-DB backups for code-only deployments
 that do not migrate those databases. Auth pairing changes need only a small
 consistent backup of the pairing DB if one is desired.
+
+
+## Generated media and history rewrite
+
+On 2026-10-27, generated content media was removed from Git's current tree and
+all published history at the owner's request. Ignored directories:
+
+- `plainly/frontend/static/audio/`, `covers/`, `illustrations/`, `guides/`
+- the same four directories under the historical `frontend/static/` root
+- generated `docs/redesign/before/`, `docs/redesign/after/` and e2e screenshots
+
+Branding/UI assets in `static/images/` and Kindle launcher covers in
+`deploy/kindle/` stay versioned. Distill content images are stored in its
+untracked content database; those are unaffected. Existing media serving paths,
+Apache aliases and database URLs have not changed. Production media remains
+under `/opt/summra/plainly/frontend/static/` and must be backed up/transferred
+independently of the Git repository.
+
+For a new deployment, restore content databases and all four media directories
+from a trusted copy (e.g. the current VM) after cloning. Copy media explicitly
+with `rsync -a` or `gcloud compute scp --recurse`; a clone or Git pull alone no
+longer supplies a populated library. Keep generated content out of future
+commits; `git check-ignore` should report these paths.
+
+When updating an existing checkout across the rewrite, first verify a separate
+media copy and a clean tracked working tree. Fetch the rewritten `main` with an
+explicit forced remote-ref update. Use `git reset --mixed origin/main` to update
+HEAD/index while leaving working media intact, then restore only the reviewed
+non-media source/doc changes from the new index. Do not use a hard reset for
+this first transition: it can delete media that used to be tracked. Verify
+media hashes and HTTP responses before deleting the temporary safety copy.
+Normal future code deploys must preserve ignored files: avoid `git clean -fdx`
+and rsync `--delete` over media directories.
+
+Commit IDs before the rewrite are obsolete. Other clones must migrate or be
+recloned rather than merge/push the old ancestry. The sole published branch is
+main; no published tags/open PRs existed during this rewrite. The push uses a
+lease on the inventoried old main SHA to avoid overwriting a concurrent update.
+After local refs/worktree HEADs are migrated, expire old reflogs and garbage
+collect so removed objects no longer occupy those clones. GitHub can retain
+unreachable cached objects until its own cleanup and may show stale size stats.
+
+Backup retention cleanup completed before this rewrite: one verified archive
+per app at `data/backups/distill-latest.tar.gz` (147,581,980 bytes) and
+`plainly-latest.tar.gz` (54,065,818 bytes), covering content, accounts/progress
+and pairing databases. Removed 28 older database backup files; net reclaimed
+1,946,896,714 bytes. Both services and public launch pages remained healthy.
+These database archives do not contain the separate static media library.

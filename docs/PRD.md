@@ -1,5 +1,19 @@
 # Plainly - Product Requirements Document
 
+## Generated media repository policy (2026-10-27)
+
+Book covers, chapter illustrations, guide images and pre-generated audio are
+managed as deployment data instead of Git source/history. Readers keep the same
+media URLs and functionality; production copies stay on the VM. Logos, UI icons
+and Kindle shortcut covers remain in source control. Generated test screenshots
+are also excluded, while their test/comparison source remains versioned.
+
+This changes repository/deployment management only, with no reading, pairing,
+progress or authentication behavior change. A developer's fresh clone needs a
+separate media/data transfer for the complete library. No media regeneration or
+user reauthentication is required on the existing VM.
+
+
 ## Plainly Kindle phone sign-in and maintainable shortcuts (2026-10-27)
 
 Deployment verified: `eb89c5f` is live for both apps. Apache syntax, service health,

@@ -1,5 +1,7 @@
 # Summra — Read the Classics in Plain English
 
+Generated book audio/images are deployment data and are intentionally absent from Git (including history). Existing VM files are preserved; see [media deployment](deploy/README.md#generated-media-and-history-rewrite) before provisioning a fresh clone.
+
 Kindle fullscreen launcher scripts, covers and setup: [deploy/kindle/README.md](deploy/kindle/README.md).
 
 Summra is a web app that makes public-domain classics easier to read. Every book is paired with two AI-generated summaries (a short overview and a fuller summary), chapter-by-chapter summaries, AI-generated chapter illustrations, optional audio narration, and — most importantly — a **sentence-by-sentence rewrite of the original text in modern English**, viewable side-by-side with the original.

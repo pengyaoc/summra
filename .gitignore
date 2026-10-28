@@ -40,10 +40,20 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
-# Audio files (too large for git)
-# plainly/frontend/static/audio/*.wav
-# plainly/frontend/static/audio/*.mp3
-# plainly/frontend/static/tts/*.wav
+# Generated book media is deployed separately and retained on the VM.
+# Include historical roots to prevent accidentally reintroducing old layouts.
+/plainly/frontend/static/audio/
+/plainly/frontend/static/covers/
+/plainly/frontend/static/illustrations/
+/plainly/frontend/static/guides/
+/frontend/static/audio/
+/frontend/static/covers/
+/frontend/static/illustrations/
+/frontend/static/guides/
+
+# Generated visual-regression captures; keep the comparison HTML/source.
+/docs/redesign/before/
+/docs/redesign/after/
 
 # Data directory - ignore all files but keep structure
 data/**/*
