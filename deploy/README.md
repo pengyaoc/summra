@@ -248,3 +248,50 @@ Distill embeds about 146MB of image blobs, which compress little. Plainly's
 content database is mostly compressible text; its static audio/images are
 outside the database archives. A backup-size comparison therefore does not
 compare the apps' complete media libraries.
+
+
+## Distill private file media migration
+
+Distill originals and cover variants now use the private, gitignored
+`/opt/summra/data/distill-media/` store. It is not a public Apache Alias: the
+existing Flask image routes keep their allowlisted Google/paired-Kindle auth.
+`DISTILL_MEDIA_DIR` overrides the default beside `DISTILL_DB` (`<stem>-media`).
+Changing that location must agree with `DISTILL_VM_MEDIA_DIR` in local deploy
+settings; the default systemd sandbox permits writing only under `data/`.
+
+For a legacy BLOB database, stop Distill/import writers, refresh the existing
+consistent app backup, then run under the service user:
+
+```sh
+venv/bin/python -m distill.scripts.migrate_media --db data/distill.db --compact
+```
+
+The migration writes and verifies every original/thumbnail file before removing
+BLOB columns in one metadata transaction. IDs, cover tokens, MIME/encoded bytes
+and reader state stay unchanged. A failed write leaves the original DB intact.
+`--compact` is maintenance-only: it verifies all references and VACUUMs after
+migration; it is not done during normal startup. Restart Distill only after
+checking image counts/hashes, foreign keys, content/reader records and database
+integrity. Verify authenticated original/thumbnail requests and anonymous auth
+rejection. Keep the pre-migration latest backup until these checks pass, then
+refresh it using the new metadata schema (same archive name, atomic replacement).
+Plainly does not need a restart or a migration.
+
+The helper `venv/bin/python -m distill.scripts.media_transfer backup --db
+/opt/summra/data/distill.db --owner summra` atomically replaces
+`data/backups/distill-latest.tar.gz` with verified online SQLite snapshots of
+content, accounts/progress and pairing DBs plus a SHA256 manifest. It does not
+include media or overwrite account databases. Run as an operator able to write
+the backup directory (root-owned on the current VM). Keep one latest archive;
+copy the private media directory separately for complete disaster recovery.
+
+Future `push_book --deploy`/`deploy_db` takes a consistent content snapshot,
+packages its referenced objects, verifies local files and uploaded hashes, then
+installs additive immutable media before metadata activation. A missing/corrupt
+file or failed install aborts without stopping the service. The one current
+metadata archive is refreshed before swapping DBs; accounts/pairing remain
+untouched. Existing remote code must already include the new helper. Optional
+`DISTILL_VM_REPO_ROOT` defaults to the parent of the remote `data/` directory.
+Old/unused media is intentionally retained for rollback references: do not prune
+objects without considering every retained metadata snapshot. Generated data
+must stay ignored and outside Git, including future imports.

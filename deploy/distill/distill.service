@@ -17,7 +17,7 @@ Restart=on-failure
 RestartSec=5
 
 # Same sandbox as summra.service: only data/ (distill.db, distill_user.db
-# and their -wal/-shm siblings) is writable at runtime.
+# and their -wal/-shm siblings, plus private distill-media/) is writable at runtime.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

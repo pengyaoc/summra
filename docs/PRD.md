@@ -1,5 +1,21 @@
 # Plainly - Product Requirements Document
 
+## Distill image storage outside the database (2026-10-27)
+
+Original Distill images and generated cover thumbnails now live as private
+files outside SQLite and Git. The reading experience, image URLs, sign-in
+protection, book/chapter identity, cover appearance and saved reading places
+remain unchanged. This reduces the content database and metadata backup size;
+it does not discard images or reduce their quality.
+
+Imports and book deployment carry media separately from metadata, with verified
+file installation before activating a new content database. Existing books can
+be migrated without reimporting or regenerating images. Account/progress and
+Kindle pairing data are not replaced. Operators retain one latest metadata
+backup per app and must preserve/back up its separate media files as well.
+Plainly's existing media storage and reader behavior are unchanged.
+
+
 ## Generated media repository policy (2026-10-27)
 
 Verified on production: generated media stayed in place with all 634 hashes

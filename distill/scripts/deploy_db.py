@@ -2,17 +2,21 @@
 
 Usage: python -m distill.scripts.deploy_db [--db PATH] [--config PATH]
 
-Only the content DB is pushed. distill_user.db holds reading progress and is never touched.
+Content metadata and referenced media are pushed. Account/progress databases are
+backed up but never replaced. The one latest metadata archive is atomically refreshed.
 """
 import argparse
+from contextlib import closing
+import tempfile
 import hashlib
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timezone
+import shlex
 from pathlib import Path
 
 from distill import config
+from distill.scripts.media_transfer import media_archive
 
 DEFAULT_CONFIG = config.BASE_DIR / 'deploy' / 'distill' / 'deploy.local.env'
 REQUIRED_KEYS = (
@@ -20,8 +24,7 @@ REQUIRED_KEYS = (
     'DISTILL_VM_SERVICE_USER', 'DISTILL_VM_REMOTE_DB', 'DISTILL_VM_UNIT', 'DISTILL_VM_PORT',
 )
 REMOTE_UPLOAD = 'distill.db.new'  # relative to the ssh user's home: the VM's /tmp is small
-SNAPSHOT_MARK = 'bak-pre-push'
-SNAPSHOTS_KEPT = 2
+REMOTE_MEDIA_UPLOAD = 'distill-media.new.tar'
 
 
 class DeployError(Exception):
@@ -49,7 +52,7 @@ def _md5(path: Path) -> str:
     return digest.hexdigest()
 
 
-def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
+def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
     missing = [key for key in REQUIRED_KEYS if not settings.get(key)]
     if missing:
         raise DeployError(f'missing deploy setting(s): {", ".join(missing)}')
@@ -81,12 +84,27 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
         conn.close()
     local_md5 = _md5(db_path)
 
-    # 2. Snapshot the live DB (nothing to snapshot on a first push).
-    exists = run(['gcloud', 'compute', 'ssh', instance, f'--command=test -f {remote_db}', *gcloud_flags],
+    # Install verified immutable media before activating any references to it.
+    repo_root = Path(settings.get('DISTILL_VM_REPO_ROOT') or Path(remote_db).parent.parent)
+    remote_media = settings.get('DISTILL_VM_MEDIA_DIR') or str(Path(remote_db).with_name(Path(remote_db).stem + '-media'))
+    helper = (f'sudo env PYTHONPATH={shlex.quote(str(repo_root))} '
+              f'{shlex.quote(str(repo_root / "venv/bin/python"))} -m distill.scripts.media_transfer')
+    if archive is not None:
+        archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+        gcloud('scp', str(archive), f'{instance}:{REMOTE_MEDIA_UPLOAD}', what='media upload')
+        ssh(f'chmod 600 ~/{REMOTE_MEDIA_UPLOAD}', 'private media upload permissions')
+        uploaded_sha = ssh(f'sha256sum ~/{REMOTE_MEDIA_UPLOAD}', 'media upload hash').split()[:1]
+        if uploaded_sha != [archive_sha]:
+            raise DeployError('media SHA256 mismatch after upload; service untouched')
+        ssh(f'{helper} install ~/{REMOTE_MEDIA_UPLOAD} --media-dir {shlex.quote(remote_media)} '
+            f'--owner {shlex.quote(svc)}', 'verified media installation')
+
+    # One consistent archive includes existing content/accounts/pairing DBs.
+    exists = run(['gcloud', 'compute', 'ssh', instance, f'--command=test -f {shlex.quote(remote_db)}', *gcloud_flags],
                  capture_output=True, text=True)
     if exists.returncode == 0:
-        stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-        ssh(f'sudo cp {remote_db} {remote_db}.{SNAPSHOT_MARK}-{stamp}', 'snapshot of the live database')
+        ssh(f'{helper} backup --db {shlex.quote(remote_db)} --owner {shlex.quote(svc)}',
+            'snapshot of the live database')
 
     # 3-4. Upload, then verify before touching the service.
     gcloud('scp', str(db_path), f'{instance}:{REMOTE_UPLOAD}', what='scp of the database')
@@ -98,10 +116,10 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
     ctl = f'sudo -u {svc} XDG_RUNTIME_DIR=/run/user/$(id -u {svc}) systemctl --user'
     swap = ' && '.join([
         f'{ctl} stop {unit}',
-        f'sudo rm -f {remote_db}-wal {remote_db}-shm',
-        f'sudo mv ~/{REMOTE_UPLOAD} {remote_db}',
-        f'sudo chown {svc}:{svc} {remote_db}',
-        f'sudo chmod 664 {remote_db}',
+        f'sudo rm -f {shlex.quote(remote_db + "-wal")} {shlex.quote(remote_db + "-shm")}',
+        f'sudo mv ~/{REMOTE_UPLOAD} {shlex.quote(remote_db)}',
+        f'sudo chown {shlex.quote(svc + ":" + svc)} {shlex.quote(remote_db)}',
+        f'sudo chmod 664 {shlex.quote(remote_db)}',
         f'{ctl} start {unit}',
         'sleep 3',
         f'{ctl} is-active {unit}',
@@ -113,9 +131,30 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
     if code != '401':
         raise DeployError(f'expected HTTP 401 from the app (up, auth required), got {code!r}')
 
-    # 7. Keep only the newest snapshots.
-    ssh(f'ls -1t {remote_db}.{SNAPSHOT_MARK}-* 2>/dev/null | tail -n +{SNAPSHOTS_KEPT + 1} | xargs -r sudo rm -f',
-        'snapshot pruning (deploy itself succeeded)')
+    if archive is not None:
+        ssh(f'rm -f ~/{REMOTE_MEDIA_UPLOAD}', 'temporary media upload cleanup')
+
+
+def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
+    db_path = Path(db_path)
+    missing = [key for key in REQUIRED_KEYS if not settings.get(key)]
+    if missing:
+        raise DeployError(f'missing deploy setting(s): {", ".join(missing)}')
+    if not db_path.is_file():
+        raise DeployError(f'database not found: {db_path}')
+    try:
+        # Verify local references before any upload or service mutation.
+        with tempfile.TemporaryDirectory(prefix='distill-content-upload-') as temporary:
+            snapshot = Path(temporary) / 'distill.db'
+            with closing(sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)) as source:
+                with closing(sqlite3.connect(snapshot)) as target:
+                    source.backup(target)
+                    if target.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
+                        raise ValueError('Content snapshot integrity check failed')
+            with media_archive(snapshot, media_dir=config.media_dir_for(db_path)) as archive:
+                _deploy_db(snapshot, settings, run, archive)
+    except (ValueError, OSError, sqlite3.Error) as error:
+        raise DeployError(f'Media preparation/deployment failed: {error}') from error
 
 
 def main(argv: list) -> int:

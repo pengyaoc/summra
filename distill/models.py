@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -14,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 from PIL import Image, ImageOps
 
 from distill import config
+from distill.media import MediaStore
 from distill.book_format import block_text, iter_chapters, list_images, load_book, normalize_toc_titles, validate_book, word_count
 from shared.reader.index import ReaderIndexMixin, create_reader_revisions, create_reader_tables
 
@@ -43,8 +45,9 @@ def _cover_variants(data: bytes) -> list:
 class DistillDatabase(ReaderIndexMixin):
     _reader_revision_tracking = True
 
-    def __init__(self, db_path: Path = config.DATABASE_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: Path = config.DATABASE_PATH, media_dir=None):
+        self.db_path = Path(db_path)
+        self.media = MediaStore(media_dir if media_dir is not None else config.media_dir_for(self.db_path))
         self.init_db()
 
     def get_connection(self):
@@ -55,8 +58,8 @@ class DistillDatabase(ReaderIndexMixin):
 
     def init_db(self):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        conn = self.get_connection()
-        with conn:
+        with closing(self.get_connection()) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS books (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +90,7 @@ class DistillDatabase(ReaderIndexMixin):
                     book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
                     name TEXT NOT NULL,
                     mime TEXT NOT NULL,
-                    data BLOB NOT NULL,
+                    storage_key TEXT NOT NULL,
                     UNIQUE(book_id, name)
                 )
             ''')
@@ -97,9 +100,10 @@ class DistillDatabase(ReaderIndexMixin):
                 token TEXT NOT NULL,
                 source_checksum TEXT NOT NULL,
                 mime TEXT NOT NULL,
-                data BLOB NOT NULL,
+                storage_key TEXT NOT NULL,
                 PRIMARY KEY (image_id, format)
             )''')
+            self._migrate_media(conn)
             # Backward-compatible metadata migration; chapter IDs and progress stay intact.
             if 'categories' not in {row['name'] for row in conn.execute('PRAGMA table_info(books)')}:
                 conn.execute("ALTER TABLE books ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'")
@@ -116,7 +120,63 @@ class DistillDatabase(ReaderIndexMixin):
                                 'distill_chapter_revision_delete', 'distill_chapter_revision_update'):
                     conn.execute(f'DROP TRIGGER IF EXISTS {trigger}')
                 conn.execute('DROP TABLE distill_reader_revision')
-        conn.close()
+
+    def _migrate_media(self, conn):
+        """Write/verify legacy bytes first; rebuild metadata tables atomically.
+
+        IDs, thumbnail tokens and all book/chapter/progress coordinates survive.
+        A file error rolls back the database, leaving legacy BLOBs available.
+        """
+        if 'data' not in {row['name'] for row in conn.execute('PRAGMA table_info(images)')}:
+            return
+        previous_sequence = conn.execute("SELECT seq FROM sqlite_sequence WHERE name='images'").fetchone()
+        conn.execute('''CREATE TABLE images_media (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+            name TEXT NOT NULL, mime TEXT NOT NULL, storage_key TEXT NOT NULL,
+            UNIQUE(book_id, name))''')
+        conn.execute('''CREATE TABLE cover_thumbnails_media (
+            image_id INTEGER NOT NULL REFERENCES images_media(id) ON DELETE CASCADE,
+            format TEXT NOT NULL, token TEXT NOT NULL, source_checksum TEXT NOT NULL,
+            mime TEXT NOT NULL, storage_key TEXT NOT NULL,
+            PRIMARY KEY (image_id, format))''')
+        for row in conn.execute('SELECT * FROM images'):
+            key = self.media.put(bytes(row['data']))
+            conn.execute('INSERT INTO images_media VALUES (?,?,?,?,?)',
+                         (row['id'], row['book_id'], row['name'], row['mime'], key))
+        for row in conn.execute('SELECT * FROM cover_thumbnails'):
+            key = self.media.put(bytes(row['data']))
+            conn.execute('INSERT INTO cover_thumbnails_media VALUES (?,?,?,?,?,?)',
+                         (row['image_id'], row['format'], row['token'], row['source_checksum'], row['mime'], key))
+        conn.execute('DROP TABLE cover_thumbnails')
+        conn.execute('DROP TABLE images')
+        conn.execute('ALTER TABLE images_media RENAME TO images')
+        conn.execute('ALTER TABLE cover_thumbnails_media RENAME TO cover_thumbnails')
+        if previous_sequence:
+            conn.execute("INSERT INTO sqlite_sequence(name,seq) SELECT 'images',? WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name='images')", (previous_sequence[0],))
+            conn.execute("UPDATE sqlite_sequence SET seq=MAX(seq,?) WHERE name='images'", (previous_sequence[0],))
+        if conn.execute('PRAGMA foreign_key_check').fetchone():
+            raise ValueError('Foreign-key failure after media migration')
+
+    def media_keys(self):
+        with closing(self.get_connection()) as conn:
+            return [row[0] for row in conn.execute(
+                'SELECT storage_key FROM images UNION SELECT storage_key FROM cover_thumbnails ORDER BY 1')]
+
+    def verify_media(self):
+        keys = self.media_keys()
+        for key in keys:
+            self.media.verify(key)
+        return len(keys)
+
+    def compact(self):
+        """Explicit maintenance after migration, with app/import writers stopped."""
+        self.verify_media()
+        with closing(self.get_connection()) as conn:
+            conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            conn.execute('VACUUM')
+            if [row[0] for row in conn.execute('PRAGMA quick_check')] != ['ok']:
+                raise ValueError('Database integrity check failed')
 
     # ------------------------------------------------------------------
     # Import
@@ -166,8 +226,8 @@ class DistillDatabase(ReaderIndexMixin):
                 conn.execute('DELETE FROM chapters WHERE book_id = ? AND ordinal >= ?', (book_id, len(chapters)))
 
                 conn.execute('DELETE FROM images WHERE book_id = ?', (book_id,))
-                conn.executemany('INSERT INTO images (book_id, name, mime, data) VALUES (?, ?, ?, ?)',
-                                 [(book_id, *image) for image in images])
+                conn.executemany('INSERT INTO images (book_id, name, mime, storage_key) VALUES (?, ?, ?, ?)',
+                                 [(book_id, name, mime, self.media.put(data)) for name, mime, data in images])
                 cover_row = conn.execute('SELECT id FROM images WHERE book_id = ? AND name = ?',
                                          (book_id, cover)).fetchone() if cover else None
                 conn.execute('UPDATE books SET cover_image_id = ? WHERE id = ?',
@@ -182,33 +242,36 @@ class DistillDatabase(ReaderIndexMixin):
     # Queries
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _store_cover_variants(conn, image_id, data, variants):
+    def _store_cover_variants(self, conn, image_id, data, variants):
         token = hashlib.sha256(b''.join(v[2] for v in variants)).hexdigest()[:24]
         checksum = hashlib.sha256(_COVER_RECIPE + data).hexdigest()
         conn.executemany('''INSERT OR REPLACE INTO cover_thumbnails
-            (image_id, format, token, source_checksum, mime, data) VALUES (?, ?, ?, ?, ?, ?)''',
-            [(image_id, fmt, token, checksum, mime, encoded) for fmt, mime, encoded in variants])
+            (image_id, format, token, source_checksum, mime, storage_key) VALUES (?, ?, ?, ?, ?, ?)''',
+            [(image_id, fmt, token, checksum, mime, self.media.put(encoded)) for fmt, mime, encoded in variants])
 
     def generate_cover_thumbnails(self) -> int:
         """Idempotent backfill; originals and reader/progress data are untouched."""
         conn = self.get_connection()
         try:
-            covers = conn.execute('''SELECT i.id, i.data FROM books b
+            covers = conn.execute('''SELECT i.id, i.storage_key FROM books b
                 JOIN images i ON i.id = b.cover_image_id''').fetchall()
             generated = 0
             for cover in covers:
-                checksum = hashlib.sha256(_COVER_RECIPE + cover['data']).hexdigest()
-                existing = conn.execute('''SELECT format FROM cover_thumbnails
+                data = self.media.get(cover['storage_key'])
+                if data is None:
+                    raise FileNotFoundError(f"Missing cover media: {cover['storage_key']}")
+                checksum = hashlib.sha256(_COVER_RECIPE + data).hexdigest()
+                existing = conn.execute('''SELECT format, storage_key FROM cover_thumbnails
                     WHERE image_id = ? AND source_checksum = ?''', (cover['id'], checksum)).fetchall()
-                if {r['format'] for r in existing} == {'avif', 'webp', 'jpg'}:
+                if ({r['format'] for r in existing} == {'avif', 'webp', 'jpg'}
+                        and all(self.media.path(r['storage_key']).is_file() for r in existing)):
                     continue
-                variants = _cover_variants(cover['data'])
+                variants = _cover_variants(data)
                 with conn:
                     # An import may replace the cover while encoding is running.
-                    current = conn.execute('SELECT data FROM images WHERE id = ?', (cover['id'],)).fetchone()
-                    if current and current['data'] == cover['data']:
-                        self._store_cover_variants(conn, cover['id'], cover['data'], variants)
+                    current = conn.execute('SELECT storage_key FROM images WHERE id = ?', (cover['id'],)).fetchone()
+                    if current and current['storage_key'] == cover['storage_key']:
+                        self._store_cover_variants(conn, cover['id'], data, variants)
                         generated += 1
             return generated
         finally:
@@ -217,10 +280,11 @@ class DistillDatabase(ReaderIndexMixin):
     def get_cover_thumbnail(self, slug: str, token: str, fmt: str) -> Optional[Tuple[str, bytes]]:
         conn = self.get_connection()
         try:
-            row = conn.execute('''SELECT t.mime, t.data FROM cover_thumbnails t
+            row = conn.execute('''SELECT t.mime, t.storage_key FROM cover_thumbnails t
                 JOIN books b ON b.cover_image_id = t.image_id
                 WHERE b.slug = ? AND t.token = ? AND t.format = ?''', (slug, token, fmt)).fetchone()
-            return (row['mime'], bytes(row['data'])) if row else None
+            data = self.media.get(row['storage_key']) if row else None
+            return (row['mime'], data) if data is not None else None
         finally:
             conn.close()
 
@@ -361,9 +425,10 @@ class DistillDatabase(ReaderIndexMixin):
     def get_image(self, book_id: int, name: str) -> Optional[Tuple[str, bytes]]:
         conn = self.get_connection()
         try:
-            row = conn.execute('SELECT mime, data FROM images WHERE book_id = ? AND name = ?',
+            row = conn.execute('SELECT mime, storage_key FROM images WHERE book_id = ? AND name = ?',
                                (book_id, name)).fetchone()
-            return (row['mime'], bytes(row['data'])) if row else None
+            data = self.media.get(row['storage_key']) if row else None
+            return (row['mime'], data) if data is not None else None
         finally:
             conn.close()
 

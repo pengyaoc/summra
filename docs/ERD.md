@@ -1,5 +1,39 @@
 # Summra - Technical Implementation Details
 
+## Distill image files and metadata schema (2026-10-27)
+
+Distill `images` now stores `(id, book_id, name, mime, storage_key)`;
+`cover_thumbnails` stores `(image_id, format, token, source_checksum, mime,
+storage_key)`. No image bytes remain in either table after migration.
+`storage_key` is the lowercase SHA256 of the exact encoded image bytes; files
+live at `<media-root>/<first-two-hex>/<sha256>`. Default root is beside the
+configured content DB as `<stem>-media`, normally `data/distill-media/`, with
+`DISTILL_MEDIA_DIR`/constructor override support. Path validation rejects
+arbitrary paths. The directory stays outside public static aliases and inside
+the existing systemd writable `data/` sandbox. HTTP authorization still applies
+to `/books/<slug>/images/<name>` and `/books/<slug>/cover/<token>.<format>`.
+
+Writes use same-directory temporary files, checksum verification, fsync and
+atomic replace before a database reference can commit. Hash-named objects are
+immutable and deduplicated; reimports do not delete old objects because older
+metadata backups may still reference them. Reads keep the existing MIME/bytes
+interface and authenticated URL/cache behavior. Missing files produce the
+existing not-found response. Backfill encodes before requests as before.
+
+Startup detects legacy image BLOB columns, exports/verifies their bytes and
+rebuilds both tables atomically with original IDs/sequences/tokens and foreign
+keys intact. Failure rolls back database changes; written unreferenced objects
+are harmless. Explicit offline `migrate_media --compact` verifies all references
+and VACUUMs; content, chapter IDs, reader units and separate account/progress/
+pairing databases stay intact. Future restores require metadata plus the media
+store; a DB archive alone no longer contains Distill's images.
+
+Deployment snapshots metadata consistently, uploads only referenced immutable
+media objects, checks transfer hashes and installs them before DB activation.
+The remote helper refreshes one consistent metadata archive per app rather than
+raw backup accumulation. No Plainly schema/auth changes are required.
+
+
 ## Generated media lives outside Git (2026-10-27)
 
 Verified on production: generated media stayed in place with all 634 hashes

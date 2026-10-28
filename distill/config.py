@@ -10,3 +10,9 @@ USER_DATABASE_PATH = Path(os.environ.get('DISTILL_USER_DB') or BASE_DIR / 'data'
 # Loopback by default: the dev server runs with auth off.
 HOST = os.environ.get('DISTILL_HOST', '127.0.0.1')
 PORT = int(os.environ.get('PORT', 5003))
+
+
+def media_dir_for(db_path):
+    """Keep a custom DB's media beside that DB unless explicitly overridden."""
+    path = Path(db_path)
+    return Path(os.environ.get('DISTILL_MEDIA_DIR') or path.with_name(path.stem + '-media'))

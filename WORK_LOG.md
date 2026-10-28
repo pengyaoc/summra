@@ -1,5 +1,13 @@
 # Summra Work Log
 
+## 2026-10-27: File-backed private Distill images
+
+- Replaced original-image and cover-thumbnail BLOB storage with hash-keyed private files under `data/distill-media/<sha-prefix>/<sha256>` (or `DISTILL_MEDIA_DIR`); SQLite keeps MIME, IDs, names, cover tokens/source checksums and `storage_key` references. Existing authenticated image URLs, response bodies, ETags/cache rules and chapter/reader coordinates remain unchanged. New imports/backfills write verified, durable, atomic files before metadata commits; identical bytes deduplicate and old files are retained for rollback snapshots.
+- Legacy migration writes/verifies all files before rebuilding both image tables in one transaction, preserving IDs, AUTOINCREMENT sequence, thumbnail tokens and foreign keys. File failures roll back the original BLOB schema/data. `distill.scripts.migrate_media --compact` explicitly verifies and VACUUMs with writers stopped; no automatic compaction on normal startup. Production inventory before migration:886 originals/145,079,672 bytes,162 thumbnails/3,578,072 bytes.
+- Content deploy now takes an online SQLite snapshot, packages/verifies referenced files separately, verifies transfer hashes and installs media before activating metadata. Missing/corrupt local media or failed remote media install aborts before stopping the service. Account/progress/pairing DBs are backed up but never replaced. Deployment refreshes the one verified `backups/distill-latest.tar.gz` archive instead of accumulating raw full-DB snapshots. Generated media remains ignored through existing `data/` rules and must be backed up separately from metadata.
+- Focused migration/store/transfer/deploy/push tests:36 passed. Full regression: 1,225 passed, 2 opt-in cases deselected. Production-copy rehearsal passed all 886 original and 162 thumbnail authenticated HTTP byte hashes and verified anonymous rejection, unchanged non-image tables/IDs and valid foreign keys. Deduplicated 1,043 files/146,541,246 bytes; compacted DB 159,563,776→9,986,048 bytes. Live migration pending. Existing Plainly files and its service are unaffected.
+
+
 ## 2026-10-27: Remove generated media from published Git history
 
 - At the user's explicit request, rewrote the sole published branch (`main`; no tags or open PRs) using git-filter-repo. Removed generated audio, book covers, chapter illustrations and guide images under both historical `frontend/static/` and current `plainly/frontend/static/` roots, plus generated redesign/e2e screenshot directories. App branding/icons and Kindle launcher covers remain versioned.
