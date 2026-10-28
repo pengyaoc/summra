@@ -94,10 +94,10 @@
   }
 
   function layout() {
-    // PW3 fullscreen removes 216px of native chrome. Its reported viewport
-    // grows by the same amount; retain the measured normal-mode correction.
+    // PW3 fullscreen removes 216px of chrome. Only outerHeight reflects
+    // this change: innerHeight/clientHeight remain1268px on this firmware.
     if (nativePW3 && shell) {
-      var extraHeight = Math.max(0, doc.clientHeight - 1268);
+      var extraHeight = window.outerHeight === screen.height ? 216 : 0;
       body.style.height = (1260 + extraHeight) + 'px';
       shell.style.height = (1279 + extraHeight) + 'px';
     }
@@ -387,6 +387,16 @@
       else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
       else show(pageOfParagraph(num('start')));
     }, 200);
+    // Native chrome changes outerHeight without changing innerHeight. Some
+    // builds omit the DOM resize event, so only reflow when this value changes.
+    var nativeOuterHeight = window.outerHeight;
+    setInterval(function () {
+      if (window.outerHeight === nativeOuterHeight) return;
+      nativeOuterHeight = window.outerHeight;
+      var at = currentParagraph();
+      layout();
+      show(pageOfParagraph(at));
+    }, 1000);
   }
 
 })();

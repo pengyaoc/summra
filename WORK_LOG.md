@@ -1,5 +1,9 @@
 # Summra Work Log
 
+## 2026-10-27: Detect measured fullscreen outer height
+
+Physical geometry proves that fullscreen changes outerHeight1232→1448 while innerHeight/clientHeight stay1268. Use the matched PW3's outerHeight equal to screen.height to add216px to the native body/shell. A once-per-second native-only check repaginates only when outerHeight changes, covering builds that omit DOM resize. Regression emulates the real fixed-inner-height behavior. Restore shortcut now validates the exact standard browser title as well as titles with extra fields; manual restoration returns1232px and removes session state. Normal Home scriptlet launch successfully opens the authenticated fullscreen library. Direct browser LIPC `go` caused a Mesquite crash and is excluded; recovery dismissed its dialog and reopened via normal launch. Temporary geometry diagnostic will be removed during clean deployment. No native browser/root-filesystem edits or auth/data changes.
+
 ## 2026-10-27: Use native fullscreen browser space
 
 A reversible X11 window-title request (`PC:N` versus normal `PC:TS`) hides the PW3's native status/URL bars without replacing the authenticated browser or editing its files. Physical screenshot confirms1072×1448 at y0 instead of1072×1232 at y216. The native reader now adds any reported viewport-height increase above1268px to its measured1260px body/1279px scroll shell; reversing fullscreen restores normal height. Only the existing matched legacy PW3 profile uses this correction. Added enter/exit height regression coverage. No data/auth/progress schema changes. Launcher and full-height physical verification pending.
