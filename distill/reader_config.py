@@ -12,7 +12,7 @@ DISTILL_READER = ReaderConfig(
     kindle=KindleOptions((('summary', 'Summary'),), 'summary', font_size_max=10, font_size_default=6,
                         font_choices=(('system', '默认'), ('song', '宋体'), ('hei', '黑体')),
                         font_default='song'),
-    extra_page_blocks='figure.reader-figure',
+    extra_page_blocks='figure.reader-figure, table.reader-grid',
     flow_complex_blocks=True,
     inline='strict',
     image_base='',

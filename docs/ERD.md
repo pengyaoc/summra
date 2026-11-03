@@ -1,5 +1,61 @@
 # Summra - Technical Implementation Details
 
+## 2026-11-03 — GitHub and VM synchronization
+
+The research-table and Kindle startup/illustration changes, regression coverage,
+and publication/deployment records are being committed together and synchronized
+to GitHub and the VM. This records the already deployed behavior above; the sync
+adds no architectural or data-model changes. Content/media and account/progress
+stores remain deployment data. Physical Kindle paint verification is still
+pending. Final revision and verification evidence are recorded in WORK_LOG.md.
+
+
+## 2026-11-02 — Kindle startup and illustration layout repair
+
+The shared Kindle reader now hides its body before the first body paint when
+JavaScript is enabled, waits for chapter image load/error completion, and reveals
+the requested page only after pagination and the existing native PW3 shell's
+200 ms geometry settlement. A 15-second head-script recovery preserves access
+if the reader script fails; the image wait is capped at 10 seconds. Failed or
+stalled images are hidden before pagination, retain their captions, and cannot
+shift an already displayed page when a late request completes. No-JavaScript
+reading retains the existing visible scrolling chapter.
+
+Loaded illustrations receive explicit proportional dimensions before column
+pagination. The image plus caption and figure margins are constrained to the
+reading viewport; figures and images explicitly use block layout, avoiding
+reliance on an old browser's HTML5 figure defaults and inline-image baselines.
+Resize notifications with unchanged geometry do not repaginate. Existing native
+PW3 shell setup ordering, fullscreen polling/reload behavior, startup fragments,
+font controls, authentication and progress coordinates remain. No DB/schema or
+content changes. Deployed and live-verified November 2, 2026; physical Kindle
+paint/drag confirmation remains pending because the device is unreachable.
+Validation details are in WORK_LOG.md.
+
+
+## 2026-11-02 — Research grids and NVIDIA publication
+
+Table blocks may opt into `presentation: "grid"` (validated by the format loader).
+Distill's web reader keeps these as semantic tables, explicitly includes them in
+pagination, and caps each scrolling grid to its measured page height. Wheel and
+touch gestures within a grid scroll its cells; page navigation remains outside
+the grid. Existing table blocks retain their paragraph-flow behavior. Kindle
+server rendering expands opted-in grids into splittable cell paragraphs with
+repeated row/column labels and the original block index, preventing narrow,
+tall tables from clipping without depending on modern browser APIs. No SQL
+schema, authentication, or account/progress storage changes.
+
+The two October 31 NVIDIA Markdown documents are imported unchanged in substance
+as one entry, `nvidia-equity-research-2026-10-31`: two parts, 21 reader sections,
+21 native table blocks, category `Equity research`. YAML is metadata; Markdown
+links become label plus full URL under the strict-inline format, and two literal
+footnote asterisks use the equivalent Unicode asterisk to avoid emphasis parsing.
+Source sequence verification covers 1,331 headings, paragraphs, list items and
+table cells. Local reader count is 14,626 words. Published and production-verified as book 63
+on November 2, 2026; all 21 tables and sections pass live checks. Detailed
+evidence is in WORK_LOG.md.
+
+
 ## File-media migration verified live (2026-10-28)
 
 Production and the Mac authoring content DB now use the file-backed schema

@@ -7,8 +7,8 @@
 /* Distill's block vocabulary on the shared Kindle e-ink pages. No JavaScript here:
    kindle.js paginates .flow into columns, so nothing may be split across one. */
 .flow table, .flow tr, .flow figure { -webkit-column-break-inside: avoid; break-inside: avoid; }
-.flow figure { margin: 1em 0; text-align: center; text-indent: 0; }
-.flow figure img { max-width: 100%; max-height: 540px; }
+.flow figure { display: block; margin: 1em 0; text-align: center; text-indent: 0; }
+.flow figure img { display: block; margin: 0 auto; max-width: 100%; max-height: 540px; -webkit-column-break-inside: avoid; break-inside: avoid; }
 .flow figcaption { font-size: 0.8em; font-style: italic; text-align: center; }
 
 .flow h3 { font-size: 1.1em; margin: 1.1em 0 0.4em; text-align: left; -webkit-column-break-after: avoid; break-after: avoid; }
@@ -24,5 +24,6 @@
 .flow table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0.8em 0; font-size: 0.8em; text-align: left; }
 .flow th, .flow td { border: 2px solid #000; padding: 4px 6px; vertical-align: top; word-wrap: break-word; }
 .flow th { font-weight: bold; }
+.flow .reader-table-cell { text-indent: 0; text-align: left; margin: 0.4em 0; word-wrap: break-word; }
 
 .list li.part { padding: 14px 0 4px; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #000; }

@@ -5,7 +5,7 @@
 //
 // Screenshots land in ./screenshots/kindle_*.png.
 
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -27,6 +27,143 @@ const check = (ok, label) => {
 };
 
 const browser = await chromium.launch({ headless: !process.env.HEADED });
+
+// Standalone Distill image/startup regression:
+// BASE_URL=http://localhost:5003 KINDLE_SLUG=atomic-habits KINDLE_IMAGES_ONLY=1 node kindle_mode.mjs
+// Deliberately hold image responses so a cached-image-only test cannot pass.
+async function checkIllustrations(engine, name) {
+  for (const shape of [{width:640,height:1200}, {width:1200,height:300}]) {
+    const context = await engine.newContext({
+      userAgent: KINDLE_UA, viewport: {width:1072,height:1268},
+      screen: {width:1072,height:1448}, hasTouch:false,
+    });
+    const pg = await context.newPage();
+    const problems = [];
+    pg.on('pageerror', error => problems.push(error.message));
+    await pg.addInitScript(() => {
+      window.__readerReveals = 0;
+      new MutationObserver(records => {
+        for (const record of records) {
+          if (record.target === document.documentElement && record.attributeName === 'class'
+              && /reader-loading/.test(record.oldValue || '')
+              && !/reader-loading/.test(document.documentElement.className)) window.__readerReveals++;
+        }
+      }).observe(document, {subtree:true, attributes:true, attributeOldValue:true, attributeFilter:['class']});
+    });
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let requested;
+    const imageRequested = new Promise(resolve => { requested = resolve; });
+    await pg.route('**/books/*/images/*', async route => {
+      requested();
+      await gate;
+      await route.fulfill({contentType:'image/svg+xml', body:
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${shape.width}" height="${shape.height}"><rect width="100%" height="50%" fill="black"/><rect y="50%" width="100%" height="50%" fill="#999"/></svg>`});
+    });
+    await pg.goto(`${base}/books/${SLUG}/read?ch=2#fwd`, {waitUntil:'domcontentloaded'});
+    await imageRequested;
+    check(await pg.locator('body').evaluate(el => getComputedStyle(el).visibility === 'hidden'), `${name}: delayed image keeps initial layouts hidden`);
+    check(await pg.locator('#left').innerText() === '', `${name}: no text-only page published before image dimensions`);
+    release();
+    await pg.waitForFunction(() => !/reader-loading/.test(document.documentElement.className));
+    const inspect = () => pg.evaluate(() => {
+      const flow = document.getElementById('flow');
+      const vp = document.getElementById('viewport');
+      const image = flow.querySelector('figure img');
+      const figure = image.closest('figure');
+      const rects = [...image.getClientRects()];
+      return {
+        complete:image.complete && image.naturalWidth > 0,
+        width:image.width, height:image.height, ratio:image.width / image.height,
+        naturalRatio:image.naturalWidth / image.naturalHeight,
+        figureHeight:figure.offsetHeight, viewportHeight:vp.clientHeight,
+        rectCount:rects.length, imageTop:image.getBoundingClientRect().top,
+        figureTop:figure.getBoundingClientRect().top,
+        display:getComputedStyle(image).display,
+        reveals:window.__readerReveals,
+        footer:document.getElementById('menu-pos').textContent,
+        geometry:flow.style.cssText,
+      };
+    });
+    const first = await inspect();
+    check(first.complete && first.width > 0 && first.height > 0, `${name}: image loaded before reveal`);
+    check(Math.abs(first.ratio - first.naturalRatio) < 0.02, `${name}: image retains aspect ratio`);
+    check(first.figureHeight <= first.viewportHeight && first.rectCount === 1, `${name}: whole image and caption fit one column`);
+    check(first.display === 'block' && Math.abs(first.imageTop - first.figureTop) < 1, `${name}: no blank inline image baseline area`);
+    await pg.evaluate(() => window.dispatchEvent(new Event('resize')));
+    await pg.waitForTimeout(600);
+    const settled = await inspect();
+    check(settled.reveals === 1 && settled.geometry === first.geometry && settled.footer === first.footer,
+      `${name}: one reveal and no redundant resize repagination`);
+    await pg.screenshot({path:join(shots, `kindle_${name}_image_${shape.width}.png`)});
+    await pg.mouse.click(500, 20);
+    await pg.locator('#bigger').click();
+    const resized = await inspect();
+    check(resized.figureHeight <= resized.viewportHeight && Math.abs(resized.ratio - resized.naturalRatio) < 0.02,
+      `${name}: font changes preserve complete illustration`);
+    await pg.locator('#close').click();
+    // Keep the measured native PW3 shell sequence and fullscreen behavior.
+    if (await pg.locator('html.native-pw3').count()) {
+      await pg.evaluate(() => Object.defineProperty(window, 'outerHeight', {configurable:true, value:1448}));
+      await pg.waitForTimeout(1200);
+      check(await pg.locator('body').evaluate(el => el.clientHeight) === 1476,
+        `${name}: native fullscreen height retained`);
+      const reloaded = pg.waitForEvent('domcontentloaded');
+      await pg.evaluate(() => Object.defineProperty(window, 'outerHeight', {configurable:true, value:1232}));
+      await reloaded;
+      await pg.waitForFunction(() => !/reader-loading/.test(document.documentElement.className));
+      check(await pg.locator('body').evaluate(el => el.clientHeight) === 1260,
+        `${name}: native fullscreen exit reload retained`);
+    }
+    // Anchor navigation is applied before revealing, including the final page.
+    await pg.goto(`${base}/books/${SLUG}/read?ch=2#end`);
+    await pg.reload();
+    await pg.waitForFunction(() => !/reader-loading/.test(document.documentElement.className));
+    check((await pg.locator('#left').innerText()) === 'End of chapter', `${name}: startup end anchor preserved`);
+    check(problems.length === 0, `${name}: no image/startup script errors (${problems.join(' | ')})`);
+    await context.close();
+  }
+  for (const failure of ['error', 'stalled']) {
+    const context = await engine.newContext({userAgent:KINDLE_UA, viewport:{width:758,height:950}});
+    const pg = await context.newPage();
+    // Exercise the real timeout branch promptly, while retaining head recovery.
+    await pg.addInitScript(() => {
+      const timeout = window.setTimeout;
+      window.setTimeout = function(callback, ms) { return timeout(callback, ms === 10000 ? 150 : ms); };
+    });
+    let release;
+    const gate = new Promise(resolve => {release=resolve;});
+    await pg.route('**/books/*/images/*', async route => {
+      if (failure === 'error') return route.abort();
+      await gate;
+      await route.fulfill({contentType:'image/svg+xml', body:'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="1200"><rect width="600" height="1200"/></svg>'});
+    });
+    await pg.goto(`${base}/books/${SLUG}/read?ch=2`, {waitUntil:'domcontentloaded'});
+    await pg.waitForFunction(() => !/reader-loading/.test(document.documentElement.className));
+    const before = await pg.locator('#flow').getAttribute('style');
+    release();
+    await pg.waitForLoadState('load');
+    await pg.waitForTimeout(300);
+    check(await pg.locator('#flow figure img').evaluate(el => getComputedStyle(el).display === 'none')
+      && await pg.locator('#flow figcaption').count() > 0
+      && await pg.locator('#flow').getAttribute('style') === before,
+      `${name}: ${failure} image retains caption and cannot reflow after reveal`);
+    await context.close();
+  }
+  const nojs = await engine.newContext({userAgent:KINDLE_UA, javaScriptEnabled:false});
+  const pg = await nojs.newPage();
+  await pg.goto(`${base}/books/${SLUG}/read?ch=2`);
+  check(await pg.locator('body').isVisible(), `${name}: no-JavaScript chapter stays visible`);
+  await nojs.close();
+}
+if (process.env.KINDLE_IMAGES_ONLY) {
+  await checkIllustrations(browser, 'chromium');
+  const wk = await webkit.launch({headless:true});
+  await checkIllustrations(wk, 'webkit');
+  await wk.close();
+  await browser.close();
+  process.exit(failures.length ? 1 : 0);
+}
 // Paperwhite's browser viewport is roughly 758x1024 CSS px under its toolbar.
 const ctx = await browser.newContext({ userAgent: KINDLE_UA, viewport: { width: 758, height: 950 } });
 const page = await ctx.newPage();

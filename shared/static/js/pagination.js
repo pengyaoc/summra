@@ -79,6 +79,7 @@ export const paginationMixin = {
         // Handle wheel events for scroll-to-turn-page
         const handleWheel = (e) => {
             if (this.continuousPanelOpen?.()) return;
+            if (e.target.closest?.('.reader-grid')) return;
             const chapterSection = document.getElementById('chapter-detail-section');
             if ((!chapterSection || chapterSection.classList.contains('hidden')) && !this.continuousReader?.active) {
                 return;
@@ -387,6 +388,11 @@ export const paginationMixin = {
                 // a mode switch) in the previous chapter.
                 if (pageBlocks.length > 0 && block.matches?.('h2.reader-chapter-heading')) break;
                 const clone = block.cloneNode(true);
+                if (block.matches?.('table.reader-grid')) {
+                    // Bound the scrollable grid to the actual page, including
+                    // short landscape viewports and enlarged reader fonts.
+                    block.style.maxHeight = clone.style.maxHeight = `${Math.max(1, this.pagination.containerHeight - 40)}px`;
+                }
                 pageDiv.appendChild(clone);
 
                 // Check for overflow using native scrollHeight (pixel-perfect!)
@@ -847,7 +853,7 @@ export const paginationMixin = {
 
         wrapperElement.addEventListener('touchstart', (e) => {
             const selection = window.getSelection();
-            if (e.touches.length !== 1 || this.pagination.isNavigating || (selection && !selection.isCollapsed)) {
+            if (e.target.closest?.('.reader-grid') || e.touches.length !== 1 || this.pagination.isNavigating || (selection && !selection.isCollapsed)) {
                 drag = null;
                 return;
             }

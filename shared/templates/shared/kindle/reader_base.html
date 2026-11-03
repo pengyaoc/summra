@@ -18,6 +18,16 @@
   Also used: base_path, asset_v, reader_config (platform context).
 #}
 {% extends 'shared/kindle/base.html' %}
+{% block head_start %}
+<script>
+// Hide intermediate pagination before the body can paint. With scripting off,
+// the ordinary scrolling chapter remains visible. Recover if the reader fails.
+document.documentElement.className += ' reader-loading';
+window.kindleLoadingTimeout = setTimeout(function () {
+  document.documentElement.className = document.documentElement.className.replace(/\breader-loading\b/g, '');
+}, 15000);
+</script>
+{% endblock %}
 {% block html_class %}reading fs-{{ font_size }} font-{{ font_family|default('system') }}{% endblock %}
 {% block title %}{{ chapter.chapter_title or ('Chapter ' ~ chapter.chapter_number) }} — {{ book.title }}{% endblock %}
 {% block body_class %}reader{% endblock %}

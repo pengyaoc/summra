@@ -19,12 +19,39 @@ from shared.kindle.pages import (
 )
 from shared.kindle.progress import save_progress as shared_save_progress
 from shared.progress import routes as progress_routes
-from shared.reader.blocks import block_element, block_text
+from shared.reader.blocks import block_element, block_text, format_inline
+from markupsafe import Markup
 from shared.reader.index import ReaderIndexMixin
 
 bp = Blueprint('distill_kindle', __name__)
 
 TEXT = 'summary'  # Distill's one text
+
+
+def _kindle_block(block, index):
+    """Read wide research grids cell by cell without shrinking or clipping.
+
+    Each cell is a splittable paragraph; repeated row and column labels keep
+    context across e-ink pages. All cells retain the table's progress index.
+    The no-JS reader receives the same complete, readable representation.
+    """
+    if block.get('type') != 'table' or block.get('presentation') != 'grid':
+        return block_element(block, index, DISTILL_READER.image_base)
+    header = block.get('header', [])
+    rows = block.get('rows', [])
+    paragraphs = []
+    if not rows:
+        rows = [header]
+        header = []
+    for row in rows:
+        row_label = row[0] if row else ''
+        for column in range(max(len(row), len(header))):
+            label = header[column] if column < len(header) else ''
+            context = ' — '.join(value for value in (row_label if column else '', label) if value)
+            value = row[column] if column < len(row) else ''
+            prefix = f'<strong>{format_inline(context)}:</strong> ' if context else ''
+            paragraphs.append(f'<p class="reader-table-cell" data-i="{index}">{prefix}{format_inline(value)}</p>')
+    return Markup('\n'.join(paragraphs))
 
 
 def _saved_position(book_id, chapters):
@@ -122,7 +149,7 @@ def reader_page(slug):
     def chapter_url(i):
         return url(f'/books/{slug}/read', ch=ordinals[i]) if 0 <= i < len(chapters) else None
 
-    flow = [block_element(b, i, DISTILL_READER.image_base) for i, b in enumerate(chapter['blocks'])]
+    flow = [_kindle_block(b, i) for i, b in enumerate(chapter['blocks'])]
     return render_page(
         'reader.html',
         book=book, chapter={'chapter_number': ordinal, 'chapter_title': chapter['title']},

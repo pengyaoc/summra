@@ -148,6 +148,7 @@ button.btn { -webkit-appearance: none; }
 .fs-10 .flow { font-size: 72px; line-height: 1.5; }
 
 /* Paginated once kindle.js runs: the page never scrolls. */
+.reader-loading body { visibility: hidden; }
 .js.reading { height: 100%; overflow: hidden; }
 .js.reading, .js.reading body { touch-action: none; overscroll-behavior: none; }
 /* Old Kindle WebKit can report window.innerHeight including browser chrome

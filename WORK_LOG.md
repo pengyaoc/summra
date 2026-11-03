@@ -10732,3 +10732,346 @@ CI never installed `distill/requirements.txt`, so `qrcode` was missing and the
 QR route returned HTML. That install is now in `ci.yml`. Run 40623715697 passed
 (1205 tests). The local venv's editable install was stale (it mapped the
 pre-split `backend`/`scripts`) and was reinstalled with `pip install -e .`.
+
+## 2026-10-29 — How Big Things Get Done: Distill content import
+
+Processing the owner's supplied English EPUB (Crown/Currency, 2023; ISBN
+9780593239520) with the book-summary skill's source-extraction, parallel-writing,
+independent-review, assembly and direct Distill import workflow. Staging files:
+/private/tmp/distill-how-big-things-20261029/. Three writers covered disjoint
+chapter groups; a separate fresh-context reviewer is checking the assembled book.
+The companion includes the introduction, all nine chapters, coda, both appendices,
+an overview and provenance, the complete 25-row cost-risk reference table, all
+three embedded figures and the EPUB's cover. No web images were requested.
+
+Pre-import read-only production check: live and local catalogs match exactly
+(54 book IDs/slugs/titles/checksums). Local recovery snapshot:
+/private/tmp/distill-how-big-things-20261029/pre-import-distill.db. Mechanical
+checks pass: 13/13 mapped entries, D1/D2/D3 all 5, all key points present; D6's
+numerical 1 reflects intentionally unillustrated chapters (online sourcing off).
+Dry-run validates 15 reader chapters including Overview/Source and 12,436 words.
+Scratch import passes web/Kindle library, book and reader rendering, all four
+JPEG routes, reader manifest, database integrity and foreign-key checks. Scratch
+user state is separate from real reading progress. No application code, schema,
+or product requirements changed; ERD/PRD changes are unnecessary for this content
+addition. Independent review found and corrected two compression errors (ongoing versus completed book-writing duration; the number of stations versus the number of shared designs). The fresh reviewer verified both fixes in rebuilt book.json and approved the final result: D4/D5/D7 all 5. Rebuilt gate/D1/D2/D3 still pass; final text is 12,448 words. Added the generalizable source-compression safeguards to the skill as its feedback step requires. Master import succeeded as book 59, bringing the catalog to 55 books; all previous 54 IDs/titles/checksums are unchanged, integrity is OK, and foreign-key checks pass. Deployment succeeded with the existing push_book --deploy script (verified media upload and live backup, content DB swap, service restart and expected unauthenticated 401). Live checks confirm 55 books, new book 59, 15 reader chapters, authenticated book/reader/cover/manifest HTTP 200 and every reader segment HTTP 200. Live integrity and foreign-key checks pass. Published URL: https://pengyaochen.com/distill/books/how-big-things-get-done. Account/progress databases were not replaced. No code changes or commit.
+
+## 2026-11-02 — The Innovator’s Dilemma: Distill content import
+
+Prepared an original English summary from the owner-supplied Clayton M.
+Christensen EPUB (SHA256
+40cfb78b6cfd019d789df284ade43d381ed0dfe995280026076cc9fc2a062834).
+Authoring folder: data/distill_import/the-innovators-dilemma/ (ignored data);
+source extraction and consistent pre-import DB backup are under
+/private/tmp/distill-innovators-dilemma/. The owner explicitly approved creating
+the folder and publishing. The summary includes an overview, introduction, all
+eleven chapters, book-group discussion/application, provenance and EPUB cover:
+15 reader chapters, 5,395 words. Historical examples and the hypothetical
+electric-vehicle application are identified as the book’s period and argument.
+
+Pre-import read-only checks found identical local/live catalogs (55 book
+IDs/slugs/titles/checksums). Format validation passes; a scratch import passes
+web/Kindle library, book and reader rendering, cover and manifest routes, both
+reader segments, anonymous auth rejection, integrity and foreign-key checks.
+Scratch account/pairing DBs are isolated from real user state. Source spot-checks
+confirmed resource/process/value distinctions, market-relative disruption,
+organizational independence, and the EV chapter’s speculative status. No app
+code, schema or product requirements changed; ERD/PRD need no content-only
+update. Publication is pending; no commit.
+
+Publication completed through the existing push_book --deploy workflow: book 60,
+56 total books. All prior 55 local IDs/slugs/titles/content checksums remain
+unchanged. Live catalog digest matches the complete local catalog
+(3bb2c904a567a07472e111306be4baf83888882a8edf07a670e4e04002f78d7a).
+Verified live book checksum, 15 chapters, integrity OK and no foreign-key errors.
+Authenticated loopback library, book, reader, EPUB cover, manifest and both reader
+segments return HTTP 200. Public launch returns 200 and the private book URL
+redirects signed-out visitors (302). The deploy script completed verified media
+installation, live database backup, content swap/restart and expected anonymous
+loopback 401. It did not replace account/progress or pairing databases.
+Published: https://pengyaochen.com/distill/books/the-innovators-dilemma.
+Content-only addition; no code changes or commit.
+
+## 2026-11-02 — The Innovator’s Dilemma: rubric audit and rebuild
+
+At the owner’s request, audited the published book against the now-discovered
+book-summary skill and RUBRIC.md. The initial mechanical check scores D1 1/5
+(all 13 sections below 600 words), D2 5/5, D3 3/5 (Introduction lacks keypoints),
+and D6 1/5 (no embedded figures). Existing source notes omit extraction details
+and explicit part-grouping provenance. The supplied EPUB contains substantive
+figures for the Introduction and chapters 1–10, so the prior omission does not
+qualify for the skill’s default online-image exemption. Chapters 11 and the Book
+Group Guide have no substantive embedded figure; external sourcing remains off.
+
+Verified that local and production catalogs match: 56 books, identical IDs,
+titles, slugs and content checksums (catalog digest
+6a258cb408cb38c927902f861337ae1d8182e941c77f4c53cd29bf2f6cc772d2).
+Book 60 is the existing entry and will retain its slug/ID. Created a consistent
+pre-revision content snapshot in the existing scratch authoring directory,
+/private/tmp/distill-innovators-dilemma/. Three source-reading writer subagents
+are rebuilding disjoint chapter ranges; a fresh independent review will follow.
+Recorded the actual TOC/source lengths and restored eleven EPUB illustrations,
+with original source credits. Rebuilding content/provenance only; no app code,
+architecture, schema or product-requirement changes, so ERD/PRD are unaffected.
+Publication pending completion of the rubric gate and independent review.
+
+## 2026-11-02 — How Big Things Get Done: published rubric audit
+
+Read-only audit requested by the owner against the book-summary skill and its
+RUBRIC.md. Confirmed production book 59 matches the local content checksum
+cb670b0823adf1986bccaf40c6113a87ca634605aea963a27c0b665c44995d54.
+Recovered the actual Crown/Currency 2023 EPUB from the Calibre library; its NCX
+confirms all 13 mapped entries and their order. Recomputed source lengths from
+the chapter XHTML and current summary lengths with the skill scorer in memory:
+all summaries are 713–1,222 words, in the allowed band including its soft cap.
+Gate passes; D1/D2/D3 score 5. All three substantive embedded figures are present
+in the correct chapters (1 and 9), plus the edition cover. D6 numerically scores
+1 for 2/13 chapter coverage, but online sourcing remains off under the skill's
+explicit default exemption; no embedded figures are missing.
+
+A fresh independent reviewer read Overview, all 13 mapped entries, and Source,
+and checked consequential claims against the actual EPUB throughout the book.
+D4 specificity and D5 provenance score 5; D7 readability scores 4. No confirmed
+factual errors, chapter gaps, or contradictions require rewriting. Optional
+presentation polish: move Chapter 1's performance figure beside its dataset
+explanation; move Chapter 9's two figures beside their respective discussions;
+format Chapter 4's four iteration advantages as bullets. These are minor
+presentation findings rather than failed chapters. The prior Caro duration and
+Madrid station/design corrections remain accurate. Appendix A's 25 rows and
+three numeric columns match the source. No full independent external fact-check
+or live visual inspection was claimed. Content, deployment, application code,
+architecture, schema, and product requirements are unchanged; no commit.
+
+Rebuild complete: 13 mapped source entries / 15 reader chapters, 13,782 reader
+words, eleven embedded chapter illustrations plus the original EPUB cover.
+Mechanical gate passes 13/13; D1/D2/D3 all 5/5, every chapter 600–1,300 words
+(including the rubric’s soft cap allowance). Raw D6 is 3/5 (11/13); only the
+source-unillustrated chapter 11 and guide are exempt under embedded-only scope.
+The fresh independent reviewer read all drafts and final JSON and checked
+source-sensitive claims. D4/D5 score 5/5. Two D7 findings in chapter 9 and the
+guide were fixed by restoring explicit strategy/principle/response lists;
+reviewer confirmed both assembled blocks and upgraded D7 to 5/5, with no
+outstanding findings. These reinforce the skill’s existing enumeration rule;
+no new generalizable error class required an additional skill rule.
+
+The final scratch import passes web/Kindle library/book/reader HTTP rendering,
+all twelve original images (exact bytes), three cover variants, all five reader
+segments, privacy rejection and SQLite integrity/foreign-key checks. Real user
+and pairing state were isolated throughout scratch validation. Source provenance
+now records both the OPF and copyright-page ISBNs without conflating them.
+Final publication authorized by the original redo/redeploy request; proceeding
+through the existing verified-media deployment workflow. No app-code changes or
+commit; only this existing work log is tracked.
+
+Re-deployed successfully as the existing book 60 at
+https://pengyaochen.com/distill/books/the-innovators-dilemma.
+All 55 other book records/checksums are unchanged; all 15 existing chapter IDs
+are retained. Final live catalog matches local (56 books; digest
+703bb1ed680812d66b086f955e7d03b94da65f5963a9bdf32d2d3733b7a98a4e).
+Revised book checksum:
+1a17455494a7edbb94253f4c937979509b7175a56e7c2ee9c9280b6d45c56219.
+Production verification passes authenticated web/Kindle library/book/reader,
+all twelve image endpoints, reader manifest and all five segments (HTTP 200),
+expected anonymous book rejection (401), integrity OK and zero foreign-key
+errors. Live manifest reports 13,782 words. Deployment refreshed the existing
+backup and verified media before metadata activation, then restarted Distill;
+account/progress/pairing databases were not replaced. Content-only revision;
+no code/schema migration or commit. Scratch findings and verification output
+remain in /private/tmp/distill-innovators-dilemma/.
+
+## 2026-11-02 — A Philosophy of Software Design: Distill reading companion
+
+User requested the book-summary skill for the supplied English EPUB and publication
+to Distill. Source is John Ousterhout, second edition v2.0 (July 2021), Yaknyam
+Press; copyright ISBN 978-1-7321022-1-7. Extracted the complete XHTML spine and
+185 print-page anchors. User explicitly selected 22 detailed chapter summaries
+with subsection topics retained within each chapter. Three independent writing
+chunks cover chapters 1–7, 8–14, and 15–22; fresh rubric/coherence review follows
+assembly. Scratch authoring and recovery snapshot are under
+/private/tmp/distill-software-design/. Original EPUB cover and nine substantive
+embedded illustrations across eight chapters selected; repeated warning icons
+and separators excluded. Online image sourcing is off by default. No invented
+Parts; closing reference lists are explicitly identified when used in chapter 22.
+Validation, independent review, and deployment are pending. Content-only addition;
+no application code/schema changes or commit. Existing work-log changes preserved.
+
+Assembly passes the Distill validator and chapter gate (22/22). D1/D2/D3 are
+5/5; every chapter is in the rubric depth band with canonical key points.
+Raw D6 is 1/5 (8/22 illustrated, nine figures); remaining fourteen chapters have
+no substantive embedded illustrations and are exempt under the default online
+sourcing scope. Original cover is the tenth image file. Current reader text is
+18,432 words across 24 entries (22 numbered chapters, Overview, and canonical
+Source). Scratch import passes web/Kindle library/book/reader rendering, all ten
+image endpoints with exact byte comparisons, cover endpoints, all six reader
+segments, SQLite integrity, and foreign-key checks. Local/live preflight catalogs
+match exactly (56 books; digest
+703bb1ed680812d66b086f955e7d03b94da65f5963a9bdf32d2d3733b7a98a4e).
+Fresh independent review is in progress; master content DB remains unchanged.
+
+Fresh reviewer completed full draft/overview/source reading and targeted source
+checks. Three caption precision findings (chapters 2, 3, 7) were confirmed
+against original figures and fixed: avoid introducing CSS, preserve the strategic
+progress figure’s qualitative/nonempirical status, and distinguish pass-through
+configuration variables from the context-object remedy. Reviewer confirmed all
+three corrections in rebuilt book.json. Final scores: gate pass; D1/D2/D3/D4/D5/D7
+all 5/5; D6 raw 1/5 with source-unillustrated chapters exempt. Added a targeted
+caption-grounding self-check to the invoked book-summary skill as its required
+feedback step directs. Final validator and scratch reader checks pass again:
+18,456 reader words, 24 entries, ten images, six segments. Category: Science &
+technology. Publishing is authorized by the original user request; proceeding
+through the existing verified-media deployment workflow. No code/schema changes.
+
+Published successfully as book 62:
+https://pengyaochen.com/distill/books/a-philosophy-of-software-design.
+Live verification confirms 57 books and catalog digest matching local:
+4f7c043fa8468edd5287f21867b1490fa841d01e9d7312902f5bc87819d2a3ef.
+New-book checksum:
+7294d8b5f2323b49da85d37ab62a6f970a2d304cac9155f16bc4d6cbf94532f4.
+All previous 56 local IDs/slugs/titles/checksums unchanged. Production web/Kindle
+library/book/reader return HTTP 200, all ten image endpoints and six reader
+segments pass, anonymous book access returns expected 401, integrity is OK, and
+foreign-key checks are clean. Live reader reports 18,456 words and 24 entries
+(22 chapter summaries + Overview + Source). Deployment verified media before
+activation, refreshed backup, and restarted the service; account/progress DBs
+were not replaced. Three writer agents and one fresh independent reviewer used.
+No application code/schema change or commit; content and deployment evidence
+remain in scratch, with only the existing work log updated in the repository.
+
+## 2026-11-02 — NVIDIA full equity research publication and table support
+
+User requested both supplied October 31 NVIDIA Markdown documents as one Distill
+entry, with no summarization, tagged equity research and readable web/Kindle
+tables. Built `nvidia-equity-research-2026-10-31` in scratch: 2 parts, 21 sections,
+14,626 words, all 21 source tables. Sequential preservation check covers 587
+research and 744 valuation source units; both source SHA256 values are recorded
+in /private/tmp/distill-nvidia-20261031/conversion-verification.json. Formatting
+adaptations: omit YAML delimiters, expose each Markdown link as label plus full
+URL (strict-inline does not allow hyperlinks), and use Unicode literal footnote
+asterisks. Source files untouched. No summarization or fact revision.
+
+Implemented opt-in grid presentation: actual table grids on web, bounded by the
+measured pagination height, with local wheel/touch scrolling. Existing tables
+keep their prior flow. Kindle expands opted-in tables into readable paragraphs
+with row/column context and original block progress indices. No schema/auth
+changes. ERD and PRD updated. Local/live preflight catalogs match at 57 books,
+digest 4f7c043fa8468edd5287f21867b1490fa841d01e9d7312902f5bc87819d2a3ef.
+Initial focused tests: 48 passed. Broader tests found the expected configuration
+snapshot assertion, now updated. Desktop/phone/landscape browser table checks
+pass; Kindle's test expected-count typo corrected (194 cells in comps chapter).
+Final regression run and deployment pending. Existing WORK_LOG changes preserved.
+
+Final local regression: 257 tests pass (Distill suite, shared block parity, shared
+Kindle). Frontend bundle rebuilt; build freshness and diff whitespace checks
+pass. Chromium desktop 1280×900, phone 390×844 and landscape 844×390 checks
+confirm the 10-column / 17-row comparison grid is retained, bounded, and scrolls
+both axes without turning pages. Kindle UA at 1072×1268 renders all 194 cells
+of the two comps tables as labeled, paginatable paragraphs; screenshot inspected.
+This is browser emulation, not a physical Kindle check. Production checkout HEAD
+matches local and has no tracked modifications. Deployment will copy only the
+reviewed changed runtime files with a rollback archive; no commit or push, and
+pre-existing local work-log changes remain intact.
+
+Published successfully as book 63 at
+https://pengyaochen.com/distill/books/nvidia-equity-research-2026-10-31.
+Production verifies 58 books, category Equity research, all 21 sections and 21
+tables, 844 Kindle cell paragraphs, all 5 reader segments and 14,626 reader words.
+Live runtime file SHA256 values match the verified local files. Web/Kindle
+library/book/reader return 200; anonymous book access returns 401. SQLite
+integrity and foreign keys pass. Catalog digest:
+10c0f791b1aa5c93838a1c42c2e553f7caced2a579a2231c690d844b616ad11e.
+New book checksum:
+95d639d75f35591e11fb3019b1591c1ee00920d02c8b6d7799a92cf70682166a.
+All 57 previous local book IDs/slugs/titles/checksums were verified unchanged
+before deployment; the exact live catalog matches local after deployment.
+The existing deploy workflow refreshed its consistent content/account/pairing
+backup, verified media, then activated metadata and restarted Distill. Account,
+progress and pairing DBs were not replaced. Code rollback archive:
+/opt/summra/data/backups/nvidia-reader-before-20261102.tar.gz. Reader code was
+deployed directly; local and production tracked changes remain uncommitted.
+No Git commit/push was requested or made. Final Kindle focused run: 22 passed
+after adding paragraph separation; prior broad run: 257 passed. Browser screenshots
+and conversion/live evidence are in /private/tmp/distill-nvidia-20261031/.
+
+## 2026-11-02 — Kindle startup flash and partially rendered illustrations
+
+User reports visible chapter-start render/flash/re-render and images with blank
+upper halves. Code inspection confirms initial pagination/show followed by a
+second native PW3 pagination/show after 200 ms, with neither waiting for image
+requests; figure/image layout also relied on HTML5/default inline formatting.
+The previously configured device at 192.168.1.133:2222 timed out, so no physical
+reproduction or verification is claimed.
+
+Implemented head-time visibility gating with a 15-second failure fallback,
+load/error-aware image readiness capped at 10 seconds, and a single final reveal
+after the preserved PW3 shell settlement. Images are explicitly proportionally
+sized before columns to fit the viewport with caption/margins. Distill figures
+and images use explicit block layout. Identical resize events no longer trigger
+repagination. Broken/stalled images cannot reflow visible text later. No schema,
+content, account, auth, launcher or device changes. Existing NVIDIA/table work
+and prior work-log modifications are preserved. ERD/PRD updated.
+
+Added delayed-image portrait/landscape browser coverage in the existing Kindle
+e2e script, including single reveal, image/figure geometry and end-anchor reload.
+Initial Chromium and WebKit image/readiness/geometry checks passed; the initial
+end-anchor test used same-document fragment navigation, corrected to reload for
+a true chapter-start check. ES5 source gate initially matched the word “let” in
+a comment; wording corrected without changing syntax. Full regression and final
+browser checks are running; deployment pending.
+
+Local validation complete: 301 relevant Python tests pass (Distill, shared Kindle,
+Plainly Kindle and markup characterization), plus the ES5 source gate. Extended
+Chromium/WebKit tests pass for delayed portrait/landscape images, one startup
+reveal, unchanged-geometry resize suppression, font resizing, native fullscreen
+entry/exit, end-anchor restoration, failed/stalled image late-arrival stability,
+and no-JavaScript reading. Existing full Plainly Kindle browser suite passes,
+including sync/resume, Original/Plain English switching, page boundaries and
+native PW3 shell/fullscreen geometry. Real Atomic Habits and Software Design
+illustrations fit and appear complete in WebKit screenshots, visually inspected.
+Physical Kindle remains unreachable; browser emulation cannot establish device
+paint correctness or native drag containment. Preparing a five-file deployment
+with preimage hash checks and rollback; content DB will not be deployed.
+
+Deployed the five reviewed runtime files with exact preimage/SHA256 checks;
+rollback: /opt/summra/data/backups/kindle-render-before-20261102.tar.gz.
+Restarted Distill and Plainly because both cache the shared reader template;
+both services are active. Production verifies all five file hashes, startup
+visibility guard in the head before the body, updated JS/CSS, authenticated
+Distill and Plainly Kindle chapters (200), original illustration asset (200),
+and anonymous Distill rejection (401). All 58 book records/checksums match the
+pre-deploy catalog digest
+10c0f791b1aa5c93838a1c42c2e553f7caced2a579a2231c690d844b616ad11e;
+integrity and foreign keys pass. No content/account/progress/pairing database
+was copied or replaced. No launcher/device modifications. No commit or push;
+earlier local and production changes remain preserved. Final diff whitespace
+check passes. Live/deploy evidence: /private/tmp/distill-nvidia-20261031/
+kindle-live-verification.json and kindle-deployment.json. On-device confirmation
+of the reported painting symptoms remains pending; no claim of physical proof.
+
+## 2026-11-03 — Commit and synchronize all pending changes
+
+Owner explicitly requested logging, committing, and pushing all changes to
+GitHub and the VM. Scope includes the pending historical content-publication
+work-log entries, full NVIDIA publication, opt-in research grids and Kindle
+cell flow, startup single-reveal/image sizing repairs, built web bundle, and
+regression tests. ERD/PRD describe the final implemented behavior and explicitly
+record no additional product/schema impact from this synchronization step.
+The previous “no commit/push” notes describe the earlier deployment stage and
+are superseded by this request.
+
+Re-fetched origin before committing. Targeted regressions pass: 303 tests;
+frontend build freshness passes. Earlier Chromium/WebKit image regressions,
+full Plainly Kindle navigation/sync/fullscreen checks, web table viewport checks,
+and live production/privacy/catalog checks passed as recorded above. A final
+full Python suite is running. GitHub push and VM Git synchronization are pending;
+VM directly deployed runtime edits will be preserved and matched by hash before
+fast-forwarding the checkout. Databases/media are already live and will not be
+replaced. Physical Kindle verification remains pending (device unreachable).
+
+Final validation: the full suite passed 1,219 tests; eight Gutenberg-dependent
+checks failed only because sandbox DNS/network access was blocked. Re-ran those
+eight with network access: 8/8 passed. Combined result: all 1,227 selected tests
+pass, with two existing deselections and one dependency deprecation warning.
+Build freshness and diff whitespace checks pass. Origin/main matches local base
+(e5849fa), and the VM is on that base with exactly the twelve expected tracked
+runtime edits. Proceeding with the owner-authorized commit and push; runtime
+hash comparison and a recoverable stash will protect VM edits during Git sync.

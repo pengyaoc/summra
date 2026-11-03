@@ -50,6 +50,10 @@
   var page = 0;
   var starts = [];    // page each paragraph starts on
   var ends = [];      // page each paragraph ends on
+  var ready = false;
+  var nativePW3 = false;
+  var shell = null;
+  var geometry = '';
 
   addClass(doc, 'js');
 
@@ -93,6 +97,29 @@
     return Math.max(0, Math.floor((offsetOf(el) + 2) / step));
   }
 
+  function windowGeometry() {
+    return doc.clientWidth + ',' + doc.clientHeight + ',' + window.outerHeight;
+  }
+
+  function fitImages(width, height) {
+    var images = flow.getElementsByTagName('img');
+    for (var i = 0; i < images.length; i++) {
+      var image = images[i];
+      if (!image.complete || !image.naturalWidth || !image.naturalHeight) continue;
+      var figure = image.parentNode;
+      var captions = figure.getElementsByTagName('figcaption');
+      var captionHeight = captions.length ? captions[0].offsetHeight : 0;
+      var style = window.getComputedStyle(figure, null);
+      var margins = (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+      // Size the replaced element before columns fragment it. The complete
+      // illustration and its caption must fit within a single e-ink page.
+      var available = Math.max(1, Math.min(540, height - captionHeight - margins - 8));
+      var scale = Math.min(1, width / image.naturalWidth, available / image.naturalHeight);
+      image.style.width = Math.max(1, Math.floor(image.naturalWidth * scale)) + 'px';
+      image.style.height = Math.max(1, Math.floor(image.naturalHeight * scale)) + 'px';
+    }
+  }
+
   function layout() {
     // PW3 fullscreen removes 216px of chrome. Only outerHeight reflects
     // this change: innerHeight/clientHeight remain1268px on this firmware.
@@ -112,6 +139,11 @@
     flow.style.top = '0px';
     rows = false;
     flow.style.width = width + 'px';
+    flow.style.height = height + 'px';
+    // Measure captions in the unfragmented flow, including after a font change.
+    setStyle('columnWidth', 'auto');
+    flow.style.height = 'auto';
+    fitImages(width, height);
     flow.style.height = height + 'px';
     setStyle('columnWidth', width + 'px');
     setStyle('columnGap', GAP + 'px');
@@ -312,6 +344,7 @@
   }
 
   document.onclick = function (e) {
+    if (!ready) return true;
     e = e || window.event;
     var target = e.target || e.srcElement;
     var link = linkOf(target);
@@ -340,6 +373,7 @@
   };
 
   document.onkeydown = function (e) {
+    if (!ready) return true;
     e = e || window.event;
     var k = e.keyCode;
     if (k === 37 || k === 33) { prev(); return false; }
@@ -350,61 +384,100 @@
 
   var resizeTimer = null;
   window.onresize = function () {
+    if (!ready) return;
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function () {
+      if (geometry === windowGeometry()) return;
       var at = currentParagraph();
       layout();
       show(pageOfParagraph(at));
+      geometry = windowGeometry();
     }, 200);
   };
 
-  updateSizeControls();
-  layout();
-  var hash = window.location.hash;
-  var m = /^#p=(\d+)$/.exec(hash);
-  if (hash === '#fwd') { forwardTurn = true; show(0); }
-  else if (hash === '#end') show(pages - 1);
-  else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
-  else show(pageOfParagraph(num('start')));
-
-  // PW3 native panning ignores DOM touch/scroll controls. Install its scroll
-  // surface after initial pagination, with explicit styles as verified on-device.
-  var nativePW3 = !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
-    window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth < doc.clientHeight;
-  if (nativePW3) {
-    var shell = document.createElement('div');
-    shell.id = 'reader-shell';
-    shell.style.cssText = 'position:relative;width:100%;height:1279px;overflow:scroll';
-    var parts = [head, viewport, foot, menu];
-    for (var n = 0; n < parts.length; n++) shell.appendChild(parts[n]);
-    body.appendChild(shell);
-    body.style.cssText = 'position:relative;top:0;left:0;right:auto;bottom:auto;width:104%;height:1260px;overflow:hidden';
-    addClass(doc, 'native-pw3');
-    setTimeout(function () {
-      layout();
-      if (hash === '#fwd') show(0);
+  function startReader() {
+    updateSizeControls();
+    layout();
+    var hash = window.location.hash;
+    var m = /^#p=(\d+)$/.exec(hash);
+    function reveal() {
+      if (hash === '#fwd') { forwardTurn = true; show(0); }
       else if (hash === '#end') show(pages - 1);
       else if (m) show(pageOfParagraph(parseInt(m[1], 10)));
       else show(pageOfParagraph(num('start')));
-    }, 200);
-    // Native chrome changes outerHeight without changing innerHeight. Some
-    // builds omit the DOM resize event, so only reflow when this value changes.
-    var nativeOuterHeight = window.outerHeight;
-    setInterval(function () {
-      if (window.outerHeight === nativeOuterHeight) return;
-      var leavingFullscreen = nativeOuterHeight === screen.height && window.outerHeight !== screen.height;
-      nativeOuterHeight = window.outerHeight;
-      var at = currentParagraph();
-      if (leavingFullscreen) {
-        // Reintroducing native chrome retains a pan offset outside the DOM.
-        // A fresh page clears it; retain the paragraph without a history entry.
-        window.location.replace('#p=' + at);
-        window.location.reload();
-        return;
-      }
-      layout();
-      show(pageOfParagraph(at));
-    }, 1000);
+      geometry = windowGeometry();
+      ready = true;
+      clearTimeout(window.kindleLoadingTimeout);
+      removeClass(doc, 'reader-loading');
+    }
+
+    // PW3 native panning ignores DOM touch/scroll controls. Install its scroll
+    // surface after initial pagination, with explicit styles as verified on-device.
+    nativePW3 = !('ontouchstart' in window) && /AppleWebKit\/53[1-4]\./.test(navigator.userAgent) &&
+      window.screen && screen.width === 1072 && screen.height === 1448 && doc.clientWidth < doc.clientHeight;
+    if (nativePW3) {
+      shell = document.createElement('div');
+      shell.id = 'reader-shell';
+      shell.style.cssText = 'position:relative;width:100%;height:1279px;overflow:scroll';
+      var parts = [head, viewport, foot, menu];
+      for (var n = 0; n < parts.length; n++) shell.appendChild(parts[n]);
+      body.appendChild(shell);
+      body.style.cssText = 'position:relative;top:0;left:0;right:auto;bottom:auto;width:104%;height:1260px;overflow:hidden';
+      addClass(doc, 'native-pw3');
+      setTimeout(function () {
+        layout();
+        reveal();
+      }, 200);
+      // Native chrome changes outerHeight without changing innerHeight. Some
+      // builds omit the DOM resize event, so only reflow when this value changes.
+      var nativeOuterHeight = window.outerHeight;
+      setInterval(function () {
+        if (window.outerHeight === nativeOuterHeight) return;
+        var leavingFullscreen = nativeOuterHeight === screen.height && window.outerHeight !== screen.height;
+        nativeOuterHeight = window.outerHeight;
+        var at = currentParagraph();
+        if (leavingFullscreen) {
+          // Reintroducing native chrome retains a pan offset outside the DOM.
+          // A fresh page clears it; retain the paragraph without a history entry.
+          window.location.replace('#p=' + at);
+          window.location.reload();
+          return;
+        }
+        layout();
+        show(pageOfParagraph(at));
+        geometry = windowGeometry();
+      }, 1000);
+    } else reveal();
+  }
+
+  // Images have no final intrinsic size until their request finishes. Never
+  // publish a text-only pagination followed by late image decoding that shifts its pages.
+  // Broken or stalled images keep their caption and cannot move text later.
+  var images = flow.getElementsByTagName('img');
+  var remaining = images.length;
+  var started = false;
+  var imageTimer = null;
+  function imagesReady() {
+    if (started) return;
+    started = true;
+    clearTimeout(imageTimer);
+    for (var i = 0; i < images.length; i++) {
+      images[i].onload = images[i].onerror = null;
+      if (!images[i].complete || !images[i].naturalWidth) images[i].style.display = 'none';
+    }
+    startReader();
+  }
+  function imageDone() {
+    remaining--;
+    if (remaining === 0) imagesReady();
+  }
+  if (!remaining) imagesReady();
+  else {
+    imageTimer = setTimeout(imagesReady, 10000);
+    for (var i = 0; i < images.length; i++) {
+      if (images[i].complete) imageDone();
+      else images[i].onload = images[i].onerror = imageDone;
+    }
   }
 
 })();

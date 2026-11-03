@@ -35,3 +35,26 @@ def test_js_and_python_render_identically():
         for block, rendered in zip(block_list, js, strict=True):
             tag, class_name, content = blocks.render_block(block, image_base=image_base)
             assert (rendered['tag'], rendered['className'], rendered['content']) == (tag, class_name, str(content)), block
+
+
+def test_grid_presentation_retains_every_cell_and_default_flow_is_unchanged():
+    script = r"""
+import fs from 'node:fs';
+const source = fs.readFileSync('shared/static/js/blocks.js', 'utf8');
+const {renderFlowBlocks} = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const table = {type:'table', header:['Company','P/E'], rows:[['NVIDIA','**14x**'],['AMD','45x']]};
+const grid = renderFlowBlocks({...table, presentation:'grid'}, {inline:'strict'});
+const flat = renderFlowBlocks(table, {inline:'strict'});
+process.stdout.write(JSON.stringify({grid,flat}));
+"""
+    output = subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT,
+                            check=True, capture_output=True, text=True)
+    rendered = json.loads(output.stdout)
+    assert len(rendered['grid']) == 1
+    grid = rendered['grid'][0]
+    assert grid['tag'] == 'table' and 'reader-grid' in grid['className']
+    assert '<th>Company</th> <th>P/E</th>' in grid['content']
+    assert '<td>NVIDIA</td> <td><strong>14x</strong></td>' in grid['content']
+    assert '<td>AMD</td> <td>45x</td>' in grid['content']
+    assert len(rendered['flat']) == 4
+    assert all(block['tag'] == 'p' and block['flow'] for block in rendered['flat'])

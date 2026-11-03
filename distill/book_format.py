@@ -98,6 +98,8 @@ def _check_block(block, where, folder, errors):
     elif btype in ('ul', 'ol', 'keypoints'):
         _check_list(block.get('items'), f'{where}.items', errors)
     elif btype == 'table':
+        if block.get('presentation') not in (None, 'grid'):
+            errors.append(f'{where}.presentation: must be grid when specified')
         _check_list(block.get('header'), f'{where}.header', errors)
         rows = block.get('rows')
         if not isinstance(rows, list):

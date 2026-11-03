@@ -1,5 +1,47 @@
 # Plainly - Product Requirements Document
 
+## 2026-11-03 — Release synchronization
+
+The published NVIDIA entry, research-table behavior and Kindle rendering fixes
+above are included in the GitHub/VM synchronization requested by the owner.
+This release step introduces no additional product behavior or requirements.
+Browser and production checks pass; physical Kindle confirmation is pending.
+Final revision and deployment verification are recorded in WORK_LOG.md.
+
+
+## 2026-11-02 — Kindle chapters reveal once, with complete illustrations
+
+A Kindle chapter waits for illustration dimensions and final page layout before
+showing the reading page. Intermediate text-only/native-shell layouts are hidden
+to reduce e-ink flashing. This removes application-generated startup redraws;
+hardware/browser-controlled e-ink refreshes remain outside the page's control.
+Portrait and landscape illustrations retain their proportions and fit with their
+captions on the reading page. Failed or stalled illustrations retain captions
+and do not shift the chapter later. A script failure has a bounded visibility
+fallback, and reading without JavaScript stays available. The native fullscreen,
+font settings and saved-place behavior are retained. No changes to the catalog,
+research content, tagging or account data. Deployed November 2, 2026; browser
+and production checks pass. Physical Kindle paint confirmation remains pending.
+Validation details are in WORK_LOG.md.
+
+
+## 2026-11-02 — Equity research documents and readable tables
+
+Distill supports publishing complete research documents without summarizing.
+The NVIDIA company research and valuation analysis dated October 31, 2026 form
+one library entry tagged `Equity research`, with both documents available in
+order from the contents page. All prose, figures, tables and source URLs remain.
+
+Research tables retain their row/column grids in the web reader. Readers can
+scroll within wide or tall tables on desktop and phones without turning the
+page. Kindle presents each row as labeled cells with repeated row/column context,
+so every value remains readable across e-ink pages without tiny ten-column text
+or clipped rows. This also works in the server-rendered no-JavaScript view.
+Existing book table presentation is unchanged. Published and production-verified
+as book 63 on November 2, 2026; all 21 tables and sections pass live checks.
+Detailed evidence is in WORK_LOG.md.
+
+
 ## Distill image migration deployed (2026-10-28)
 
 Existing original images and cover thumbnails now serve from private files,

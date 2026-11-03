@@ -87,6 +87,11 @@ export function renderFlowBlocks(block, options = {}) {
             'reader-flow-item'));
     }
     if (block?.type === 'table') {
+        // Research documents retain their comparison grid. Other books keep
+        // the existing paragraph flow and its page-turn behavior.
+        if (block.presentation === 'grid') {
+            return [{...renderBlock(block, options), className: 'reader-table reader-grid'}];
+        }
         const header = block.header || [];
         if (!block.rows?.length) {
             return header.map(label => paragraph(`<strong>${fmt(label)}</strong>`, 'reader-flow-table-cell'));

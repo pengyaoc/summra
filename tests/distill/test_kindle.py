@@ -86,6 +86,24 @@ def test_kindle_reader_renders_blocks_with_data_i(app_env):
     assert 'type="module"' not in html
 
 
+def test_research_grid_cells_are_readable_and_keep_progress(app_env, sample_book, write_book):
+    from html import unescape
+    client, db, _, _ = app_env
+    table = {'type': 'table', 'presentation': 'grid',
+             'header': ['Company', 'P/E', 'Notes'],
+             'rows': [['NVIDIA', '**14.0x**', 'safe & sound'], ['AMD', '45.1x', 'Long ' * 500]]}
+    sample_book['parts'][0]['chapters'][0]['blocks'] = [table]
+    db.import_book(write_book(sample_book))
+    html = body(kget(client, '/books/my-book/read?ch=1'))
+    assert '<table' not in html
+    assert html.count('class="reader-table-cell" data-i="0"') == 6
+    assert '<strong>NVIDIA — P/E:</strong> <strong>14.0x</strong>' in html
+    assert 'safe &amp; sound' in html
+    assert 'Long ' * 499 in unescape(html)
+    # The existing table block index is also the saved progress coordinate.
+    assert save(client, book_id=app_env[3], ch=1, p=0).status_code == 200
+
+
 def test_kindle_source_is_last_and_readable(app_env):
     client, content_db, _, book_id = app_env
     source = content_db.get_chapters(book_id)[-1]
