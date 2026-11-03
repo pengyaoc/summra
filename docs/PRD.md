@@ -2621,3 +2621,7 @@ When updating the PRD or ERD for a feature-flagged subsystem, always note the fl
 **Last Updated:** 2026-10-26
 **Author:** Plainly Team
 **Status:** Living Document
+
+### 2026-11-03 — Article and research publishing workflow
+
+The shared `distill-publish` skill documents publication of supplied articles/research in full by default, combined-document navigation, requested categories, faithful formatting adaptation, and web/Kindle verification. This is agent workflow documentation; reader product behavior and requirements are unchanged.

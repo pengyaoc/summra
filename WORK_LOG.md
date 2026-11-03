@@ -11174,3 +11174,11 @@ with the standard existing fullscreen session for the current browser. This
 removes the test-specific ceiling while retaining normal sleep restoration;
 no installed script/settings changes. The reader is left at Software Design's
 illustration with size 8 / Hei restored.
+
+## 2026-11-03 — Shared Distill article/research publishing skill
+
+Created `skills/distill-publish/SKILL.md` with a focused format/deployment reference, using ordinary tools available to both Claude Code and Codex. Defaults to full-content publication; covers multi-document entries, source attribution/coverage, opt-in web grids and Kindle labeled-cell flow, source images, live/local full-catalog preflight, backups, scoped authorization and accurate physical-device claims. One canonical repo folder will be linked into both agents’ personal discovery directories. No application/runtime/schema changes and no private content or deployment credentials added. ERD/PRD record the no-impact assessment.
+
+Validation: the reference JSON passes the real publisher dry-run and imports into an isolated scratch content DB; no master/live content touched. Skill validation and discovery-link checks are recorded below once complete.
+
+Skill validator passes. The ~/.agents, ~/.claude and ~/.codex discovery links resolve to the same repo skill and matching contents. Publisher example dry-run and scratch import pass. Diff whitespace passes. No runtime tests needed for this documentation-only change. GitHub/VM synchronization follows this commit; no service restart or content deployment required.

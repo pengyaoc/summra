@@ -11090,3 +11090,7 @@ Cover derivatives are encoded during import/backfill, before the write transacti
 ### Tests
 
 `tests/distill/` (pytest), `tests/js/` (node) and `tests/e2e/distill.mjs`. The e2e covers: library to book to reader, no mode selector, image and table chapters without overflow, the `keypoints` label in English and Chinese, reload restores the anchor, Reading now, IndexedDB holds `distill-reader-v1` and not `summra-reader-v2`; a 375x667 mobile pass; and a 758x950 Kindle pass (no module script, no `tr` or `figure` split across columns, a tap turns the page).
+
+### 2026-11-03 — Shared article publishing skill
+
+Added `skills/distill-publish/` as a portable Claude/Codex workflow over the existing book-format/import/deploy modules. It documents full-catalog preflight, SQLite backups, separate content/progress stores, and web-grid/Kindle table behavior. No application architecture, database schema, or runtime behavior changes.
