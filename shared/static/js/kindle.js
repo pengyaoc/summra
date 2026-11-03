@@ -54,6 +54,49 @@
   var nativePW3 = false;
   var shell = null;
   var geometry = '';
+  var illustrations = [];
+
+  function prepareIllustrations() {
+    var images = flow.getElementsByTagName('img');
+    if (!images.length) return;
+    var layer = document.createElement('div');
+    layer.id = 'kindle-illustrations';
+    layer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none';
+    for (var i = 0; i < images.length; i++) {
+      if (!images[i].complete || !images[i].naturalWidth) continue;
+      // PW3 WebKit clips replaced-image painting inside multicolumn flow
+      // after relayout. Keep the original footprint, but paint a cached copy
+      // in an unfragmented layer belonging to the same clipped viewport.
+      var copy = images[i].cloneNode(false);
+      copy.removeAttribute('id');
+      copy.removeAttribute('data-i');
+      copy.setAttribute('aria-hidden', 'true');
+      copy.style.cssText = 'position:absolute;display:none;margin:0;max-width:none;max-height:none';
+      images[i].style.visibility = 'hidden';
+      layer.appendChild(copy);
+      illustrations.push({source: images[i], copy: copy});
+    }
+    viewport.appendChild(layer);
+  }
+
+  function positionIllustrations() {
+    if (!illustrations.length) return;
+    var view = viewport.getBoundingClientRect();
+    for (var i = 0; i < illustrations.length; i++) {
+      var image = illustrations[i].source;
+      var copy = illustrations[i].copy;
+      var rect = image.getBoundingClientRect();
+      if (rect.right <= view.left || rect.left >= view.right || rect.bottom <= view.top || rect.top >= view.bottom) {
+        copy.style.display = 'none';
+        continue;
+      }
+      copy.style.left = (rect.left - view.left) + 'px';
+      copy.style.top = (rect.top - view.top) + 'px';
+      copy.style.width = image.style.width;
+      copy.style.height = image.style.height;
+      copy.style.display = 'block';
+    }
+  }
 
   addClass(doc, 'js');
 
@@ -209,6 +252,7 @@
     page = Math.max(0, Math.min(pages - 1, n));
     if (rows) flow.style.top = (-page * step) + 'px';
     else flow.style.left = (-page * step) + 'px';
+    positionIllustrations();
     var done = pages > 1 ? page / (pages - 1) : 1;
     var chars = num('chars');
     var pct = Math.floor(100 * (num('before') + chars * done) / Math.max(1, num('total')));
@@ -424,6 +468,7 @@
       body.appendChild(shell);
       body.style.cssText = 'position:relative;top:0;left:0;right:auto;bottom:auto;width:104%;height:1260px;overflow:hidden';
       addClass(doc, 'native-pw3');
+      prepareIllustrations();
       setTimeout(function () {
         layout();
         reveal();

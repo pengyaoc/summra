@@ -1,5 +1,22 @@
 # Summra - Technical Implementation Details
 
+## 2026-11-03 — Physical PW3 image painting correction
+
+Physical testing reproduced a legacy WebKit multicolumn painting defect after
+font-size 8→9: the figure reserved its complete footprint but only the image's
+lower region painted. For the existing native PW3 profile only, preserve the
+original image's layout footprint and progress unit while hiding its painting.
+Paint a cached image copy in a separate clipped viewport layer outside columns,
+positioned from the original rectangle on each page turn or relayout. Captions
+remain in the normal flow; display copies carry no progress indices. Other
+browser profiles and no-JavaScript rendering retain their existing images.
+No schema, content, authentication or progress-model changes. Deployed and
+physically verified on the owner’s PW3 at sizes 8 and 9, including paging away
+and back and a second illustrated chapter. Browser projection/readiness tests
+and 303 Python regressions pass. This supersedes the earlier pending physical
+image verification; detailed evidence and limitations are in WORK_LOG.md.
+
+
 ## 2026-11-03 — GitHub and VM synchronization
 
 The research-table and Kindle startup/illustration changes, regression coverage,

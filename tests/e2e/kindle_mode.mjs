@@ -95,6 +95,22 @@ async function checkIllustrations(engine, name) {
     const settled = await inspect();
     check(settled.reveals === 1 && settled.geometry === first.geometry && settled.footer === first.footer,
       `${name}: one reveal and no redundant resize repagination`);
+    if (await pg.locator('html.native-pw3').count()) {
+      const index = await pg.locator('#flow figure').first().getAttribute('data-i');
+      await pg.goto(`${base}/books/${SLUG}/read?ch=2#p=${index}`);
+      await pg.reload();
+      await pg.waitForFunction(() => !/reader-loading/.test(document.documentElement.className));
+      const projected = await pg.evaluate(() => {
+        const source = document.querySelector('#flow figure img');
+        const copy = document.querySelector('#kindle-illustrations img');
+        const a = source.getBoundingClientRect(), b = copy.getBoundingClientRect();
+        return getComputedStyle(source).visibility === 'hidden' && getComputedStyle(copy).display === 'block'
+          && !copy.closest('#flow') && !copy.hasAttribute('data-i')
+          && Math.abs(a.left-b.left)<1 && Math.abs(a.top-b.top)<1
+          && Math.abs(a.width-b.width)<1 && Math.abs(a.height-b.height)<1;
+      });
+      check(projected, `${name}: native image paints outside columns at the reserved footprint`);
+    }
     await pg.screenshot({path:join(shots, `kindle_${name}_image_${shape.width}.png`)});
     await pg.mouse.click(500, 20);
     await pg.locator('#bigger').click();

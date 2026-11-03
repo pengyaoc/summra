@@ -1,5 +1,18 @@
 # Plainly - Product Requirements Document
 
+## 2026-11-03 — Physical Kindle illustration verification
+
+Physical PW3 testing confirmed the chapter-start content appears once after
+settling, but exposed incomplete image painting after enlarging the font.
+A device-specific image painting correction keeps the full illustration visible
+in its reserved location without changing its caption, reading position or
+proportions. Standard browser/no-JavaScript views remain unchanged. Deployed
+and physically reverified: complete illustrations at size 9 after the earlier
+failure, paging away/back, and a second chapter at the restored size 8 / Hei
+setting. Startup shows one settled content layout. This supersedes the earlier
+pending physical confirmation; details are recorded in WORK_LOG.md.
+
+
 ## 2026-11-03 — Release synchronization
 
 The published NVIDIA entry, research-table behavior and Kindle rendering fixes

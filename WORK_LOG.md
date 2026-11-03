@@ -11100,3 +11100,77 @@ be pushed and fast-forwarded on the VM. It changes no runtime behavior, schema,
 product requirements or data. ERD/PRD include that assessment and the successful
 release/CI status. No repeat runtime deployment or test run is required for the
 documentation-only sync.
+
+## 2026-11-03 — Physical Kindle verification and image painting follow-up
+
+Connected to the owner's PW3 at 192.168.1.133:2222 using its existing key-only
+SSH. Owner opened Distill Fullscreen after the initial KOReader screen prevented
+normal browser focus. Used XTest pointer input through existing LuaJIT/X11 and
+vendor framebuffer screenshots; no browser/root-filesystem/launcher/SSH settings
+were changed. Eight-second chapter-start capture shows intermediate blank
+startup frames followed by one settled content state; no text-first/text-second
+layout is visible. Raw framebuffer sampling omits compositor overlay regions;
+vendor screenshots confirm the running header/footer are intact. The initial
+missing-header suspicion was a capture-plane artifact, not a reader defect.
+
+Software Design chapter 2 initially paints its complete illustration at the
+owner's size 8 / Hei font. Increasing to size 9 reproduces the exact reported
+failure: full reserved footprint with a blank upper image region and only its
+lower portion painted. This is device-specific multicolumn replaced-image
+painting, not absent image bytes or a missing caption. Before/after evidence is
+in /private/tmp/distill-nvidia-20261031/vendor-image.png and
+vendor-image-size9.png. Physical verification is not complete.
+
+Implementing a native-PW3-only unfragmented image layer: original image footprints
+remain in flow/progress, cached display copies paint outside columns at the
+same viewport-relative rectangles. Page turns and font relayout reposition the
+copies; other profiles/no-JS remain unchanged. Added browser projection regression
+checks. ERD/PRD updated; regression, deployment and physical retest pending.
+
+The first follow-up deployment attempt stopped before touching runtime because
+the existing backup directory is root-owned. Repeated with root for backup
+creation, retaining the exact prior-file hash gate; successfully installed the
+single static JS change. Rollback:
+/opt/summra/data/backups/kindle-js-before-physical-image-fix-20261103.js.
+No service restart was needed: this is a standalone static asset and its
+content-hashed URL changes on the next chapter request.
+
+Physical retest passes: the same size-9 layout now paints the complete
+1023×483 illustration rather than just its lower portion. Returning to it after
+paging also preserves the whole image. Evidence: physical-overlay-size9.png
+and physical-overlay-size9-revisited.png in the existing scratch folder.
+The owner's size 8 / Hei setting was restored and verified from the menu
+(physical-font-restore-check.png). Opened chapter 3 from the actual contents;
+its 343×214 illustration and full caption also paint completely. Chapter 2 and
+chapter 3 startup captures each show one settled content layout after blank
+initialization. Chapter 3 includes a partial rasterization frame immediately
+before the complete frame, with the same text geometry; no second/repositioned
+content layout is observed. Framebuffer sampling is not a measurement of the
+panel's hardware flash waveform. Vendor screenshots are authoritative for
+composited header/footer; raw web-content-plane captures can omit them.
+
+The ordinary idle timeout fired during testing because synthetic XTest clicks
+do not count as physical power activity. Woke the device normally and used the
+existing bounded fullscreen script with a ten-minute test ceiling; no sleep
+prevention or persistent power/SSH/launcher/browser configuration changes.
+Native actions need settled-screen waits after font changes; an early automated
+navigation sequence landed on Overview rather than the intended next chapter.
+That capture is not counted as a chapter-transition pass. The explicit chapter-3
+contents selection and subsequent screenshot/capture provide the valid check.
+Reading navigation uses the existing signed-in progress synchronization; no
+account/progress DB was copied, replaced or manually edited.
+
+Validation: 83 focused Kindle tests pass, then 303 Distill/shared/Plainly reader
+regressions pass. Extended Chromium and WebKit delayed-image suites pass,
+including native unfragmented-image footprint matching, font changes, startup,
+fullscreen, failed/stalled images, end anchors and no-JS. Bundle freshness and
+diff whitespace checks pass. No generated media/content changes. ERD/PRD reflect
+the physical findings and final correction. Committing and pushing this follow-up
+under the owner's standing instruction to log/sync all changes; final Git/VM
+revision and CI outcome are reported in the completion message.
+
+After physical testing, requested replacement of the ten-minute test session
+with the standard existing fullscreen session for the current browser. This
+removes the test-specific ceiling while retaining normal sleep restoration;
+no installed script/settings changes. The reader is left at Software Design's
+illustration with size 8 / Hei restored.
