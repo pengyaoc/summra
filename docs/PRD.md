@@ -6,7 +6,9 @@ The published NVIDIA entry, research-table behavior and Kindle rendering fixes
 above are included in the GitHub/VM synchronization requested by the owner.
 This release step introduces no additional product behavior or requirements.
 Browser and production checks pass; physical Kindle confirmation is pending.
-Final revision and deployment verification are recorded in WORK_LOG.md.
+Code release `575447d` is pushed to GitHub and synchronized on the VM. All
+committed files match, both apps are active, and live/privacy/catalog checks
+pass. CI run 41667479715 passed. Final evidence is recorded in WORK_LOG.md.
 
 
 ## 2026-11-02 — Kindle chapters reveal once, with complete illustrations

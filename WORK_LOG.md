@@ -11075,3 +11075,28 @@ Build freshness and diff whitespace checks pass. Origin/main matches local base
 (e5849fa), and the VM is on that base with exactly the twelve expected tracked
 runtime edits. Proceeding with the owner-authorized commit and push; runtime
 hash comparison and a recoverable stash will protect VM edits during Git sync.
+
+Code release committed and pushed to origin/main as
+575447d1c3c8559ee2896ce6beea362578941feb (Fix Distill research tables and Kindle
+rendering). GitHub CI run 41667479715 passed, including the full Python suite
+and bundle freshness check:
+https://github.com/pengyaoc/summra/actions/runs/41667479715.
+
+VM fast-forwarded to the same revision. All 19 changed file SHA256 values match
+local committed files; its tracked worktree is clean. The twelve matching direct
+runtime edits were preserved in recovery stash
+70717e5c40806c2f3e5da42efbb4a25727b620f4 before synchronization. Both services
+restarted and are active. Live Distill web/Kindle library/book/reader, actual
+illustrations and Plainly Kindle reading return 200; anonymous Distill returns
+401. Startup guard and updated renderer assets are present. All 58 content
+records/checksums remain unchanged (digest
+10c0f791b1aa5c93838a1c42c2e553f7caced2a579a2231c690d844b616ad11e),
+SQLite integrity is OK and foreign keys are clean. No content/media/account or
+pairing data were replaced. Existing VM-only untracked configuration was left
+untouched. Physical Kindle painting verification remains pending.
+
+This final documentation-only commit records verified outcomes and will also
+be pushed and fast-forwarded on the VM. It changes no runtime behavior, schema,
+product requirements or data. ERD/PRD include that assessment and the successful
+release/CI status. No repeat runtime deployment or test run is required for the
+documentation-only sync.

@@ -7,7 +7,9 @@ and publication/deployment records are being committed together and synchronized
 to GitHub and the VM. This records the already deployed behavior above; the sync
 adds no architectural or data-model changes. Content/media and account/progress
 stores remain deployment data. Physical Kindle paint verification is still
-pending. Final revision and verification evidence are recorded in WORK_LOG.md.
+pending. Code release `575447d` is pushed to GitHub and synchronized on the VM. All
+committed files match, both apps are active, and live/privacy/catalog checks
+pass. CI run 41667479715 passed. Final evidence is recorded in WORK_LOG.md.
 
 
 ## 2026-11-02 — Kindle startup and illustration layout repair
