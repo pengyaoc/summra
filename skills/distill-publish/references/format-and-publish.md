@@ -30,7 +30,7 @@ The active checkout's `distill/book_format.py` is authoritative. Minimal article
 }
 ```
 
-Use actual source attribution, not the example values. `author` and `cover` may be omitted; never guess authorship. `lang` is two lowercase letters. Optional `cover` is an `images/<file>.jpg` or `.png` path. Empty `overview` creates no Overview chapter; nonempty `sources` adds a terminal Source chapter. Preserve the original bibliography in the original text even when adding provenance here.
+Use actual source attribution, not the example values. `author` may be omitted; never guess authorship. `lang` is two lowercase letters. The format permits omitting `cover`, but this workflow creates a dated cover by default: add `"cover": "images/cover.png"` (or a real JPEG path) after saving the artwork there. See the entrypoint's Dated covers section for date selection and cover-only update safeguards. Empty `overview` creates no Overview chapter; nonempty `sources` adds a terminal Source chapter. Preserve the original bibliography in the original text even when adding provenance here.
 
 Block shapes:
 
