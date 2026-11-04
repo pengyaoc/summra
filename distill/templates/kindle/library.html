@@ -12,7 +12,7 @@
     {% for book in reading %}
     <li><a href="{{ base_path }}/books/{{ book.slug }}/read">
       <span class="title">{{ book.title }}</span>
-      <span class="author">{{ book.author }}</span>
+      {% if book.author and book.author|trim %}<span class="author">{{ book.author }}</span>{% endif %}
       <span class="progress">{% if book.current_chapter %}{{ book.current_chapter.chapter_title }} &middot; {% endif %}{{ book.furthest_percentage }}%</span>
       <span class="bar"><span style="width: {{ book.furthest_percentage }}%"></span></span>
     </a></li>
@@ -28,7 +28,7 @@
   {% for book in books %}
   <li><a href="{{ base_path }}/books/{{ book.slug }}">
     <span class="title">{{ book.title }}</span>
-    <span class="author">{{ book.author }}</span>
+    {% if book.author and book.author|trim %}<span class="author">{{ book.author }}</span>{% endif %}
   </a></li>
   {% else %}
   <li class="empty">No books yet.</li>

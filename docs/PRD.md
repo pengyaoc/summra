@@ -2625,3 +2625,7 @@ When updating the PRD or ERD for a feature-flagged subsystem, always note the fl
 ### 2026-11-03 — Article and research publishing workflow
 
 The shared `distill-publish` skill documents publication of supplied articles/research in full by default, combined-document navigation, requested categories, faithful formatting adaptation, and web/Kindle verification. This is agent workflow documentation; reader product behavior and requirements are unchanged.
+
+### 2026-11-03 — Optional author display
+
+Entries without a nonblank author show no author line or empty author spacing in Distill library tiles, Continue reading cards, search suggestions, book pages or Kindle library/contents views. Known author names continue to display. Missing authors must not appear as “None” or another placeholder; report content and metadata remain unchanged.

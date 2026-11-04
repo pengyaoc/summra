@@ -71,7 +71,7 @@
             <a class="distill-tile" href="{{ base_path }}/books/{{ book.slug }}?return={{ return_url|urlencode }}">
                 {{ cover(book) }}
                 <h3>{{ book.title }}</h3>
-                <p>{{ book.author }}</p>
+                {% if book.author and book.author|trim %}<p>{{ book.author }}</p>{% endif %}
                 <span class="distill-book-meta">{{ '中文' if book.lang == 'zh' else 'English' if book.lang == 'en' else book.lang }} <span aria-hidden="true">·</span> {{ book_categories(book)|first }} · About {{ minutes[book.id] }} min{% if states.get(book.id) == 'finished' %} · <strong>Finished</strong>{% elif states.get(book.id) == 'reading' %} · Reading{% endif %}</span>
             </a>
 {% else %}
@@ -155,10 +155,12 @@
             option.setAttribute('aria-selected', 'false');
             var title = document.createElement('strong');
             title.textContent = book.title;
-            var author = document.createElement('span');
-            author.textContent = book.author;
             option.appendChild(title);
-            option.appendChild(author);
+            if (book.author && book.author.trim()) {
+                var author = document.createElement('span');
+                author.textContent = book.author;
+                option.appendChild(author);
+            }
             option.addEventListener('mousedown', function (event) { event.preventDefault(); });
             option.addEventListener('click', function () { openBook(index); });
             list.appendChild(option);

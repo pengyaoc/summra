@@ -10,7 +10,7 @@
   {% if cover_url %}<img class="cover" src="{{ cover_url }}" alt="">{% endif %}
   <div class="book-meta">
     <h1>{{ book.title }}</h1>
-    <p class="author">{{ book.author }}</p>
+    {% if book.author and book.author|trim %}<p class="author">{{ book.author }}</p>{% endif %}
     <div class="actions">
       <a class="btn primary" href="{{ base_path }}/books/{{ book.slug }}/read">{{ 'Continue reading' if saved else 'Start reading' }}</a>
       <button id="book-read-status" class="btn" type="button" data-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button>

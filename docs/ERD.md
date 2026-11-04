@@ -11094,3 +11094,7 @@ Cover derivatives are encoded during import/backfill, before the write transacti
 ### 2026-11-03 — Shared article publishing skill
 
 Added `skills/distill-publish/` as a portable Claude/Codex workflow over the existing book-format/import/deploy modules. It documents full-catalog preflight, SQLite backups, separate content/progress stores, and web-grid/Kindle table behavior. No application architecture, database schema, or runtime behavior changes.
+
+### 2026-11-03 — Omit absent author markup
+
+Distill web library/book templates, search suggestions and Kindle library/contents templates omit author elements for null, empty or whitespace-only author values. The shared server-rendered Continue reading card follows the same condition. Author data remains optional and unchanged in storage/APIs; no database or architectural changes.

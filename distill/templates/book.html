@@ -9,7 +9,7 @@
         {{ cover(book, eager=True) }}
         <div>
             <h1>{{ book.title }}</h1>
-            <p class="distill-author">{{ book.author }}</p>
+            {% if book.author and book.author|trim %}<p class="distill-author">{{ book.author }}</p>{% endif %}
             <p class="distill-author">About {{ minutes }} min read</p>
 {% if card and card.status == 'finished' %}<p class="distill-progress">Finished · 100%</p>
 {% if card.current_chapter %}<p class="distill-saved-place">Saved place: {{ card.current_chapter.chapter_title }}</p>{% endif %}
