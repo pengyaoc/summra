@@ -12,7 +12,9 @@ panning; non-overflowing menus and the reader keep their prior drag protection.
 Distill figures use atomic inline-block boxes so illustrations and captions stay
 together in the shorter reading columns. Native launcher gestures, authentication
 and database schemas are unchanged. The three static assets are deployed with
-content-hashed URLs; both services remain active without a restart.
+content-hashed URLs; both services remain active without a restart. Source
+release `7b78211` is synchronized to the VM with clean tracked files and matching
+live asset hashes. Release synchronization adds no architectural/schema change.
 
 
 ## 2026-11-03 — Physical PW3 image painting correction

@@ -14,7 +14,16 @@
 - VM preflight: same base commit as local, with only the three deliberately
   predeployed Kindle assets modified. Their SHA256 hashes match this release.
   Preserve VM-local backend/environment files and reconcile only the verified
-  asset changes before a fast-forward pull. Commit/push/checkout sync in progress.
+  asset changes before a fast-forward pull.
+- Committed/pushed implementation as `7b78211`; VM fast-forwarded to that exact
+  commit after verifying every predeployed asset byte against origin/main. VM
+  tracked files are clean; existing untracked backend/environment files preserved.
+  Both user services are active; Plainly loopback and authenticated Distill Kindle
+  reader return200. Live HTTPS CSS/JS SHA256 hashes match the committed files.
+  Static-only runtime deployment needs no service restart.
+- Release CI: https://github.com/pengyaoc/summra/actions/runs/41767043107.
+  This documentation-only follow-up records the completed deployment; no further
+  architecture, product, source-code or data changes.
 
 
 ## 2026-11-03: Enlarge Kindle reader UI 2.5×

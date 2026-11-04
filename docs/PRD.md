@@ -12,6 +12,8 @@ on short displays only the inner menu scrolls, with Close/font controls reachabl
 This change is scoped to reader chrome, including the Library/Contents navigation
 inside that reader; library/contents pages retain their existing layout. Deployed
 to both live apps; refresh/reopen existing Kindle pages to load the new assets.
+Implementation release `7b78211` is pushed and synchronized to the live VM; this
+release synchronization adds no further product behavior.
 
 
 ## 2026-11-03 — Physical Kindle illustration verification
