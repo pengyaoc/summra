@@ -367,6 +367,25 @@ await nativePage.waitForTimeout(300);
 check(await nativePage.locator("body").evaluate((el) => el.clientHeight) === 1260, "native fullscreen exit restores normal height");
 await nativeContext.close();
 
+// Larger chrome must remain usable when settings exceed a short viewport.
+const enlargedContext = await browser.newContext({ userAgent: KINDLE_UA, viewport: {width:640,height:400} });
+const enlargedPage = await enlargedContext.newPage();
+await enlargedPage.goto(`${base}/books/${SLUG}/read?ch=1&text=plain`);
+await enlargedPage.mouse.click(320, 30);
+check(await enlargedPage.locator('#head').evaluate(e => getComputedStyle(e).fontSize) === '35px', 'reader title uses 2.5x UI text');
+check(await enlargedPage.locator('#close').evaluate(e => getComputedStyle(e).fontSize) === '45px', 'reader navigation uses 2.5x UI text');
+check(await enlargedPage.locator('#menu').evaluate(e => e.scrollWidth <= e.clientWidth + 1), 'enlarged settings wrap without horizontal clipping');
+await enlargedPage.locator('#menu').hover({position:{x:600,y:250}});
+await enlargedPage.mouse.wheel(0, 500);
+await enlargedPage.waitForTimeout(200);
+check(await enlargedPage.locator('#menu').evaluate(e => e.scrollTop > 0), 'overflowing settings scroll within their own panel');
+check(await enlargedPage.evaluate(() => window.pageYOffset === 0), 'settings scrolling does not pan the document');
+await enlargedPage.click('#bigger');
+check(await enlargedPage.locator('html.fs-4').count() === 1, 'font control remains reachable in short settings panel');
+await enlargedPage.click('#close');
+check(await enlargedPage.locator('#menu.hidden').count() === 1, 'close remains reachable after scrolling settings');
+await enlargedContext.close();
+
 // Desktop is unaffected.
 const desk = await browser.newPage();
 await desk.goto(`${base}/`);

@@ -1,5 +1,19 @@
 # Plainly - Product Requirements Document
 
+## 2026-11-03: Larger Kindle reader UI
+
+Kindle reader chrome uses 2.5× the former text size: book title, chapter time
+remaining and percentage are 35px; Contents/Library/Close, chapter navigation
+and ordinary font buttons are 45px; A+ is 55px; row labels and position text are
+40px; font-size status is 50px. Saved reading text/font preferences and normal
+web/mobile readers are unchanged. The reader reserves 90px above/below prose,
+and long titles ellipsize. Settings panels flow and wrap instead of overlapping;
+on short displays only the inner menu scrolls, with Close/font controls reachable.
+This change is scoped to reader chrome, including the Library/Contents navigation
+inside that reader; library/contents pages retain their existing layout. Deployed
+to both live apps; refresh/reopen existing Kindle pages to load the new assets.
+
+
 ## 2026-11-03 — Physical Kindle illustration verification
 
 Physical PW3 testing confirmed the chapter-start content appears once after
@@ -131,6 +145,25 @@ VM storage investigation is documented with measured sizes and recommendations
 in `deploy/README.md`. Retained rollback DB snapshots account for about 2 GiB;
 no user data, media, backups or Git history is removed as part of this work.
 
+
+## Native Kindle browser controls (2026-11-03)
+
+The fullscreen launcher should let the reader put the Kindle down, sleep normally,
+and wake at the same page in fullscreen without exiting/reopening the app.
+Swipe down from the top edge to show the native browser toolbar. Reserve the
+bottom-left corner to toggle the toolbar both on and off. A tap on the page while
+the toolbar is visible dismisses it without also activating the page. Native
+Home/menu/address controls remain browser controls; the website has no browser
+control UI or bridge. Single power press retains normal Kindle sleep behavior.
+
+Leaving for Home, manual Restore Toolbar, helper failure or browser replacement
+ends fullscreen. Sessions no longer expire automatically after four hours;
+a bounded diagnostic timeout remains optional. The existing PW3 reader may
+reload at its saved paragraph when bars reappear. Physical swipe operation was
+confirmed after the stacking fix. Subsequent corner-reveal misses led to enlarging the reserved corner to about 159px on PW3;
+the user physically retested and reported substantially improved corner behavior.
+Menu/keyboard and physical button/cover acceptance remain distinct from synthetic input and power-service tests; see
+WORK_LOG.md for current verification and installation status.
 
 ## Verified Distill Fullscreen shortcut (2026-10-27)
 

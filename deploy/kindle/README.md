@@ -58,17 +58,37 @@ for stable Home samples so scriptlet exit cannot cancel the browser startup.
 It then records the exact browser window/title and changes `PC:TS` to `PC:N`.
 This reclaims the native URL and status bar area without changing browser files.
 
-Power/sleep events, leaving the browser, process exit, the four-hour ceiling,
-or **Restore Distill Toolbar** request restoration. Normal sleep stays enabled;
-there is no autostart or sleep-prevention setting. The restore shortcut serves
+Swipe down starting in the top 2.5% of the screen to reveal the native browser
+bars (travel at least 5.5% of screen height within 1.5 seconds). Tap outside the
+bars to dismiss them; that tap is consumed, so it cannot turn a page or activate
+a link. The bottom-left 11%-of-screen-height square is reserved for toggling
+bars both on and off (about 159 × 159 pixels on the verified portrait PW3).
+Corner holds/drags do not toggle. The top edge is reserved for the swipe while
+fullscreen, so ordinary taps in that strip do not reach the webpage.
+
+Input-only X11 windows are owned by a LuaJIT child of the launcher; no webpage
+controls, event handlers or device bridge are added. The input zones are restacked
+just above the browser every 500 ms, below native chrome and dialog windows,
+so browser refreshes cannot permanently obscure them. KOReader's `luajit` and the
+Kindle's native `libX11` are required. Startup leaves the bars visible if native
+input setup fails. Native menus and keyboard remain separate windows above the
+page-area dismissal window; physical touch/stacking verification is required.
+
+Power/sleep pauses the session and removes input windows from view. Wake
+reapplies fullscreen to the same browser window. Leaving the browser, helper or
+session process exit, and **Restore Distill Toolbar** end the session and
+restore the bars. Browser replacement/title ownership changes end the session
+safely rather than taking over an unrelated window. Normal sleep stays enabled;
+there is no autostart or sleep-prevention setting. Sessions have no default
+four-hour cutoff. The restore shortcut serves
 both apps despite its existing Distill name. Log:
 `/mnt/us/distill-fullscreen/native/session.log`.
 
 For a short supervised recovery check, set `DISTILL_FULLSCREEN_SECONDS=30`
-(range 10–14400) when invoking `session.sh`. Default is 14400 seconds. Run
+(range 10–14400; 0 means unlimited) when invoking `session.sh`. Default is 0. Run
 `sh -n deploy/kindle/*.sh` individually before installing script edits.
 Actual Home launches, covers, manual restore and a shortened timeout were
-verified. A physical power-button event was not exercised during verification.
+verified. Power-service sleep/wake was exercised with the same helper surviving; physical button/cover and touch acceptance remain separate checks.
 A forced kill or system failure can leave stale RAM state; inspect processes
 and the recorded window before removing state or relaunching.
 
@@ -91,3 +111,21 @@ Shared server code: `shared/auth/device_pairing.py`; shared pairing screen:
 `shared/templates/shared/kindle/pairing.html`. Reader JS/CSS and templates live
 under `shared/static/` and `shared/templates/shared/kindle/`. Native fullscreen
 viewport handling is in `shared/static/js/kindle.js`, not the launchers.
+
+## Native gesture validation (2026-11-03)
+
+Run `sh session.sh --gesture-self-test` on Kindle to exercise the embedded Lua
+controller without opening X11 or changing browser state. It checks swipe
+threshold/direction/duration, ordinary-page pass-through, consumed dismissal,
+and corner toggles/drag/hold rejection. Run `sh -n` on each launcher locally.
+On-device XTest integration checks exercise actual native windows/title changes:
+corner on/off, edge swipe on, and outside-tap off. The user confirmed physical swipe operation after the stacking fix, then reported
+remaining corner-reveal misses. Logs showed touches just outside the former
+101px target; the corner is now 159px, and user retesting confirmed improved
+reliability. Toolbar menu/URL keyboard,
+physical button/cover sleep/wake and Home exit still need separate physical checks.
+
+The existing PW3 reader reloads at its saved paragraph when native bars return
+to clear an old WebKit pan offset. This pre-existing website behavior is unchanged;
+showing the toolbar can therefore cause a reader reload. No server deployment is
+needed for launcher changes; back up and reinstall the device script explicitly.

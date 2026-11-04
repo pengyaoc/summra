@@ -266,3 +266,76 @@ def test_kindle_script_is_es5():
     src = (ROOT / 'shared/static/js/kindle.js').read_text()
     for pattern in (r'\blet\s', r'\bconst\s', r'=>', r'\bclass\s', '`', r'classList'):
         assert not re.search(pattern, src), pattern
+
+
+@pytest.mark.parametrize('scenario', ['home', 'sleep', 'helper_failure'])
+def test_native_launcher_restores_and_cleans_up(tmp_path, scenario):
+    """Exercise shell supervision with fake native tools, without touching X11."""
+    import os
+    import subprocess
+
+    source = (ROOT / 'deploy/kindle/session.sh').read_text()
+    state = tmp_path / 'state'
+    title = tmp_path / 'title'
+    original = 'L:A_N:application_PC:TS_ID:com.lab126.browser'
+    title.write_text(original)
+    counter = tmp_path / 'counter'
+    counter.write_text('0')
+    bindir = tmp_path / 'bin'
+    bindir.mkdir()
+
+    def executable(name, body):
+        path = bindir / name
+        path.write_text('#!/bin/sh\n' + body)
+        path.chmod(0o755)
+        return path
+
+    wm = executable('wmctrl', '''if [ "$1" = '-l' ]; then
+cat "$TEST_TITLE" | awk '{print "0x123 0 kindle " $0}'
+else
+printf '%s' "$5" > "$TEST_TITLE"
+fi
+''')
+    executable('sleep', '/bin/sleep 0.05\n')
+    executable('lipc-get-prop', '''if [ "$2" = state ]; then
+n=$(cat "$TEST_COUNTER"); n=$((n+1)); echo "$n" > "$TEST_COUNTER"
+if [ "$TEST_SCENARIO" = sleep ] && [ "$n" -ge 2 ] && [ "$n" -le 4 ]; then
+ echo screenSaver
+else echo active; fi
+else
+n=$(cat "$TEST_COUNTER")
+if [ "$n" -ge 8 ]; then echo com.lab126.KPPMainApp
+else echo com.lab126.browser; fi
+fi
+''')
+    helper = '''start_gestures() {
+  echo ready > "$STATE/gesture-ready"
+  if [ "$TEST_SCENARIO" = helper_failure ]; then /bin/sleep 0.12; return; fi
+  while [ ! -f "$STATE/stop" ]; do /bin/sleep 0.01; done
+}
+'''
+    start = source.index('start_gestures() {')
+    end = source.index('if [ "${1:-}" = \'--gesture-self-test\' ]; then')
+    source = source[:start] + helper + source[end:]
+    source = source.replace('BASE=/mnt/us/distill-fullscreen/native', f'BASE={tmp_path}')
+    source = source.replace('STATE=/tmp/distill-native-fullscreen', f'STATE={state}')
+    source = source.replace('WM=/mnt/us/koreader/wmctrl', f'WM={wm}')
+    restore = (ROOT / 'deploy/kindle/restore.sh').read_text()
+    restore = restore.replace('STATE=/tmp/distill-native-fullscreen', f'STATE={state}')
+    restore = restore.replace('WM=/mnt/us/koreader/wmctrl', f'WM={wm}')
+    (tmp_path / 'restore.sh').write_text(restore)
+    (tmp_path / 'restore.sh').chmod(0o755)
+    script = tmp_path / 'session.sh'
+    script.write_text(source)
+    env = dict(os.environ, PATH=f'{bindir}:' + os.environ['PATH'],
+               TEST_TITLE=str(title), TEST_COUNTER=str(counter), TEST_SCENARIO=scenario,
+               DISTILL_FULLSCREEN_SECONDS='0')
+    result = subprocess.run(['sh', str(script), '--current'], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert title.read_text() == original
+    assert not state.exists()
+    if scenario == 'sleep':
+        assert 'Wake: fullscreen restored without navigation.' in result.stdout
+    elif scenario == 'helper_failure':
+        assert 'Gesture handler exited; restoring toolbar.' in result.stdout

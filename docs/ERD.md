@@ -1,5 +1,20 @@
 # Summra - Technical Implementation Details
 
+## 2026-11-03: Kindle reader chrome sizing and overflow
+
+Shared `shared/static/css/kindle.css` scales reader chrome typography 2.5×,
+reserves 90px top/bottom pagination insets, and lays out settings panels in normal
+flow inside an independently scrollable menu. Existing viewport measurements
+repaginate prose into the reduced reading rectangle without changing kfs/font
+cookies, anchors or body-text size. The ES5 scroll guard in `kindle.js` permits
+input within an overflowing open menu while continuing to suppress document
+panning; non-overflowing menus and the reader keep their prior drag protection.
+Distill figures use atomic inline-block boxes so illustrations and captions stay
+together in the shorter reading columns. Native launcher gestures, authentication
+and database schemas are unchanged. The three static assets are deployed with
+content-hashed URLs; both services remain active without a restart.
+
+
 ## 2026-11-03 — Physical PW3 image painting correction
 
 Physical testing reproduced a legacy WebKit multicolumn painting defect after
@@ -181,6 +196,33 @@ launcher, not an alternate engine. Disk audit in `deploy/README.md` attributes
 most avoidable VM usage to retained deployment DB backups; live DBs have almost
 no free pages, so no schema/VACUUM or deletion is justified by this audit alone.
 
+
+## Native browser gestures and sleep lifecycle (2026-11-03)
+
+Supersedes the power-event termination/four-hour default below. The existing
+`deploy/kindle/session.sh` embeds a LuaJIT/FFI X11 helper with input-only,
+override-redirect edge/corner windows, restacked directly above the browser
+every 500 ms to survive browser raises while leaving native dialogs above them.
+A top-edge downward swipe restores the recorded browser title (`PC:TS`); a reserved bottom-left corner tap toggles
+`PC:N`/`PC:TS`. While bars show, an input-only page-area window consumes the first
+outside tap to dismiss them. Ordinary page input outside reserved zones remains
+with the browser. Native controls stay outside the website; no web/device bridge,
+web code, authentication, database or data model changes.
+
+Startup waits for helper readiness before hiding bars. X11 automatically destroys
+input windows when the helper connection closes; cleanup records/kills the actual
+Lua child PID as well as its shell wrapper and restores only the owned title.
+The supervisor tolerates non-active power states, hides gesture windows while
+asleep, restores fullscreen on wake, and grants a bounded app-focus settling
+period. Browser/window replacement exits safely. Default session duration is
+unlimited; an optional bounded recovery timer and manual restore remain.
+Existing reader paragraph-preserving reload on toolbar restoration is unchanged.
+Physical swipe operation was confirmed after periodic stacking. Corner reveal
+was subsequently reported inconsistent: touches outside the former 101px zone
+led to expanding it to 11% of screen height (159px on PW3). The controller now
+regression-tests those physical coordinates; user retesting confirmed improved
+corner reliability after the expansion. Validation/deployment status is recorded
+in WORK_LOG.md; native dialog stacking and physical power-button/cover checks remain separate.
 
 ## Verified native fullscreen architecture (2026-10-27)
 

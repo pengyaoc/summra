@@ -1,5 +1,86 @@
 # Summra Work Log
 
+## 2026-11-03: Commit and synchronize Kindle release
+
+- At the user's request, reviewed the11 pending Kindle launcher/UI/test/documentation
+  files together. ERD and PRD reflect the final native159px corner, sleep lifecycle,
+  2.5× reader chrome and caption-safe pagination; worklog records physical feedback,
+  validation and deployment limits. No media, credentials or environment files
+  are included.
+- Existing validation remains applicable:412 shared/Distill Python cases,66 focused
+  shared/Plainly cases,14 Plainly browser scenarios, Distill desktop/mobile/Kindle
+  and dedicated Chromium/WebKit illustration runs pass; shell syntax and whitespace
+  checks pass. No further code edits since those checks.
+- VM preflight: same base commit as local, with only the three deliberately
+  predeployed Kindle assets modified. Their SHA256 hashes match this release.
+  Preserve VM-local backend/environment files and reconcile only the verified
+  asset changes before a fast-forward pull. Commit/push/checkout sync in progress.
+
+
+## 2026-11-03: Enlarge Kindle reader UI 2.5×
+
+- Increased book title/time/percentage 14→35px, navigation and regular control
+  text 18→45px, A+22→55px, menu labels/position16→40px and font status20→50px.
+  Expanded header/footer allocation36→90px, retaining existing saved prose size.
+- Replaced anchored settings banners with flowing/wrapping panels to prevent
+  large controls overlapping. Short viewports scroll the menu internally;
+  document panning stays blocked and ordinary menus retain drag protection.
+- Focused Python checks:66 passed. Initial Kindle browser regression passes;
+  inspected 1072×1448 and758×950 menus with no horizontal overflow, plus640×400
+  scroll overflow. Added browser regression for scroll/reachable font and Close.
+- All14 required Plainly browser scenarios pass. Added short-screen scroll,
+  2.5× typography and reachable font/Close checks. Distill's reduced reading area
+  exposed figure fragmentation: atomic inline-block figures keep image/caption
+  together. Corrected stale Distill card selector and page-turn assertion (rounded
+  percentages need not change on every page); added enlarged font-family/status
+  checks. Final Distill desktop/mobile/Kindle run passes when run serially;
+  dedicated image tests pass in Chromium/WebKit, including font changes and
+  native fullscreen transitions. Shared/Distill Python suite:412 passed; initial
+  shared/Plainly Kindle and markup suite:66 passed. Concurrent Distill browser
+  runs produced expected progress-session409 conflicts; serial rerun is clean.
+- Deployed only the three reviewed CSS/JS assets to the existing VM after checking
+  original hashes; rollback archive `/tmp/summra-kindle-ui-before-20261103.tgz`.
+  Live public Plainly asset hashes and Kindle HTML content-hash references match;
+  authenticated Distill styles and Kindle reader return200. Both services active,
+  no restart required. Website changes are live; an existing Kindle page must be
+  refreshed/reopened. Physical on-device visual acceptance remains pending.
+  No native launcher or data/schema/auth changes in this UI update. Assets were
+  deployed ahead of Git release synchronization, recorded below.
+
+
+## 2026-11-03: Native Kindle gesture controls and sleep-aware session
+
+- Implemented browser control entirely in the existing Kindle launcher: top-edge
+  swipe reveals native bars, reserved bottom-left corner taps toggle on/off, and
+  page-area taps dismiss visible bars without reaching the webpage. Added an
+  embedded LuaJIT controller self-test; no website or schema/auth changes.
+- Initial passive-grab trial encountered a native input-grab conflict and retained
+  normal bars. Replaced it with X11 input-only windows; corrected title handling
+  to use the browser's `_NET_WM_NAME` UTF-8 property. On-device XTest checks passed
+  corner on/off, top-edge reveal and outside dismissal against the real browser.
+- Sleep now suspends gesture zones and wake restores fullscreen; normal sleep
+  stays enabled. Removed default four-hour expiration, kept optional timeout,
+  title ownership/manual restoration, and actual Lua-child cleanup on failure.
+- Validation: all launcher shell syntax checks and embedded on-device controller
+  tests pass; 20 focused pytest cases pass, including mocked Home exit, sleep/wake
+  and helper-failure cleanup. Installed-device XTest passes all four interactions;
+  killing the actual Lua child restores bars and removes session state. Powerd
+  entered screenSaver with gesture zones suspended, then returned active with
+  the same helper PID and fullscreen restored. The advertised wakeUp write was
+  rejected by firmware; wake was observed rather than attributed to that write.
+- User reported intermittent physical swipe/corner behavior in the initial trial.
+  Added periodic stacking directly above the browser (below native UI), enlarged
+  the corner target to 101 × 101 pixels, and added native gesture-coordinate logs.
+  Reinstalled and reran controller/XTest checks successfully. The user then confirmed
+  both physical top-edge swipes and bottom-left toggles work consistently.
+- Installed on the reachable PW3, with original launcher preserved as
+  `/mnt/us/distill-fullscreen/native/session.sh.before-gestures`. Current session
+  is active without a timeout. Initial physical acceptance was subsequently
+  corrected: corner reveal still missed some taps; the later expansion is recorded
+  below. Native menu/keyboard stacking and physical power-button/cover operation
+  remain unverified separately from power-service tests. Launcher files are
+  installed on the Kindle; Git release synchronization is recorded below.
+
 ## 2026-10-28: Distill file-media migration verified in production and authoring DB
 
 - Deployed `ca07abe`; GitHub CI passed: https://github.com/pengyaoc/summra/actions/runs/40647364065. All1,225 local regression cases passed,2 opt-in cases deselected. Rehearsal migrated a production copy and checked all886 original/162 thumbnail authenticated HTTP bodies against their original SHA256 hashes, anonymous rejection and unchanged non-image records.
@@ -11190,6 +11271,20 @@ User requested Tesla/SpaceX published in the same manner as NVIDIA. Selected eac
 Validation: both publisher dry-runs and isolated scratch imports pass. Desktop 1280×900, phone 390×844 and landscape 844×390 browser previews pass table sizing and horizontal/vertical scrolling without page turning or JS errors. Inspected web/Kindle screenshots; Kindle emulation renders largest comps chapters as 135 Tesla and 150 SpaceX labeled cell paragraphs. No physical-device verification claimed for these new entries. Local/live preflight inventories match across books, chapters, images and cover thumbnails at 58 entries; integrity/foreign keys pass. Consistent local backup: /private/tmp/distill-tesla-spacex-20261103/before.db. Master import/deployment and final live verification follow. No app code/schema/product behavior changes. Existing uncommitted Kindle launcher/test/docs work is unrelated and preserved.
 
 Published successfully: Tesla book 64 at https://pengyaochen.com/distill/books/tesla-equity-research-2026-11-03 and SpaceX book 65 at https://pengyaochen.com/distill/books/spacex-equity-research-2026-11-03. Existing publisher performed verified media installation, a consistent live metadata/account/pairing backup, the content DB swap/restart, and normal anonymous 401 check. Final live/local inventories match exactly across all four content tables at 60 entries; all 58 pre-existing book/chapter/image/cover records were verified unchanged. No account/progress/pairing DB replacement. All 43 live Kindle chapters pass exact cell-text/context comparison (535 Tesla, 585 SpaceX cell paragraphs); 4 Tesla and 3 SpaceX reader segments return 200. Both authenticated web/Kindle book/read pages return 200 and anonymous pages return 401; integrity and foreign keys pass. All four vault source hashes remain unchanged. Detailed audit/browser/live results are in the task scratch folder. Only this publication log is being committed; unrelated pre-existing Kindle changes remain in the working tree.
+
+### 2026-11-03: Expand corner reveal hit target after physical retest
+
+- User corrected initial acceptance: bottom-left toolbar reveal was inconsistent.
+  Physical logs include presses at x106–107, just outside the 101px reveal target;
+  toolbar dismissal still worked there because the page-wide dismissal zone was
+  active. Enlarged the reserved corner to 11% of display height (159px on PW3),
+  preserving outside-tap dismissal and keeping browser control native.
+- Added controller regressions for the observed tap coordinates, the enlarged
+  target's on/off behavior and pass-through outside it. Embedded on-device
+  controller tests and all 20 focused pytest tests pass. Reinstalled on PW3;
+  native XTest verifies reveal and hide at (107,1367), plus swipe reveal and
+  outside dismissal. User physically retested and reported “much better now”;
+  improved reliability is confirmed, without claiming every tap succeeds.
 
 ## 2026-11-03 — Dated NVIDIA, Tesla and SpaceX research covers
 

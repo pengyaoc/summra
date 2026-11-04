@@ -106,6 +106,10 @@
   // the options object as capture=true; newer ones also honor passive=false.
   function preventDocumentScroll(e) {
     e = e || window.event;
+    // Enlarged settings can exceed a short viewport. Let that inner panel
+    // scroll while retaining the reader's protection against document panning.
+    var target = e.target || e.srcElement;
+    if (menuOpen() && inside(target, menu) && menu.scrollHeight > menu.clientHeight) return;
     if (e.preventDefault) e.preventDefault();
     e.returnValue = false;
   }

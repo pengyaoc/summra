@@ -7,7 +7,9 @@
 /* Distill's block vocabulary on the shared Kindle e-ink pages. No JavaScript here:
    kindle.js paginates .flow into columns, so nothing may be split across one. */
 .flow table, .flow tr, .flow figure { -webkit-column-break-inside: avoid; break-inside: avoid; }
-.flow figure { display: block; margin: 1em 0; text-align: center; text-indent: 0; }
+/* Atomic inline-blocks keep captions with images when larger reader chrome
+   leaves a shorter column; legacy column-break avoidance alone can fragment. */
+.flow figure { display: inline-block; width: 100%; vertical-align: top; margin: 1em 0; text-align: center; text-indent: 0; }
 .flow figure img { display: block; margin: 0 auto; max-width: 100%; max-height: 540px; -webkit-column-break-inside: avoid; break-inside: avoid; }
 .flow figcaption { font-size: 0.8em; font-style: italic; text-align: center; }
 

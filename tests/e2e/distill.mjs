@@ -255,7 +255,7 @@ try {
 
   // --- Library shows it under Reading now ---------------------------------
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
-  check(await page.locator(`.library-card a.library-read-action[href*="/books/${SLUG}/read?"]`).count() === 1, 'library lists the book under Reading now');
+  check(await page.locator(`a.library-card[href*="/books/${SLUG}/read?"]`).count() === 1, 'library lists the book under Reading now');
   check(/Chapter \d+ of \d+|Overview/.test(await page.locator('.library-card-location').first().innerText()), 'Reading now card shows the progress label');
   await page.screenshot({ path: `${SHOTS}distill_library_reading_now.png` });
 
@@ -424,10 +424,17 @@ try {
     const img = await kp.evaluate(() => [...document.querySelectorAll('#flow figure img')].map((i) => [i.complete, i.naturalWidth]));
     check(img.length > 0 && img.every(([done, w]) => done && w > 0), `Kindle figure images load (naturalWidth>0: ${JSON.stringify(img)})`);
 
-    const before = [await right(), await flowLeft()];
+    const before = [await right(), await flowLeft(), await kp.locator('#menu-pos').innerText()];
     await kp.mouse.click(700, 475);
     await kp.waitForTimeout(150);
-    check((await flowLeft()) !== before[1] && (await right()) !== before[0], `tap at x=700 turns the page (${before} -> ${await right()})`);
+    check((await flowLeft()) !== before[1] && (await kp.locator('#menu-pos').innerText()) !== before[2], `tap at x=700 turns the page (${before} -> ${await right()})`);
+    await kp.mouse.click(379, 30);
+    check(await kp.locator('#font-size-status').evaluate(e => getComputedStyle(e).fontSize) === '50px', 'Kindle size status uses 2.5x UI text');
+    check(await kp.locator('#font-hei').evaluate(e => getComputedStyle(e).fontSize) === '45px', 'Kindle font-family buttons use 2.5x UI text');
+    check(await kp.locator('#menu').evaluate(e => e.scrollWidth <= e.clientWidth + 1), 'Kindle font menu fits without horizontal overflow');
+    await kp.click('#font-hei');
+    check(await kp.locator('html.font-hei').count() === 1, 'enlarged font-family control changes the reading font');
+    await kp.click('#close');
     await kp.screenshot({ path: `${SHOTS}distill_kindle_reader.png` });
     const table = await kp.evaluate(() => { const t = document.querySelector('#flow table'); return t ? t.getBoundingClientRect().left : null; });
     check(table !== null, 'Kindle reader renders the table');
