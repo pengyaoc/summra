@@ -2661,6 +2661,16 @@ When updating the PRD or ERD for a feature-flagged subsystem, always note the fl
 
 The shared `distill-publish` skill documents publication of supplied articles/research in full by default, combined-document navigation, requested categories, faithful formatting adaptation, and web/Kindle verification. This is agent workflow documentation; reader product behavior and requirements are unchanged.
 
+### 2026-11-04 — Home browser title
+
+The Distill home page browser tab displays exactly `Distill`, without the `Library ·` prefix.
+
 ### 2026-11-03 — Optional author display
 
 Entries without a nonblank author show no author line or empty author spacing in Distill library tiles, Continue reading cards, search suggestions, book pages or Kindle library/contents views. Known author names continue to display. Missing authors must not appear as “None” or another placeholder; report content and metadata remain unchanged.
+
+### 2026-11-04 — Reading desk book details and daylight browsing
+
+Use the approved Reading desk design for web book details: cover, title/subtitle, optional author, section/read-time metadata and existing reading actions in a left jacket column; a short excerpt from the existing overview and grouped contents in the right column. Stack the jacket above the contents on phones, including 320px widths. Chinese titles split on the existing double em dash when present, with title and subtitle in Kai; English titles use the matching editorial serif style. Body text, metadata, chapter links and controls use consistent sans typography. Do not invent a new book description or change source content.
+
+Library and book-details pages stay in warm daylight regardless of OS appearance. Apply the same Chinese Kai/English serif titles to home tiles, Reading now/Finished cards, cover placeholders and search suggestions. Keep the home tab title exactly `Distill`. Native expandable parts make long contents scannable; open the saved part automatically, falling back to the first named part. Overview/Source links remain visible. Preserve reading progress, finished/unfinished actions, restart, filtered-library return links, accessibility and the reader's own day/night/font settings. No feature flag: all web browsing uses this design when deployed; Kindle views are unchanged.

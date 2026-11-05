@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% from 'shared/_library_card.html' import library_card with context %}
 {% from '_cover.html' import cover with context %}
-{% block title %}Library · Distill{% endblock %}
+{% block title %}Distill{% endblock %}
 {% block content %}
 <main class="distill-main">
     <div class="distill-library-intro">
@@ -68,7 +68,7 @@
         {% if query or language or category or status or sort != 'newest' %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}{% if status %} · {{ {'unread': 'Unread', 'reading': 'Reading', 'finished': 'Finished'}[status] }}{% endif %}{% if sort != 'newest' %} · {{ {'title': 'Title order', 'author': 'Author order', 'shortest': 'Shortest first'}[sort] }}{% endif %}</span><a href="{{ base_path }}/">Clear filters</a></div>{% endif %}
         <div class="distill-grid">
 {% for book in books %}
-            <a class="distill-tile" href="{{ base_path }}/books/{{ book.slug }}?return={{ return_url|urlencode }}">
+            <a class="distill-tile" lang="{{ book.lang }}" href="{{ base_path }}/books/{{ book.slug }}?return={{ return_url|urlencode }}">
                 {{ cover(book) }}
                 <h3>{{ book.title }}</h3>
                 {% if book.author and book.author|trim %}<p>{{ book.author }}</p>{% endif %}
@@ -155,6 +155,7 @@
             option.setAttribute('aria-selected', 'false');
             var title = document.createElement('strong');
             title.textContent = book.title;
+            title.lang = book.lang || 'en';
             option.appendChild(title);
             if (book.author && book.author.trim()) {
                 var author = document.createElement('span');

@@ -10,7 +10,7 @@
     <div class="library-card-cover-frame">{{ cover_html }}</div>
     <div class="library-card-body">
         <div class="library-card-meta">{% if book.status == 'finished' %}<span>Finished</span><span>100%</span>{% elif pct %}<span>Continue reading</span><span>{{ pct }}%</span>{% else %}<span>Just started</span>{% endif %}</div>
-        <h3>{{ book.title }}</h3>
+        <h3 lang="{{ book.lang or 'en' }}">{{ book.title }}</h3>
         {% if book.author and book.author|trim %}<p class="library-card-author">{{ book.author }}</p>{% endif %}
         <p class="library-card-location">{{ book.current_chapter.chapter_title if book.current_chapter and book.current_chapter.chapter_title else ('Chapter ' ~ book.current_chapter.chapter_number if book.current_chapter else 'Beginning') }}{% if reader_config.modes|length > 1 %} · {{ mode.library_label or mode.label }}{% endif %}</p>
         <div class="library-card-foot">

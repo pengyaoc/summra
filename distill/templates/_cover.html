@@ -12,6 +12,6 @@
 <img class="distill-cover" src="{{ base_path }}/books/{{ book.slug }}/images/{{ book.cover_image|urlencode }}" alt="" loading="{{ 'eager' if eager else 'lazy' }}" decoding="async">
 {%- endif %}
 {%- else -%}
-<div class="distill-cover book-cover-placeholder" aria-hidden="true"><span>{{ book.title }}</span></div>
+<div class="distill-cover book-cover-placeholder" lang="{{ book.lang or 'en' }}" aria-hidden="true"><span>{{ book.title }}</span></div>
 {%- endif %}
 {%- endmacro %}

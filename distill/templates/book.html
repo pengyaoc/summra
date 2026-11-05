@@ -7,10 +7,12 @@
     <a class="distill-back" href="{{ return_url }}">← Library</a>
     <section class="distill-book-head">
         {{ cover(book, eager=True) }}
-        <div>
-            <h1>{{ book.title }}</h1>
+        <div class="distill-book-info">
+            <p class="distill-book-eyebrow">{{ categories|first }} <span aria-hidden="true">·</span> {{ '中文' if book.lang == 'zh' else 'English' if book.lang == 'en' else book.lang }}</p>
+            {% set title_parts = book.title.split('——', 1) if book.lang == 'zh' else [book.title] %}
+            <h1>{{ title_parts[0] }}{% if title_parts|length > 1 %}<span class="distill-book-subtitle">{{ title_parts[1] }}</span>{% endif %}</h1>
             {% if book.author and book.author|trim %}<p class="distill-author">{{ book.author }}</p>{% endif %}
-            <p class="distill-author">About {{ minutes }} min read</p>
+            <p class="distill-book-facts">{{ section_count }} sections <span aria-hidden="true">·</span> About {{ minutes }} min read</p>
 {% if card and card.status == 'finished' %}<p class="distill-progress">Finished · 100%</p>
 {% if card.current_chapter %}<p class="distill-saved-place">Saved place: {{ card.current_chapter.chapter_title }}</p>{% endif %}
 {% elif label %}
@@ -24,19 +26,32 @@
             <p id="distill-book-status" role="status"></p>
         </div>
     </section>
+    <div class="distill-book-body">
+{% if excerpt %}
+    <section class="distill-book-about" aria-labelledby="about-heading">
+        <h2 id="about-heading">About this book</h2>
+        <p class="distill-book-excerpt">{{ excerpt }}</p>
+        <p class="distill-excerpt-note">From the overview</p>
+    </section>
+{% endif %}
     <section class="distill-toc" aria-labelledby="toc-heading">
-        <h2 id="toc-heading">Contents</h2>
+        <div class="distill-toc-heading"><h2 id="toc-heading">Contents</h2><span>{{ section_count }} sections</span></div>
 {% for part_title, chapters in toc %}
 {% if part_title %}
-        <h3 class="toc-part-title">{{ part_title }}</h3>
+        <details class="distill-toc-part"{% if part_title == active_part %} open{% endif %}>
+            <summary class="toc-part-title">{{ part_title }}<span class="distill-part-toggle" aria-hidden="true"></span></summary>
 {% endif %}
         <ol class="toc-list">
 {% for chapter in chapters %}
             <li><a{% if card and card.current_chapter and card.current_chapter.id == chapter.id %} aria-current="location"{% endif %} href="{{ base_path }}/books/{{ book.slug }}/read?chapter={{ chapter.id }}&amp;return={{ return_url|urlencode }}">{{ chapter.title }}</a></li>
 {% endfor %}
         </ol>
+{% if part_title %}
+        </details>
+{% endif %}
 {% endfor %}
     </section>
+    </div>
 </main>
 {% endblock %}
 

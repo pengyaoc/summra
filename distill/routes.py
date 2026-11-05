@@ -120,7 +120,7 @@ def reading_cards(db, user_id, books, cards=None):
             continue
         label = progress_label(card, counts.get(book['id'], 0))
         # The shared card macro prints current_chapter.chapter_title as its location line.
-        reading.append({**card, 'cover_image': book['cover_image'],
+        reading.append({**card, 'lang': book['lang'], 'cover_image': book['cover_image'],
                         'cover_thumbnail_token': book.get('cover_thumbnail_token'),
                         'current_chapter': {'chapter_title': label} if label else None})
     return reading
@@ -193,7 +193,7 @@ def library():
                                     else (book.get(sort) or '').casefold(), book['title'].casefold()))
     # Only searchable metadata is embedded, never chapter content. Keep the whole
     # selected shelf available when editing a previously submitted search.
-    search_catalog = [{key: book.get(key) or '' for key in ('title', 'author', 'slug')}
+    search_catalog = [{key: book.get(key) or '' for key in ('title', 'author', 'slug', 'lang')}
                       for book in filtered]
     return render_template('library.html', reading=reading_cards(db, g.user_id, books, cards['continue_reading']),
                            finished=[{**card, **next(book for book in books if book['id'] == card['id'])} for card in cards['finished']], states=states, minutes=minutes, status=status, sort=sort,
@@ -215,8 +215,24 @@ def book_page(slug):
         if not toc or toc[-1][0] != chapter['part_title']:
             toc.append((chapter['part_title'], []))
         toc[-1][1].append(chapter)
+    # Only the overview is read for the short jacket excerpt; never load the
+    # entire book or construct its reader manifest for the details page.
+    overview = _db().get_chapter(book['id'], 0)
+    paragraphs = [block['text'] for block in (overview or {}).get('blocks', [])
+                  if block.get('type') == 'p' and block.get('text', '').strip()]
+    # An edition/title line often precedes the actual introductory paragraph.
+    if len(paragraphs) > 1 and book['title'] in paragraphs[0]:
+        paragraphs = paragraphs[1:]
+    excerpt = paragraphs[0].replace('*', '').strip() if paragraphs else ''
+    if len(excerpt) > 420:
+        excerpt = excerpt[:420].rstrip() + '…'
+    current_id = ((card or {}).get('current_chapter') or {}).get('id')
+    active_part = next((chapter['part_title'] for chapter in outline if chapter['id'] == current_id), None)
+    if not active_part:
+        active_part = next((part for part, _ in toc if part), None)
     return render_template(
-        'book.html', book=book, toc=toc, card=card,
+        'book.html', book=book, toc=toc, card=card, excerpt=excerpt,
+        active_part=active_part, section_count=len(outline), categories=book_categories(book),
         label=progress_label(card, _db().count_chapters(book['id'])),
         percent=card['furthest_percentage'] if card else 0, return_url=library_return(),
         minutes=reading_estimates(_db(), [book])[book['id']])

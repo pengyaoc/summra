@@ -1,5 +1,36 @@
 /* Distill: library, book page and reader block styling, on the shared tokens. */
 
+/* LXGW WenKai v1.311, regular (Fontsource's 500 face). SIL OFL 1.1;
+   see ../fonts/OFL-LXGW-WenKai.txt. Loaded only when a title uses Kai. */
+@font-face {
+    font-family: 'Distill Kai';
+    font-style: normal;
+    font-weight: 400 500;
+    font-display: swap;
+    src: url('../fonts/lxgw-wenkai-v1.311-regular.woff2') format('woff2');
+}
+
+/* Browsing is always warm daylight; the reader keeps its own theme settings. */
+.distill-browse {
+    color-scheme: only light;
+    --font-serif: 'Iowan Old Style', Baskerville, Georgia, 'Distill Kai', 'Kaiti SC', STKaiti, KaiTi, serif;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+    --font-kai: 'Distill Kai', 'Kaiti SC', STKaiti, KaiTi, serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+}
+.distill-browse :is(.distill-tile h3, .library-card h3, .book-cover-placeholder span, .distill-search-menu strong):lang(zh) {
+    font-family: var(--font-kai);
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.5;
+}
+.distill-browse :is(.distill-tile h3, .library-card h3, .distill-search-menu strong):lang(en) {
+    font-weight: 500;
+    line-height: 1.35;
+}
+
 /* The shared reader hides its panels and status line with .hidden but does not define it. */
 .hidden { display: none !important; }
 .distill-install-action[hidden] { display: none; }
@@ -28,14 +59,13 @@
 .distill-tile h3 { margin: .6rem 0 .15rem; font-family: var(--font-serif); font-size: 1rem; line-height: 1.25; }
 .distill-tile p { margin: 0; color: var(--ink-muted); font-size: .85rem; }
 
-.distill-back { display: inline-block; margin-bottom: 1rem; color: var(--ink-muted); font-size: .9rem; text-decoration: none; }
-.distill-book-head { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 1.75rem; align-items: start; margin-bottom: 2.5rem; }
-.distill-author { margin: 0 0 .75rem; color: var(--ink-muted); font-size: 1.05rem; }
-.distill-progress { margin: 0 0 1rem; color: var(--ink-muted); font-size: .9rem; font-weight: 650; }
+.distill-back { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink-muted); font-size: .85rem; text-decoration: none; }
+.distill-author { margin: .85rem 0 0; color: var(--ink-muted); font-size: .95rem; }
+.distill-progress { margin: 0 0 .65rem; color: var(--ink-muted); font-size: .85rem; font-weight: 500; }
 .library-read-action { text-decoration: none; }
-@media (max-width: 640px) { .distill-book-head { grid-template-columns: 100px minmax(0, 1fr); gap: 1rem; } .distill-main h1 { font-size: 1.5rem; } }
 
-.toc-part-title { margin: 1.5rem 0 .4rem; color: var(--ink-muted); font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.toc-part-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 60px; padding: 1rem 0; color: var(--ink); font-size: .95rem; font-weight: 500; line-height: 1.5; cursor: pointer; list-style: none; }
+.toc-part-title::-webkit-details-marker { display: none; }
 .toc-list { margin: 0; padding: 0; list-style: none; }
 .toc-list li { border-bottom: 1px solid var(--rule); }
 .toc-list a { display: block; padding: .6rem 0; color: var(--ink); text-decoration: none; }
@@ -122,3 +152,56 @@
 .distill-install-guide button { margin-top: .5rem; color: var(--accent); border: 0; background: none; font: inherit; cursor: pointer; }
 
 .distill-saved-place { margin: 0 0 1rem; color: var(--ink-muted); font-size: .9rem; }
+
+/* Reading desk: a quiet book jacket beside an organized contents column. */
+.distill-book { display: grid; grid-template-columns: 240px minmax(0, 1fr); column-gap: 48px; row-gap: 24px; padding-top: 1.25rem; }
+.distill-book > .distill-back { grid-column: 1 / -1; justify-self: start; }
+.distill-book-head { display: flex; flex-direction: column; align-self: start; gap: 26px; min-width: 0; margin: 0; padding: 0 32px 24px 0; border-right: 1px solid var(--rule-strong); }
+.distill-book-head > :is(.distill-cover-picture, .distill-cover) { width: 144px; max-width: 100%; }
+.distill-book-head .distill-cover { border-radius: 2px; box-shadow: 4px 8px 18px #2b26221a; }
+.distill-book-info { min-width: 0; }
+.distill-book-eyebrow { margin: 0 0 14px; color: var(--accent); font-size: .65rem; font-weight: 500; letter-spacing: .09em; line-height: 1.7; text-transform: uppercase; }
+.distill-book-eyebrow span { padding: 0 .2em; }
+.distill-book h1 { margin: 0; font-size: 1.9rem; font-weight: 500; line-height: 1.2; letter-spacing: -.025em; overflow-wrap: anywhere; text-wrap: balance; }
+.distill-book h1:lang(zh) { font-family: var(--font-kai); font-size: 1.9rem; font-weight: 400; line-height: 1.4; letter-spacing: 0; }
+.distill-book-subtitle { display: block; margin-top: .65rem; color: var(--ink-muted); font-size: .58em; font-weight: 400; line-height: 1.65; letter-spacing: 0; }
+.distill-book-facts { display: flex; flex-wrap: wrap; column-gap: .4rem; margin: 1rem 0 1.25rem; color: var(--ink-muted); font-size: .75rem; line-height: 1.7; }
+.distill-book .distill-book-actions { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.distill-book-actions > .library-read-action { justify-content: space-between; gap: 16px; padding: .75rem 1rem; border-radius: 4px; font-size: .85rem; font-weight: 500; }
+.distill-book-actions > :is(.distill-unfinish, .distill-restart) { justify-content: flex-start; padding: .5rem 0; color: var(--ink-muted); font-size: .8rem; font-weight: 400; text-decoration: none; }
+.distill-book-actions > :is(.distill-unfinish, .distill-restart):hover { color: var(--accent); text-decoration: underline; text-underline-offset: .2em; }
+#distill-book-status:empty { display: none; }
+#distill-book-status { margin-top: .75rem; font-size: .85rem; }
+.distill-book-body { min-width: 0; }
+.distill-book-about { padding: 0 0 26px; }
+.distill-book-about h2, .distill-toc-heading h2 { margin: 0; font-family: var(--font-serif); font-size: 1.4rem; font-weight: 500; line-height: 1.4; }
+.distill-book-excerpt { margin-top: 16px; color: var(--ink-muted); font-size: .95rem; line-height: 1.9; overflow-wrap: anywhere; }
+.distill-excerpt-note { margin-top: .7rem; color: var(--ink-muted); font-size: .7rem; }
+.distill-toc-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; padding: 22px 0 18px; border-top: 1px solid var(--rule-strong); }
+.distill-toc-heading > span { color: var(--ink-muted); font-size: .75rem; }
+.distill-toc-part { border-bottom: 1px solid var(--rule); }
+.distill-part-toggle::after { content: '+'; color: var(--ink-muted); font-size: 1.1rem; font-weight: 400; }
+.distill-toc-part[open] .distill-part-toggle::after { content: '−'; }
+.distill-toc-part > .toc-list { padding: 0 0 14px; }
+.distill-toc-part .toc-list li { border: 0; }
+.distill-book .toc-list a { min-height: 44px; padding: 10px 0; color: var(--ink-muted); font-size: .9rem; line-height: 1.65; overflow-wrap: anywhere; }
+.distill-book .toc-list a:hover { color: var(--accent); }
+.distill-book .toc-list [aria-current] { padding-left: .75rem; color: var(--accent); font-weight: 500; }
+.distill-back:focus-visible, .toc-part-title:focus-visible, .toc-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 720px) {
+    .distill-book { display: block; padding: 1rem 1.5rem 3rem; }
+    .distill-book > .distill-back { margin-bottom: 22px; }
+    .distill-book-head { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 22px; margin-bottom: 26px; padding: 0 0 26px; border: 0; border-bottom: 1px solid var(--rule-strong); }
+    .distill-book-head > :is(.distill-cover-picture, .distill-cover) { width: 96px; }
+    .distill-book h1, .distill-book h1:lang(zh) { font-size: 1.65rem; }
+    .distill-book-eyebrow { margin-bottom: 10px; font-size: .65rem; letter-spacing: .06em; }
+    .distill-author { font-size: .85rem; }
+    .distill-book-facts { margin: .7rem 0 1rem; }
+    .distill-book-actions > .library-read-action { padding: .65rem .8rem; gap: 10px; }
+}
+@media (max-width: 360px) {
+    .distill-book { padding-right: 1.25rem; padding-left: 1.25rem; }
+    .distill-book-head { grid-template-columns: 76px minmax(0, 1fr); gap: 16px; }
+    .distill-book-head > :is(.distill-cover-picture, .distill-cover) { width: 76px; }
+    .distill-book h1, .distill-book h1:lang(zh) { font-size: 1.5rem; }
+}

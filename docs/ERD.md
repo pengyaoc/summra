@@ -11139,6 +11139,16 @@ Cover derivatives are encoded during import/backfill, before the write transacti
 
 Added `skills/distill-publish/` as a portable Claude/Codex workflow over the existing book-format/import/deploy modules. It documents full-catalog preflight, SQLite backups, separate content/progress stores, and web-grid/Kindle table behavior. No application architecture, database schema, or runtime behavior changes.
 
+### 2026-11-04 — Home browser title
+
+The Distill web library template renders the document title as `Distill`. This presentation-only change has no architecture, data model, or storage impact.
+
 ### 2026-11-03 — Omit absent author markup
 
 Distill web library/book templates, search suggestions and Kindle library/contents templates omit author elements for null, empty or whitespace-only author values. The shared server-rendered Continue reading card follows the same condition. Author data remains optional and unchanged in storage/APIs; no database or architectural changes.
+
+### 2026-11-04 — Distill Reading desk and browse typography
+
+The web book-details template uses a jacket/sidebar and a contents column, stacking on narrow screens. Native `details`/`summary` groups keep chapter order/links and `aria-current`; the saved chapter's named part opens by default, otherwise the first named part opens. Untitled groups (including Overview and Source) remain directly visible. The route loads only the ordinal-0 overview for a plain, escaped, at-most-420-character jacket excerpt (plus ellipsis), skipping a leading title/edition paragraph when a following paragraph exists. Outline/progress queries remain separate; no full manifest or full-book block load is added. No schema, content or progress-coordinate changes.
+
+`distill-browse` scopes the fixed light palette, serif English title stack, sans UI/body stack and self-hosted LXGW WenKai v1.311 regular face to library/book browsing, leaving reader and Kindle typography/theme controls intact. The OFL license ships beside the WOFF2 in `distill/static/fonts/`. The font is requested on use and does not contact an external font provider. The library catalog carries `lang` for search suggestions; Distill cards carry it for titles, and the shared server-rendered card title has a language attribute (defaults to English). No Plainly font styles change. No new feature flag; applies to all Distill web browsing after deployment.

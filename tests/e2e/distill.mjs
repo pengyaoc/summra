@@ -184,12 +184,39 @@ try {
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   check(await page.locator('.distill-tile').count() > 0, 'library lists books');
   check(await page.locator('.distill-tile .distill-cover').count() === await page.locator('.distill-tile').count(), 'every book has a cover image or placeholder');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  check(await page.evaluate(() => getComputedStyle(document.body).colorScheme.includes('light') && getComputedStyle(document.body).backgroundColor === 'rgb(246, 241, 231)'), 'home stays daylight with an OS dark preference');
+  check(await page.title() === 'Distill', 'home tab title is exactly Distill');
+  const chineseTitle = page.locator('.distill-tile[lang="zh"] h3').first();
+  if (await chineseTitle.count()) check(await chineseTitle.evaluate(el => getComputedStyle(el).fontFamily.includes('Distill Kai')), 'home Chinese titles use the approved Kai face');
   await page.screenshot({ path: `${SHOTS}distill_library.png`, fullPage: false });
 
   await page.click(`a.distill-tile[href*="/books/${SLUG}?"]`);
   await page.waitForSelector('h1');
   check(/\/books\/[^/]+$/.test(new URL(page.url()).pathname) && (await page.locator('h1').innerText()).length > 0, 'library leads to the book page with an h1');
   check(await page.locator('.toc-part-title').count() > 0, 'book page has part headings');
+  check(await page.evaluate(() => getComputedStyle(document.body).colorScheme.includes('light')), 'book page stays daylight with an OS dark preference');
+  const firstPart = page.locator('details.distill-toc-part').first();
+  if (await firstPart.count()) {
+    if (await firstPart.getAttribute('open') !== null) await firstPart.locator('summary').click();
+    await firstPart.locator('summary').click();
+    check(await firstPart.locator('a').first().isVisible(), 'opening a contents part exposes its chapter links');
+  }
+  for (const width of [320, 390]) {
+    await page.setViewportSize({width, height: 844});
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `English book page fits ${width}px`);
+  }
+  await page.goto(`${BASE}/books/${ZH_SLUG}`);
+  await page.evaluate(() => document.fonts.ready);
+  check(await page.locator('h1').evaluate(el => getComputedStyle(el).fontFamily.includes('Distill Kai')), 'Chinese book heading uses Kai');
+  check(await page.evaluate(() => document.fonts.check('16px "Distill Kai"', '全球通史')), 'self-hosted Kai font loads');
+  for (const width of [320, 390]) {
+    await page.setViewportSize({width, height: 844});
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Chinese book page fits ${width}px`);
+  }
+  await page.setViewportSize({width:1280, height:900});
+  await page.goto(`${BASE}/books/${SLUG}`);
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.screenshot({ path: `${SHOTS}distill_book.png`, fullPage: false });
 
   await page.click('a.library-read-action');

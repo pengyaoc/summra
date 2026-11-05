@@ -242,7 +242,7 @@ def test_typeahead_catalog_ignores_query_but_respects_filters(app_env, sample_bo
     db.import_book(write_book(sample_book))
     html = get(client, '/?q=missing&lang=zh&category=Science').get_data(as_text=True)
     catalog = json.loads(re.search(r'<script id="distill-search-catalog" type="application/json">(.*?)</script>', html, re.S).group(1))
-    assert catalog == [{'title': '细胞传', 'author': 'A. Writer', 'slug': 'science-zh'}]
+    assert catalog == [{'title': '细胞传', 'author': 'A. Writer', 'slug': 'science-zh', 'lang': 'zh'}]
     assert 'role="combobox"' in html
     assert 'role="listbox"' in html
     assert 'aria-controls="distill-search-options"' in html
@@ -370,3 +370,33 @@ def test_mark_as_read_works_without_prior_reader_state_and_requires_json_identit
     assert projection['book']['status'] == 'finished'
     assert projection['modes'][0]['current_marker']['chapter_id'] == db.get_chapters(bid)[0]['id']
     assert 'Mark unfinished' in get(client, '/books/my-book').get_data(as_text=True)
+
+
+def test_reading_desk_opens_saved_part_and_escapes_overview(app_env, sample_book, write_book):
+    client, db, _, book_id = app_env
+    sample_book['parts'][1]['title'] = 'Part Two'
+    sample_book['overview'] = [{'type': 'p', 'text': 'Book overview & context.'}]
+    db.import_book(write_book(sample_book))
+    chapter = db.get_chapters(book_id)[3]
+    response = client.post('/api/progress/v2/mutations', json=_mutation(book_id, chapter['id'], unit=0), headers=HEADERS)
+    assert response.status_code == 200
+    html = get(client, '/books/my-book').get_data(as_text=True)
+    assert 'Book overview &amp; context.' in html
+    parts = re.findall(r'<details class="distill-toc-part"( open)?>\s*<summary class="toc-part-title">([^<]+)', html)
+    assert parts == [('', 'Part One'), (' open', 'Part Two')]
+    assert f'aria-current="location" href="/books/my-book/read?chapter={chapter["id"]}' in html
+
+
+def test_chinese_titles_keep_their_language_on_the_home_page(app_env, sample_book, write_book):
+    client, db, _, _ = app_env
+    sample_book.update(slug='chinese-book', title='全球通史——从史前史到21世纪', lang='zh')
+    book_id = db.import_book(write_book(sample_book))
+    chapter = db.get_chapters(book_id)[1]
+    client.post('/api/progress/v2/mutations', json=_mutation(book_id, chapter['id']), headers=HEADERS)
+    home = get(client, '/').get_data(as_text=True)
+    assert '<title>Distill</title>' in home
+    assert 'class="distill-tile" lang="zh"' in home
+    assert '<h3 lang="zh">全球通史——从史前史到21世纪</h3>' in home
+    book = get(client, '/books/chinese-book').get_data(as_text=True)
+    assert '<html lang="zh"' in book
+    assert '<h1>全球通史<span class="distill-book-subtitle">从史前史到21世纪</span></h1>' in book

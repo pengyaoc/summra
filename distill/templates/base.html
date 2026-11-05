@@ -31,7 +31,7 @@
     <script defer src="{{ url_for('static', filename='js/pwa.js') }}{{ asset_v('js/pwa.js') }}"></script>
     {% endif %}
 </head>
-<body{% block body_attrs %}{% endblock %}>
+<body{% block body_attrs %} class="distill-browse"{% endblock %}>
 {% block header %}
 {% if not pwa_launch %}
     <header class="distill-header">
