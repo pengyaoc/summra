@@ -98,3 +98,4 @@ tests/e2e/package-lock.json
 
 # Distill deploy settings (real VM identifiers)
 deploy/distill/deploy.local.env
+data/distill-voice-refs/
