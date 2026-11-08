@@ -15,7 +15,12 @@ REFERENCE_TEXT = {
     'en': 'Reading is to the mind what exercise is to the body.',
     'zh': '读书之于心灵，犹如运动之于身体。',
 }
-SIRI_ATTEMPTS = 3
+ATTEMPTS = 3  # per text part; macOS voices occasionally hang or drop their helper
+
+
+def _timeout(text: str) -> float:
+    """Seconds a voice may take for `text` before the call counts as hung."""
+    return 60 + len(text) / 4
 DURATION_TOLERANCE = 0.02
 
 
@@ -53,8 +58,11 @@ def _wav_info(path: Path) -> Rendered:
         return Rendered(path, round(audio.getnframes() * 1000 / rate), rate)
 
 
-def _run(cmd, what):
-    result = subprocess.run(cmd, capture_output=True, text=True)
+def _run(cmd, what, timeout=60, input=None):
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=input)
+    except subprocess.TimeoutExpired:
+        raise RenderFailed(f'{what} hung for {timeout:.0f}s')
     if result.returncode != 0:
         raise RenderFailed(f'{what} failed: {(result.stderr or result.stdout).strip()[:300]}')
     return result
@@ -68,12 +76,18 @@ class SayEngine:
         return 'say:system'
 
     def render(self, text: str, out_wav: Path) -> Rendered:
-        with tempfile.TemporaryDirectory(prefix='distill-say-') as tmp:
-            source, aiff = Path(tmp) / 'text.txt', Path(tmp) / 'speech.aiff'
-            source.write_text(text, encoding='utf-8')
-            _run(['say', '-o', str(aiff), '-f', str(source)], 'say')
-            _run(['afconvert', '-f', 'WAVE', '-d', 'LEI16', str(aiff), str(out_wav)], 'afconvert to WAV')
-        return _wav_info(out_wav)
+        error = None
+        for _ in range(ATTEMPTS):
+            with tempfile.TemporaryDirectory(prefix='distill-say-') as tmp:
+                source, aiff = Path(tmp) / 'text.txt', Path(tmp) / 'speech.aiff'
+                source.write_text(text, encoding='utf-8')
+                try:
+                    _run(['say', '-o', str(aiff), '-f', str(source)], 'say', timeout=_timeout(text))
+                    _run(['afconvert', '-f', 'WAVE', '-d', 'LEI16', str(aiff), str(out_wav)], 'afconvert to WAV')
+                    return _wav_info(out_wav)
+                except RenderFailed as failure:
+                    error = failure
+        raise RenderFailed(f'say failed {ATTEMPTS} times: {error}')
 
 
 class SiriEngine:
@@ -106,12 +120,13 @@ class SiriEngine:
         body = (f'siri_tts.VOICE_NAME = {self.voice!r}; '
                 f'siri_tts.synthesize(sys.stdin.read(), "zh-CN", {str(out_wav)!r}, rate={self.rate!r})')
         error = None
-        for _ in range(SIRI_ATTEMPTS):
-            result = subprocess.run(self._script(body), input=text, capture_output=True, text=True)
-            if result.returncode == 0:
+        for _ in range(ATTEMPTS):
+            try:
+                _run(self._script(body), 'Siri', timeout=_timeout(text), input=text)
                 return _wav_info(out_wav)
-            error = (result.stderr or result.stdout).strip()[-300:]
-        raise RenderFailed(f'Siri failed {SIRI_ATTEMPTS} times: {error}')
+            except RenderFailed as failure:
+                error = failure
+        raise RenderFailed(f'Siri failed {ATTEMPTS} times: {error}')
 
 
 def engine_for(lang: str, settings: dict) -> Engine:
