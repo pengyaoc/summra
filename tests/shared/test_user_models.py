@@ -213,3 +213,10 @@ def test_explicit_completion_migration_keeps_markers_and_manual_read_status(test
     assert marked['projection']['book']['status'] == 'finished'
     assert db.clear_automatic_completions() == 0
     assert db.get_book_projection(uid, 7)['modes'][0]['furthest_marker'] == modes[0]['furthest_marker']
+
+
+def test_listen_is_valid_cause(test_db_path):
+    db = UserDatabase(db_path=test_db_path)
+    user_id = db.upsert_user_by_email("listener@example.com")
+    result = db.apply_mutation(user_id, _mutation(1, cause="listen"), _marker(0), None)
+    assert result["result"] == "accepted"

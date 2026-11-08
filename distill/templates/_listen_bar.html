@@ -1,0 +1,16 @@
+{# Distill Listen mini-player; listen.js shows it once the book has audio. #}
+<div id="listen-bar" class="listen-bar" hidden>
+    <button type="button" id="listen-resume" class="listen-resume" hidden></button>
+    <div class="listen-controls">
+        <button type="button" id="listen-back" class="listen-btn" aria-label="Back 15 seconds">−15</button>
+        <button type="button" id="listen-play" class="listen-btn listen-play" aria-label="Play">Play</button>
+        <button type="button" id="listen-fwd" class="listen-btn" aria-label="Forward 30 seconds">+30</button>
+        <button type="button" id="listen-rate" class="listen-btn" aria-label="Playback speed">1×</button>
+        <span id="listen-title" class="listen-title"></span>
+        <button type="button" id="listen-next" class="listen-btn" aria-label="Next chapter">Next</button>
+        <button type="button" id="listen-close" class="listen-btn" aria-label="Close player">✕</button>
+    </div>
+    <button type="button" id="listen-follow" class="listen-follow" hidden>Back to audio</button>
+    <p id="listen-message" class="listen-message" role="status"></p>
+    <button type="button" id="listen-reload" class="listen-follow" hidden>Sign in again</button>
+</div>

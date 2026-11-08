@@ -15,7 +15,7 @@ from shared.reader.modes import ALL_MODES
 VALID_MODES = set(ALL_MODES)
 VALID_CAUSES = {
     'page_turn', 'mode_exit', 'toc', 'hidden', 'pagehide', 'navigation',
-    'completion', 'manual_finish', 'manual_unfinish',
+    'completion', 'manual_finish', 'manual_unfinish', 'listen',
 }
 
 

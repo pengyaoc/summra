@@ -1,5 +1,6 @@
 // Distill's whole web-reader client: two hooks on the shared reader platform, and a boot.
 import { applyReaderPlatform } from '../shared/js/platform.js';
+import { Listener } from './listen.js';
 
 class DistillReader {
     classifyUnit(text) { return JSON.parse(text); }
@@ -18,3 +19,7 @@ await reader.showContinuousReader(window.DISTILL_BOOK, {
     chapter: new URLSearchParams(location.search).get('chapter'),
     restart: new URLSearchParams(location.search).get('restart') === '1',
 });
+
+const listener = new Listener(reader, window.DISTILL_BOOK);
+window.distillListener = listener;  // also the e2e test's handle
+await listener.init();

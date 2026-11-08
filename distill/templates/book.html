@@ -23,6 +23,7 @@
 {% if card and card.status == 'finished' %}<a class="distill-restart" href="{{ base_path }}/books/{{ book.slug }}/read?restart=1&amp;return={{ return_url|urlencode }}">Read from beginning</a>{% endif %}
             <button type="button" class="distill-unfinish" data-book-id="{{ book.id }}" data-reading-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button>
             </div>
+            <a id="distill-resume-listening" class="distill-restart" hidden href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}"></a>
             <p id="distill-book-status" role="status"></p>
         </div>
     </section>
@@ -57,6 +58,16 @@
 
 {% block scripts %}
 <script>
+try {  // Distill Listen keeps its place on this device (see listen.js).
+    const listened = JSON.parse(localStorage.getItem('distill-listen-{{ book.id }}') || 'null');
+    const link = document.getElementById('distill-resume-listening');
+    if (listened?.title && link) {
+        const clock = `${Math.floor(listened.ms / 60000)}:${String(Math.floor(listened.ms / 1000) % 60).padStart(2, '0')}`;
+        link.textContent = `Resume listening · ${listened.title}, ${clock}`;
+        link.href += `&chapter=${listened.chapter_id}`;
+        link.hidden = false;
+    }
+} catch (_) { /* private mode */ }
 const unfinished = document.querySelector('.distill-unfinish');
 unfinished?.addEventListener('click', async () => {
     unfinished.disabled = true;
