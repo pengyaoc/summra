@@ -157,7 +157,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
   - Siri paths come from `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy/distill/deploy.local.env`.
   - Measured speed: `say` about 3.7× real time per process; Siri about 5×.
 - **Routes:**
-  - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, max-age=31536000, immutable`. Stale or missing audio returns 404.
+  - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, no-cache` with the storage key as ETag, because the URL stays the same across re-renders. Stale or missing audio returns 404.
   - `GET /api/books/<slug>/audio` returns `{book_id, chapters:[{chapter_id, ordinal, title, url, duration_ms, timings}]}`.
 - **Player** (`distill/static/js/listen.js`, `templates/_listen_bar.html`):
   - One `<audio>` element. Sets `navigator.audioSession.type='playback'` where available. Media Session supplies metadata and action handlers.

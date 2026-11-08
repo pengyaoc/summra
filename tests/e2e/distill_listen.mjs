@@ -79,11 +79,18 @@ await page.waitForSelector('#continuous-reader-content [data-reader-anchor]', { 
 const label = await page.locator('#listen-resume').textContent().catch(() => '');
 const mmss = `${Math.floor(saved.ms / 60000)}:${String(Math.floor(saved.ms / 1000) % 60).padStart(2, '0')}`;
 check(label.includes('Resume listening') && label.includes(mmss), `after a reload the bar offers "${label.trim()}"`);
+// iOS only lets play() start inside the tap, so it must not wait for the audio to load first.
+await page.evaluate(() => {
+  window.__playReady = [];
+  const play = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () { window.__playReady.push(this.readyState); return play.call(this); };
+});
 await page.locator('#listen-resume').click();
 await page.waitForFunction((ms) => Math.abs(window.distillListener.audio.currentTime * 1000 - ms) < 2000, saved.ms, { timeout: 10000 })
   .catch(() => {});
 check(Math.abs(await page.evaluate(() => window.distillListener.audio.currentTime * 1000) - saved.ms) < 2000,
   'resume continues at the saved second');
+check(await page.evaluate(() => window.__playReady[0]) === 0, 'resume calls play() inside the tap, before the audio has loaded');
 
 await page.evaluate(() => window.distillListener.audio.dispatchEvent(new Event('ended')));
 await page.waitForFunction((url) => window.distillListener.audio.src.endsWith(url), book.chapters[1].url, { timeout: 10000 }).catch(() => {});
@@ -93,6 +100,35 @@ await page.waitForFunction(() => Number.isFinite(window.distillListener.audio.du
 await page.evaluate(() => window.distillListener.seekToMs(1e9));
 check(await page.evaluate(() => window.distillListener.audio.currentTime <= window.distillListener.audio.duration + 0.01),
   'seeking past the end is clamped');
+
+// Once paused, paging by hand and leaving the app must not post the old audio position.
+// (The seek past the end above moves on to the next chapter; let it start before pausing.)
+await page.waitForFunction((url) => window.distillListener.audio.src.endsWith(url) && window.distillListener.audio.currentTime > 0.3,
+  book.chapters[2].url, { timeout: 10000 }).catch(() => {});
+await page.evaluate(() => window.distillListener.pause());
+await page.waitForTimeout(800);
+check(await page.evaluate(() => window.distillListener.audio.paused), 'the player is paused');
+const hasQueue = await page.evaluate(() => {
+  if (!window.authModule?.queueReaderMutation) return false;
+  window.__causes = [];
+  const queue = window.authModule.queueReaderMutation;
+  window.authModule.queueReaderMutation = (mutation) => { window.__causes.push(mutation.event_cause); return queue(mutation); };
+  return true;
+});
+check(hasQueue, 'progress saves can be watched');
+for (let i = 0; i < 3; i += 1) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(300); }
+await page.waitForTimeout(1200);
+const pagedTo = await page.evaluate(() => window.distillListener.reader.continuousReader.currentMarker?.paragraph_id);
+await page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange'));
+  window.dispatchEvent(new Event('pagehide'));
+});
+await page.waitForTimeout(500);
+const causes = await page.evaluate(() => window.__causes);
+check(!causes.includes('listen'), `hiding a paused player posts no audio position (${causes.join(',')})`);
+check(await page.evaluate(() => window.distillListener.reader.continuousReader.currentMarker?.paragraph_id) === pagedTo,
+  'the hand-paged reading position is kept');
 
 // A sign-in redirect while loading audio pauses with a clear message.
 // The service worker would answer these requests itself; block it so the routes apply.
@@ -114,6 +150,42 @@ await fresh.route('**/books/*/audio/*.m4a', (route) => route.fulfill({ status: 2
 await fresh.locator('#listen-button').click();
 await fresh.waitForSelector('#listen-message:not(:empty)', { timeout: 15000 }).catch(() => {});
 check(/sign in/i.test(await fresh.locator('#listen-message').textContent()), 'a failed load pauses and asks to sign in again');
+await fresh.unroute('**/books/*/audio/*.m4a');
+
+const listenAt = async (chapterId) => {
+  // Navigating while audio is still downloading makes WebKit report the cancelled load as a page error.
+  await fresh.evaluate(() => window.distillListener?.pause());
+  await fresh.waitForTimeout(1500);
+  await fresh.goto(`${BASE}/books/${SLUG}/read?chapter=${chapterId}`);
+  await fresh.waitForSelector('#listen-button', { state: 'visible', timeout: 15000 });
+  await fresh.locator('#listen-button').click();
+};
+const srcEndsWith = (url) => fresh.waitForFunction((u) => (window.distillListener.audio?.src || '').endsWith(u), url, { timeout: 10000 })
+  .then(() => true, () => false);
+
+// Listen in a chapter whose audio is missing or stale starts at the next chapter that has audio.
+const skipped = book.chapters[1].chapter_id;
+await fresh.route('**/api/books/*/audio', async (route) => {
+  const response = await route.fetch();
+  const data = await response.json();
+  data.chapters = data.chapters.filter((c) => c.chapter_id !== skipped);
+  await route.fulfill({ response, json: data });
+});
+await listenAt(skipped);
+check(await srcEndsWith(book.chapters[2].url), 'Listen in a chapter without audio starts at the next chapter that has it');
+await fresh.unroute('**/api/books/*/audio');
+
+// Audio that went stale while the page was open (404) skips ahead instead of asking to sign in.
+await fresh.route(`**/books/*/audio/${first.chapter_id}.m4a`, (route) => route.fulfill({ status: 404, contentType: 'text/html', body: 'Not found' }));
+await listenAt(first.chapter_id);
+check(await srcEndsWith(book.chapters[1].url), 'audio that went stale (404) skips to the next chapter');
+await fresh.unroute(`**/books/*/audio/${first.chapter_id}.m4a`);
+
+// A dropped connection says so.
+await fresh.route('**/books/*/audio/*.m4a', (route) => route.abort('internetdisconnected'));
+await listenAt(first.chapter_id);
+await fresh.waitForSelector('#listen-message:not(:empty)', { timeout: 15000 }).catch(() => {});
+check(/offline/i.test(await fresh.locator('#listen-message').textContent()), 'a dropped connection says offline, not sign in');
 
 check(problems.length === 0, `no page errors${problems.length ? ': ' + problems.join('; ') : ''}`);
 await browser.close();

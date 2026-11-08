@@ -295,8 +295,8 @@ def chapter_audio(slug, chapter_id):
         abort(404)
     key = item['storage_key']
     response = send_file(_db().media.path(key), mimetype='audio/mp4', conditional=True, etag=key, max_age=0)
-    # Content-addressed: a changed chapter gets a new key, so the bytes never change.
-    response.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    # The URL survives a re-render; the ETag (the storage key) is what changes.
+    response.headers['Cache-Control'] = 'private, no-cache'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 

@@ -50,6 +50,9 @@ export class Listener {
         this.lastLocal = 0;
         this.lastServer = 0;
         this.startedAt = null;
+        this.dirty = false;        // the audio moved since the last server save
+        this.pendingStart = null;  // seconds to seek to once the audio's metadata loads
+        this.failed = false;
         this.key = `distill-listen-${book.id}`;
     }
 
@@ -150,7 +153,7 @@ export class Listener {
         audio.addEventListener('play', () => this.renderState());
         audio.addEventListener('pause', () => { this.renderState(); this.saveAll(); });
         audio.addEventListener('ended', () => this.nextChapter());
-        audio.addEventListener('error', () => this.fail());
+        audio.addEventListener('error', () => this.fail(audio.error));
         this.audio = audio;
         this.bindMediaSession();
         return audio;
@@ -192,15 +195,25 @@ export class Listener {
         audio.src = chapter.url;
         audio.defaultPlaybackRate = rate;
         audio.playbackRate = rate;
+        this.failed = false;
         const start = Math.max(0, Math.min(ms, chapter.duration_ms)) / 1000;
+        // play() runs now, inside the tap (iOS refuses it later); the seek waits for metadata.
+        this.pendingStart = start > 0 ? start : null;
         if (start > 0) {
-            await new Promise(resolve => {
-                const ready = () => { audio.currentTime = start; resolve(); };
-                if (audio.readyState >= 1) ready(); else audio.addEventListener('loadedmetadata', ready, { once: true });
-                audio.addEventListener('error', resolve, { once: true });
-            });
+            const seek = () => { audio.currentTime = start; this.pendingStart = null; };
+            if (audio.readyState >= 1) seek(); else audio.addEventListener('loadedmetadata', seek, { once: true });
         }
-        try { await audio.play(); } catch (error) { if (error?.name !== 'AbortError') this.fail(); }
+        try { await audio.play(); } catch (error) { if (error?.name !== 'AbortError') this.fail(error); }
+    }
+
+    // Chapter ids in reading order, from the reader's manifest.
+    readingOrder() {
+        const state = this.reader.continuousReader;
+        const segments = (state?.manifest?.segments || [])
+            .filter(segment => segment.mode === state.mode)
+            .sort((a, b) => a.ordinal - b.ordinal);
+        const ids = segments.flatMap(segment => (segment.chapter_ids || []).map(Number));
+        return ids.length ? ids : this.chapters.map(item => item.chapter_id);
     }
 
     listenFromReadingPosition() {
@@ -208,7 +221,17 @@ export class Listener {
         const saved = this.saved();
         const chapterId = Number(String(marker?.paragraph_id || '').split('.')[0]) || this.chapters[0].chapter_id;
         let index = this.chapters.findIndex(item => item.chapter_id === chapterId);
-        if (index < 0) index = 0;
+        if (index < 0) {
+            // This chapter has no current audio: start at the next one that does.
+            const order = this.readingOrder();
+            const here = order.indexOf(chapterId);
+            index = this.chapters.findIndex(item => order.indexOf(item.chapter_id) > here);
+            if (index < 0) {
+                this.showBar(true);
+                this.$('listen-message').textContent = 'No audio from here on yet.';
+                return Promise.resolve();
+            }
+        }
         const timings = this.chapters[index].timings;
         let ms;
         if (saved && marker && saved.paragraph_id === nearestUnit(timings, marker.paragraph_id)?.paragraph_id
@@ -233,7 +256,7 @@ export class Listener {
 
     resume() {
         if (!this.audio || this.index < 0) return this.resumeSaved();
-        return this.audio.play().catch(() => this.fail());
+        return this.audio.play().catch(error => { if (error?.name !== 'AbortError') this.fail(error); });
     }
 
     pause() { this.audio?.pause(); }
@@ -242,6 +265,7 @@ export class Listener {
         if (!this.audio) return;
         const duration = Number.isFinite(this.audio.duration) ? this.audio.duration * 1000 : this.chapters[this.index]?.duration_ms || 0;
         this.audio.currentTime = Math.max(0, Math.min(ms, duration)) / 1000;
+        this.dirty = true;
         this.onTime();
     }
 
@@ -271,8 +295,10 @@ export class Listener {
     }
 
     onTime() {
+        if (this.pendingStart !== null) return;  // still at 0:00, before the seek to the resume point
         const position = this.position();
         if (!position) return;
+        if (!this.audio.paused) this.dirty = true;
         if (position.paragraph_id !== this.unit) {
             this.unit = position.paragraph_id;
             this.follow();
@@ -336,7 +362,10 @@ export class Listener {
     saveServer() {
         const position = this.position();
         const state = this.reader.continuousReader;
-        if (!position || !state?.active) return;
+        // Only a position the audio actually reached since the last save: a paused
+        // player must not overwrite where the reader has since paged to.
+        if (!position || !state?.active || !this.dirty) return;
+        this.dirty = false;
         this.lastServer = Date.now();
         const marker = {
             book_id: this.book.id, mode: 'summary', content_version: state.manifest?.content_version,
@@ -359,13 +388,28 @@ export class Listener {
         if (navigator.mediaSession) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
     }
 
-    // Any failed load (an expired sign-in redirect included) pauses with a way back.
-    fail() {
+    // A failed load pauses and says why: signed out, offline, stale audio (skip ahead) or other.
+    async fail(error) {
+        if (this.failed) return;  // the error event and the play() rejection report the same failure
+        this.failed = true;
         this.audio?.pause();
         this.saveLocal();
         this.showBar(true);
-        this.$('listen-message').textContent = 'Paused — sign in again to keep listening.';
-        this.$('listen-reload').hidden = false;
         this.renderState();
+        const say = (text, reload = false) => {
+            this.$('listen-message').textContent = text;
+            this.$('listen-reload').hidden = !reload;
+        };
+        if (error?.name === 'NotAllowedError') return say('Tap Play to start listening.');
+        let why = 'signin';
+        try {
+            const response = await fetch(this.chapters[this.index]?.url, { method: 'HEAD', credentials: 'include', cache: 'no-store', redirect: 'manual' });
+            if (response.status === 404) why = 'stale';
+            else if (response.ok && (response.headers.get('content-type') || '').startsWith('audio/')) why = 'other';
+        } catch (_) { why = 'offline'; }
+        if (why === 'stale') return this.nextChapter();
+        if (why === 'offline') return say('Paused — you’re offline. Tap Play to try again.');
+        if (why === 'other') return say('Couldn’t play this chapter. Tap Play to try again.');
+        return say('Paused — sign in again to keep listening.', true);
     }
 }

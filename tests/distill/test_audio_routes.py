@@ -73,3 +73,17 @@ def test_audio_api_lists_current_only(audio_env):
 def test_audio_unknown_book_404(audio_env):
     client = audio_env[0]
     assert client.get('/api/books/nope/audio', headers=HEADERS).status_code == 404
+
+
+def test_audio_is_revalidated_not_immutable(audio_env):
+    """The URL stays the same across re-renders, so the browser must check the ETag."""
+    client, db, _, chapter = audio_env
+    response = client.get(url(chapter), headers=HEADERS)
+    assert 'no-cache' in response.headers['Cache-Control'] and 'immutable' not in response.headers['Cache-Control']
+    etag = response.headers['ETag']
+    assert client.get(url(chapter), headers={**HEADERS, 'If-None-Match': etag}).status_code == 304
+    timings = [{'paragraph_id': f"{chapter['id']}.0", 'start_ms': 0, 'end_ms': 800}]
+    db.save_chapter_audio(chapter['id'], AUDIO[:512], timings, 800, spoken_checksum(spoken_units(chapter)),
+                          'say:system', 'say', None)
+    again = client.get(url(chapter), headers={**HEADERS, 'If-None-Match': etag})
+    assert again.status_code == 200 and again.data == AUDIO[:512]
