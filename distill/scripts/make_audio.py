@@ -1,7 +1,7 @@
 """Render chapter audio for Distill books on the owner's Mac, then optionally deploy.
 
 Usage:
-  python -m distill.scripts.make_audio (--book SLUG | --all) [--dry-run] [--approve-voice]
+  python -m distill.scripts.make_audio (--book SLUG | --all) [--dry-run] [--approve-voice] [--opus-only]
                                        [--jobs N] [--db PATH] [--config PATH] [--deploy]
 
 Only chapters whose audio is missing or stale are rendered, so an interrupted run
@@ -16,7 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from distill import config
-from distill.audio.assemble import render_chapter
+from distill.audio.assemble import encode_opus, render_chapter
 from distill.audio.engines import (
     RenderFailed, VoiceMismatch, VoiceUnavailable, check_reference, engine_for,
 )
@@ -46,10 +46,21 @@ def _render_one(db_path: str, chapter_id: int, lang: str, settings: dict) -> tup
     chapter = next(c for c in _chapters(db, chapter_id))
     engine = engine_for(lang, settings)
     with tempfile.TemporaryDirectory(prefix='distill-audio-') as work:
-        m4a, timings, duration_ms, checksum = render_chapter(chapter, engine, Path(work))
-    db.save_chapter_audio(chapter_id, m4a, timings, duration_ms, checksum, engine.voice_id(), engine.name,
+        opus, timings, duration_ms, checksum = render_chapter(chapter, engine, Path(work))
+    db.save_chapter_audio(chapter_id, opus, timings, duration_ms, checksum, engine.voice_id(), engine.name,
                           getattr(engine, 'rate', None))
+    db.set_deploy_audio(chapter_id, opus)  # the same file: new chapters keep no AAC
     return chapter_id, duration_ms, time.monotonic() - started
+
+
+def _encode_missing_opus(db: DistillDatabase) -> int:
+    """Make the Opus copy for every older chapter that has only AAC; no voices are used."""
+    todo = db.missing_deploy_audio()
+    with tempfile.TemporaryDirectory(prefix='distill-opus-') as work:
+        for chapter_id in todo:
+            key = db.get_chapter_audio_key(chapter_id)
+            db.set_deploy_audio(chapter_id, encode_opus(db.media.get(key), Path(work)))
+    return len(todo)
 
 
 def _chapters(db: DistillDatabase, chapter_id: int):
@@ -98,6 +109,8 @@ def main(argv: list) -> int:
     parser.add_argument('--jobs', type=int, default=2, help='chapters rendered at once')
     parser.add_argument('--db', type=Path, default=config.DATABASE_PATH)
     parser.add_argument('--config', type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument('--opus-only', action='store_true',
+                        help='only convert older AAC-only chapters to Opus; render nothing')
     parser.add_argument('--deploy', action='store_true', help='push the DB and new audio to the VM afterwards')
     args = parser.parse_args(argv)
     if args.deploy and args.dry_run:
@@ -108,6 +121,9 @@ def main(argv: list) -> int:
     if not books:
         print(f'No such book: {args.book}', file=sys.stderr)
         return 1
+    if args.opus_only:
+        print(f'Encoded {_encode_missing_opus(db)} Opus copies.')
+        return 0
     settings = _settings(args.config)
     plan = [(book, db.stale_or_missing_audio(book['id'])) for book in books]
 

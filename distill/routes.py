@@ -293,7 +293,7 @@ def chapter_audio(slug, chapter_id):
     item = next((c for c in chapters if c['chapter_id'] == chapter_id), None)
     if not item:
         abort(404)
-    key = item['storage_key']
+    key = item['deploy_key'] or item['storage_key']  # Opus; an older chapter's AAC until converted
     response = send_file(_db().media.path(key), mimetype='audio/mp4', conditional=True, etag=key, max_age=0)
     # The URL survives a re-render; the ETag (the storage key) is what changes.
     response.headers['Cache-Control'] = 'private, no-cache'

@@ -157,6 +157,13 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
         ssh(f'rm -f ~/{REMOTE_MEDIA_UPLOAD}', 'temporary media upload cleanup')
 
 
+def _ship_deploy_audio(snapshot) -> None:
+    """Point the shipped DB's audio at the Opus files, so older chapters' AAC stays on the Mac."""
+    if 'deploy_key' in {row[1] for row in snapshot.execute('PRAGMA table_info(chapter_audio)')}:
+        with snapshot:
+            snapshot.execute('UPDATE chapter_audio SET storage_key = deploy_key WHERE deploy_key IS NOT NULL')
+
+
 def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
     db_path = Path(db_path)
     missing = [key for key in REQUIRED_KEYS if not settings.get(key)]
@@ -171,6 +178,7 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
             with closing(sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)) as source:
                 with closing(sqlite3.connect(snapshot)) as target:
                     source.backup(target)
+                    _ship_deploy_audio(target)
                     if target.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
                         raise ValueError('Content snapshot integrity check failed')
             media_dir = config.media_dir_for(db_path)

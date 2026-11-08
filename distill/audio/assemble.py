@@ -1,4 +1,4 @@
-"""Render a chapter's spoken units and join them into one AAC file with unit timings.
+"""Render a chapter's spoken units and join them into one Opus file with unit timings.
 
 Units are rendered part by part and joined with fixed silences, so each unit's
 start and end are known exactly; no forced alignment is needed.
@@ -13,7 +13,7 @@ from distill.audio.spoken import spoken_checksum, spoken_units
 
 UNIT_GAP_MS = 350
 PART_GAP_MS = 250
-BITRATE = 32000
+OPUS_BITRATE = '24k'  # approved by ear 2026-11-08; AAC 32 kbps sounded dull
 
 
 def compute_timings(units: Sequence[Tuple[str, Sequence[float]]],
@@ -36,7 +36,7 @@ def compute_timings(units: Sequence[Tuple[str, Sequence[float]]],
 
 
 def render_chapter(chapter: dict, engine: Engine, work_dir: Path) -> Tuple[bytes, List[dict], int, str]:
-    """Return (m4a bytes, timings, duration_ms, spoken checksum) for one chapter."""
+    """Return (Opus bytes, timings, duration_ms, spoken checksum) for one chapter."""
     work_dir = Path(work_dir)
     units = spoken_units(chapter)
     rendered = []  # per unit: list of PCM frame strings
@@ -71,14 +71,29 @@ def render_chapter(chapter: dict, engine: Engine, work_dir: Path) -> Tuple[bytes
 
     timings = compute_timings([(unit.paragraph_id, [ms(f) for f in frames]) for unit, frames in zip(units, rendered)],
                               unit_gap_ms=ms(unit_gap), part_gap_ms=ms(part_gap))
-    joined, encoded = work_dir / 'chapter.wav', work_dir / 'chapter.m4a'
+    joined = work_dir / 'chapter.wav'
     with wave.open(str(joined), 'wb') as out:
         out.setnchannels(1)
         out.setsampwidth(2)
         out.setframerate(rate)
         out.writeframes(bytes(pcm))
-    result = subprocess.run(['afconvert', '-f', 'm4af', '-d', 'aac', '-b', str(BITRATE), str(joined), str(encoded)],
+    return _to_opus(joined, work_dir / 'chapter.mp4'), timings, round(ms(bytes(pcm))), spoken_checksum(units)
+
+
+def _to_opus(source: Path, encoded: Path) -> bytes:
+    """Opus 24 kbps in an MP4 container: the only file a new chapter keeps."""
+    result = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-c:a', 'libopus',
+                             '-b:a', OPUS_BITRATE, '-application', 'audio', '-f', 'mp4', str(encoded)],
                             capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f'afconvert failed: {result.stderr.strip()[:300]}')
-    return encoded.read_bytes(), timings, round(ms(bytes(pcm))), spoken_checksum(units)
+        raise RuntimeError(f'ffmpeg Opus encode failed: {result.stderr.strip()[:300]}')
+    return encoded.read_bytes()
+
+
+def encode_opus(aac: bytes, work_dir: Path) -> bytes:
+    """Convert an older chapter's AAC file to Opus without re-rendering it."""
+    work_dir = Path(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    source = work_dir / 'master.m4a'
+    source.write_bytes(aac)
+    return _to_opus(source, work_dir / 'deploy.mp4')

@@ -26,6 +26,8 @@ def media_keys(db_path):
             if 'storage_key' not in columns:
                 raise ValueError('Legacy image BLOBs: run distill.scripts.migrate_media first')
             keys.update(row[0] for row in db.execute(f'SELECT storage_key FROM {table}'))
+            if 'deploy_key' in columns:
+                keys.update(row[0] for row in db.execute(f'SELECT deploy_key FROM {table} WHERE deploy_key IS NOT NULL'))
         return sorted(keys)
 
 

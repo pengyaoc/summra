@@ -114,6 +114,9 @@ class DistillDatabase(ReaderIndexMixin):
                 timings TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
+            if 'deploy_key' not in {row['name'] for row in conn.execute('PRAGMA table_info(chapter_audio)')}:
+                # The Opus file the server sends. Older chapters keep their AAC in storage_key.
+                conn.execute('ALTER TABLE chapter_audio ADD COLUMN deploy_key TEXT')
             self._migrate_media(conn)
             # Backward-compatible metadata migration; chapter IDs and progress stay intact.
             if 'categories' not in {row['name'] for row in conn.execute('PRAGMA table_info(books)')}:
@@ -173,11 +176,12 @@ class DistillDatabase(ReaderIndexMixin):
         with closing(self.get_connection()) as conn:
             return [row[0] for row in conn.execute(
                 'SELECT storage_key FROM images UNION SELECT storage_key FROM cover_thumbnails '
-                'UNION SELECT storage_key FROM chapter_audio ORDER BY 1')]
+                'UNION SELECT storage_key FROM chapter_audio '
+                'UNION SELECT deploy_key FROM chapter_audio WHERE deploy_key IS NOT NULL ORDER BY 1')]
 
     def save_chapter_audio(self, chapter_id: int, m4a: bytes, timings: List[Dict], duration_ms: int,
                            checksum: str, voice: str, engine: str, rate: Optional[float]) -> str:
-        """Store a chapter's audio file and timings; the file goes to the media store."""
+        """Store a chapter's rendered audio and timings; any older Opus copy is dropped."""
         key = self.media.put(m4a)
         with closing(self.get_connection()) as conn, conn:
             conn.execute('''INSERT OR REPLACE INTO chapter_audio
@@ -185,6 +189,23 @@ class DistillDatabase(ReaderIndexMixin):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
                 (chapter_id, key, checksum, duration_ms, voice, engine, rate, json.dumps(timings)))
         return key
+
+    def set_deploy_audio(self, chapter_id: int, data: bytes) -> str:
+        """Store the Opus file the server sends for a chapter."""
+        key = self.media.put(data)
+        with closing(self.get_connection()) as conn, conn:
+            conn.execute('UPDATE chapter_audio SET deploy_key = ? WHERE chapter_id = ?', (key, chapter_id))
+        return key
+
+    def get_chapter_audio_key(self, chapter_id: int) -> str:
+        with closing(self.get_connection()) as conn:
+            return conn.execute('SELECT storage_key FROM chapter_audio WHERE chapter_id = ?', (chapter_id,)).fetchone()[0]
+
+    def missing_deploy_audio(self) -> List[int]:
+        """Older chapters that have only AAC, with no Opus file yet."""
+        with closing(self.get_connection()) as conn:
+            return [row[0] for row in conn.execute(
+                'SELECT chapter_id FROM chapter_audio WHERE deploy_key IS NULL ORDER BY chapter_id')]
 
     def _audio_by_chapter(self, book_id: int):
         """[(chapter, audio row or None, current?)] in chapter order."""
@@ -203,7 +224,7 @@ class DistillDatabase(ReaderIndexMixin):
     def book_audio(self, book_id: int) -> List[Dict]:
         """Chapters whose audio matches their current text, in reading order."""
         return [{'chapter_id': c['id'], 'ordinal': c['ordinal'], 'title': c['title'],
-                 'storage_key': row['storage_key'], 'duration_ms': row['duration_ms'],
+                 'storage_key': row['storage_key'], 'deploy_key': row['deploy_key'], 'duration_ms': row['duration_ms'],
                  'timings': json.loads(row['timings'])}
                 for c, row, current in self._audio_by_chapter(book_id) if current]
 

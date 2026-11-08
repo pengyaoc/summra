@@ -87,3 +87,21 @@ def test_audio_is_revalidated_not_immutable(audio_env):
                           'say:system', 'say', None)
     again = client.get(url(chapter), headers={**HEADERS, 'If-None-Match': etag})
     assert again.status_code == 200 and again.data == AUDIO[:512]
+
+
+def test_audio_serves_deploy_copy_when_present(audio_env):
+    client, db, _, chapter = audio_env
+    key = db.set_deploy_audio(chapter['id'], b'OPUS' * 100)
+    response = client.get(url(chapter), headers=HEADERS)
+    assert response.status_code == 200
+    assert response.data == b'OPUS' * 100
+    assert response.headers['ETag'].strip('"') == key
+
+
+def test_rerender_drops_stale_deploy_copy(audio_env):
+    client, db, _, chapter = audio_env
+    db.set_deploy_audio(chapter['id'], b'OLD-OPUS')
+    timings = [{'paragraph_id': f"{chapter['id']}.0", 'start_ms': 0, 'end_ms': 900}]
+    db.save_chapter_audio(chapter['id'], AUDIO[:300], timings, 900, spoken_checksum(spoken_units(chapter)),
+                          'say:system', 'say', None)
+    assert client.get(url(chapter), headers=HEADERS).data == AUDIO[:300]

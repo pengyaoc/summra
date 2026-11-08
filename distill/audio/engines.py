@@ -15,6 +15,7 @@ REFERENCE_TEXT = {
     'en': 'Reading is to the mind what exercise is to the body.',
     'zh': '读书之于心灵，犹如运动之于身体。',
 }
+SAY_SAMPLE_RATE = 48000  # the voice has real detail above the default 22 kHz's 11 kHz ceiling
 ATTEMPTS = 3  # per text part; macOS voices occasionally hang or drop their helper
 
 
@@ -82,7 +83,7 @@ class SayEngine:
                 source, aiff = Path(tmp) / 'text.txt', Path(tmp) / 'speech.aiff'
                 source.write_text(text, encoding='utf-8')
                 try:
-                    _run(['say', '-o', str(aiff), '-f', str(source)], 'say', timeout=_timeout(text))
+                    _run(['say', f'--data-format=BEI16@{SAY_SAMPLE_RATE}', '-o', str(aiff), '-f', str(source)], 'say', timeout=_timeout(text))
                     _run(['afconvert', '-f', 'WAVE', '-d', 'LEI16', str(aiff), str(out_wav)], 'afconvert to WAV')
                     return _wav_info(out_wav)
                 except RenderFailed as failure:

@@ -134,3 +134,17 @@ def test_siri_hang_counts_as_a_failed_attempt(monkeypatch, tmp_path):
     with pytest.raises(RenderFailed):
         SiriEngine(Path('/x/pipeline'), Path('/x/python')).render('你好', tmp_path / 'a.wav')
     assert len(attempts) == 3 and all(attempts)
+
+
+def test_say_records_at_48khz(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[0] == 'afconvert':
+            write_wav(Path(cmd[-1]), b'\x01\x00' * 2205)
+        return subprocess.CompletedProcess(cmd, 0, '', '')
+
+    monkeypatch.setattr(engines.subprocess, 'run', fake_run)
+    SayEngine().render('Hello.', tmp_path / 'a.wav')
+    assert '--data-format=BEI16@48000' in calls[0]

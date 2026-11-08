@@ -37,6 +37,7 @@ class FakeRun:
         self.media_sha = None
         self.media_members = []
         self.uploaded_db_md5 = None
+        self.uploaded_audio = None
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -52,6 +53,9 @@ class FakeRun:
         if argv[:3] == ['gcloud', 'compute', 'scp'] and argv[4].endswith(':distill.db.new'):
             from pathlib import Path
             self.uploaded_db_md5 = hashlib.md5(Path(argv[3]).read_bytes()).hexdigest()
+            with sqlite3.connect(argv[3]) as uploaded:
+                if uploaded.execute("SELECT 1 FROM sqlite_master WHERE name='chapter_audio'").fetchone():
+                    self.uploaded_audio = uploaded.execute('SELECT storage_key, deploy_key FROM chapter_audio').fetchall()
         if 'sha256sum' in line:
             return subprocess.CompletedProcess(argv, 0, f'{self.media_sha} media.tar', '')
         if 'md5sum' in line:
@@ -278,3 +282,26 @@ def test_remote_media_list_failure_never_stops_service(file_media_db):
     with pytest.raises(DeployError):
         deploy_db(file_media_db.db_path, SETTINGS, run=run)
     assert not run.has('systemctl')
+
+
+def test_deploy_ships_opus_not_master(file_media_db):
+    db = file_media_db
+    chapter_id = db.get_chapters(db.list_books()[0]['id'])[0]['id']
+    master = db.save_chapter_audio(chapter_id, b'aac-master', [], 1, 'c', 'say:system', 'say', None)
+    opus = db.set_deploy_audio(chapter_id, b'opus-copy')
+    run = make_run(db.db_path)
+    deploy_db(db.db_path, SETTINGS, run=run)
+    assert f'{opus[:2]}/{opus}' in run.media_members
+    assert f'{master[:2]}/{master}' not in run.media_members
+    assert run.uploaded_audio == [(opus, opus)]
+    assert db.get_chapter_audio_key(chapter_id) == master  # local master untouched
+
+
+def test_deploy_ships_master_when_no_opus_yet(file_media_db):
+    db = file_media_db
+    chapter_id = db.get_chapters(db.list_books()[0]['id'])[0]['id']
+    master = db.save_chapter_audio(chapter_id, b'aac-master', [], 1, 'c', 'say:system', 'say', None)
+    run = make_run(db.db_path)
+    deploy_db(db.db_path, SETTINGS, run=run)
+    assert f'{master[:2]}/{master}' in run.media_members
+    assert run.uploaded_audio == [(master, None)]

@@ -191,3 +191,24 @@ def test_media_transfer_keys_include_chapter_audio(tmp_path, sample_book, write_
     bid = db.import_book(write_book(sample_book))
     key = db.save_chapter_audio(db.get_chapters(bid)[0]['id'], b'sound', [], 1, 'c', 'say:system', 'say', None)
     assert key in media_keys(db.db_path)
+
+
+def test_media_keys_keep_master_and_deploy_copy(tmp_path, sample_book, write_book):
+    from distill.scripts.media_transfer import media_keys
+    db = DistillDatabase(tmp_path / 'source.db')
+    bid = db.import_book(write_book(sample_book))
+    chapter_id = db.get_chapters(bid)[0]['id']
+    master = db.save_chapter_audio(chapter_id, b'master', [], 1, 'c', 'say:system', 'say', None)
+    opus = db.set_deploy_audio(chapter_id, b'opus')
+    assert {master, opus} <= set(db.media_keys())
+    assert {master, opus} <= set(media_keys(db.db_path))
+    assert db.missing_deploy_audio() == []
+
+
+def test_missing_deploy_audio_lists_chapters_without_opus(tmp_path, sample_book, write_book):
+    db = DistillDatabase(tmp_path / 'source.db')
+    bid = db.import_book(write_book(sample_book))
+    chapter_id = db.get_chapters(bid)[0]['id']
+    assert db.missing_deploy_audio() == []
+    db.save_chapter_audio(chapter_id, b'master', [], 1, 'c', 'say:system', 'say', None)
+    assert db.missing_deploy_audio() == [chapter_id]

@@ -143,21 +143,26 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
 - **Assembly** (`distill/audio/assemble.py`):
   - Each part is rendered and joined with silence: 350 ms between units and after the title, 250 ms between list items.
   - `compute_timings` gives each unit's start and end in ms from exact frame counts.
-  - Encoded AAC-LC mono 32 kbps `.m4a` with `afconvert`.
-- **Schema:** `chapter_audio(chapter_id PK -> chapters ON DELETE CASCADE, storage_key, text_checksum, duration_ms, voice, engine, rate, timings JSON, created_at)`.
-  - The file is in the content-addressed `MediaStore`.
+  - `say` records at 48 kHz (`--data-format=BEI16@48000`); the default 22 kHz cut everything above 11 kHz and sounded dull. Siri keeps its own rate.
+  - The joined raw WAV is encoded once with ffmpeg to Opus 24 kbps (`-application audio`) in an MP4 container (about 12 MB per hour). That is the only file a new chapter keeps; no AAC. Chosen by ear on 2026-11-08 over AAC 32 kbps (dull) and Opus 16 kbps (8 kHz bandwidth). iPhones play Opus in MP4 from iOS 17.
+  - Chapters rendered before 2026-11-08 are AAC-LC 32 kbps at 22 kHz. `encode_opus` converts that AAC to Opus 24 without re-rendering, and the AAC stays on the Mac.
+- **Schema:** `chapter_audio(chapter_id PK -> chapters ON DELETE CASCADE, storage_key, text_checksum, duration_ms, voice, engine, rate, timings JSON, created_at, deploy_key)`.
+  - `deploy_key` is the Opus file the server sends. For new chapters `storage_key = deploy_key` (one Opus file). For older chapters `storage_key` is their AAC and `deploy_key` is NULL until converted. Files are in the content-addressed `MediaStore`.
+  - `save_chapter_audio` clears `deploy_key`, so a stale Opus file is never served. `set_deploy_audio` stores it; `missing_deploy_audio()` lists AAC-only chapters.
   - `book_audio(book_id)` returns current chapters only. `stale_or_missing_audio(book_id)` lists chapters to render.
   - Saving audio does not change `reader_revision`.
 - **Deploy:**
   - `media_transfer list --media-dir` prints the keys the VM has. `deploy_db` verifies all local media, lists the VM's keys, then uploads a tar of only the missing ones.
-  - `media_keys` includes `chapter_audio`.
+  - `media_keys` includes `chapter_audio` (both keys locally).
+  - In the shipped snapshot, `deploy_db` sets `storage_key = deploy_key` wherever it is set, so the VM DB references only Opus files and no AAC is uploaded. An AAC-only chapter ships its AAC until converted.
   - The VM must run this code before an audio push, since the push relies on its `list` command.
-- **Command:** `python -m distill.scripts.make_audio (--book SLUG | --all) [--dry-run] [--approve-voice] [--jobs N] [--deploy]`.
-  - Renders only stale or missing chapters, so runs can resume. Stops a book on its first failure.
+- **Command:** `python -m distill.scripts.make_audio (--book SLUG | --all) [--dry-run] [--approve-voice] [--opus-only] [--jobs N] [--deploy]`.
+  - Renders only stale or missing chapters, so runs can resume. Stops a book on its first failure. Each render saves one Opus file.
+  - `--opus-only` converts AAC-only chapters to Opus 24 (no voices, no rendering).
   - Siri paths come from `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy/distill/deploy.local.env`.
   - Measured speed: `say` about 3.7× real time per process; Siri about 5×.
 - **Routes:**
-  - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, no-cache` with the storage key as ETag, because the URL stays the same across re-renders. Stale or missing audio returns 404.
+  - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. Serves `deploy_key` (Opus), else an older chapter's AAC `storage_key`, as `audio/mp4`. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, no-cache` with the served file's key as ETag, because the URL stays the same across re-renders. Stale or missing audio returns 404.
   - `GET /api/books/<slug>/audio` returns `{book_id, chapters:[{chapter_id, ordinal, title, url, duration_ms, timings}]}`.
 - **Player** (`distill/static/js/listen.js`, `templates/_listen_bar.html`):
   - One `<audio>` element. Sets `navigator.audioSession.type='playback'` where available. Media Session supplies metadata and action handlers.

@@ -29,6 +29,7 @@ def env(tmp_path, monkeypatch, sample_book, write_book):
         return b'm4a-' + str(chapter['id']).encode(), [], 10, spoken_checksum(spoken_units(chapter))
 
     monkeypatch.setattr(make_audio, 'render_chapter', fake_render)
+    monkeypatch.setattr(make_audio, 'encode_opus', lambda aac, work_dir: b'opus-' + aac)
     return db, db_path, first, second, rendered, checks
 
 
@@ -95,3 +96,25 @@ def test_unknown_book_fails(env):
 def test_deploy_with_dry_run_rejected(env):
     with pytest.raises(SystemExit):
         run(env[1], '--book', 'my-book', '--dry-run', '--deploy')
+
+
+def test_render_stores_only_the_opus_file(env, monkeypatch):
+    db, db_path, first, _, _, _ = env
+    monkeypatch.setattr(make_audio, 'encode_opus', lambda *a: pytest.fail('new renders are not re-encoded'))
+    assert run(db_path, '--book', 'my-book') == 0
+    assert db.missing_deploy_audio() == []
+    chapter_id = db.get_chapters(first)[0]['id']
+    item = db.book_audio(first)[0]
+    assert item['deploy_key'] == item['storage_key']
+    assert db.media.get(item['deploy_key']) == b'm4a-' + str(chapter_id).encode()
+
+
+def test_opus_only_encodes_missing_copies_without_rendering(env):
+    db, db_path, first, _, rendered, checks = env
+    chapter = db.get_chapters(first)[0]
+    db.save_chapter_audio(chapter['id'], b'old-aac', [], 10, spoken_checksum(spoken_units(chapter)), 'v', 'say', None)
+    assert db.missing_deploy_audio() == [chapter['id']]
+    assert run(db_path, '--all', '--opus-only') == 0
+    assert rendered == [] and checks == []
+    assert db.missing_deploy_audio() == []
+    assert db.media.get(db.book_audio(first)[0]['deploy_key']) == b'opus-old-aac'
