@@ -164,13 +164,14 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
 - **Routes:**
   - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. Serves `deploy_key` (Opus), else an older chapter's AAC `storage_key`, as `audio/mp4`. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, no-cache` with the served file's key as ETag, because the URL stays the same across re-renders. Stale or missing audio returns 404.
   - `GET /api/books/<slug>/audio` returns `{book_id, chapters:[{chapter_id, ordinal, title, url, duration_ms, timings}]}`.
-- **Player** (`distill/static/js/listen.js`, `templates/_listen_bar.html`):
+- **Player** — shared reader platform (2026-11-08): `shared/static/js/listen.js`, `shared/templates/shared/reader/_listen_bar.html`, `shared/static/css/listen.css`. An app constructs `new Listener(reader, book, {audioApi, storageKey, mode})` on top of the shared continuous reader and includes the bar and CSS. Distill passes `/api/books/<slug>/audio`, `distill-listen-<book_id>` and `summary` (`distill/static/js/distill_reader.js`). Plainly has no timed audio yet, so it does not construct one.
   - One `<audio>` element. Sets `navigator.audioSession.type='playback'` where available. Media Session supplies metadata and action handlers.
   - The bar is moved into `.continuous-reader-footer`, so `calculatePages` subtracts its height. Showing or hiding it dispatches `resize`.
-  - Following drives the reader's own `displayCurrentPage` / `loadContinuousReaderAt`, so normal page-turn progress saving applies.
-  - A displayed page without the spoken paragraph, while playing, turns following off.
-  - `localStorage['distill-listen-<book_id>'] = {chapter_id, paragraph_id, ms, title, rate, at}`.
-  - Server saves set the reader's `currentMarker` to `{mode:'summary', chapter_id, paragraph_id, offset}`, where offset is the fraction of the unit played, and call `saveContinuousReader('listen')`. `listen` was added to `VALID_CAUSES`.
+  - Following drives the reader's own `displayCurrentPage` / `loadContinuousReaderAt`, so normal page-turn progress saving applies. While following, every `timeupdate` maps (unit, offset through it) to a page with `findContinuousPageForMarker`, so the page turns inside a paragraph that runs onto the next page, not only when a new paragraph starts.
+  - Following stops only on a page turn by the reader, playing or paused: the listener wraps `navigateToNextPage` / `navigateToPreviousPage` (every key, tap, swipe and button turn) and watches clicks on contents entries (`[data-reader-chapter-target]`). Re-layouts (the bar appearing, resize, settings) and the player's own turns (`navigating`) do not count. Before 2026-11-08 a displayed page without the spoken paragraph turned following off, which the bar's own re-layout triggered on phones.
+  - While not following, the bar shows **Back to audio** (`#listen-follow`: show the playing paragraph, follow again) and **Play from here** (`#listen-here`: `listenFromReadingPosition`, restart at the paragraph at the top of the page). Play/pause continues the audio and never moves the page.
+  - `localStorage[storageKey] = {chapter_id, paragraph_id, ms, title, rate, at}` (Distill: `distill-listen-<book_id>`, also read by its book page).
+  - Server saves set the reader's `currentMarker` to `{mode, chapter_id, paragraph_id, offset}`, where offset is the fraction of the unit played, and call `saveContinuousReader('listen')`. `listen` was added to `VALID_CAUSES`.
 - **Tests:**
   - pytest: `tests/distill/test_audio_*.py`, `test_make_audio.py`, plus additions to `test_models.py`, `test_deploy_db.py` and `test_file_media.py`.
   - WebKit e2e: `tests/e2e/distill_listen.mjs`. It needs a book with rendered audio (`DISTILL_LISTEN_SLUG`).

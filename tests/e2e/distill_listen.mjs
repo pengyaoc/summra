@@ -7,7 +7,7 @@
 
 import { webkit } from 'playwright';
 import { mkdirSync } from 'node:fs';
-import { unitAt, msFor } from '../../distill/static/js/listen.js';
+import { unitAt, msFor } from '../../shared/static/js/listen.js';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5003';
 const SLUG = process.env.DISTILL_LISTEN_SLUG || 'abundance-klein-thompson';

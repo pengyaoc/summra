@@ -1,6 +1,12 @@
-// Distill Listen: plays pre-rendered chapter audio in step with the reader.
-// One <audio> element; position is kept in localStorage (survives an iOS app
-// kill) and saved to the server as the summary mode's reading position.
+// Listen (shared reader platform): plays pre-rendered chapter audio in step with
+// the continuous reader. One <audio> element; position is kept in localStorage
+// (survives an iOS app kill) and saved to the server as the reading position of
+// the app's audio mode.
+//
+// Page following: hands off, the page turns as the audio moves on (also inside a
+// paragraph that runs onto the next page). A page turn by the reader stops
+// following without touching the audio; "Back to audio" and "Play from here"
+// are offered until following resumes. Play/pause never moves the page.
 
 const RATES = [1, 1.25, 1.5, 1.75, 2];
 const LOCAL_EVERY_MS = 5000;
@@ -38,9 +44,13 @@ function nearestUnit(timings, paragraphId) {
 const clock = ms => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
 export class Listener {
-    constructor(reader, book) {
+    // options: { audioApi: URL of {chapters:[{chapter_id, title, url, duration_ms, timings}]},
+    //           storageKey: localStorage key for this book, mode: reader mode the audio follows }
+    constructor(reader, book, { audioApi, storageKey, mode }) {
         this.reader = reader;
         this.book = book;
+        this.audioApi = audioApi;
+        this.mode = mode;
         this.chapters = [];
         this.index = -1;
         this.audio = null;
@@ -53,7 +63,7 @@ export class Listener {
         this.dirty = false;        // the audio moved since the last server save
         this.pendingStart = null;  // seconds to seek to once the audio's metadata loads
         this.failed = false;
-        this.key = `distill-listen-${book.id}`;
+        this.key = storageKey;
     }
 
     get timings() { return this.chapters[this.index]?.timings || []; }
@@ -62,7 +72,7 @@ export class Listener {
 
     async init() {
         try {
-            const response = await fetch(withBasePath(`/api/books/${this.book.slug}/audio`), { credentials: 'include' });
+            const response = await fetch(withBasePath(this.audioApi), { credentials: 'include' });
             const data = response.ok && (response.headers.get('content-type') || '').includes('json') ? await response.json() : null;
             this.chapters = data?.chapters || [];
         } catch (_) { this.chapters = []; }
@@ -97,7 +107,8 @@ export class Listener {
         this.$('listen-fwd').addEventListener('click', () => this.seekBy(30));
         this.$('listen-next').addEventListener('click', () => this.nextChapter());
         this.$('listen-rate').addEventListener('click', () => this.setRate(RATES[(RATES.indexOf(this.rate()) + 1) % RATES.length]));
-        this.$('listen-follow').addEventListener('click', () => { this.following = true; this.$('listen-follow').hidden = true; this.follow(true); });
+        this.$('listen-follow').addEventListener('click', () => { this.setFollowing(true); this.follow(true); });
+        this.$('listen-here').addEventListener('click', () => this.listenFromReadingPosition());
         this.$('listen-resume').addEventListener('click', () => this.resumeSaved());
         this.$('listen-reload').addEventListener('click', () => location.reload());
         this.$('listen-close').addEventListener('click', () => { this.pause(); this.showBar(false); });
@@ -105,20 +116,32 @@ export class Listener {
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.saveAll(); });
     }
 
-    // Paging away from the spoken paragraph while audio plays stops the text
-    // following the audio. A re-layout that keeps it on screen does not count.
+    // A page turn by the reader (keys, taps, swipes, a contents jump), playing or
+    // paused, stops following. Re-layouts and the player's own turns do not count.
     watchManualPaging() {
-        const original = this.reader.onContinuousPageDisplayed.bind(this.reader);
-        this.reader.onContinuousPageDisplayed = () => {
-            original();
-            const page = document.querySelector('#continuous-reader-content .pagination-page-container') || document;
-            const spokenVisible = !!this.unit && !!page.querySelector(`[data-reader-anchor="${this.unit}"]`);
-            if (!this.navigating && this.unit && !spokenVisible && this.audio && !this.audio.paused && this.following) {
-                this.following = false;
-                this.$('listen-follow').hidden = false;
-            }
-            this.highlight();
+        const reader = this.reader;
+        const byHand = name => {
+            const original = reader[name].bind(reader);
+            reader[name] = (...args) => {
+                if (!this.navigating && this.index >= 0) this.setFollowing(false);
+                return original(...args);
+            };
         };
+        byHand('navigateToNextPage');
+        byHand('navigateToPreviousPage');
+        // A chapter picked from the contents is a jump by hand; other reloads
+        // (resize, settings) are re-layouts and keep following.
+        document.addEventListener('click', event => {
+            if (this.index >= 0 && event.target.closest?.('[data-reader-chapter-target]')) this.setFollowing(false);
+        }, true);
+        const displayed = reader.onContinuousPageDisplayed.bind(reader);
+        reader.onContinuousPageDisplayed = () => { displayed(); this.highlight(); };
+    }
+
+    setFollowing(following) {
+        this.following = following;
+        this.$('listen-follow').hidden = following;
+        this.$('listen-here').hidden = following;
     }
 
     showBar(visible) {
@@ -241,7 +264,7 @@ export class Listener {
             ms = marker ? nearestUnit(timings, marker.paragraph_id).start_ms : 0;
         }
         this.startedAt = unitAt(timings, ms).paragraph_id;
-        this.following = true;
+        this.setFollowing(true);
         return this.load(index, ms);
     }
 
@@ -250,7 +273,7 @@ export class Listener {
         const index = saved ? this.chapters.findIndex(item => item.chapter_id === saved.chapter_id) : -1;
         if (index < 0) return this.listenFromReadingPosition();
         this.startedAt = unitAt(this.chapters[index].timings, saved.ms).paragraph_id;
-        this.following = true;
+        this.setFollowing(true);
         return this.load(index, saved.ms);
     }
 
@@ -299,11 +322,11 @@ export class Listener {
         const position = this.position();
         if (!position) return;
         if (!this.audio.paused) this.dirty = true;
-        if (position.paragraph_id !== this.unit) {
-            this.unit = position.paragraph_id;
-            this.follow();
-        }
-        this.highlight();
+        const moved = position.paragraph_id !== this.unit;
+        this.unit = position.paragraph_id;
+        // Every tick, not only on a new paragraph: a long paragraph runs onto the next page.
+        if (!this.navigating) this.follow();
+        if (moved) this.highlight();
         const now = Date.now();
         if (now - this.lastLocal > LOCAL_EVERY_MS) this.saveLocal();
         if (now - this.lastServer > SERVER_EVERY_MS && !this.audio.paused) this.saveServer();
@@ -358,7 +381,7 @@ export class Listener {
         } catch (_) { /* private mode */ }
     }
 
-    // The audio position becomes the summary mode's reading position.
+    // The audio position becomes the audio mode's reading position.
     saveServer() {
         const position = this.position();
         const state = this.reader.continuousReader;
@@ -368,7 +391,7 @@ export class Listener {
         this.dirty = false;
         this.lastServer = Date.now();
         const marker = {
-            book_id: this.book.id, mode: 'summary', content_version: state.manifest?.content_version,
+            book_id: this.book.id, mode: this.mode, content_version: state.manifest?.content_version,
             chapter_id: position.chapter_id, paragraph_id: position.paragraph_id, offset: position.offset,
             ordinal: state.unitsById?.get(position.paragraph_id)?.ordinal, quote: '',
         };
