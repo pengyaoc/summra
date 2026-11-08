@@ -123,6 +123,55 @@ Distill metadata archive is3,520,797 bytes and no longer embeds image bytes;
 restore metadata together with the separate private media store.
 
 
+## Distill Listen: chapter audio (2026-11-07)
+
+Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `docs/superpowers/plans/2026-11-07-distill-listen.md`.
+
+- **Spoken text** (`distill/audio/spoken.py`):
+  - `spoken_units(chapter)` returns `SpokenUnit(paragraph_id, parts)` per reader unit (`"<chapter_id>.<block_index>"`).
+  - `p`, `h` and `quote` blocks give one part each. `ul`, `ol` and `keypoints` give one part per item. `table` and `image` are skipped.
+  - The chapter title is the first part of the first unit. A chapter with nothing spoken gets one unit, `<id>.0`, holding the title.
+  - `spoken_checksum` hashes the units. A mismatch makes the audio stale.
+- **Engines** (`distill/audio/engines.py`):
+  - `SayEngine`: `say -o`, system voice, 22,050 Hz. Output is byte-identical between runs.
+  - `SiriEngine`: InkChinese's `pipeline/siri_tts.py`, run in InkChinese's venv (PyObjC) one unit per subprocess. Voice `zh-CN-D`, rate 1.0, 48 kHz.
+    - It checks that `zh-CN-D` is in `siri_tts.voices()`, because the private SiriTTSService falls back silently for unknown names.
+    - It retries 3 times, then raises `RenderFailed`.
+  - `check_reference` renders a fixed sentence and compares it with `<db dir>/distill-voice-refs/<engine>.json`, which is gitignored.
+    - `say` must match the sha256 of its PCM.
+    - Siri must match duration within ±2%, since its output is not byte-repeatable (3,500 vs 3,520 ms).
+- **Assembly** (`distill/audio/assemble.py`):
+  - Each part is rendered and joined with silence: 350 ms between units and after the title, 250 ms between list items.
+  - `compute_timings` gives each unit's start and end in ms from exact frame counts.
+  - Encoded AAC-LC mono 32 kbps `.m4a` with `afconvert`.
+- **Schema:** `chapter_audio(chapter_id PK -> chapters ON DELETE CASCADE, storage_key, text_checksum, duration_ms, voice, engine, rate, timings JSON, created_at)`.
+  - The file is in the content-addressed `MediaStore`.
+  - `book_audio(book_id)` returns current chapters only. `stale_or_missing_audio(book_id)` lists chapters to render.
+  - Saving audio does not change `reader_revision`.
+- **Deploy:**
+  - `media_transfer list --media-dir` prints the keys the VM has. `deploy_db` verifies all local media, lists the VM's keys, then uploads a tar of only the missing ones.
+  - `media_keys` includes `chapter_audio`.
+  - The VM must run this code before an audio push, since the push relies on its `list` command.
+- **Command:** `python -m distill.scripts.make_audio (--book SLUG | --all) [--dry-run] [--approve-voice] [--jobs N] [--deploy]`.
+  - Renders only stale or missing chapters, so runs can resume. Stops a book on its first failure.
+  - Siri paths come from `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy/distill/deploy.local.env`.
+  - Measured speed: `say` about 3.7× real time per process; Siri about 5×.
+- **Routes:**
+  - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, max-age=31536000, immutable`. Stale or missing audio returns 404.
+  - `GET /api/books/<slug>/audio` returns `{book_id, chapters:[{chapter_id, ordinal, title, url, duration_ms, timings}]}`.
+- **Player** (`distill/static/js/listen.js`, `templates/_listen_bar.html`):
+  - One `<audio>` element. Sets `navigator.audioSession.type='playback'` where available. Media Session supplies metadata and action handlers.
+  - The bar is moved into `.continuous-reader-footer`, so `calculatePages` subtracts its height. Showing or hiding it dispatches `resize`.
+  - Following drives the reader's own `displayCurrentPage` / `loadContinuousReaderAt`, so normal page-turn progress saving applies.
+  - A displayed page without the spoken paragraph, while playing, turns following off.
+  - `localStorage['distill-listen-<book_id>'] = {chapter_id, paragraph_id, ms, title, rate, at}`.
+  - Server saves set the reader's `currentMarker` to `{mode:'summary', chapter_id, paragraph_id, offset}`, where offset is the fraction of the unit played, and call `saveContinuousReader('listen')`. `listen` was added to `VALID_CAUSES`.
+- **Tests:**
+  - pytest: `tests/distill/test_audio_*.py`, `test_make_audio.py`, plus additions to `test_models.py`, `test_deploy_db.py` and `test_file_media.py`.
+  - WebKit e2e: `tests/e2e/distill_listen.mjs`. It needs a book with rendered audio (`DISTILL_LISTEN_SLUG`).
+- **Worktree testing:** `tests/distill` is a package named `distill`, so in a git worktree plain `pytest` imports the main checkout's `distill.*` through the editable install. Remap the editable finder's `MAPPING` to the worktree, or run from the main checkout.
+
+
 ## Distill image files and metadata schema (2026-10-27)
 
 Distill `images` now stores `(id, book_id, name, mime, storage_key)`;

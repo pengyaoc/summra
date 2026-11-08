@@ -2630,7 +2630,7 @@ When the browser is an e-ink Kindle, the same URLs serve the e-ink pages (see 12
 
 ### 17.6 Non-goals (for now)
 
-Server-side summarization, file upload in the browser, multiple users beyond the owner, public reading, a pitch or landing page, a subdomain, audio, study cues, search, highlights or notes. Books are added by running an import command on the owner's computer; the web app has no upload UI.
+Server-side summarization, file upload in the browser, multiple users beyond the owner, public reading, a pitch or landing page, a subdomain, offline audio, study cues, search, highlights or notes. Books are added by running an import command on the owner's computer; the web app has no upload UI.
 
 ### 17.7 Acceptance criteria
 
@@ -2646,6 +2646,27 @@ Server-side summarization, file upload in the browser, multiple users beyond the
 - Installing Distill uses the drop icon even when the OS fetches metadata without sign-in. Signed-out access to book content and progress remains blocked.
 
 ---
+
+### 17.8 Listen (2026-11-07)
+
+**User story:** As the owner, I want to listen to a summary on my iPhone and switch between listening and reading at the same spot, so that I can keep going while walking or driving, and still find my place after iOS closes the app.
+
+- **Audio:** made ahead of time on the owner's Mac.
+  - English uses the Mac's system voice (`say`, Siri Voice 2). Chinese uses Mandarin Siri Voice 4 at rate 1.0.
+  - Each chapter reads its title, then paragraphs, headings, quotes, lists and key points. Tables and images (captions included) are skipped.
+- **Listen:** a headphones button in the reader toolbar starts at the paragraph at the top of the page. If audio was paused in that paragraph, it resumes at the paused second instead. The button appears only when the book has audio.
+- **Player bar:** sits above the reading progress line, with:
+  - play/pause, back 15 s, forward 30 s;
+  - speed (1×, 1.25×, 1.5×, 1.75×, 2×);
+  - the chapter title, Next and close.
+  
+  Pages are cut above the bar, so it never covers text.
+- **Following the text:** the page follows the audio and the spoken paragraph is highlighted. Paging away from it shows "Back to audio".
+- **Lock screen:** shows the chapter, book and author, with play/pause, skip and seek. At the end of a chapter the next one plays, including while locked.
+- **Kill-safe resume:** the place is kept on the device every 5 s and on pause or leaving the app. Reopening shows "Resume listening · chapter, m:ss" in the reader and on the book page; one tap continues, since iOS needs a tap to start audio.
+- **Shared position:** listening saves the summary's reading position (on pause, chapter change and every 30 s), so the text opens where the audio stopped, on any device.
+- **Failures:** a failed load, such as an expired sign-in, pauses and asks to sign in again. It never stops silently.
+- **Text edits:** audio for a chapter whose text has changed is hidden until it is re-rendered.
 
 ## Feature Flag Bundle
 

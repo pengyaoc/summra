@@ -515,6 +515,15 @@ Distill is the owner-only summary reader at `/distill` on the same host. It shar
   - Settings come from the gitignored `deploy/distill/deploy.local.env` (override with `--config`). Make it from `deploy/distill/deploy.local.env.example`. Keys: `DISTILL_VM_INSTANCE`, `_ZONE`, `_PROJECT`, `_ACCOUNT`, `_SERVICE_USER`, `_REMOTE_DB`, `_UNIT`, `_PORT`, and `DISTILL_SITE_URL`.
   - An md5 mismatch aborts before the service is stopped. Never push `distill_user.db`: it holds reading progress.
 
+**Chapter audio (Listen).** Audio is rendered on the Mac only (macOS voices), never on the VM.
+- English uses `say` with the system voice (Siri Voice 2). Chinese uses Mandarin Siri Voice 4 at rate 1.0, through InkChinese's `pipeline/siri_tts.py`; set `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy.local.env`.
+- Commands:
+  - `venv/bin/python -m distill.scripts.make_audio --book <slug> --dry-run` estimates the hours.
+  - `... --book <slug> --deploy` renders only stale or missing chapters, then pushes the DB plus only the new media keys.
+  - `--all` covers the library.
+  - Use `--jobs 1` for English: parallel `say` processes have hung (each voice call times out and retries 3 times, but serial is reliable).
+- A run stops if a voice no longer matches its approved reference clip (`data/distill-voice-refs/`). After listening to a sample, re-approve with `--approve-voice`.
+
 **First install** (as done 2026-10-26). Run as root via `gcloud compute ssh`:
 1. `pip install -r distill/requirements.txt` in the venv (Pillow).
 2. Copy the env file from the example and fill in the allow-list.

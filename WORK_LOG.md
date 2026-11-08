@@ -1,5 +1,56 @@
 # Summra Work Log
 
+## 2026-11-07: Distill Listen (audio for summaries)
+
+- Goal: listen to Distill summaries on the iPhone PWA and switch between
+  listening and reading at the same spot, with a position that survives an app
+  kill. Volume: 64 books (56 en, 8 zh), 1,816 chapters, ~120–140 h of speech.
+- Voices picked by the owner from test clips:
+  - Chinese: Mandarin Siri Voice 4 (`zh-CN-D`) at rate 1.0, via InkChinese's
+    private SiriTTSService exporter. About 5× real time; returns timings for
+    each spoken stretch.
+  - English: macOS `say` with the system voice. About 2× real time.
+- Rejected: on-device `speechSynthesis` (stops on lock, loses its place on
+  kill), and a private podcast feed (would lose reading/listening sync).
+- Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`.
+  - Chapter audio is made on the Mac, one reader unit at a time, and stored in
+    MediaStore.
+  - The timing of each unit (`chapter_id.ordinal`) is known when the units are
+    joined.
+  - Playback uses one `<audio>` element plus Media Session.
+  - Position is saved to localStorage and synced as the summary-mode progress
+    marker.
+- 2026-11-07 tests:
+  - Asking the private Siri route for "Nora" returns the same bytes as a
+    made-up name, so it quietly falls back for unknown voices.
+  - `say` uses the system voice (Siri Voice 2), which `-v` can't name, and its
+    output is byte-for-byte repeatable.
+  - So English stays on `say`, guarded by an exact reference-clip check.
+- Owner decisions: the VM disk has room; when sign-in expires, playback pauses
+  and asks to sign in again.
+- Spec approved. Plan: `docs/superpowers/plans/2026-11-07-distill-listen.md`
+  (8 tasks). Built on branch `feat/distill-listen`, in a worktree.
+- Built:
+  - `distill/audio/` (spoken units, engines with voice guard, assembly);
+  - the `chapter_audio` table;
+  - deploys that upload only the media the VM lacks;
+  - the Range audio route and timings API;
+  - `make_audio`;
+  - `listen.js` (player bar in the reader footer, text following, Media
+    Session, local and server position).
+- Measured:
+  - `say` renders at about 3.7× real time per process; Siri at about 5×.
+  - Siri output is not byte-repeatable (3,500 vs 3,520 ms for the reference
+    sentence), so its voice check matches duration within ±2%.
+- Tests:
+  - full pytest: 1,275 passed;
+  - `distill_listen.mjs` (WebKit) and `distill.mjs` pass;
+  - all 14 Plainly e2e scripts pass (`shared/` changed: the `listen` progress
+    cause).
+- Rollout: audio for `abundance-klein-thompson`, `the-vital-question` and
+  `silent-spring` (the owner's three requested books, already imported
+  2026-10-25).
+
 ## 2026-11-07: Kindle back/forward scale correction
 
 - Reproduced on the physical PW3: direction reversal could shrink the whole
