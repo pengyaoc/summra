@@ -103,6 +103,17 @@ class DistillDatabase(ReaderIndexMixin):
                 storage_key TEXT NOT NULL,
                 PRIMARY KEY (image_id, format)
             )''')
+            conn.execute('''CREATE TABLE IF NOT EXISTS chapter_audio (
+                chapter_id INTEGER PRIMARY KEY REFERENCES chapters(id) ON DELETE CASCADE,
+                storage_key TEXT NOT NULL,
+                text_checksum TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                voice TEXT NOT NULL,
+                engine TEXT NOT NULL,
+                rate REAL,
+                timings TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
             self._migrate_media(conn)
             # Backward-compatible metadata migration; chapter IDs and progress stay intact.
             if 'categories' not in {row['name'] for row in conn.execute('PRAGMA table_info(books)')}:
@@ -161,7 +172,43 @@ class DistillDatabase(ReaderIndexMixin):
     def media_keys(self):
         with closing(self.get_connection()) as conn:
             return [row[0] for row in conn.execute(
-                'SELECT storage_key FROM images UNION SELECT storage_key FROM cover_thumbnails ORDER BY 1')]
+                'SELECT storage_key FROM images UNION SELECT storage_key FROM cover_thumbnails '
+                'UNION SELECT storage_key FROM chapter_audio ORDER BY 1')]
+
+    def save_chapter_audio(self, chapter_id: int, m4a: bytes, timings: List[Dict], duration_ms: int,
+                           checksum: str, voice: str, engine: str, rate: Optional[float]) -> str:
+        """Store a chapter's audio file and timings; the file goes to the media store."""
+        key = self.media.put(m4a)
+        with closing(self.get_connection()) as conn, conn:
+            conn.execute('''INSERT OR REPLACE INTO chapter_audio
+                (chapter_id, storage_key, text_checksum, duration_ms, voice, engine, rate, timings)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (chapter_id, key, checksum, duration_ms, voice, engine, rate, json.dumps(timings)))
+        return key
+
+    def _audio_by_chapter(self, book_id: int):
+        """[(chapter, audio row or None, current?)] in chapter order."""
+        from distill.audio.spoken import spoken_checksum, spoken_units
+        with closing(self.get_connection()) as conn:
+            rows = {r['chapter_id']: r for r in conn.execute(
+                '''SELECT a.* FROM chapter_audio a JOIN chapters c ON c.id = a.chapter_id
+                   WHERE c.book_id = ?''', (book_id,))}
+        result = []
+        for chapter in self.get_chapters(book_id):
+            row = rows.get(chapter['id'])
+            current = bool(row) and row['text_checksum'] == spoken_checksum(spoken_units(chapter))
+            result.append((chapter, row, current))
+        return result
+
+    def book_audio(self, book_id: int) -> List[Dict]:
+        """Chapters whose audio matches their current text, in reading order."""
+        return [{'chapter_id': c['id'], 'ordinal': c['ordinal'], 'title': c['title'],
+                 'storage_key': row['storage_key'], 'duration_ms': row['duration_ms'],
+                 'timings': json.loads(row['timings'])}
+                for c, row, current in self._audio_by_chapter(book_id) if current]
+
+    def stale_or_missing_audio(self, book_id: int) -> List[int]:
+        return [c['id'] for c, _, current in self._audio_by_chapter(book_id) if not current]
 
     def verify_media(self):
         keys = self.media_keys()

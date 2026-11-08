@@ -324,3 +324,43 @@ def test_categories_round_trip_and_old_schema_migration(tmp_path, sample_book, w
     sample_book['categories'] = ['Science', 'History']
     db.import_book(write_book(sample_book))
     assert db.get_book(book_id)['categories'] == ['Science', 'History']
+
+
+def _save_audio(db, chapter, key_bytes=b'audio'):
+    from distill.audio.spoken import spoken_checksum, spoken_units
+    timings = [{'paragraph_id': f"{chapter['id']}.0", 'start_ms': 0, 'end_ms': 100}]
+    return db.save_chapter_audio(chapter['id'], key_bytes, timings, 100,
+                                 spoken_checksum(spoken_units(chapter)), 'say:system', 'say', None)
+
+
+def test_book_audio_hides_stale(db, sample_book, write_book):
+    bid = db.import_book(write_book(sample_book))
+    chapters = db.get_chapters(bid)
+    assert db.stale_or_missing_audio(bid) == [c['id'] for c in chapters]
+    _save_audio(db, chapters[1])
+    current = db.book_audio(bid)
+    assert [c['chapter_id'] for c in current] == [chapters[1]['id']]
+    assert current[0]['timings'][0]['end_ms'] == 100 and current[0]['title'] == chapters[1]['title']
+    assert chapters[1]['id'] not in db.stale_or_missing_audio(bid)
+    with db.get_connection() as conn:
+        blocks = chapters[1]['blocks'] + [{'type': 'p', 'text': 'New text.'}]
+        conn.execute('UPDATE chapters SET blocks = ? WHERE id = ?', (json.dumps(blocks), chapters[1]['id']))
+    assert db.book_audio(bid) == []
+    assert chapters[1]['id'] in db.stale_or_missing_audio(bid)
+
+
+def test_media_keys_include_audio(db, sample_book, write_book):
+    bid = db.import_book(write_book(sample_book))
+    key = _save_audio(db, db.get_chapters(bid)[0])
+    assert key in db.media_keys()
+    assert db.media.get(key) == b'audio'
+
+
+def test_save_audio_does_not_bump_reader_revision(db, sample_book, write_book):
+    bid = db.import_book(write_book(sample_book))
+    def revision():
+        with db.get_connection() as conn:
+            return conn.execute('SELECT revision FROM reader_revision WHERE book_id = ?', (bid,)).fetchone()[0]
+    before = revision()
+    _save_audio(db, db.get_chapters(bid)[0])
+    assert revision() == before
