@@ -1,5 +1,18 @@
 # Plainly - Product Requirements Document
 
+## 2026-11-07: Kindle back/forward viewport stability
+
+Returning to the next page after paging backward must retain the same full-size
+reading rectangle immediately, without an extra page turn, right/bottom blank
+space or a scrollbar. The native fullscreen launcher now maintains the reader's
+browser scale after navigation. Repeated physical PW3 touchscreen tests and the
+owner's finger test confirm full-size reading. Browser toolbar gestures remain
+native, with no browser controls added to the web app. Native zoom controls return
+for library/ordinary browsing and when leaving the browser. Reading preferences,
+font sizes, pagination and saved-position behavior are unchanged. This fix
+requires installing the updated device launcher; a website refresh alone does
+not install it.
+
 ## 2026-11-03: Larger Kindle reader UI
 
 Kindle reader chrome uses 2.5× the former text size: book title, chapter time

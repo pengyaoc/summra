@@ -5,6 +5,124 @@ BASE=/mnt/us/distill-fullscreen/native
 STATE=/tmp/distill-native-fullscreen
 WM=/mnt/us/koreader/wmctrl
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+# Runs in the privileged stock browser, never in website code. Keep the source
+# embedded here so reinstalling the launcher also updates its viewport policy.
+viewport_policy_source() {
+  cat <<'JAVASCRIPT'
+// Distill native viewport policy v1
+(function () {
+  var key = '__distillReaderViewportPolicy';
+  if (window[key]) window[key].dispose();
+  var app = window.kindleApp;
+  if (!app || !app.contentWindow || !app.applicationManager) return;
+  var content = app.contentWindow.get();
+  var viewport = content.viewport;
+  if (!viewport || !viewport.autoZoom || !viewport.doubleTap || !viewport.zoomFactor ||
+      !viewport.horizontalScrollBar || !viewport.verticalScrollBar) return;
+  var active = true, managed = false, attached = null, timers = [];
+  var logger = app.logging.createEventLogger('distill_viewport');
+  function isReader(url) {
+    return /^https:\/\/pengyaochen\.com\/(distill|plainly)\/books\/[^\/?#]+\/read([?#]|$)/.test(url)
+      && !/[?&]kindle=0([&#]|$)/.test(url);
+  }
+  function currentURL() { return String(content.window.location.href); }
+  function clearTimers() {
+    for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+    timers = [];
+  }
+  function detach() {
+    if (attached) attached.removeEventListener('click', onClick, true);
+    attached = null;
+  }
+  function release() {
+    clearTimers(); detach();
+    if (managed) {
+      viewport.autoZoom.enable();
+      viewport.doubleTap.enable();
+      viewport.horizontalScrollBar.set('auto');
+      viewport.verticalScrollBar.set('auto');
+    }
+    managed = false;
+  }
+  function lock() {
+    if (!active || !isReader(currentURL())) { release(); return; }
+    var doc = content.window.document;
+    if (!doc || !doc.body) return;
+    managed = true;
+    viewport.autoZoom.disable();
+    viewport.doubleTap.disable();
+    viewport.horizontalScrollBar.set('hidden');
+    viewport.verticalScrollBar.set('hidden');
+    var width = doc.body.clientWidth;
+    var available = content.window.outerWidth;
+    if (width > 0 && available > 0) viewport.zoomFactor.set(Math.min(1, available / width));
+    viewport.position.set(0, 0);
+    if (attached !== doc) {
+      detach(); attached = doc;
+      attached.addEventListener('click', onClick, true);
+    }
+  }
+  function schedule() {
+    clearTimers();
+    if (!active || !isReader(currentURL())) { release(); return; }
+    lock();
+    timers.push(setTimeout(lock, 0));
+    timers.push(setTimeout(lock, 250));
+  }
+  function onClick() {
+    clearTimers();
+    timers.push(setTimeout(lock, 0));
+    timers.push(setTimeout(lock, 100));
+  }
+  function onURL(url) {
+    if (!active || !isReader(String(url))) { release(); return; }
+    schedule();
+  }
+  function onGo() { active = true; schedule(); }
+  function onPause() { active = false; release(); }
+  function dispose() {
+    active = false; release();
+    content.removeEventListener('urlChange', onURL);
+    content.removeEventListener('documentLoad', schedule);
+    app.applicationManager.removeEventListener('go', onGo);
+    app.applicationManager.removeEventListener('pause', onPause);
+    app.applicationManager.removeEventListener('unload', dispose);
+    delete window[key];
+  }
+  content.addEventListener('urlChange', onURL);
+  content.addEventListener('documentLoad', schedule);
+  app.applicationManager.addEventListener('go', onGo);
+  app.applicationManager.addEventListener('pause', onPause);
+  app.applicationManager.addEventListener('unload', dispose);
+  window[key] = {dispose: dispose};
+  schedule();
+  logger.info('DISTILL_VIEWPORT_READY:__DISTILL_TOKEN__');
+})();
+JAVASCRIPT
+}
+install_viewport_policy() {
+  POLICY=/var/local/mesquite/browser/distill-viewport-policy.js
+  # This is an app-local sidecar in Mesquite's jail, not a stock browser patch.
+  [ ! -L "$POLICY" ] || return 1
+  if [ -e "$POLICY" ]; then
+    [ "$(head -n 1 "$POLICY")" = '// Distill native viewport policy v1' ] || return 1
+  fi
+  POLICY_TMP="$POLICY.$TOKEN"
+  viewport_policy_source | sed "s/__DISTILL_TOKEN__/$TOKEN/g" > "$POLICY_TMP" || return 1
+  # Mesquite runs as uid 9000, so the non-secret script must be readable.
+  chmod 644 "$POLICY_TMP" && mv -f "$POLICY_TMP" "$POLICY" || { rm -f "$POLICY_TMP"; return 1; }
+  lipc-set-prop com.lab126.appmgrd start "app://com.lab126.browser/?test=distill-viewport-policy.js%3F$TOKEN" || return 1
+  POLICY_COUNT=0
+  while [ "$POLICY_COUNT" -lt 5 ]; do
+    grep -F "DISTILL_VIEWPORT_READY:$TOKEN:" /var/log/messages >/dev/null 2>&1 && return 0
+    POLICY_COUNT=$((POLICY_COUNT + 1)); sleep 1
+  done
+  return 1
+}
+if [ "${1:-}" = '--viewport-policy-source' ]; then
+  viewport_policy_source
+  exit $?
+fi
 # Input stays entirely in X11: input-only edge/corner windows intercept
 # reserved gestures, with a page-area dismissal window only while bars show.
 # Closing the X connection automatically removes every input window.
@@ -309,6 +427,8 @@ FULL=$(printf '%s' "$ORIGINAL" | sed 's/_PC:TS_/_PC:N_/')
 printf '%s\n' "$WINDOW" > "$STATE/window"
 printf '%s\n' "$ORIGINAL" > "$STATE/original"
 printf '%s\n' "$FULL" > "$STATE/full"
+# Require the native viewport policy before expanding the old browser surface.
+install_viewport_policy || { log 'Native viewport policy unavailable; toolbar retained.'; exit 1; }
 # Do not hide the escape controls until native input windows are confirmed.
 start_gestures &
 GESTURES=$!

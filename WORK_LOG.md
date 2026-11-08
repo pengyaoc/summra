@@ -1,5 +1,44 @@
 # Summra Work Log
 
+## 2026-11-07: Kindle back/forward scale correction
+
+- Reproduced on the physical PW3: direction reversal could shrink the whole
+  fullscreen page to about 5/6 size despite unchanged DOM geometry. Normal
+  toolbar mode was stable. Initial frontend geometry/scroll/repaint trials passed
+  emulation but failed hardware; matching root dimensions introduced scrollbars.
+  All website trials and geometry beacons were reverted. Live kindle.js remains
+  the committed SHA256
+  89b96413802ddea581ed9026c4e2b2862a848147d1c8afa5f52b10e6e1d8d267.
+- Native privileged viewport control resolves the observed failure. Embedded an
+  ES5 policy in the existing session.sh; the launcher atomically installs its
+  marked app-local sidecar and invokes the stock Mesquite test-script hook.
+  Disable native auto/double-tap zoom, fit body width, reset native pan after
+  clicks/documents/activation, and hide native reader scrollbars. URL-scoped to
+  HTTPS Distill/Plainly book readers, excluding kindle=0; pause/navigation/unload
+  restore controls and remove callbacks. No website bridge, stock source patch,
+  schema/auth/content/progress changes or sleep prevention.
+- Startup waits for token-specific readiness before hiding bars. The first
+  packaged attempt correctly retained bars: chmod 600 prevented uid9000 Mesquite
+  from reading the root-written sidecar. Corrected to 644 (no secrets), verified
+  real readiness/fullscreen startup, and added an installer regression covering
+  readability, owned replacement and refusal of symlinks/unmarked files.
+- Owner finger testing confirms “Stays full size.” Repeated physical raw-touch
+  back/forward cycles and toolbar-toggle/reload checks retain the same title
+  rectangle (109,33)-(945,65), without right/bottom shrink. Earlier one-shot
+  auto-zoom trials were insufficient; the installed policy reasserts after input
+  and document navigation. Physical fixtures/captures remain under /tmp; old
+  native test sidecar removed. Website diagnostic code is absent.
+- Installed the launcher on the owner's PW3 firmware 5.16.2.1.1; rollback copy:
+  /mnt/us/distill-fullscreen/native/session.sh.before-viewport-20261107.
+  Existing native corner/swipe controls remain separate from web UI.
+- Validation: focused native/shared suite (23 cases), shell syntax and whitespace
+  checks; mocked native API lifecycle/URL/click/document tests plus real device
+  acceptance. The earlier 460 backend and browser suites did not prove this
+  hardware-only fix and are not represented as its physical evidence. ERD, PRD
+  and Kindle runbook updated. Source commit/push and VM repository sync follow;
+  no website assets or service restart are needed. Unrelated documentation edits
+  from other sessions are preserved outside this release.
+
 ## 2026-11-03: Commit and synchronize Kindle release
 
 - At the user's request, reviewed the11 pending Kindle launcher/UI/test/documentation

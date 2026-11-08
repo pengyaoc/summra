@@ -56,7 +56,7 @@ The shared state directory `/tmp/distill-native-fullscreen/` prevents two apps
 from controlling the same native browser window. A normal appmgr launch waits
 for stable Home samples so scriptlet exit cannot cancel the browser startup.
 It then records the exact browser window/title and changes `PC:TS` to `PC:N`.
-This reclaims the native URL and status bar area without changing browser files.
+This reclaims the native URL and status bar area without patching stock browser files.
 
 Swipe down starting in the top 2.5% of the screen to reveal the native browser
 bars (travel at least 5.5% of screen height within 1.5 seconds). Tap outside the
@@ -67,7 +67,8 @@ Corner holds/drags do not toggle. The top edge is reserved for the swipe while
 fullscreen, so ordinary taps in that strip do not reach the webpage.
 
 Input-only X11 windows are owned by a LuaJIT child of the launcher; no webpage
-controls, event handlers or device bridge are added. The input zones are restacked
+controls or device bridge are added. A separate privileged native viewport
+policy observes reader clicks; website scripts remain unchanged. The input zones are restacked
 just above the browser every 500 ms, below native chrome and dialog windows,
 so browser refreshes cannot permanently obscure them. KOReader's `luajit` and the
 Kindle's native `libX11` are required. Startup leaves the bars visible if native
@@ -110,7 +111,8 @@ Distill's private library never becomes public.
 Shared server code: `shared/auth/device_pairing.py`; shared pairing screen:
 `shared/templates/shared/kindle/pairing.html`. Reader JS/CSS and templates live
 under `shared/static/` and `shared/templates/shared/kindle/`. Native fullscreen
-viewport handling is in `shared/static/js/kindle.js`, not the launchers.
+DOM viewport handling is in `shared/static/js/kindle.js`; native browser scale
+stabilization is embedded in `session.sh`.
 
 ## Native gesture validation (2026-11-03)
 
@@ -129,3 +131,32 @@ The existing PW3 reader reloads at its saved paragraph when native bars return
 to clear an old WebKit pan offset. This pre-existing website behavior is unchanged;
 showing the toolbar can therefore cause a reader reload. No server deployment is
 needed for launcher changes; back up and reinstall the device script explicitly.
+
+## Native page-scale correction (2026-11-07)
+
+On the verified PW3 firmware 5.16.2.1.1, fullscreen back/forward turns could
+change native browser scale despite unchanged DOM geometry. The launcher now
+installs its embedded policy at
+`/var/local/mesquite/browser/distill-viewport-policy.js`, inside Mesquite's jail,
+and loads it through the stock app-local test-script hook. No vendor browser
+source, cookies or website code is modified. Installation requires this writable
+app directory and the stock privileged viewport APIs; readiness failure retains
+the toolbar. Existing unmarked files or symlinks at the policy path are refused.
+
+The policy applies only to HTTPS pengyaochen.com Distill/Plainly book readers,
+excluding kindle=0. It disables native automatic/double-tap zoom, fits the existing
+body to the window, clears native pan after clicks and document loads, and hides
+native reader scrollbars (restored to automatic outside the reader). Native
+zoom controls return outside reader URLs and on app pause; callbacks are removed
+on unload/replacement. No polling or sleep prevention is added. Toolbar visibility
+and recovery gestures continue to work, including the existing saved-paragraph
+reload when bars reappear.
+
+Local validation: `venv/bin/python -m pytest tests/shared/test_kindle_shared.py -q`
+and `sh -n deploy/kindle/session.sh`. The tests cover URL scoping, both-direction
+click resets, document replacement, pause/resume/unload, duplicate installation
+and safe toolbar retention on setup failure. Physical raw-touch cycles plus the
+owner's finger test confirm full-size pages. To roll back on this device, restore
+`session.sh.before-viewport-20261107`, end the fullscreen session and close/reopen
+the stock browser to unload the policy; the marked sidecar may then be removed.
+Git/VM deployment alone does not update this device launcher.

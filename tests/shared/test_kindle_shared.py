@@ -268,7 +268,7 @@ def test_kindle_script_is_es5():
         assert not re.search(pattern, src), pattern
 
 
-@pytest.mark.parametrize('scenario', ['home', 'sleep', 'helper_failure'])
+@pytest.mark.parametrize('scenario', ['home', 'sleep', 'helper_failure', 'policy_failure'])
 def test_native_launcher_restores_and_cleans_up(tmp_path, scenario):
     """Exercise shell supervision with fake native tools, without touching X11."""
     import os
@@ -308,7 +308,8 @@ if [ "$n" -ge 8 ]; then echo com.lab126.KPPMainApp
 else echo com.lab126.browser; fi
 fi
 ''')
-    helper = '''start_gestures() {
+    helper = '''mock_viewport_policy() { [ "$TEST_SCENARIO" != policy_failure ]; }
+start_gestures() {
   echo ready > "$STATE/gesture-ready"
   if [ "$TEST_SCENARIO" = helper_failure ]; then /bin/sleep 0.12; return; fi
   while [ ! -f "$STATE/stop" ]; do /bin/sleep 0.01; done
@@ -317,6 +318,7 @@ fi
     start = source.index('start_gestures() {')
     end = source.index('if [ "${1:-}" = \'--gesture-self-test\' ]; then')
     source = source[:start] + helper + source[end:]
+    source = source.replace('install_viewport_policy ||', 'mock_viewport_policy ||')
     source = source.replace('BASE=/mnt/us/distill-fullscreen/native', f'BASE={tmp_path}')
     source = source.replace('STATE=/tmp/distill-native-fullscreen', f'STATE={state}')
     source = source.replace('WM=/mnt/us/koreader/wmctrl', f'WM={wm}')
@@ -332,10 +334,128 @@ fi
                DISTILL_FULLSCREEN_SECONDS='0')
     result = subprocess.run(['sh', str(script), '--current'], env=env,
                             capture_output=True, text=True, timeout=10)
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == (1 if scenario == 'policy_failure' else 0), result.stdout + result.stderr
     assert title.read_text() == original
     assert not state.exists()
-    if scenario == 'sleep':
+    if scenario == 'policy_failure':
+        assert 'Native viewport policy unavailable; toolbar retained.' in result.stdout
+        assert 'Fullscreen active' not in result.stdout
+    elif scenario == 'sleep':
         assert 'Wake: fullscreen restored without navigation.' in result.stdout
     elif scenario == 'helper_failure':
         assert 'Gesture handler exited; restoring toolbar.' in result.stdout
+
+
+def test_native_viewport_policy_navigation_and_lifecycle():
+    """Execute the installed ES5 policy against a fake privileged browser API."""
+    import subprocess
+
+    source = subprocess.check_output(
+        ['sh', str(ROOT / 'deploy/kindle/session.sh'), '--viewport-policy-source'],
+        text=True)
+    for pattern in (r'\blet\s', r'\bconst\s', r'=>', r'\bclass\s', '`'):
+        assert not re.search(pattern, source), pattern
+    harness = r'''
+const vm = require('vm'), assert = require('assert');
+const source = require('fs').readFileSync(0, 'utf8');
+function events(obj = {}) {
+  const listeners = {};
+  obj.addEventListener = (name, fn) => (listeners[name] ||= new Set()).add(fn);
+  obj.removeEventListener = (name, fn) => listeners[name].delete(fn);
+  obj.emit = (name, value) => [...(listeners[name] || [])].forEach(fn => fn(value));
+  obj.count = name => (listeners[name] || new Set()).size;
+  return obj;
+}
+const calls = [], timers = new Map(); let serial = 0;
+const toggle = name => ({disable: () => calls.push(name + ':off'),
+                         enable: () => calls.push(name + ':on')});
+const viewport = {autoZoom: toggle('auto'), doubleTap: toggle('double'),
+  horizontalScrollBar: {set: value => calls.push('horizontal:' + value)},
+  verticalScrollBar: {set: value => calls.push('vertical:' + value)},
+  zoomFactor: {set: value => calls.push(['zoom', value])},
+  position: {set: (x,y) => calls.push(['position',x,y])}};
+const doc = () => events({body: {clientWidth: 1115}});
+const reader = 'https://pengyaochen.com/distill/books/test/read?ch=4#p=3';
+const page = {location: {href: reader}, document: doc(), outerWidth: 1072};
+const content = events({viewport, window: page});
+const manager = events();
+const context = {window: {kindleApp: {contentWindow: {get: () => content},
+  applicationManager: manager, logging: {createEventLogger: () => ({info(){}})}}},
+  setTimeout: fn => {timers.set(++serial, fn); return serial;},
+  clearTimeout: id => timers.delete(id)};
+vm.createContext(context);
+function run() { vm.runInContext(source, context); }
+function flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn=>fn()); }
+function locked() {
+  assert(calls.includes('auto:off')); assert(calls.includes('double:off'));
+  assert(calls.includes('horizontal:hidden')); assert(calls.includes('vertical:hidden'));
+  assert(calls.some(c => c[0] === 'zoom' && Math.abs(c[1] - 1072/1115) < 1e-9));
+  assert(calls.some(c => c[0] === 'position' && c[1] === 0 && c[2] === 0));
+}
+run(); flush(); locked(); assert.equal(page.document.count('click'), 1);
+// Both directions must reassert scale after the website/native click handlers.
+for(let i=0; i<6; i++) { calls.length=0; page.document.emit('click'); flush(); locked(); }
+const oldDoc = page.document;
+page.document = doc(); page.location.href = reader.replace('ch=4','ch=5');
+content.emit('urlChange',page.location.href); content.emit('documentLoad'); flush();
+assert.equal(oldDoc.count('click'),0); assert.equal(page.document.count('click'),1);
+// Replacement never accumulates listeners or delayed resets.
+run(); flush(); assert.equal(content.count('urlChange'),1);
+assert.equal(manager.count('pause'),1); assert.equal(page.document.count('click'),1);
+calls.length=0; page.document.emit('click'); manager.emit('pause'); flush();
+assert(calls.includes('auto:on')); assert(calls.includes('double:on'));
+assert(calls.includes('horizontal:auto')); assert(calls.includes('vertical:auto'));
+assert(!calls.some(c=>c[0] === 'zoom')); assert.equal(page.document.count('click'),0);
+calls.length=0; manager.emit('go'); flush(); locked();
+// Library, ordinary browsing and explicit non-Kindle views release native controls.
+for(const url of ['https://pengyaochen.com/distill/',
+ 'https://pengyaochen.com.evil.test/distill/books/test/read',
+ 'http://pengyaochen.com/distill/books/test/read', reader + '&kindle=0',
+ 'https://example.com/distill/books/test/read']) {
+ page.location.href = reader; content.emit('documentLoad'); flush(); calls.length=0;
+ page.location.href = url; content.emit('urlChange',url); flush();
+ assert(calls.includes('auto:on')); assert(calls.includes('double:on'));
+assert(calls.includes('horizontal:auto')); assert(calls.includes('vertical:auto'));
+ assert(!calls.some(c=>c[0] === 'zoom')); assert.equal(page.document.count('click'),0);
+}
+page.location.href='https://pengyaochen.com/plainly/books/test/read?ch=2';
+content.emit('documentLoad'); flush(); calls.length=0;
+manager.emit('unload'); flush(); assert(calls.includes('auto:on'));
+assert.equal(content.count('documentLoad'),0); assert.equal(manager.count('go'),0);
+assert(!context.window.__distillReaderViewportPolicy); assert.equal(timers.size,0);
+'''
+    subprocess.run(['node', '-e', harness], input=source, text=True,
+                   check=True, capture_output=True, timeout=10)
+
+
+def test_native_viewport_sidecar_installation(tmp_path):
+    """Real installer writes a readable policy, checks readiness and refuses conflicts."""
+    import os
+    import subprocess
+
+    source = (ROOT / 'deploy/kindle/session.sh').read_text()
+    source = source[source.index('viewport_policy_source() {'):
+                    source.index('if [ "${1:-}" = \'--viewport-policy-source\' ]; then')]
+    policy = tmp_path / 'policy.js'
+    messages = tmp_path / 'messages'
+    messages.write_text('browser:distill_viewport::DISTILL_VIEWPORT_READY:123-456:\n')
+    source = source.replace('/var/local/mesquite/browser/distill-viewport-policy.js', str(policy))
+    source = source.replace('/var/log/messages', str(messages))
+    source = source.replace('lipc-set-prop com.lab126.appmgrd start', 'true')
+    source += '\nTOKEN=123-456\ninstall_viewport_policy\n'
+    env = dict(os.environ)
+
+    def install():
+        return subprocess.run(['sh', '-c', source], env=env, capture_output=True, timeout=10)
+
+    assert install().returncode == 0
+    assert policy.stat().st_mode & 0o777 == 0o644  # Mesquite is uid 9000, not root.
+    assert 'DISTILL_VIEWPORT_READY:123-456' in policy.read_text()
+    assert install().returncode == 0  # owned sidecar replacement
+    policy.write_text('unrelated local file')
+    assert install().returncode == 1
+    assert policy.read_text() == 'unrelated local file'
+    policy.unlink()
+    policy.symlink_to(messages)
+    assert install().returncode == 1
+    assert messages.read_text().startswith('browser:')

@@ -1,5 +1,24 @@
 # Summra - Technical Implementation Details
 
+## 2026-11-07: Native Kindle viewport stabilization
+
+The native fullscreen launcher embeds an ES5 policy loaded through Mesquite's
+app-local test-script hook into its privileged browser context. It disables
+native auto/double-tap zoom on HTTPS Distill/Plainly book-reader URLs, fits the
+existing body width to the physical window, and resets native viewport position
+after clicks, document loads and app activation; native reader scrollbars are
+hidden and return to automatic outside the reader. Delayed reassertion runs after
+native input handling; webpage DOM dimensions and pagination remain unchanged.
+Listeners/timers are replaced idempotently and removed on unload; native zoom
+controls are re-enabled on pause or navigation outside reader URLs (including
+kindle=0). No web-to-device bridge, schema/auth change or stock browser patch.
+
+The launcher atomically installs its marked sidecar inside Mesquite's writable
+app jail and requires a token-specific native readiness log before hiding bars.
+Unsupported native APIs leave the toolbar visible. Physical PW3 touch cycles and
+user finger testing confirm stable full-size pages; emulation alone is not proof
+for this hardware-only bug. Website geometry experiments were reverted.
+
 ## 2026-11-03: Kindle reader chrome sizing and overflow
 
 Shared `shared/static/css/kindle.css` scales reader chrome typography 2.5×,
