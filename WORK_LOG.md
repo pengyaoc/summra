@@ -35,9 +35,12 @@
   checks; mocked native API lifecycle/URL/click/document tests plus real device
   acceptance. The earlier 460 backend and browser suites did not prove this
   hardware-only fix and are not represented as its physical evidence. ERD, PRD
-  and Kindle runbook updated. Source commit/push and VM repository sync follow;
-  no website assets or service restart are needed. Unrelated documentation edits
-  from other sessions are preserved outside this release.
+  and Kindle runbook updated. Source release 049a8fc is committed/pushed and
+  fast-forwarded on the VM. Device/local/VM launcher SHA256 matches
+  160b9a5377180a462915d953eb0bfe240de0b0896322df0eadf96b8ee9613fd7.
+  Live reader JS retains the baseline hash above; distill and summra (Plainly)
+  user services are active, without a restart. VM-local files and unrelated
+  documentation edits from other sessions are preserved outside this release.
 
 ## 2026-11-03: Commit and synchronize Kindle release
 
