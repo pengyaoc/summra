@@ -4,7 +4,7 @@ import hashlib
 import math
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
+from flask import Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, url_for
 
 from shared.auth.pchauth.flask_adapter import login_required
 from shared.progress.routes import library_cards
@@ -277,3 +277,36 @@ def cover_thumbnail(slug, token, fmt):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.set_etag(hashlib.sha256(data).hexdigest())
     return response.make_conditional(request)
+
+
+def _current_audio(slug):
+    book = _db().get_book_by_slug(slug)
+    if not book:
+        abort(404)
+    return book, _db().book_audio(book['id'])
+
+
+@bp.route('/books/<slug>/audio/<int:chapter_id>.m4a')
+@login_required
+def chapter_audio(slug, chapter_id):
+    _, chapters = _current_audio(slug)
+    item = next((c for c in chapters if c['chapter_id'] == chapter_id), None)
+    if not item:
+        abort(404)
+    key = item['storage_key']
+    response = send_file(_db().media.path(key), mimetype='audio/mp4', conditional=True, etag=key, max_age=0)
+    # Content-addressed: a changed chapter gets a new key, so the bytes never change.
+    response.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+@bp.route('/api/books/<slug>/audio')
+@login_required
+def book_audio_api(slug):
+    book, chapters = _current_audio(slug)
+    return jsonify({'book_id': book['id'], 'chapters': [{
+        'chapter_id': c['chapter_id'], 'ordinal': c['ordinal'], 'title': c['title'],
+        'url': url_for('distill.chapter_audio', slug=slug, chapter_id=c['chapter_id']),
+        'duration_ms': c['duration_ms'], 'timings': c['timings'],
+    } for c in chapters]})
