@@ -16,7 +16,7 @@ import shlex
 from pathlib import Path
 
 from distill import config
-from distill.scripts.media_transfer import media_archive
+from distill.scripts.media_transfer import media_archive, verify_media
 
 DEFAULT_CONFIG = config.BASE_DIR / 'deploy' / 'distill' / 'deploy.local.env'
 REQUIRED_KEYS = (
@@ -52,6 +52,32 @@ def _md5(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _gcloud_flags(settings: dict) -> list:
+    return [f'--zone={settings["DISTILL_VM_ZONE"]}', f'--project={settings["DISTILL_VM_PROJECT"]}',
+            f'--account={settings["DISTILL_VM_ACCOUNT"]}']
+
+
+def _remote_media(settings: dict):
+    """(media_transfer helper command on the VM, VM media directory)."""
+    remote_db = settings['DISTILL_VM_REMOTE_DB']
+    repo_root = Path(settings.get('DISTILL_VM_REPO_ROOT') or Path(remote_db).parent.parent)
+    remote_media = settings.get('DISTILL_VM_MEDIA_DIR') or str(Path(remote_db).with_name(Path(remote_db).stem + '-media'))
+    helper = (f'sudo env PYTHONPATH={shlex.quote(str(repo_root))} '
+              f'{shlex.quote(str(repo_root / "venv/bin/python"))} -m distill.scripts.media_transfer')
+    return helper, remote_media
+
+
+def _remote_media_keys(settings: dict, run) -> frozenset:
+    """Media keys the VM already holds, so a push uploads only new objects."""
+    helper, remote_media = _remote_media(settings)
+    result = run(['gcloud', 'compute', 'ssh', settings['DISTILL_VM_INSTANCE'],
+                  f'--command={helper} list --media-dir {shlex.quote(remote_media)}', *_gcloud_flags(settings)],
+                 capture_output=True, text=True)
+    if result.returncode != 0:
+        raise DeployError(f'listing VM media failed: {(result.stderr or result.stdout or "").strip()}')
+    return frozenset(line.strip() for line in (result.stdout or '').splitlines() if line.strip())
+
+
 def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
     missing = [key for key in REQUIRED_KEYS if not settings.get(key)]
     if missing:
@@ -64,8 +90,7 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
     remote_db = settings['DISTILL_VM_REMOTE_DB']
     unit = settings['DISTILL_VM_UNIT']
     port = settings['DISTILL_VM_PORT']
-    gcloud_flags = [f'--zone={settings["DISTILL_VM_ZONE"]}', f'--project={settings["DISTILL_VM_PROJECT"]}',
-                    f'--account={settings["DISTILL_VM_ACCOUNT"]}']
+    gcloud_flags = _gcloud_flags(settings)
 
     def gcloud(verb: str, *args: str, what: str) -> str:
         result = run(['gcloud', 'compute', verb, *args, *gcloud_flags], capture_output=True, text=True)
@@ -85,10 +110,7 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
     local_md5 = _md5(db_path)
 
     # Install verified immutable media before activating any references to it.
-    repo_root = Path(settings.get('DISTILL_VM_REPO_ROOT') or Path(remote_db).parent.parent)
-    remote_media = settings.get('DISTILL_VM_MEDIA_DIR') or str(Path(remote_db).with_name(Path(remote_db).stem + '-media'))
-    helper = (f'sudo env PYTHONPATH={shlex.quote(str(repo_root))} '
-              f'{shlex.quote(str(repo_root / "venv/bin/python"))} -m distill.scripts.media_transfer')
+    helper, remote_media = _remote_media(settings)
     if archive is not None:
         archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
         gcloud('scp', str(archive), f'{instance}:{REMOTE_MEDIA_UPLOAD}', what='media upload')
@@ -151,7 +173,10 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
                     source.backup(target)
                     if target.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
                         raise ValueError('Content snapshot integrity check failed')
-            with media_archive(snapshot, media_dir=config.media_dir_for(db_path)) as archive:
+            media_dir = config.media_dir_for(db_path)
+            verify_media(snapshot, media_dir)  # before any remote call
+            present = _remote_media_keys(settings, run)
+            with media_archive(snapshot, media_dir=media_dir, exclude=present) as archive:
                 _deploy_db(snapshot, settings, run, archive)
     except (ValueError, OSError, sqlite3.Error) as error:
         raise DeployError(f'Media preparation/deployment failed: {error}') from error

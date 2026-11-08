@@ -159,3 +159,35 @@ def test_backup_keeps_one_verified_metadata_archive_and_preserves_accounts(tmp_p
         assert set(tar.getnames()) == {'distill.db', 'distill_user.db', 'distill_pairing.db', 'manifest.json'}
         assert not any('/' in name for name in tar.getnames())
     assert all((tmp_path / name).read_bytes() == data for name, data in expected.items())
+
+
+def test_list_keys_empty_dir(tmp_path):
+    from distill.scripts.media_transfer import list_keys
+    assert list_keys(tmp_path / 'missing') == []
+
+
+def test_list_keys_returns_stored(tmp_path):
+    from distill.scripts.media_transfer import list_keys
+    store = MediaStore(tmp_path / 'media')
+    keys = sorted([store.put(b'one'), store.put(b'two')])
+    assert list_keys(store.root) == keys
+
+
+def test_archive_excludes_present_keys(tmp_path, sample_book, write_book):
+    import tarfile
+    db = DistillDatabase(tmp_path / 'source.db')
+    db.import_book(write_book(sample_book))
+    keys = db.media_keys()
+    with media_archive(db.db_path, exclude=frozenset(keys[:1])) as archive:
+        with tarfile.open(archive) as tar:
+            assert sorted(tar.getnames()) == [f'{k[:2]}/{k}' for k in keys[1:]]
+    with media_archive(db.db_path, exclude=frozenset(keys)) as archive:
+        assert archive is None
+
+
+def test_media_transfer_keys_include_chapter_audio(tmp_path, sample_book, write_book):
+    from distill.scripts.media_transfer import media_keys
+    db = DistillDatabase(tmp_path / 'source.db')
+    bid = db.import_book(write_book(sample_book))
+    key = db.save_chapter_audio(db.get_chapters(bid)[0]['id'], b'sound', [], 1, 'c', 'say:system', 'say', None)
+    assert key in media_keys(db.db_path)

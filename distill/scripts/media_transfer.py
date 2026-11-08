@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import pwd
+import re
 import sqlite3
 import tarfile
 import tempfile
@@ -18,7 +19,7 @@ from distill.media import MediaStore
 def media_keys(db_path):
     with closing(sqlite3.connect(f'file:{Path(db_path)}?mode=ro', uri=True)) as db:
         keys = set()
-        for table in ('images', 'cover_thumbnails'):
+        for table in ('images', 'cover_thumbnails', 'chapter_audio'):
             columns = {row[1] for row in db.execute(f'PRAGMA table_info({table})')}
             if not columns:
                 continue
@@ -28,12 +29,20 @@ def media_keys(db_path):
         return sorted(keys)
 
 
-@contextmanager
-def media_archive(db_path, media_dir=None):
+def verify_media(db_path, media_dir=None):
+    """Check every object the DB references exists locally with the right hash."""
     store = MediaStore(media_dir if media_dir is not None else config.media_dir_for(db_path))
     keys = media_keys(db_path)
     for key in keys:
         store.verify(key)
+    return store, keys
+
+
+@contextmanager
+def media_archive(db_path, media_dir=None, exclude=frozenset()):
+    """Verify every referenced object, then tar only those not in `exclude`."""
+    store, keys = verify_media(db_path, media_dir)
+    keys = [key for key in keys if key not in exclude]
     if not keys:
         yield None
         return
@@ -50,6 +59,14 @@ def _owner(path, owner):
     if owner:
         account = pwd.getpwnam(owner)
         os.chown(path, account.pw_uid, account.pw_gid)
+
+
+def list_keys(media_dir):
+    """Storage keys already present in a media directory (none if it is missing)."""
+    root = Path(media_dir)
+    if not root.is_dir():
+        return []
+    return sorted(p.name for p in root.glob('??/*') if re.fullmatch(r'[0-9a-f]{64}', p.name))
 
 
 def install_archive(archive, media_dir, owner=None):
@@ -123,11 +140,16 @@ def main(argv=None):
     install.add_argument('archive', type=Path)
     install.add_argument('--media-dir', type=Path, required=True)
     install.add_argument('--owner')
+    listing = commands.add_parser('list')
+    listing.add_argument('--media-dir', type=Path, required=True)
     backup = commands.add_parser('backup')
     backup.add_argument('--db', type=Path, required=True)
     backup.add_argument('--owner')
     args = parser.parse_args(argv)
-    if args.command == 'install':
+    if args.command == 'list':
+        for key in list_keys(args.media_dir):
+            print(key)
+    elif args.command == 'install':
         print('Verified media objects:', install_archive(args.archive, args.media_dir, args.owner))
     else:
         print('Verified metadata backup:', backup_metadata(args.db, args.owner))

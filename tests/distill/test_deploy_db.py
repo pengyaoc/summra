@@ -253,3 +253,28 @@ def test_missing_local_media_aborts_without_remote_calls(file_media_db):
     with pytest.raises(DeployError, match='Media'):
         deploy_db(db.db_path, SETTINGS, run=run)
     assert run.calls == []
+
+
+def test_deploy_uploads_only_missing(file_media_db):
+    db = file_media_db
+    keys = db.media_keys()
+    assert len(keys) >= 2
+    run = make_run(db.db_path, {'media_transfer list': (0, keys[0] + '\n')})
+    deploy_db(db.db_path, SETTINGS, run=run)
+    assert sorted(run.media_members) == [f'{k[:2]}/{k}' for k in keys[1:]]
+    assert run.index('media_transfer list') < run.index('distill-media.new.tar')
+
+
+def test_deploy_skips_media_upload_when_vm_has_everything(file_media_db):
+    db = file_media_db
+    run = make_run(db.db_path, {'media_transfer list': (0, '\n'.join(db.media_keys()) + '\n')})
+    deploy_db(db.db_path, SETTINGS, run=run)
+    assert not run.has('distill-media.new.tar')
+    assert run.has('systemctl --user stop')
+
+
+def test_remote_media_list_failure_never_stops_service(file_media_db):
+    run = make_run(file_media_db.db_path, {'media_transfer list': (1, 'boom')})
+    with pytest.raises(DeployError):
+        deploy_db(file_media_db.db_path, SETTINGS, run=run)
+    assert not run.has('systemctl')
