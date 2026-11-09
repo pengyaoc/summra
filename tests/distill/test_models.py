@@ -327,7 +327,7 @@ def test_categories_round_trip_and_old_schema_migration(tmp_path, sample_book, w
 
 
 def _save_audio(db, chapter, key_bytes=b'audio'):
-    from distill.audio.spoken import spoken_checksum, spoken_units
+    from shared.audio.spoken import spoken_checksum, spoken_units
     timings = [{'paragraph_id': f"{chapter['id']}.0", 'start_ms': 0, 'end_ms': 100}]
     return db.save_chapter_audio(chapter['id'], key_bytes, timings, 100,
                                  spoken_checksum(spoken_units(chapter)), 'say:system', 'say', None)
@@ -367,8 +367,8 @@ def test_save_audio_does_not_bump_reader_revision(db, sample_book, write_book):
 
 
 def test_audio_cut_off_by_siri_is_rerecorded_but_keeps_playing(db, sample_book, write_book):
-    from distill.audio.spoken import spoken_checksum, spoken_units
-    from distill.audio.engines import SiriEngine
+    from shared.audio.spoken import spoken_checksum, spoken_units
+    from shared.audio.engines import SiriEngine
     bid = db.import_book(write_book(sample_book))
     chapter = db.get_chapters(bid)[0]
     checksum = spoken_checksum(spoken_units(chapter))

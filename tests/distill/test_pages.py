@@ -151,7 +151,8 @@ def test_reader_shell_has_platform_partials_and_no_mode_selector(app_env):
     assert 'reader-mode-settings' not in html and 'data-reader-settings-mode' not in html
     assert 'window.APP_BASE_PATH' in html
     book = json.loads(html_module.unescape(re.search(r'data-book="([^"]*)"', html).group(1)))
-    assert book == {'id': 1, 'slug': 'my-book', 'title': 'My Book', 'author': 'A. Writer', 'return_url': '/', 'cover': ''}
+    assert book == {'id': 1, 'slug': 'my-book', 'title': 'My Book', 'author': 'A. Writer', 'return_url': '/', 'cover': book['cover']}
+    assert book['cover'].startswith('/books/my-book/cover/')
     names = [s.split('?')[0] for s in re.findall(r'<script[^>]*src="([^"]+)"', html)]
     assert names.index('/static/shared/js/base_path.js') < names.index('/static/shared/js/reader_state.js') \
         < names.index('/static/js/distill_shell.js')

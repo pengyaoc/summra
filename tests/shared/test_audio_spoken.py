@@ -1,4 +1,4 @@
-from distill.audio.spoken import SpokenUnit, spoken_checksum, spoken_units
+from shared.audio.spoken import SpokenUnit, spoken_checksum, spoken_units
 
 CHAPTER = {
     'id': 7, 'title': '1. First',

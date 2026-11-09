@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from distill.audio import assemble
-from distill.audio.assemble import compute_timings, encode_opus, render_chapter
-from distill.audio.engines import Rendered
-from distill.audio.spoken import spoken_checksum, spoken_units
+from shared.audio import assemble
+from shared.audio.assemble import compute_timings, encode_opus, render_chapter
+from shared.audio.engines import Rendered
+from shared.audio.spoken import spoken_checksum, spoken_units
 
 CHAPTER = {'id': 5, 'title': 'Title', 'blocks': [
     {'type': 'p', 'text': 'First paragraph.'},

@@ -181,3 +181,17 @@ def test_check_command_passes_a_healthy_database(pair, capsys):
     patch_main(['check', '--db', str(live_path)])
 
     assert 'ok' in capsys.readouterr().out
+
+
+def test_two_modes_of_one_chapter_are_separate_rows(pair):
+    local, live, book_id = pair
+    chapter = local.get_chapters(book_id)[0]
+    local.save_chapter_audio(chapter['id'], b'one', [], 1, 'c', 'v', 'siri', 1.0)
+    local.save_chapter_audio(chapter['id'], b'two', [], 1, 'c', 'v', 'siri', 1.0, mode='plain')
+    apply_patch(live, patch_for(local, live))
+    assert count(patch_for(local, live)) == 0
+    local.save_chapter_audio(chapter['id'], b'three', [], 1, 'c', 'v', 'siri', 1.0, mode='plain')
+    patch = patch_for(local, live)
+    assert count(patch) == 1
+    apply_patch(live, patch)
+    assert dump(live, 'chapter_audio') == dump(local.db_path, 'chapter_audio')

@@ -8,8 +8,8 @@ import wave
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
-from distill.audio.engines import Engine
-from distill.audio.spoken import spoken_checksum, spoken_units
+from shared.audio.engines import Engine
+from shared.audio.spoken import spoken_checksum, spoken_units
 
 UNIT_GAP_MS = 350
 PART_GAP_MS = 250

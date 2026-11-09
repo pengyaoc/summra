@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from distill.audio import engines
-from distill.audio.engines import (
+from shared.audio import engines
+from shared.audio.engines import (
     RenderFailed, Rendered, SayEngine, SiriEngine, VoiceMismatch, VoiceUnavailable,
     check_reference, engine_for,
 )

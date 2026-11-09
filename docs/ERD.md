@@ -135,12 +135,12 @@ restore metadata together with the separate private media store.
 
 Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `docs/superpowers/plans/2026-11-07-distill-listen.md`.
 
-- **Spoken text** (`distill/audio/spoken.py`):
+- **Spoken text** (`shared/audio/spoken.py`):
   - `spoken_units(chapter)` returns `SpokenUnit(paragraph_id, parts)` per reader unit (`"<chapter_id>.<block_index>"`).
   - `p`, `h` and `quote` blocks give one part each. `ul`, `ol` and `keypoints` give one part per item. `table` and `image` are skipped.
   - The chapter title is the first part of the first unit. A chapter with nothing spoken gets one unit, `<id>.0`, holding the title.
   - `spoken_checksum` hashes the units. A mismatch makes the audio stale.
-- **Engines** (`distill/audio/engines.py`):
+- **Engines** (`shared/audio/engines.py`):
   - `SayEngine`: `say -o`, system voice, 22,050 Hz. Output is byte-identical between runs.
   - `SiriEngine`: InkChinese's `pipeline/siri_tts.py`, run in InkChinese's venv (PyObjC) one unit per subprocess. Voice `zh-CN-D`, rate 1.0, 48 kHz.
     - It checks that `zh-CN-D` is in `siri_tts.voices()`, because the private SiriTTSService falls back silently for unknown names.
@@ -148,7 +148,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
   - `check_reference` renders a fixed sentence and compares it with `<db dir>/distill-voice-refs/<engine>.json`, which is gitignored.
     - `say` must match the sha256 of its PCM.
     - Siri must match duration within ±2%, since its output is not byte-repeatable (3,500 vs 3,520 ms).
-- **Assembly** (`distill/audio/assemble.py`):
+- **Assembly** (`shared/audio/assemble.py`):
   - Each part is rendered and joined with silence: 350 ms between units and after the title, 250 ms between list items.
   - `compute_timings` gives each unit's start and end in ms from exact frame counts.
   - `say` records at 48 kHz (`--data-format=BEI16@48000`); the default 22 kHz cut everything above 11 kHz and sounded dull. Siri keeps its own rate.

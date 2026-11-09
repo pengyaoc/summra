@@ -16,11 +16,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from distill import config
-from distill.audio.assemble import encode_opus, render_chapter
-from distill.audio.engines import (
+from shared.audio.assemble import encode_opus, render_chapter
+from shared.audio.engines import (
     RenderFailed, VoiceMismatch, VoiceUnavailable, check_reference, engine_for,
 )
-from distill.audio.spoken import spoken_units
+from shared.audio.spoken import spoken_units
 from distill.models import DistillDatabase
 from distill.scripts.deploy_db import DEFAULT_CONFIG, DeployError, deploy_db, load_settings
 

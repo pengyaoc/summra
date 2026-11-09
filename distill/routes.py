@@ -292,35 +292,3 @@ def cover_thumbnail(slug, token, fmt):
     response.set_etag(hashlib.sha256(data).hexdigest())
     return response.make_conditional(request)
 
-
-def _current_audio(slug):
-    book = _db().get_book_by_slug(slug)
-    if not book:
-        abort(404)
-    return book, _db().book_audio(book['id'])
-
-
-@bp.route('/books/<slug>/audio/<int:chapter_id>.m4a')
-@login_required
-def chapter_audio(slug, chapter_id):
-    _, chapters = _current_audio(slug)
-    item = next((c for c in chapters if c['chapter_id'] == chapter_id), None)
-    if not item:
-        abort(404)
-    key = item['deploy_key'] or item['storage_key']  # Opus; an older chapter's AAC until converted
-    response = send_file(_db().media.path(key), mimetype='audio/mp4', conditional=True, etag=key, max_age=0)
-    # The URL survives a re-render; the ETag (the storage key) is what changes.
-    response.headers['Cache-Control'] = 'private, no-cache'
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    return response
-
-
-@bp.route('/api/books/<slug>/audio')
-@login_required
-def book_audio_api(slug):
-    book, chapters = _current_audio(slug)
-    return jsonify({'book_id': book['id'], 'chapters': [{
-        'chapter_id': c['chapter_id'], 'ordinal': c['ordinal'], 'title': c['title'],
-        'url': url_for('distill.chapter_audio', slug=slug, chapter_id=c['chapter_id']),
-        'duration_ms': c['duration_ms'], 'timings': c['timings'],
-    } for c in chapters]})

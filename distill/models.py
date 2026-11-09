@@ -16,6 +16,8 @@ from PIL import Image, ImageOps
 
 from distill import config
 from distill.media import MediaStore
+from shared.audio.spoken import spoken_units
+from shared.audio.store import AudioStoreMixin, create_audio_tables
 from distill.book_format import block_text, iter_chapters, list_images, load_book, normalize_toc_titles, validate_book, word_count
 from shared.reader.index import ReaderIndexMixin, create_reader_revisions, create_reader_tables
 
@@ -41,12 +43,7 @@ def _cover_variants(data: bytes) -> list:
             variants.append((fmt, mime, output.getvalue()))
     return variants
 
-# Recorded before long text was split: Siri cut off the end of long sentences.
-# Still served until re-recorded.
-CUT_OFF_VOICES = frozenset({'siri:zh-CN-D@1.0'})
-
-
-class DistillDatabase(ReaderIndexMixin):
+class DistillDatabase(ReaderIndexMixin, AudioStoreMixin):
     _reader_revision_tracking = True
 
     def __init__(self, db_path: Path = config.DATABASE_PATH, media_dir=None):
@@ -107,20 +104,7 @@ class DistillDatabase(ReaderIndexMixin):
                 storage_key TEXT NOT NULL,
                 PRIMARY KEY (image_id, format)
             )''')
-            conn.execute('''CREATE TABLE IF NOT EXISTS chapter_audio (
-                chapter_id INTEGER PRIMARY KEY REFERENCES chapters(id) ON DELETE CASCADE,
-                storage_key TEXT NOT NULL,
-                text_checksum TEXT NOT NULL,
-                duration_ms INTEGER NOT NULL,
-                voice TEXT NOT NULL,
-                engine TEXT NOT NULL,
-                rate REAL,
-                timings TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''')
-            if 'deploy_key' not in {row['name'] for row in conn.execute('PRAGMA table_info(chapter_audio)')}:
-                # The Opus file the server sends. Older chapters keep their AAC in storage_key.
-                conn.execute('ALTER TABLE chapter_audio ADD COLUMN deploy_key TEXT')
+            create_audio_tables(conn)
             self._migrate_media(conn)
             # Backward-compatible metadata migration; chapter IDs and progress stay intact.
             if 'categories' not in {row['name'] for row in conn.execute('PRAGMA table_info(books)')}:
@@ -183,58 +167,8 @@ class DistillDatabase(ReaderIndexMixin):
                 'UNION SELECT storage_key FROM chapter_audio '
                 'UNION SELECT deploy_key FROM chapter_audio WHERE deploy_key IS NOT NULL ORDER BY 1')]
 
-    def save_chapter_audio(self, chapter_id: int, m4a: bytes, timings: List[Dict], duration_ms: int,
-                           checksum: str, voice: str, engine: str, rate: Optional[float]) -> str:
-        """Store a chapter's rendered audio and timings; any older Opus copy is dropped."""
-        key = self.media.put(m4a)
-        with closing(self.get_connection()) as conn, conn:
-            conn.execute('''INSERT OR REPLACE INTO chapter_audio
-                (chapter_id, storage_key, text_checksum, duration_ms, voice, engine, rate, timings)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                (chapter_id, key, checksum, duration_ms, voice, engine, rate, json.dumps(timings)))
-        return key
-
-    def set_deploy_audio(self, chapter_id: int, data: bytes) -> str:
-        """Store the Opus file the server sends for a chapter."""
-        key = self.media.put(data)
-        with closing(self.get_connection()) as conn, conn:
-            conn.execute('UPDATE chapter_audio SET deploy_key = ? WHERE chapter_id = ?', (key, chapter_id))
-        return key
-
-    def get_chapter_audio_key(self, chapter_id: int) -> str:
-        with closing(self.get_connection()) as conn:
-            return conn.execute('SELECT storage_key FROM chapter_audio WHERE chapter_id = ?', (chapter_id,)).fetchone()[0]
-
-    def missing_deploy_audio(self) -> List[int]:
-        """Older chapters that have only AAC, with no Opus file yet."""
-        with closing(self.get_connection()) as conn:
-            return [row[0] for row in conn.execute(
-                'SELECT chapter_id FROM chapter_audio WHERE deploy_key IS NULL ORDER BY chapter_id')]
-
-    def _audio_by_chapter(self, book_id: int):
-        """[(chapter, audio row or None, current?)] in chapter order."""
-        from distill.audio.spoken import spoken_checksum, spoken_units
-        with closing(self.get_connection()) as conn:
-            rows = {r['chapter_id']: r for r in conn.execute(
-                '''SELECT a.* FROM chapter_audio a JOIN chapters c ON c.id = a.chapter_id
-                   WHERE c.book_id = ?''', (book_id,))}
-        result = []
-        for chapter in self.get_chapters(book_id):
-            row = rows.get(chapter['id'])
-            current = bool(row) and row['text_checksum'] == spoken_checksum(spoken_units(chapter))
-            result.append((chapter, row, current))
-        return result
-
-    def book_audio(self, book_id: int) -> List[Dict]:
-        """Chapters whose audio matches their current text, in reading order."""
-        return [{'chapter_id': c['id'], 'ordinal': c['ordinal'], 'title': c['title'],
-                 'storage_key': row['storage_key'], 'deploy_key': row['deploy_key'], 'duration_ms': row['duration_ms'],
-                 'timings': json.loads(row['timings'])}
-                for c, row, current in self._audio_by_chapter(book_id) if current]
-
-    def stale_or_missing_audio(self, book_id: int) -> List[int]:
-        return [c['id'] for c, row, current in self._audio_by_chapter(book_id)
-                if not current or row['voice'] in CUT_OFF_VOICES]
+    def audio_spoken_units(self, chapter: Dict, mode: str):
+        return spoken_units(chapter)
 
     def verify_media(self):
         keys = self.media_keys()

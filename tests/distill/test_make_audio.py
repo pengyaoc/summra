@@ -1,7 +1,7 @@
 import pytest
 
-from distill.audio.engines import RenderFailed, VoiceMismatch
-from distill.audio.spoken import spoken_checksum, spoken_units
+from shared.audio.engines import RenderFailed, VoiceMismatch
+from shared.audio.spoken import spoken_checksum, spoken_units
 from distill.models import DistillDatabase
 from distill.scripts import make_audio
 

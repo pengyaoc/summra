@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from distill.audio.spoken import spoken_checksum, spoken_units
+from shared.audio.spoken import spoken_checksum, spoken_units
 
 from .conftest import HEADERS
 
