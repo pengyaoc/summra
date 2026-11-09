@@ -60,7 +60,7 @@ if (split) {
 // 2 + 3. Paging by hand while paused stops following; the audio keeps its place.
 await L(() => window.distillListener.pause());
 await settle();
-const pausedAt = await L(() => window.distillListener.audio.currentTime);
+const pausedAt = await L(() => window.distillListener.position().ms / 1000);
 await page.keyboard.press('ArrowRight');
 await settle();
 await page.keyboard.press('ArrowRight');
@@ -71,7 +71,7 @@ check(await page.locator('#listen-here').isVisible(), 'paging away offers "Play 
 
 // 4. Play continues the audio where it was and leaves the page alone.
 await page.locator('#listen-play').click();
-await page.waitForFunction(() => !window.distillListener.audio.paused, null, { timeout: 5000 });
+await page.waitForFunction(() => window.distillListener.playing, null, { timeout: 5000 });
 await settle();
 check(Math.abs(await L(() => window.distillListener.audio.currentTime) - pausedAt) < 2.5, 'play continues the audio where it paused');
 const next = chapter.timings.find((unit) => unit.start_ms > pausedAt * 1000 + 1000);
@@ -93,7 +93,7 @@ await page.keyboard.press('ArrowRight');
 await settle();
 const target = await L(() => document.querySelector('#continuous-reader-content .pagination-page-container [data-reader-anchor]')?.dataset.readerAnchor);
 await page.locator('#listen-here').click();
-await page.waitForFunction(() => !window.distillListener.audio.paused && window.distillListener.audio.currentTime > 0, null, { timeout: 10000 });
+await page.waitForFunction(() => window.distillListener.playing && window.distillListener.audio.currentTime > 0, null, { timeout: 10000 });
 await settle();
 check(await L(() => window.distillListener.startedAt) === target, `Play from here starts at this page (${target})`);
 check(await page.locator('#listen-here').isHidden(), 'Play from here resumes following');
@@ -119,7 +119,7 @@ check(await highlighted() === 0, 'a late time update after closing does not brin
 
 // 6. Starting again shows the highlight.
 await page.locator('#listen-button').click();
-await page.waitForFunction(() => !window.distillListener.audio.paused, null, { timeout: 15000 });
+await page.waitForFunction(() => window.distillListener.playing, null, { timeout: 15000 });
 await page.waitForFunction(() => document.querySelector('#continuous-reader-content .listen-current'), null, { timeout: 10000 }).catch(() => {});
 check(await highlighted() > 0, 'listening again brings the highlight back');
 

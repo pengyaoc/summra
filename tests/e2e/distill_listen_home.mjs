@@ -19,6 +19,11 @@ const check = (ok, msg) => { if (!ok) { failures++; console.error(`FAIL: ${msg}`
 const browser = await webkit.launch({ headless: !process.env.HEADED });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await context.newPage();
+await page.addInitScript(() => {  // the lock-screen buttons, as the page registers them
+  window.__actions = {};
+  const register = MediaSession.prototype.setActionHandler;
+  MediaSession.prototype.setActionHandler = function (name, handler) { window.__actions[name] = handler; return register.call(this, name, handler); };
+});
 const problems = [];
 page.on('pageerror', (e) => problems.push(e.message));
 
@@ -67,13 +72,33 @@ const state = await (await page.request.get(`${BASE}/api/progress/v2/books/${boo
 const marker = state.projection.modes.find((m) => m.mode === 'summary').current_marker;
 check(marker.paragraph_id === second.paragraph_id, `home: listening saves the place on the server (${marker.paragraph_id})`);
 
+const beforePause = await page.evaluate(() => window.distillListener.position().ms);
 await listen.click();
-await page.waitForFunction(() => window.distillListener.audio.paused);
+await page.waitForFunction(() => window.distillListener.playing === false);
 check(await listen.innerText() === 'Listen', 'home: Pause goes back to Listen');
+// iOS freezes a paused web app and lock-screen Play stops reaching it, so silence keeps it active.
+await page.waitForTimeout(500);
+const held = await page.evaluate(() => { const l = window.distillListener; return { silent: l.audio.src.startsWith('blob:'), running: !l.audio.paused, ms: l.position().ms }; });
+check(held.silent && held.running, `paused: silence keeps the app active (${JSON.stringify(held)})`);
+check(Math.abs(held.ms - beforePause) < 1500, 'paused: the place in the chapter is kept');
+await page.waitForTimeout(1200);
+check(Math.abs(await page.evaluate(() => window.distillListener.position().ms) - held.ms) < 5, 'paused: silence does not move the place');
+await page.evaluate(() => window.__actions.play());  // lock-screen Play
+await page.waitForFunction(() => window.distillListener.playing && window.distillListener.audio.currentTime > 0, null, { timeout: 15000 });
+const back = await page.evaluate(() => ({ src: window.distillListener.audio.src, loop: window.distillListener.audio.loop, ms: window.distillListener.position().ms }));
+check(back.src.includes('/audio/') && !back.loop && Math.abs(back.ms - held.ms) < 2500, `resume: the chapter continues from the same place (${JSON.stringify(back)})`);
+await page.evaluate(() => { window.distillListener.holdMs = 300; window.distillListener.pause(); });
+await page.waitForTimeout(900);
+check(await page.evaluate(() => window.distillListener.audio.paused), 'paused too long: silence stops');
+await page.evaluate(() => window.__actions.pause());  // iOS may show Pause while silence plays; it must still resume
+await page.waitForFunction(() => window.distillListener.playing, null, { timeout: 15000 });
+check((await page.evaluate(() => window.distillListener.audio.src)).includes('/audio/'), 'paused too long: Play still resumes the chapter');
+await page.evaluate(() => { window.distillListener.holdMs = 1800000; window.distillListener.pause(); });
 await page.locator('#listen-close').click();
 check(await page.locator('#listen-bar').isHidden(), 'home: closing hides the player');
+check(await page.evaluate(() => window.distillListener.audio.paused), 'closing the player ends the silence');
 await listen.click();
-await page.waitForFunction(() => !window.distillListener.audio.paused, null, { timeout: 10000 });
+await page.waitForFunction(() => window.distillListener.playing, null, { timeout: 10000 });
 check(await page.locator('#listen-bar').isVisible(), 'home: Listen after closing brings the player back');
 await page.evaluate(() => window.distillListener.pause());
 

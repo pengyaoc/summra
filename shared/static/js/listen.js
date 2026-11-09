@@ -11,6 +11,24 @@
 const RATES = [1, 1.25, 1.5, 1.75, 2];
 const LOCAL_EVERY_MS = 5000;
 const SERVER_EVERY_MS = 30000;
+const HOLD_MS = 30 * 60 * 1000;
+
+// Two seconds of silent 8 kHz WAV. iOS freezes a paused web app and lock-screen Play
+// then never reaches it, so a paused player loops this to stay the active audio.
+let silenceUrl = null;
+function silence() {
+    if (silenceUrl) return silenceUrl;
+    const samples = 16000;
+    const bytes = new Uint8Array(44 + samples).fill(128);
+    const view = new DataView(bytes.buffer);
+    const text = (at, value) => [...value].forEach((char, i) => view.setUint8(at + i, char.charCodeAt(0)));
+    text(0, 'RIFF'); view.setUint32(4, 36 + samples, true); text(8, 'WAVEfmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, 8000, true); view.setUint32(28, 8000, true); view.setUint16(32, 1, true); view.setUint16(34, 8, true);
+    text(36, 'data'); view.setUint32(40, samples, true);
+    silenceUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+    return silenceUrl;
+}
 
 // The unit playing at `ms`, and how far through it (0..1). A gap belongs to the unit before it.
 export function unitAt(timings, ms) {
@@ -64,9 +82,13 @@ export class Listener {
         this.pendingStart = null;  // seconds to seek to once the audio's metadata loads
         this.failed = false;
         this.key = storageKey;
+        this.held = null;          // { ms, timer } while paused on silence
+        this.holdMs = HOLD_MS;
     }
 
     get timings() { return this.chapters[this.index]?.timings || []; }
+
+    get playing() { return !!this.audio && !this.audio.paused && !this.held; }
 
     $(id) { return document.getElementById(id); }
 
@@ -102,7 +124,7 @@ export class Listener {
     }
 
     bindBar() {
-        this.$('listen-play').addEventListener('click', () => (this.audio && !this.audio.paused ? this.pause() : this.resume()));
+        this.$('listen-play').addEventListener('click', () => (this.playing ? this.pause() : this.resume()));
         this.$('listen-back').addEventListener('click', () => this.seekBy(-15));
         this.$('listen-fwd').addEventListener('click', () => this.seekBy(30));
         this.$('listen-next').addEventListener('click', () => this.nextChapter());
@@ -111,7 +133,7 @@ export class Listener {
         this.$('listen-here').addEventListener('click', () => this.listenFromReadingPosition());
         this.$('listen-resume').addEventListener('click', () => this.resumeSaved());
         this.$('listen-reload').addEventListener('click', () => location.reload());
-        this.$('listen-close').addEventListener('click', () => { this.pause(); this.showBar(false); });
+        this.$('listen-close').addEventListener('click', () => { this.pause(); this.stopSilence(); this.showBar(false); });
         window.addEventListener('pagehide', () => this.saveAll());
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.saveAll(); });
     }
@@ -173,11 +195,12 @@ export class Listener {
         const audio = new Audio();
         audio.preload = 'auto';
         try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* optional API */ }
-        audio.addEventListener('timeupdate', () => this.onTime());
-        audio.addEventListener('play', () => this.renderState());
-        audio.addEventListener('pause', () => { this.renderState(); this.saveAll(); });
-        audio.addEventListener('ended', () => this.nextChapter());
-        audio.addEventListener('error', () => this.fail(audio.error));
+        // While held, these events are the silence's, not the chapter's.
+        audio.addEventListener('timeupdate', () => { if (!this.held) this.onTime(); });
+        audio.addEventListener('play', () => { if (!this.held) this.renderState(); });
+        audio.addEventListener('pause', () => { if (!this.held) { this.renderState(); this.saveAll(); } });
+        audio.addEventListener('ended', () => { if (!this.held) this.nextChapter(); });
+        audio.addEventListener('error', () => { if (!this.held) this.fail(audio.error); });
         this.audio = audio;
         this.bindMediaSession();
         return audio;
@@ -188,7 +211,8 @@ export class Listener {
         if (!session) return;
         const handlers = {
             play: () => this.resume(),
-            pause: () => this.pause(),
+            // Playing silence can make the lock screen offer Pause; while held, either button means play.
+            pause: () => (this.held ? this.resume() : this.pause()),
             seekbackward: details => this.seekBy(-(details?.seekOffset || 15)),
             seekforward: details => this.seekBy(details?.seekOffset || 30),
             seekto: details => this.seekToMs((details?.seekTime || 0) * 1000),
@@ -205,6 +229,7 @@ export class Listener {
         const chapter = this.chapters[index];
         if (!chapter) return;
         const audio = this.ensureAudio();
+        this.endHold();
         this.index = index;
         this.unit = null;
         this.showBar(true);
@@ -280,20 +305,50 @@ export class Listener {
 
     resume() {
         if (!this.audio || this.index < 0) return this.resumeSaved();
+        if (this.held) return this.load(this.index, this.held.ms);
         return this.audio.play().catch(error => { if (error?.name !== 'AbortError') this.fail(error); });
     }
 
-    pause() { this.audio?.pause(); }
+    pause() {
+        if (!this.playing) return;
+        const ms = Math.round(this.audio.currentTime * 1000);
+        this.audio.pause();
+        this.held = { ms, timer: setTimeout(() => this.stopSilence(), this.holdMs) };
+        this.saveAll();
+        this.renderState();
+        this.audio.loop = true;
+        this.audio.src = silence();
+        // Without the silence the player is simply paused. Starting it marks the session as playing, so restate it.
+        this.audio.play().catch(() => {}).finally(() => { if (this.held && navigator.mediaSession) navigator.mediaSession.playbackState = 'paused'; });
+    }
+
+    stopSilence() {
+        if (!this.held) return;
+        clearTimeout(this.held.timer);
+        this.audio.pause();
+    }
+
+    endHold() {
+        if (this.held) clearTimeout(this.held.timer);
+        this.held = null;
+        if (this.audio) this.audio.loop = false;
+    }
 
     seekToMs(ms) {
         if (!this.audio) return;
+        if (this.held) {
+            this.held.ms = Math.max(0, Math.min(ms, this.chapters[this.index]?.duration_ms || 0));
+            this.dirty = true;
+            this.saveLocal();
+            return;
+        }
         const duration = Number.isFinite(this.audio.duration) ? this.audio.duration * 1000 : this.chapters[this.index]?.duration_ms || 0;
         this.audio.currentTime = Math.max(0, Math.min(ms, duration)) / 1000;
         this.dirty = true;
         this.onTime();
     }
 
-    seekBy(seconds) { if (this.audio) this.seekToMs(this.audio.currentTime * 1000 + seconds * 1000); }
+    seekBy(seconds) { if (this.audio) this.seekToMs((this.held ? this.held.ms : this.audio.currentTime * 1000) + seconds * 1000); }
 
     setRate(rate) {
         if (this.audio) { this.audio.playbackRate = rate; this.audio.defaultPlaybackRate = rate; }
@@ -303,7 +358,7 @@ export class Listener {
 
     async nextChapter() {
         this.saveServer();
-        if (this.index + 1 >= this.chapters.length) { this.pause(); this.renderState(); return; }
+        if (this.index + 1 >= this.chapters.length) { this.audio?.pause(); this.renderState(); return; }
         await this.load(this.index + 1, 0);
     }
 
@@ -314,7 +369,7 @@ export class Listener {
 
     position() {
         if (!this.audio || this.index < 0) return null;
-        const ms = Math.round(this.audio.currentTime * 1000);
+        const ms = this.held ? this.held.ms : Math.round(this.audio.currentTime * 1000);
         return { ms, ...unitAt(this.timings, ms), chapter_id: this.chapters[this.index].chapter_id };
     }
 
@@ -405,7 +460,7 @@ export class Listener {
     saveAll() { this.saveLocal(); this.saveServer(); }
 
     renderState() {
-        const playing = this.audio && !this.audio.paused;
+        const playing = this.playing;
         const button = this.$('listen-play');
         button.textContent = playing ? 'Pause' : 'Play';
         button.setAttribute('aria-label', playing ? 'Pause' : 'Play');

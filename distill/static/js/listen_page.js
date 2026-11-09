@@ -47,11 +47,11 @@ async function start() {
     const renderState = listener.renderState.bind(listener);
     listener.renderState = () => {
         renderState();
-        button.textContent = listener.audio && !listener.audio.paused ? 'Pause' : 'Listen';
+        button.textContent = listener.playing ? 'Pause' : 'Listen';
     };
     button.disabled = false;
     button.addEventListener('click', () => {
-        if (listener.audio && !listener.audio.paused) { listener.pause(); return; }
+        if (listener.playing) { listener.pause(); return; }
         listener.showBar(true);
         if (listener.index >= 0) listener.resume(); else listener.listenFromReadingPosition();
     });

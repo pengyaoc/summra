@@ -36,7 +36,7 @@ page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
 await page.goto(`${BASE}/login`);  // local auth is off: this signs in and returns to the library
 await page.waitForURL(`${BASE}/`);
-await page.waitForLoadState('networkidle');  // home's own audio lookups finish before the test navigates away
+await page.waitForFunction(() => !document.querySelector('[data-listen-book][disabled]'));  // home's own audio lookups finish before the test navigates away
 
 const book = await (await page.request.get(`${BASE}/api/books/${SLUG}/audio`)).json();
 check(book.chapters.length > 1, `book ${SLUG} has audio for ${book.chapters.length} chapters`);
@@ -69,7 +69,7 @@ await page.waitForSelector('#listen-follow', { state: 'visible', timeout: 3000 }
 check(await page.locator('#listen-follow').isVisible(), 'paging away by hand offers "Back to audio"');
 
 await page.locator('#listen-play').click();
-await page.waitForFunction(() => window.distillListener.audio.paused);
+await page.waitForFunction(() => window.distillListener.playing === false);
 const saved = await page.evaluate((id) => JSON.parse(localStorage.getItem(`distill-listen-${id}`) || 'null'), book.book_id);
 check(saved?.paragraph_id === second.paragraph_id && Math.abs(saved.ms - (second.start_ms + 100)) < 1500,
   `pause saves the place locally (${saved?.paragraph_id} @ ${saved?.ms} ms)`);
@@ -108,7 +108,7 @@ await page.waitForFunction((url) => window.distillListener.audio.src.endsWith(ur
   book.chapters[2].url, { timeout: 10000 }).catch(() => {});
 await page.evaluate(() => window.distillListener.pause());
 await page.waitForTimeout(800);
-check(await page.evaluate(() => window.distillListener.audio.paused), 'the player is paused');
+check(await page.evaluate(() => window.distillListener.playing === false), 'the player is paused');
 const hasQueue = await page.evaluate(() => {
   if (!window.authModule?.queueReaderMutation) return false;
   window.__causes = [];
