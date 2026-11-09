@@ -398,3 +398,31 @@ def test_main_reports_what_was_verified(db_path, monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert '3 row(s) changed' in out and '40 rows match' in out and '7 media files' in out
+
+
+def _old_audio_db():
+    import sqlite3
+    conn = sqlite3.connect(':memory:')
+    conn.execute('''CREATE TABLE chapter_audio (chapter_id INTEGER PRIMARY KEY, storage_key TEXT NOT NULL,
+        text_checksum TEXT NOT NULL, duration_ms INTEGER NOT NULL, voice TEXT NOT NULL, engine TEXT NOT NULL,
+        rate REAL, timings TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, deploy_key TEXT)''')
+    conn.execute("INSERT INTO chapter_audio (chapter_id, storage_key, text_checksum, duration_ms, voice, engine, timings, deploy_key) "
+                 "VALUES (7, 'a.m4a', 'c', 1, 'v', 'e', '[]', 'a.opus')")
+    return conn
+
+
+def test_a_snapshot_with_the_old_audio_key_is_migrated_before_comparing():
+    from distill.scripts.deploy_db import _ship_deploy_audio
+    conn = _old_audio_db()
+    _ship_deploy_audio(conn)
+    key = [row[1] for row in sorted((r for r in conn.execute('PRAGMA table_info(chapter_audio)') if r[5]), key=lambda r: r[5])]
+    assert key == ['chapter_id', 'mode']
+    assert conn.execute('SELECT mode, storage_key FROM chapter_audio').fetchall() == [('summary', 'a.opus')]
+
+
+def test_migrating_an_up_to_date_snapshot_changes_nothing():
+    from distill.scripts.deploy_db import _ship_deploy_audio
+    conn = _old_audio_db()
+    _ship_deploy_audio(conn)
+    _ship_deploy_audio(conn)
+    assert conn.execute('SELECT COUNT(*) FROM chapter_audio').fetchone() == (1,)

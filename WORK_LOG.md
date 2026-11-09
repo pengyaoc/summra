@@ -11587,3 +11587,5 @@ Not verified: iPhone behaviour (audio across a swap, lock screen). The owner wai
 Local style check against main: all reader variants identical. Home card differences come from this worktree's smaller reading history (1 continue card against 3), not code.
 
 Found in final checks: pressing Listen on a page that opens partway through a paragraph turned back a page, because the player reported 0:00 before its seek landed and the paragraph began on the page before. Now the position reports the seek target, and following never turns back for a paragraph already on screen (`reader_audio_stable.mjs`).
+
+Deploy: `deploy_db` failed its own read-back (3,990 rows) because the local DB still had the old audio key. It now migrates its snapshot before comparing (`test_deploy_db.py`).

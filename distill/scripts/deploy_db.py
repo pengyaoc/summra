@@ -19,6 +19,7 @@ import sys
 import shlex
 from pathlib import Path
 
+from shared.audio.store import create_audio_tables
 from distill import config
 from distill.scripts.db_patch import build_patch, patch_size, row_hashes
 from distill.scripts.media_transfer import media_archive, media_keys, verify_media
@@ -153,7 +154,10 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> dict:
 
 
 def _ship_deploy_audio(snapshot) -> None:
-    """Point the shipped DB's audio at the Opus files, so older chapters' AAC stays on the Mac."""
+    """Bring the shipped DB's audio table up to date and point it at the Opus files, so older chapters' AAC stays on the Mac."""
+    if 'chapter_audio' in {row[0] for row in snapshot.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
+        with snapshot:
+            create_audio_tables(snapshot)
     if 'deploy_key' in {row[1] for row in snapshot.execute('PRAGMA table_info(chapter_audio)')}:
         with snapshot:
             snapshot.execute('UPDATE chapter_audio SET storage_key = deploy_key WHERE deploy_key IS NOT NULL')
