@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% from '_cover.html' import cover with context %}
+{% from '_listen.html' import listen_button %}
 {% block lang %}{{ book.lang }}{% endblock %}
 {% block title %}{{ book.title }} · Distill{% endblock %}
 {% block content %}
 <main class="distill-main distill-book">
-    <a class="distill-back" href="{{ return_url }}">← Library</a>
+    <a class="distill-back" href="{{ return_url }}">Library</a>
     <section class="distill-book-head">
         {{ cover(book, eager=True) }}
         <div class="distill-book-info">
@@ -18,12 +19,14 @@
 {% elif label %}
             <p class="distill-progress">{{ label }}{% if percent %} · {{ percent }}%{% endif %}</p>
 {% endif %}
+            <div class="home-actions">
+                <a class="home-action home-action-primary" href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}">{{ 'Continue' if label else 'Start' }}</a>
+                {{ listen_button(book) }}
+            </div>
             <div class="distill-book-actions">
-            <a class="library-read-action" href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}">{{ 'Continue reading' if label else 'Start reading' }}<span aria-hidden="true">→</span></a>
 {% if card and card.status == 'finished' %}<a class="distill-restart" href="{{ base_path }}/books/{{ book.slug }}/read?restart=1&amp;return={{ return_url|urlencode }}">Read from beginning</a>{% endif %}
             <button type="button" class="distill-unfinish" data-book-id="{{ book.id }}" data-reading-status="{{ 'reading' if card and card.status == 'finished' else 'read' }}">{{ 'Mark unfinished' if card and card.status == 'finished' else 'Mark as read' }}</button>
             </div>
-            <a id="distill-resume-listening" class="distill-restart" hidden href="{{ base_path }}/books/{{ book.slug }}/read?return={{ return_url|urlencode }}"></a>
             <p id="distill-book-status" role="status"></p>
         </div>
     </section>
@@ -54,20 +57,12 @@
     </section>
     </div>
 </main>
+{% include '_listen_player.html' %}
 {% endblock %}
 
 {% block scripts %}
+{% include '_listen_scripts.html' %}
 <script>
-try {  // Distill Listen keeps its place on this device (see listen.js).
-    const listened = JSON.parse(localStorage.getItem('distill-listen-{{ book.id }}') || 'null');
-    const link = document.getElementById('distill-resume-listening');
-    if (listened?.title && link) {
-        const clock = `${Math.floor(listened.ms / 60000)}:${String(Math.floor(listened.ms / 1000) % 60).padStart(2, '0')}`;
-        link.textContent = `Resume listening · ${listened.title}, ${clock}`;
-        link.href += `&chapter=${listened.chapter_id}`;
-        link.hidden = false;
-    }
-} catch (_) { /* private mode */ }
 const unfinished = document.querySelector('.distill-unfinish');
 unfinished?.addEventListener('click', async () => {
     unfinished.disabled = true;

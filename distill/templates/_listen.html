@@ -1,0 +1,4 @@
+{# Listen button for a page outside the reader; js/listen_page.js enables it once the book's audio is known. #}
+{% macro listen_button(book) -%}
+<button type="button" class="home-action" data-listen-book="{{ book.id }}" data-listen-slug="{{ book.slug }}" data-listen-title="{{ book.title }}" data-listen-author="{{ book.author or '' }}" disabled>Listen</button>
+{%- endmacro %}

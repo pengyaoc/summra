@@ -1,40 +1,40 @@
 {% extends 'base.html' %}
-{% from 'shared/_library_card.html' import library_card with context %}
 {% from '_cover.html' import cover with context %}
+{% from '_listen.html' import listen_button %}
 {% block title %}Distill{% endblock %}
-{% block header_nav %}
-    <nav class="distill-tabs" aria-label="Bookshelf">
-        <a href="{{ base_path }}/?tab=reading"{% if tab == 'reading' %} aria-current="page"{% endif %}>Reading</a>
-        <a href="{{ base_path }}/?tab=library"{% if tab == 'library' %} aria-current="page"{% endif %}>Library</a>
-    </nav>
-{% endblock %}
+{% block header_nav %}{% if lead %}<a class="home-search-link" href="#library">Search</a>{% endif %}{% endblock %}
 {% block content %}
-<main class="distill-main">
+<main class="home{% if lead %} home-reading{% endif %}">
     <h1 class="distill-sr-only">Distill</h1>
-{% if tab == 'reading' %}
-    <section class="distill-section" aria-labelledby="reading-now-heading">
-{% if reading %}
-        <h2 id="reading-now-heading" class="distill-sr-only">Reading now</h2>
-        <div class="distill-reading-lead">{{ library_card(reading[0], cover(reading[0]), read_href=base_path ~ '/books/' ~ reading[0].slug ~ '/read?return=' ~ (return_url|urlencode)) }}</div>
-{% if reading|length > 1 %}        <div class="library-cards">
-{% for card in reading[1:] %}
-            {{ library_card(card, cover(card), read_href=base_path ~ '/books/' ~ card.slug ~ '/read?return=' ~ (return_url|urlencode)) }}
-{% endfor %}
+{% if lead %}
+    <section class="home-now" aria-label="Reading now">
+        <a class="home-book" lang="{{ lead.lang or 'en' }}" href="{{ base_path }}/books/{{ lead.slug }}?return={{ return_url|urlencode }}">
+            {{ cover(lead, eager=True) }}
+            <span class="home-book-text"><h2>{{ lead.title }}</h2>{% if lead.author and lead.author|trim %}<span class="home-author">{{ lead.author }}</span>{% endif %}</span>
+        </a>
+        <div class="home-progress" role="img" aria-label="{{ lead.furthest_percentage or 0 }}% read"><span style="width: {{ lead.furthest_percentage or 0 }}%"></span></div>
+        <p class="home-where">{% if lead.current_chapter %}{{ lead.current_chapter.chapter_title }}, about{% else %}About{% endif %} {{ lead_minutes_left }} min left</p>
+        <div class="home-actions">
+            <a class="home-action home-action-primary" href="{{ base_path }}/books/{{ lead.slug }}/read?return={{ return_url|urlencode }}">Continue</a>
+            {{ listen_button(lead) }}
         </div>
-{% endif %}
-{% else %}
-        <h2 id="reading-now-heading" class="distill-sr-only">Reading</h2>
-        <div class="distill-empty"><h3>Nothing in progress.</h3><p>Pick your next book from your Library.</p><a href="{{ base_path }}/?tab=library">Go to Library</a></div>
+{% if also_reading %}
+        <h2 class="home-also-heading">Also reading</h2>
+        <ul class="home-also">
+{% for card in also_reading %}
+            <li><a href="{{ base_path }}/books/{{ card.slug }}?return={{ return_url|urlencode }}" lang="{{ card.lang or 'en' }}">{{ cover(card) }}<span><strong>{{ card.title }}</strong><small>{{ card.furthest_percentage or 0 }}% read</small></span></a></li>
+{% endfor %}
+        </ul>
 {% endif %}
     </section>
-{% else %}
-    <section class="distill-section" aria-labelledby="library-heading">
-        <div class="distill-shelf-heading"><h2 id="library-heading">Library</h2>
-            <p role="status">{{ books|length }}{% if query or language or category or status or sort != 'newest' %} of {{ total_books }}{% endif %} {{ 'book' if total_books == 1 else 'books' }}</p>
+{% endif %}
+    <section class="home-library" id="library" aria-labelledby="library-heading">
+        <div class="distill-shelf-heading"><h2 id="library-heading">All {{ total_books }} {{ 'book' if total_books == 1 else 'books' }}</h2>
+            {% if query or language or category or status or sort != 'newest' %}<p role="status">{{ books|length }} of {{ total_books }} {{ 'book' if total_books == 1 else 'books' }}</p>{% endif %}
         </div>
         <nav class="distill-status-switch" aria-label="Show books">{% for value, text, href in status_links %}<a href="{{ href }}"{% if status == value %} aria-current="page"{% endif %}>{{ text }}</a>{% endfor %}</nav>
-        <form class="distill-filters" action="{{ base_path }}/" method="get" role="search" aria-label="Find books">
-            <input type="hidden" name="tab" value="library">{% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+        <form class="distill-filters" action="{{ base_path }}/#library" method="get" role="search" aria-label="Find books">
+            {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
             <div class="distill-search-wrap">
             <label class="distill-search"><span class="distill-sr-only">Search books or authors</span>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -62,27 +62,27 @@
             </select></label>
             </div>
         </form>
-        {% if query or language or category or status or sort != 'newest' %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}{% if status %} · {{ {'unread': 'Unread', 'reading': 'Reading', 'finished': 'Finished'}[status] }}{% endif %}{% if sort != 'newest' %} · {{ {'title': 'Title order', 'author': 'Author order', 'shortest': 'Shortest first'}[sort] }}{% endif %}</span><a href="{{ base_path }}/?tab=library">Clear filters</a></div>{% endif %}
+        {% if query or language or category or status or sort != 'newest' %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}{% if status %} · {{ {'unread': 'Unread', 'reading': 'Reading', 'finished': 'Finished'}[status] }}{% endif %}{% if sort != 'newest' %} · {{ {'title': 'Title order', 'author': 'Author order', 'shortest': 'Shortest first'}[sort] }}{% endif %}</span><a href="{{ base_path }}/#library">Clear filters</a></div>{% endif %}
         <div class="distill-grid">
 {% for book in books %}
             <a class="distill-tile" lang="{{ book.lang }}" href="{{ base_path }}/books/{{ book.slug }}?return={{ return_url|urlencode }}">
                 {{ cover(book) }}
                 <h3>{{ book.title }}</h3>
-                {% if book.author and book.author|trim %}<p>{{ book.author }}</p>{% endif %}
-                <span class="distill-book-meta">{{ '中文' if book.lang == 'zh' else 'English' if book.lang == 'en' else book.lang }} <span aria-hidden="true">·</span> {{ book_categories(book)|first }} · About {{ minutes[book.id] }} min{% if states.get(book.id) == 'finished' %} · <strong>Finished</strong>{% elif states.get(book.id) == 'reading' %} · Reading{% endif %}</span>
+                <span class="distill-book-meta">About {{ minutes[book.id] }} min{% if states.get(book.id) == 'finished' %}, <strong>finished</strong>{% elif states.get(book.id) == 'reading' %}, reading{% endif %}</span>
             </a>
 {% else %}
             <div class="distill-empty"><h3>{{ 'No books match your filters.' if total_books else 'Your bookshelf is ready.' }}</h3>
             <p>{{ 'Try another title, author, language or category.' if total_books else 'Your imported books will appear here.' }}</p>
-            {% if total_books %}<a href="{{ base_path }}/?tab=library">Show all books</a>{% endif %}</div>
+            {% if total_books %}<a href="{{ base_path }}/#library">Show all books</a>{% endif %}</div>
 {% endfor %}
         </div>
     </section>
-{% endif %}
 </main>
+{% include '_listen_player.html' %}
 {% endblock %}
 
 {% block scripts %}
+{% if lead %}{% include '_listen_scripts.html' %}{% endif %}
 <script id="distill-search-catalog" type="application/json">{{ search_catalog | tojson }}</script>
 <script>
 (function () {

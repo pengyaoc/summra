@@ -183,21 +183,12 @@ try {
   // --- Library -> book page -> reader -------------------------------------
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   check(await page.locator('.distill-tile').count() > 0, 'library lists books');
-  // Tabs on top everywhere; filters visible on desktop and behind a button on phones.
-  check(await page.locator('.distill-tabs a').count() === 2, 'Reading and Library tabs show');
-  const tabsBottom = (await page.locator('.distill-tabs').boundingBox()).y;
-  const onOneLine = async () => {
-    const icon = await page.locator('.distill-wordmark').boundingBox();
-    const tabs = await page.locator('.distill-tabs').boundingBox();
-    return tabs.y < icon.y + icon.height && icon.y < tabs.y + tabs.height && tabs.x >= icon.x + icon.width;
-  };
-  check(await onOneLine(), 'desktop: tabs share the line with the icon');
-  check(tabsBottom < (await page.locator('.distill-tile').first().boundingBox()).y, 'tabs sit above the books');
+  check(await page.locator('.distill-tabs').count() === 0, 'no tabs');
+  check(await page.locator('#library .distill-grid').count() === 1, 'home holds the whole library');
   const panel = page.locator('.distill-filter-panel');
   check(await panel.isVisible() && await page.locator('.distill-filter-toggle').isHidden(), 'desktop: filters stay visible');
   const desktopSize = page.viewportSize();
   await page.setViewportSize({ width: 375, height: 667 });
-  check(await onOneLine(), 'phone: tabs share the line with the icon');
   check(await panel.isHidden(), 'phone: filters start hidden');
   await page.locator('.distill-filter-toggle').click();
   check(await panel.isVisible(), 'phone: the Filters button opens them');
@@ -205,8 +196,8 @@ try {
   await page.selectOption('select[name="lang"]', 'en');
   await page.waitForURL(/lang=en/);
   check(await page.locator('.distill-tile[lang="zh"]').count() === 0, 'choosing a filter applies at once');
-  check(/tab=library/.test(page.url()), 'a filter stays on Library');
-  await page.goto(`${BASE}/?tab=library`, { waitUntil: 'networkidle' });
+  check(new URL(page.url()).hash === '#library', 'a filter returns to the library section');
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   check(await page.locator('.distill-tile .distill-cover').count() === await page.locator('.distill-tile').count(), 'every book has a cover image or placeholder');
   await page.emulateMedia({ colorScheme: 'dark' });
   check(await page.evaluate(() => getComputedStyle(document.body).colorScheme.includes('light') && getComputedStyle(document.body).backgroundColor === 'rgb(246, 241, 231)'), 'home stays daylight with an OS dark preference');
@@ -243,7 +234,7 @@ try {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.screenshot({ path: `${SHOTS}distill_book.png`, fullPage: false });
 
-  await page.click('a.library-read-action');
+  await page.click('a.home-action-primary');
   await anchorsReady();
   check(new URL(page.url()).pathname.endsWith(`/books/${SLUG}/read`), 'read link opens the reader');
   check(await page.locator('#continuous-reader-content [data-reader-anchor]').count() > 0, 'reader shows anchored blocks');
@@ -306,8 +297,35 @@ try {
 
   // --- Library shows it under Reading now ---------------------------------
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
-  check(await page.locator(`a.library-card[href*="/books/${SLUG}/read?"]`).count() === 1, 'library lists the book under Reading now');
-  check(/Chapter \d+ of \d+|Overview/.test(await page.locator('.library-card-location').first().innerText()), 'Reading now card shows the progress label');
+  check(await page.locator(`.home-now a.home-action-primary[href*="/books/${SLUG}/read?"]`).count() === 1, 'home leads with the book in progress');
+  check(/(Chapter \d+ of \d+|Overview).*min left/.test(await page.locator('.home-where').innerText()), 'home shows where you are and the time left');
+  check(await page.locator('.home-now').evaluate(el => el.compareDocumentPosition(document.getElementById('library')) & Node.DOCUMENT_POSITION_FOLLOWING), 'library follows the current book');
+  const sideBySide = async () => {
+    const [a, b] = await page.locator('.home-now .home-action').all();
+    const [x, y] = [await a.boundingBox(), await b.boundingBox()];
+    return Math.abs(x.y - y.y) < 2 && Math.abs(x.width - y.width) < 2;
+  };
+  check(await sideBySide(), 'desktop: Continue and Listen are side by side, the same size');
+  const desk = await page.evaluate(() => { const n = document.querySelector('.home-now').getBoundingClientRect(), l = document.getElementById('library').getBoundingClientRect(); return { beside: l.left >= n.right - 1, top: Math.abs(l.top - n.top) < 2, width: l.width }; });
+  check(desk.beside && desk.top && desk.width > 700, `desktop: book on the left, library fills the rest (${JSON.stringify(desk)})`);
+  await page.evaluate(() => scrollTo(0, 800));
+  await page.waitForTimeout(100);
+  check(Math.abs(await page.locator('.home-now').evaluate(el => el.getBoundingClientRect().top)) < 2, 'desktop: the book stays put while the library scrolls');
+  await page.screenshot({ path: `${SHOTS}distill_home_desktop.png` });
+  await page.evaluate(() => scrollTo(0, 0));
+  const deskSize = page.viewportSize();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `home fits ${width}px`);
+    check(await sideBySide(), `${width}px: Continue and Listen are side by side`);
+    check(await page.locator('.home-now .home-action').first().evaluate(el => el.getBoundingClientRect().bottom <= innerHeight), `${width}px: Continue is on the first screen`);
+  }
+  await page.locator('.home-search-link').click();
+  await page.waitForTimeout(100);
+  check(Math.abs(await page.locator('#library').evaluate(el => el.getBoundingClientRect().top)) < 2, 'phone: Search jumps to the library');
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({ path: `${SHOTS}distill_home_phone.png` });
+  await page.setViewportSize(deskSize);
   await page.screenshot({ path: `${SHOTS}distill_library_reading_now.png` });
 
   // --- Cache isolation from Plainly (same origin in production) -----------

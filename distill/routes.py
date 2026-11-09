@@ -90,6 +90,11 @@ def progress_label(card, chapter_count) -> str:
     return f"Chapter {chapter['chapter_number']} of {chapter_count}"
 
 
+def minutes_left(total_minutes, percent) -> int:
+    """Reading time still ahead in a book, never less than a minute."""
+    return max(1, math.ceil(total_minutes * (100 - (percent or 0)) / 100))
+
+
 def _db():
     return current_app.config['CONTENT_DB']
 
@@ -182,14 +187,10 @@ def library():
     states = {card['id']: ('finished' if card['status'] == 'finished' else 'reading')
               for card in cards['continue_reading'] + cards['finished']}
     reading = reading_cards(db, g.user_id, books, cards['continue_reading'])
-    tab = request.args.get('tab')
-    if tab not in ('reading', 'library'):
-        filtering = any(key in request.args for key in ('q', 'lang', 'category', 'status', 'sort'))
-        tab = 'reading' if reading and not filtering else 'library'
     # The All / Unread / Finished switch keeps the other filters in place.
     kept = {key: value for key, value in (('q', query), ('lang', language), ('category', category), ('sort', sort))
             if value and not (key == 'sort' and value == 'newest')}
-    status_links = [(value, text, url_for('distill.library', tab='library', **kept, **({'status': value} if value else {})))
+    status_links = [(value, text, url_for('distill.library', _anchor='library', **kept, **({'status': value} if value else {})))
                     for value, text in (('', 'All'), ('unread', 'Unread'), ('finished', 'Finished'))]
     minutes = reading_estimates(db, books)
     filtered = [book for book in books
@@ -205,7 +206,10 @@ def library():
     # selected shelf available when editing a previously submitted search.
     search_catalog = [{key: book.get(key) or '' for key in ('title', 'author', 'slug', 'lang')}
                       for book in filtered]
-    return render_template('library.html', tab=tab, reading=reading, status_links=status_links,
+    lead = reading[0] if reading else None
+    lead_minutes_left = minutes_left(minutes[lead['id']], lead.get('furthest_percentage')) if lead else 0
+    return render_template('library.html', lead=lead, also_reading=reading[1:], lead_minutes_left=lead_minutes_left,
+                           status_links=status_links,
                            states=states, minutes=minutes, status=status, sort=sort,
                            return_url=request.script_root + request.full_path.rstrip('?'), books=shown,
                            total_books=len(books), categories=categories, query=query,

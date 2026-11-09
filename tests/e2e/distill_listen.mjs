@@ -36,6 +36,7 @@ page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
 await page.goto(`${BASE}/login`);  // local auth is off: this signs in and returns to the library
 await page.waitForURL(`${BASE}/`);
+await page.waitForLoadState('networkidle');  // home's own audio lookups finish before the test navigates away
 
 const book = await (await page.request.get(`${BASE}/api/books/${SLUG}/audio`)).json();
 check(book.chapters.length > 1, `book ${SLUG} has audio for ${book.chapters.length} chapters`);
