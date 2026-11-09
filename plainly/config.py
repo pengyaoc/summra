@@ -10,6 +10,7 @@ BASE_DIR = Path(__file__).parent.parent
 
 # Database
 DATABASE_PATH = BASE_DIR / 'data' / 'database.db'
+AUDIO_MEDIA_DIR = BASE_DIR / 'data' / 'plainly-media'
 USER_DATABASE_PATH = BASE_DIR / 'data' / 'summra.db'
 
 # Data directories

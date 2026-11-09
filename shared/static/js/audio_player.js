@@ -81,6 +81,7 @@ export class AudioPlayer {
 
     // The source's tracks must already be loaded: iOS only starts audio inside the tap.
     setSource(source) {
+        if (this.source !== source) this.source?.finish?.();
         this.source = source;
         this.tracks = source.tracks;
         this.index = -1;
@@ -121,15 +122,15 @@ export class AudioPlayer {
     }
 
     // Load track `index` at `ms` and play. Resolves once playback was requested.
-    async load(index, ms) {
+    async load(index, ms, { part = 0, partOffset = 0 } = {}) {
         const track = this.tracks[index];
         if (!track) return;
         const audio = this.ensureAudio();
         this.endHold();
         this.index = index;
         this.unit = null;
-        this.part = 0;
-        this.partOffset = 0;
+        this.part = part;
+        this.partOffset = partOffset;
         this.message = '';
         this.needsSignIn = false;
         this.failed = false;
@@ -140,11 +141,11 @@ export class AudioPlayer {
             });
         }
         const rate = this.source?.place?.saved()?.rate || audio.playbackRate || 1;
-        audio.src = track.urls[0];
+        audio.src = track.urls[part];
         audio.defaultPlaybackRate = rate;
         audio.playbackRate = rate;
         const limit = track.durationMs ?? Infinity;
-        const start = Math.max(0, Math.min(ms, limit)) / 1000;
+        const start = Math.max(0, Math.min(ms, limit) / 1000 - partOffset);
         // play() runs now, inside the tap (iOS refuses it later); the seek waits for metadata.
         this.pendingStart = start > 0 ? start : null;
         if (start > 0) {
@@ -157,7 +158,7 @@ export class AudioPlayer {
 
     resume() {
         if (!this.audio || this.index < 0) return Promise.resolve();
-        if (this.held) return this.load(this.index, this.held.ms);
+        if (this.held) return this.load(this.index, this.held.ms, { part: this.part, partOffset: this.partOffset });
         return this.audio.play().catch(error => { if (error?.name !== 'AbortError') this.fail(error); });
     }
 
@@ -192,6 +193,7 @@ export class AudioPlayer {
         this.saveAll();
         this.endHold();
         this.audio?.pause();
+        this.source?.finish?.();
         this.index = -1;
         this.unit = null;
         this.message = '';
@@ -226,7 +228,7 @@ export class AudioPlayer {
 
     async nextTrack() {
         this.saveServer();
-        if (this.index + 1 >= this.tracks.length) { this.audio?.pause(); this.renderState(); return; }
+        if (this.index + 1 >= this.tracks.length) { this.audio?.pause(); this.source?.finish?.(); this.renderState(); return; }
         await this.load(this.index + 1, 0);
     }
 
@@ -240,8 +242,9 @@ export class AudioPlayer {
         if (track && this.part + 1 < track.urls.length) {
             this.partOffset += Number.isFinite(this.audio.duration) ? this.audio.duration : 0;
             this.part += 1;
-            await track.waitForPart?.(this.part);
+            const ready = await track.waitForPart?.(this.part);
             if (this.track !== track) return;
+            if (ready === false) return this.fail(new Error('part not ready'));
             this.audio.src = track.urls[this.part];
             this.audio.play().catch(error => { if (error?.name !== 'AbortError') this.fail(error); });
             return;

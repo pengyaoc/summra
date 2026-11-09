@@ -10,6 +10,9 @@ from typing import Optional, List, Dict
 
 from plainly import config
 from plainly.study_cues import add_book_cues, add_chapter_cues
+from shared.audio.spoken import SpokenUnit
+from shared.audio.store import AudioStoreMixin, create_audio_tables
+from shared.media import MediaStore
 from shared.reader.index import ReaderIndexMixin, create_reader_revisions, create_reader_tables
 
 # Private column for chapter-list metadata, turned into reading_minutes /
@@ -41,13 +44,14 @@ def slugify(text: str) -> str:
     return text
 
 
-class Database(ReaderIndexMixin):
+class Database(ReaderIndexMixin, AudioStoreMixin):
     """Database handler for Plainly"""
 
     _reader_revision_tracking = True
 
     def __init__(self, db_path: Path = config.DATABASE_PATH):
         self.db_path = db_path
+        self.media = MediaStore(config.AUDIO_MEDIA_DIR)
         self.init_db()
 
     def get_connection(self):
@@ -223,6 +227,7 @@ class Database(ReaderIndexMixin):
         # `chapters` on read with the same function that compiled the units.
         # One version row per book; a recompile replaces its units.
         create_reader_tables(cursor)
+        create_audio_tables(conn)
         # Migrating from the old per-version tables: continue each book's
         # version numbering so markers saved before the migration are seen as
         # stale (and recovered by quote) rather than as current.
@@ -625,6 +630,13 @@ class Database(ReaderIndexMixin):
         conn.close()
 
         return chapter_id
+
+    def audio_spoken_units(self, chapter: Dict, mode: str) -> List[SpokenUnit]:
+        """What a chapter's recording in `mode` says, one entry per reader unit."""
+        with self.get_connection() as conn:
+            verse = bool(conn.execute('SELECT is_poetry FROM books WHERE id = ?', (chapter['book_id'],)).fetchone()[0])
+        texts = self._reader_chapter_units(chapter, verse, True).get(mode) or []
+        return [SpokenUnit(f"{chapter['id']}.{ordinal}", [text]) for ordinal, text in enumerate(texts) if text]
 
     def get_chapters(self, book_id: int) -> List[Dict]:
         """Get all chapters for a book"""

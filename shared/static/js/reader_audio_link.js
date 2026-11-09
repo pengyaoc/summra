@@ -147,12 +147,13 @@ const HEADPHONES = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-
 
 export class ReaderAudioLink {
     // book: { id, slug, title, author, cover? }; audioApi: URL of the book's recordings
-    constructor(player, reader, { book, mode, storageKey, audioApi, ui }) {
+    constructor(player, reader, { book, mode, storageKey, audioApi, ui, highlightCell = null }) {
         this.player = player;
         this.reader = reader;
         this.book = book;
         this.mode = mode;
         this.ui = ui;
+        this.highlightCell = highlightCell;  // in side-by-side, the column the audio reads
         const playing = player.source?.book.id === book.id ? player.source : null;
         this.place = playing?.place || new PlaceKeeper({ bookId: book.id, mode, storageKey });
         this.source = playing || new RecordedBookSource({ audioApi, book, place: this.place });
@@ -277,9 +278,13 @@ export class ReaderAudioLink {
         if (!content) return;
         const unit = this.matches ? this.player.unit : null;
         for (const element of content.querySelectorAll('.listen-current')) {
-            if (element.dataset.readerAnchor !== unit) element.classList.remove('listen-current');
+            if (element.closest('[data-reader-anchor]')?.dataset.readerAnchor !== unit) element.classList.remove('listen-current');
         }
-        if (unit) for (const element of content.querySelectorAll(`[data-reader-anchor="${unit}"]`)) element.classList.add('listen-current');
+        if (!unit) return;
+        for (const anchor of content.querySelectorAll(`[data-reader-anchor="${unit}"]`)) {
+            const column = this.highlightCell && anchor.querySelector(`.side-by-side-cell.${this.highlightCell}`);
+            (column || anchor).classList.add('listen-current');
+        }
     }
 
     // Show the page holding the spoken unit (loading its section if needed).

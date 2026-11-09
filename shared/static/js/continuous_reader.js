@@ -88,6 +88,7 @@ export const continuousReaderMixin = {
         await this.loadContinuousReaderAt(this.continuousReader.currentMarker, chapterId);
         clearTimeout(skeletonTimer);
         content?.querySelector('.reader-skeleton')?.remove();
+        this.onContinuousReaderReady?.();
     },
 
     readerSkeletonHtml() {
@@ -128,6 +129,7 @@ export const continuousReaderMixin = {
         reader.currentMarker = destination;
         reader.forwardTurn = false;
         await this.loadContinuousReaderAt(destination, destination?.chapter_id || previousMarker?.chapter_id);
+        this.onContinuousReaderReady?.();
     },
 
     async enforceContinuousReaderViewport() {
@@ -473,6 +475,7 @@ export const continuousReaderMixin = {
     // Release scrolling synchronously, before waiting for persistence or a
     // document navigation. Both SPA hosts and full-page hosts use this exit.
     leaveContinuousReader(cause = 'navigation') {
+        this.onContinuousReaderLeft?.();
         const saving = this.saveContinuousReader(cause);
         const reader = this.continuousReader;
         if (reader) {

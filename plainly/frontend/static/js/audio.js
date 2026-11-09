@@ -1,181 +1,78 @@
-// Audio/TTS playback mixin for SummraApp — the persistent audio player,
-// chunked-audio streaming playback, and TTS text-generation flow.
-// Extracted from app.js (Phase 4b continuation); merged onto
-// SummraApp.prototype via Object.assign in app.js, so every method still
-// reads/writes `this.*` exactly as before the split.
+// Audio for SummraApp: Plainly's Listen buttons, its generated summary speech, and
+// the link between the shared audio player and the shared reader. The player itself
+// lives in shared/js. Merged onto SummraApp.prototype in app.js.
+import { AudioPlayer } from '../shared/js/audio_player.js';
+import { PlayerUI } from '../shared/js/player_ui.js';
+import { ReaderAudioLink } from '../shared/js/reader_audio_link.js';
+import { GeneratedSpeechSource } from './generated_speech_source.js';
+
 export const audioMixin = {
     setupPersistentPlayer() {
-        const persistentAudio = document.getElementById('persistent-audio-element');
-        const playPauseBtn = document.getElementById('player-play-pause');
-        const stopBtn = document.getElementById('player-stop');
-        const progressBar = document.querySelector('.progress-bar');
-        const progressFill = document.getElementById('progress-fill');
-        const currentTimeSpan = document.getElementById('current-time');
-        const totalTimeSpan = document.getElementById('total-time');
-
-        playPauseBtn.addEventListener('click', () => {
-            if (persistentAudio.paused) {
-                persistentAudio.play();
-                this.currentPlayback.isPlaying = true;
-            } else {
-                persistentAudio.pause();
-                this.currentPlayback.isPlaying = false;
-            }
-        });
-
-        // The player's play/pause icon and the summary's Listen button both
-        // follow the audio element, wherever playback was started or paused.
-        const syncControls = () => {
-            this.renderPlayerPlayPause(!persistentAudio.paused);
-            this.renderListenButton();
-        };
-        ['play', 'pause', 'emptied', 'ended'].forEach(event => persistentAudio.addEventListener(event, syncControls));
-        this.renderPlayerPlayPause(false);
-
-        stopBtn.addEventListener('click', () => {
-            this.stopPlayback();
-        });
-
-        progressBar.addEventListener('click', (e) => {
-            const rect = progressBar.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
-            persistentAudio.currentTime = percent * persistentAudio.duration;
-        });
-
-        persistentAudio.addEventListener('timeupdate', () => {
-            if (persistentAudio.duration) {
-                const percent = (persistentAudio.currentTime / persistentAudio.duration) * 100;
-                progressFill.style.width = `${percent}%`;
-                currentTimeSpan.textContent = this.formatTime(persistentAudio.currentTime);
-                totalTimeSpan.textContent = this.formatTime(persistentAudio.duration);
-            }
-        });
-
-        persistentAudio.addEventListener('ended', () => {
-            this.handleAudioEnded();
-        });
-
-        persistentAudio.addEventListener('loadedmetadata', () => {
-            totalTimeSpan.textContent = this.formatTime(persistentAudio.duration);
-        });
+        this.audioPlayer = new AudioPlayer();
+        this.playerUI = new PlayerUI(this.audioPlayer, { coverFor: track => track.cover });
+        this.audioPlayer.subscribe(what => { if (what !== 'time') this.renderListenButton(); });
+        const app = this;
+        window.plainlyAudio = { player: this.audioPlayer, ui: this.playerUI, get link() { return app.readerAudioLink; } };
     },
 
-    renderPlayerPlayPause(playing) {
-        const button = document.getElementById('player-play-pause');
-        if (!button) return;
-        button.innerHTML = playing
-            ? '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>'
-            : '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>';
-        button.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-        button.title = playing ? 'Pause' : 'Play';
+    // The reader is open, or changed mode: connect it to any recording of what is on screen.
+    async onContinuousReaderReady() {
+        this.readerAudioLink?.detach();
+        this.readerAudioLink = null;
+        const opening = (this.readerAudioOpening = {});
+        const state = this.continuousReader;
+        const book = this.currentBook;
+        const slug = book.slug || this.slugify(book.title);
+        const audioMode = state.mode === 'side_by_side' ? await this.sideBySideAudioMode(slug) : state.mode;
+        if (opening !== this.readerAudioOpening || !this.continuousReader?.active) return;
+        const member = this.readerMode(state.mode)?.members?.find(item => item.id === audioMode);
+        const link = new ReaderAudioLink(this.audioPlayer, this, {
+            book: { id: book.id, slug, title: book.title, author: book.author, cover: this.bookCoverUrl(book) },
+            mode: state.mode,
+            storageKey: `plainly-listen-${book.id}-${audioMode}`,
+            audioApi: `/api/books/${slug}/audio?mode=${audioMode}`,
+            ui: this.playerUI,
+            highlightCell: member?.cell_class || null,
+        });
+        this.readerAudioLink = link;
+        await link.attach();
     },
 
-    formatTime(seconds) {
-        if (isNaN(seconds)) return '0:00';
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    onContinuousReaderLeft() {
+        this.readerAudioOpening = null;
+        this.readerAudioLink?.detach();
+        this.readerAudioLink = null;
     },
 
-    async stopPlayback() {
-        const persistentAudio = document.getElementById('persistent-audio-element');
-        const persistentPlayer = document.getElementById('persistent-player');
-
-        persistentAudio.pause();
-        persistentAudio.currentTime = 0;
-        persistentAudio.src = '';
-
-        const audioIdToCleanup = this.currentPlayback.audioId;
-
-        this.currentPlayback = {
-            isPlaying: false,
-            currentChunk: 0,
-            audioUrls: [],
-            bookTitle: '',
-            chapterTitle: '',
-            audioId: null
-        };
-
-        persistentPlayer.classList.add('hidden');
-        this.renderPlayerPlayPause(false);
-        this.renderListenButton();
-
+    // Side by side reads the Plain English recording if there is one, otherwise the original.
+    async sideBySideAudioMode(slug) {
         try {
-            await fetch(`${this.apiBase}/tts/stop`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audio_id: audioIdToCleanup })
-            });
-        } catch (error) {
-            console.error('Error stopping TTS:', error);
-        }
+            const response = await fetch(withBasePath(`/api/books/${slug}/audio?mode=plain`));
+            const data = response.ok ? await response.json() : null;
+            return data?.chapters?.length ? 'plain' : 'original';
+        } catch (_) { return 'original'; }
     },
 
-    async handleAudioEnded() {
-        this.currentPlayback.currentChunk++;
-        if (this.currentPlayback.currentChunk < this.currentPlayback.audioUrls.length) {
-            await this.playNextChunk();
-        } else {
-            this.currentPlayback.isPlaying = false;
-
-            const audioIdToCleanup = this.currentPlayback.audioId;
-            if (audioIdToCleanup) {
-                try {
-                    await fetch(`${this.apiBase}/tts/stop`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ audio_id: audioIdToCleanup })
-                    });
-                } catch (error) {
-                    console.error('Error cleaning up:', error);
-                }
-            }
-        }
+    bookCoverUrl(book) {
+        return book?.cover_image_url ? window.location.origin + this.coverSources(book.cover_image_url).jpg : null;
     },
 
-    async playNextChunk() {
-        const persistentAudio = document.getElementById('persistent-audio-element');
-        const chunkUrl = this.currentPlayback.audioUrls[this.currentPlayback.currentChunk];
-        const chunkIndex = this.currentPlayback.currentChunk;
-
-        if (chunkIndex > 0) {
-            const isReady = await this.waitForChunk(chunkUrl);
-            if (!isReady) {
-                alert(`Audio playback failed: Chunk ${chunkIndex + 1} could not be loaded.`);
-                await this.stopPlayback();
-                return;
-            }
-        }
-
-        persistentAudio.src = chunkUrl;
-
-        // Update MediaSession metadata for Bluetooth/lock screen
-        this.updateMediaSessionMetadata();
-
-        try {
-            await persistentAudio.play();
-            this.currentPlayback.isPlaying = true;
-        } catch (error) {
-            // A pause (or a new source) before playback starts rejects
-            // play() with AbortError; that's the reader's choice, not a failure.
-            if (error.name === 'AbortError') return;
-            console.error('Error playing chunk:', error);
-            alert('Failed to play audio chunk.');
-            await this.stopPlayback();
-        }
+    stopGeneratedSpeech(audioId) {
+        fetch(`${this.apiBase}/tts/stop`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio_id: audioId }),
+        }).catch(error => console.error('Error stopping TTS:', error));
     },
 
-    async waitForChunk(url, retries = 30) {
-        for (let i = 0; i < retries; i++) {
-            try {
-                const response = await fetch(url, { method: 'HEAD' });
-                if (response.ok) return true;
-            } catch (error) {
-                // Chunk not ready yet
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        return false;
+    playGeneratedSpeech(audioUrls, title, audioId) {
+        const book = this.currentBook;
+        const source = new GeneratedSpeechSource({
+            urls: audioUrls, bookId: book.id, bookTitle: book.title, author: book.author, title, audioId,
+            cover: this.bookCoverUrl(book), onFinish: () => this.stopGeneratedSpeech(audioId),
+        });
+        this.audioPlayer.setSource(source);
+        return this.audioPlayer.load(0, 0);
     },
 
     updateSummaryTTSButton() {
@@ -200,9 +97,9 @@ export const audioMixin = {
     // Listen toggles the summary's audio if it's already loaded in the
     // player; otherwise it starts it.
     onListenClick(type, content) {
-        const audio = document.getElementById('persistent-audio-element');
         if (this.isListenLoaded(type)) {
-            if (audio.paused) audio.play(); else audio.pause();
+            const player = this.audioPlayer;
+            if (player.playing) player.pause(); else player.resume();
             return;
         }
         this.generateTTS(content, type);
@@ -210,7 +107,7 @@ export const audioMixin = {
 
     isListenLoaded(type) {
         const id = this.listenAudioIds?.[`${this.currentBook?.id}:${type}`];
-        return !!id && this.currentPlayback?.audioId === id;
+        return !!id && this.audioPlayer?.active && this.audioPlayer.source?.audioId === id;
     },
 
     // Listen → Preparing… → Pause / Resume. The book page's button follows
@@ -225,14 +122,13 @@ export const audioMixin = {
     },
 
     renderListenButtonState(button, type) {
-        const audio = document.getElementById('persistent-audio-element');
         const icons = {
             play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>',
             pause: '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/>',
         };
         let state = 'idle';
         if (this.listenLoading === type) state = 'loading';
-        else if (this.isListenLoaded(type)) state = audio && !audio.paused ? 'playing' : 'paused';
+        else if (this.isListenLoaded(type)) state = this.audioPlayer.playing ? 'playing' : 'paused';
         const label = { idle: 'Listen', loading: 'Preparing…', playing: 'Pause', paused: 'Resume' }[state];
         const icon = state === 'loading'
             ? '<span class="listen-spinner" aria-hidden="true"></span>'
@@ -274,13 +170,7 @@ export const audioMixin = {
                 const audioUrls = data.streaming && data.audio_urls ? data.audio_urls : [data.audio_url];
                 // Use better labels for lock screen display: "Quick Summary" or "Full Summary"
                 const displayType = type === 'concise' ? 'Quick Summary' : 'Full Summary';
-                this.startPersistentPlayback(
-                    audioUrls,
-                    this.currentBook.title,
-                    displayType,
-                    data.audio_id,
-                    this.currentBook.author
-                );
+                this.playGeneratedSpeech(audioUrls, displayType, data.audio_id);
             } else {
                 alert(`Error generating audio: ${data.error}`);
             }
@@ -325,13 +215,7 @@ export const audioMixin = {
 
             if (data.success) {
                 const audioUrls = data.streaming && data.audio_urls ? data.audio_urls : [data.audio_url];
-                this.startPersistentPlayback(
-                    audioUrls,
-                    this.currentBook.title,
-                    chapterTitle,
-                    data.audio_id,
-                    this.currentBook.author
-                );
+                this.playGeneratedSpeech(audioUrls, chapterTitle, data.audio_id);
                 buttonElement.textContent = originalText;
                 buttonElement.disabled = false;
             } else {
@@ -345,90 +229,6 @@ export const audioMixin = {
             buttonElement.textContent = originalText;
             buttonElement.disabled = false;
         }
-    },
-
-    updatePlayerInfo(bookTitle, chapterTitle) {
-        document.getElementById('player-title').textContent = bookTitle;
-        document.getElementById('player-subtitle').textContent = chapterTitle;
-    },
-
-    updateMediaSessionMetadata() {
-        // Update MediaSession API for Bluetooth/CarPlay/Android Auto/lock screen
-        if ('mediaSession' in navigator && this.currentPlayback) {
-            const bookTitle = this.currentPlayback.bookTitle || 'Unknown Book';
-            const chapterTitle = this.currentPlayback.chapterTitle || 'Summary';
-            const author = this.currentPlayback.author || 'Unknown Author';
-
-            // Get book cover URL if available (covers are stored as .jpg/.webp)
-            const coverUrl = this.currentBook && this.currentBook.cover_image_url
-                ? window.location.origin + this.coverSources(this.currentBook.cover_image_url).jpg
-                : null;
-
-            // Format: Title = "{book name} by {author name}", Artist = "Quick Summary" or "Full Summary" or "Chapter X"
-            const displayTitle = `${bookTitle} by ${author}`;
-
-            // Set metadata
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: displayTitle,
-                artist: chapterTitle,
-                album: 'Plainly Audiobook Summaries',
-                artwork: coverUrl ? [
-                    { src: coverUrl, sizes: '512x512', type: 'image/jpeg' },
-                    { src: coverUrl, sizes: '256x256', type: 'image/jpeg' },
-                    { src: coverUrl, sizes: '128x128', type: 'image/jpeg' }
-                ] : []
-            });
-
-            // Set up playback controls
-            navigator.mediaSession.setActionHandler('play', () => {
-                const playPauseBtn = document.getElementById('player-play-pause');
-                if (playPauseBtn) playPauseBtn.click();
-            });
-
-            navigator.mediaSession.setActionHandler('pause', () => {
-                const playPauseBtn = document.getElementById('player-play-pause');
-                if (playPauseBtn) playPauseBtn.click();
-            });
-
-            navigator.mediaSession.setActionHandler('stop', () => {
-                this.stopPlayback();
-            });
-
-            // Previous/Next track handlers (if multi-chunk)
-            if (this.currentPlayback.audioUrls && this.currentPlayback.audioUrls.length > 1) {
-                navigator.mediaSession.setActionHandler('previoustrack', () => {
-                    if (this.currentPlayback.currentChunk > 0) {
-                        this.currentPlayback.currentChunk--;
-                        this.playNextChunk();
-                    }
-                });
-
-                navigator.mediaSession.setActionHandler('nexttrack', () => {
-                    if (this.currentPlayback.currentChunk < this.currentPlayback.audioUrls.length - 1) {
-                        this.currentPlayback.currentChunk++;
-                        this.playNextChunk();
-                    }
-                });
-            }
-        }
-    },
-
-    async startPersistentPlayback(audioUrls, bookTitle, chapterTitle, audioId = null, author = null) {
-        const persistentPlayer = document.getElementById('persistent-player');
-
-        this.currentPlayback = {
-            isPlaying: true,
-            currentChunk: 0,
-            audioUrls: audioUrls,
-            bookTitle: bookTitle,
-            chapterTitle: chapterTitle,
-            audioId: audioId,
-            author: author
-        };
-
-        this.updatePlayerInfo(bookTitle, chapterTitle);
-        persistentPlayer.classList.remove('hidden');
-        await this.playNextChunk();
     },
 
     truncateAtSentenceBoundary(text, maxChars = 5000) {

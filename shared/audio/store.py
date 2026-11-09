@@ -99,6 +99,11 @@ class AudioStoreMixin:
 
     def book_audio(self, book_id: int, mode: str = DEFAULT_MODE) -> List[Dict]:
         """Chapters whose audio matches their current text, in reading order."""
+        with closing(self.get_connection()) as conn:
+            exists = conn.execute('''SELECT 1 FROM chapter_audio a JOIN chapters c ON c.id = a.chapter_id
+                                     WHERE c.book_id = ? AND a.mode = ? LIMIT 1''', (book_id, mode)).fetchone()
+        if not exists:  # every reader open asks; don't load a book's text just to answer "none"
+            return []
         return [{'chapter_id': c['id'], 'ordinal': c.get('ordinal', c.get('chapter_number')),
                  'title': c.get('title', c.get('chapter_title')),
                  'storage_key': row['storage_key'], 'deploy_key': row['deploy_key'], 'duration_ms': row['duration_ms'],

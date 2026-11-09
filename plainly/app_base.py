@@ -20,6 +20,7 @@ from plainly import models
 from plainly.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
 from plainly.reader_config import PLAINLY_READER
+from shared.audio.routes import audio_blueprint
 from shared.auth import user_models
 from shared.reader.platform import install_reader_platform
 from shared.web import install_shared_ui, install_web_basics
@@ -75,6 +76,7 @@ if config.FEATURE_AUTH:
 # blueprints. Runs after install_pairing so the auth middleware is in place.
 install_reader_platform(app, PLAINLY_READER, lambda: common.db, user_db)
 
+app.register_blueprint(audio_blueprint(lambda: common.db, lambda view: view))  # recordings are as public as the books
 app.register_blueprint(system.bp)
 app.register_blueprint(pages.bp)
 app.register_blueprint(kindle.bp)

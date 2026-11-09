@@ -112,18 +112,18 @@ await page.waitForFunction(() => /Pause/.test(document.getElementById("active-su
   .then(() => expect("listen: shows Pause while this summary plays", true))
   .catch(async () => expect("listen: shows Pause while this summary plays", false, (await listen.textContent()).trim()));
 const player = await page.evaluate(() => {
-  const p = document.getElementById("persistent-player");
+  const p = document.getElementById("player-mini");
   const cs = getComputedStyle(p);
-  return { visible: !p.classList.contains("hidden"), bgImage: cs.backgroundImage, text: p.textContent,
-    titleFont: getComputedStyle(document.getElementById("player-title")).fontFamily };
+  return { visible: !p.hidden, bgImage: cs.backgroundImage, text: p.textContent,
+    titleFont: getComputedStyle(document.getElementById("player-mini-title")).fontFamily };
 });
 expect("player: visible, flat surface (no gradient), no emoji", player.visible && player.bgImage === "none" && !EMOJI.test(player.text), JSON.stringify({ ...player, text: undefined }));
 await listen.click();
 await page.waitForTimeout(400);
 expect("listen: second click pauses instead of regenerating",
-  await page.evaluate(() => document.getElementById("persistent-audio-element").paused) && /Resume/.test(await listen.textContent()),
+  await page.evaluate(() => window.plainlyAudio.player.playing === false) && /Resume/.test(await listen.textContent()),
   (await listen.textContent()).trim());
-await page.click("#player-stop");
+await page.click("#player-mini-close");
 await page.waitForTimeout(300);
 expect("listen: back to Listen after stopping", /Listen/.test(await listen.textContent()));
 

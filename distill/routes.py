@@ -4,7 +4,19 @@ import hashlib
 import math
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    g,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    url_for,
+)
 
 from shared.auth.pchauth.flask_adapter import login_required
 from shared.progress.routes import library_cards

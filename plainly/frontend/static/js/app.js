@@ -59,14 +59,6 @@ class SummraApp {
         this.chapters = [];
         this.currentChapter = null;
         this.currentView = 'home'; // Track current view: 'home', 'book', 'category', 'all-categories', 'discover'
-        this.currentPlayback = {
-            isPlaying: false,
-            currentChunk: 0,
-            audioUrls: [],
-            bookTitle: '',
-            chapterTitle: '',
-            audioId: null
-        };
         // Store scroll positions for each page
         this.scrollPositions = {};
         this.currentPage = 'home'; // Track current page for scroll saving
