@@ -21,7 +21,7 @@ def main(book_id, modes):
         ms = UNIT_MS * len(units)
         with tempfile.TemporaryDirectory() as work:
             path = Path(work) / 'tone.m4a'
-            subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', f'anullsrc=r=24000:cl=mono', '-t', str(ms / 1000), '-c:a', 'aac', str(path)], check=True)
+            subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono', '-t', str(ms / 1000), '-c:a', 'aac', str(path)], check=True)
             data = path.read_bytes()
         timings = [{'paragraph_id': u.paragraph_id, 'start_ms': i * UNIT_MS, 'end_ms': (i + 1) * UNIT_MS} for i, u in enumerate(units)]
         whole = db.audio_spoken_units(chapter, mode)

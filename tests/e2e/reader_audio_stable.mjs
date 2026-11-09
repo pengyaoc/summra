@@ -48,6 +48,35 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
   if (after !== before) console.error(`     before ${before.slice(0, 120)}\n     after  ${after.slice(0, 120)}`);
   await context.close();
 }
+
+// A page that opens partway through a paragraph: Listen starts at that paragraph, but the page must not jump back.
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/books/${SLUG}/read`);
+  await page.waitForSelector('#listen-button', { state: 'visible' });
+  await page.waitForTimeout(400);
+  const target = await page.evaluate(() => {
+    const reader = window.distillAudio.link.reader;
+    const { pages } = reader.pagination;
+    const firstAnchor = (html) => /data-reader-anchor="([^"]+)"/.exec(html)?.[1];
+    const index = pages.findIndex((html, i) => i > reader.pagination.currentPage && firstAnchor(html) && pages[i - 1].includes(`data-reader-anchor="${firstAnchor(html)}"`));
+    return index;
+  });
+  for (let i = await page.evaluate(() => window.distillAudio.link.reader.pagination.currentPage); i < target; i++) {
+    await page.evaluate(() => window.distillAudio.link.reader.navigateToNextPage());
+    await page.waitForTimeout(150);
+  }
+  check(target > 0, `found a page that continues a paragraph (${target})`);
+  await page.waitForTimeout(300);
+  await page.locator('#listen-button').click();
+  await page.waitForFunction(() => window.distillAudio?.player?.audio?.currentTime > 0.2, null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  const now = await page.evaluate(() => window.distillAudio.link.reader.pagination.currentPage);
+  check(now === target, `Listen on a continued paragraph stays on the page (${target} -> ${now})`);
+  await context.close();
+}
 await browser.close();
 console.log(failures ? `${failures} FAILED` : 'All passed');
 process.exit(failures ? 1 : 0);

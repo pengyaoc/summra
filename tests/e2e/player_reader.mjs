@@ -13,7 +13,7 @@ const context = await browser.newContext({ viewport: { width: 390, height: 844 }
 const page = await context.newPage();
 const problems = [];
 page.on('pageerror', (e) => problems.push(e.message));
-await page.goto(`${BASE}/login`);
+await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
 await page.waitForURL(`${BASE}/`);
 
 const ANCHOR = '#continuous-reader-content [data-reader-anchor]';
@@ -98,7 +98,7 @@ check(await page.locator('#listen-button').isHidden() || !await page.locator('#l
 const desk = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
 const wide = await desk.newPage();
 wide.on('pageerror', (e) => problems.push(e.message));
-await wide.goto(`${BASE}/login`);
+await wide.goto(`${BASE}/login`, { waitUntil: "networkidle" });
 await wide.goto(`${BASE}/books/${FIRST}/read`);
 await wide.waitForSelector(ANCHOR, { timeout: 20000 });
 await wide.waitForSelector('#listen-button', { state: 'visible', timeout: 15000 });

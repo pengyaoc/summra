@@ -254,7 +254,8 @@ export class AudioPlayer {
 
     position() {
         if (!this.audio || this.index < 0) return null;
-        const ms = this.held ? this.held.ms : Math.round((this.partOffset + this.audio.currentTime) * 1000);
+        // Before the seek lands the element still reads 0:00; report where it is heading.
+        const ms = this.held ? this.held.ms : Math.round((this.partOffset + (this.pendingStart ?? this.audio.currentTime)) * 1000);
         const spoken = this.timings.length ? unitAt(this.timings, ms) : { index: 0, paragraph_id: null, offset: 0 };
         return { ms, ...spoken, trackId: this.track.id, chapter_id: this.track.id };
     }

@@ -123,11 +123,28 @@ Distill metadata archive is3,520,797 bytes and no longer embeds image bytes;
 restore metadata together with the separate private media store.
 
 
+## Shared audio player (2026-11-09)
+
+Supersedes the Player notes in the two Listen sections below. Design: `docs/superpowers/specs/2026-11-09-shared-audio-player-design.md`.
+
+**Frontend (`shared/static/js/`).**
+- `audio_player.js`: `AudioPlayer`, one per browsing session. Owns the `<audio>` element, tracks (multi-part allowed), position, rate, silent hold and Media Session. Knows nothing about pages. `subscribe` emits `state`, `time`, `track`, `error`. The only `new MediaMetadata` is here.
+- `audio_sources.js`: `RecordedBookSource` (shared audio API) and `PlaceKeeper` (saved place with or without a reader on screen). `plainly/frontend/static/js/generated_speech_source.js` adapts Plainly's summary speech, using book id `speech-<id>`.
+- `reader_audio_link.js`: `ReaderAudioLink`, one per on-screen reader: headphones button, highlight, page following, turning away, Listen from here instead. Highlight and page turns need the screen's book and page to match the audio. Paging back to the spoken page, or starting a track from the player, resumes following.
+- `player_ui.js` with `shared/templates/shared/reader/_player.html` and `listen.css`: mini player and full player. Controls hide from track data, not app checks. The player floats, so audio cannot change where reader pages are cut.
+- `page_swap.js` (Distill): fetches same-origin pages from an allow-list, parses them and swaps `#page-root`. Prefetches on hover and pointerdown, keeps scroll in history state, and falls back to a full load (saving audio first) on 401, redirect or failure. The reader DOM stays in `#reader-shell`, outside `#page-root`. `distill_shell.js` owns the player and exposes `window.distillAudio`; Plainly exposes `window.plainlyAudio`.
+
+**Backend (`shared/audio/`).** `store.py` (`AudioStoreMixin`, table `chapter_audio`, key `(chapter_id, mode)`, default mode `summary`), `routes.py` (`audio_blueprint(get_db, access_check)`), `engines.py`, `spoken.py`, `assemble.py`. An app supplies the hook `audio_spoken_units`. Plainly stores media under `data/plainly-media`. The `make_audio` command stays in `distill/scripts`, so recording Plainly needs a small command-line wrapper around the shared pipeline.
+
+**Deploy order.** Run `deploy_code` before `deploy_db`, so the VM migrates `chapter_audio` to the two-column key before rows arrive.
+
+**Tests.** `tests/e2e/`: `reader_audio_stable`, `player_ui`, `player_reader`, `distill_in_place`, `plainly_player`, `distill_page_timing` (budget in `perf/distill_baseline.json`, measured through a local delay proxy because `page.route` disables the HTTP cache).
+
 ## Distill home and Listen outside the reader (2026-11-08)
 
 `distill/routes.py::library` no longer has a `tab` state (old `?tab=` links are ignored). `library.html` renders `.home-now` (the first `reading_cards` entry, `minutes_left`, other books in progress) followed by `#library`; while a book is in progress, filters and status links target `#library` (at the top of the page on desktop, so only phones move). `_brand.html` holds the mark and `site_header`, which home renders inside `.home-now` while reading. CSS grid and `position: sticky` give the desktop layout from 1000 px.
 
-`distill/static/js/listen_page.js` reuses the shared `Listener` on home and book pages with a stand-in reader object: the real manifest and `/api/progress/v2` marker, no-op paging, and `saveContinuousReader` posting through `authModule.queueReaderMutation`. It loads audio data on page load, because iOS requires `play()` inside the tap. Audio lives in the page, so a full navigation stops it. `_listen.html` holds the button, `_listen_player.html` the shared bar, `_listen_scripts.html` the script tags.
+Listen outside the reader is now handled by the shared player: see "Shared audio player".
 
 ## Distill Listen: chapter audio (2026-11-07)
 
@@ -175,7 +192,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
 - **Routes:**
   - `GET /books/<slug>/audio/<chapter_id>.m4a`: login required. Serves `deploy_key` (Opus), else an older chapter's AAC `storage_key`, as `audio/mp4`. `send_file(conditional=True)` handles Range, giving 206 or 416. `Cache-Control: private, no-cache` with the served file's key as ETag, because the URL stays the same across re-renders. Stale or missing audio returns 404.
   - `GET /api/books/<slug>/audio` returns `{book_id, chapters:[{chapter_id, ordinal, title, url, duration_ms, timings}]}`.
-- **Player** — shared reader platform (2026-11-08): `shared/static/js/listen.js`, `shared/templates/shared/reader/_listen_bar.html`, `shared/static/css/listen.css`. An app constructs `new Listener(reader, book, {audioApi, storageKey, mode})` on top of the shared continuous reader and includes the bar and CSS. Distill passes `/api/books/<slug>/audio`, `distill-listen-<book_id>` and `summary` (`distill/static/js/distill_reader.js`). Plainly has no timed audio yet, so it does not construct one.
+- **Player** — replaced 2026-11-09 by "Shared audio player"; the notes below are history. Shared reader platform (2026-11-08): `shared/static/js/listen.js`, `shared/templates/shared/reader/_listen_bar.html`, `shared/static/css/listen.css`. An app constructs `new Listener(reader, book, {audioApi, storageKey, mode})` on top of the shared continuous reader and includes the bar and CSS. Distill passes `/api/books/<slug>/audio`, `distill-listen-<book_id>` and `summary` (`distill/static/js/distill_reader.js`). Plainly has no timed audio yet, so it does not construct one.
   - One `<audio>` element. Sets `navigator.audioSession.type='playback'` where available. Media Session supplies metadata and action handlers.
   - The bar is moved into `.continuous-reader-footer`, so `calculatePages` subtracts its height. Showing or hiding it dispatches `resize`.
   - Following drives the reader's own `displayCurrentPage` / `loadContinuousReaderAt`, so normal page-turn progress saving applies. While following, every `timeupdate` maps (unit, offset through it) to a page with `findContinuousPageForMarker`, so the page turns inside a paragraph that runs onto the next page, not only when a new paragraph starts.

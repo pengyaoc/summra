@@ -11571,3 +11571,19 @@ Owner: lock-screen Pause worked but Play did nothing (with Plainly force-quit), 
 ## 2026-11-09 — Chinese audio deployed; VM check in deploy_db
 
 All 12 Chinese books re-recorded with Siri text pieces (no failures) and deployed with `deploy_db`. Owner asked for the VM to be validated: every `deploy_db` run now ends with `db_patch check` (`quick_check`, `foreign_key_check`), a second row-hash comparison that must find no differences, and all referenced media present on the VM; it prints what it verified. TDD in `tests/distill/test_deploy_db.py` and `test_db_patch.py`; full suite 1,352 passed.
+
+## 2026-11-09 — Shared audio player, Distill in-place loading (branch feat/distill-player)
+
+Owner: closing the player moved the reader's text; audio should carry on while browsing, like 微信读书; player logic, highlight, page following, saved place and Listen from here instead must be shared so Plainly works as soon as it has recordings. Spec and plan: `docs/superpowers/{specs,plans}/2026-11-09-shared-audio-player*`.
+
+Built: `AudioPlayer`, sources, `ReaderAudioLink`, `PlayerUI`; mini and full player; Distill in-place loading (`page_swap.js`, persistent reader shell); `shared/audio/` store and API with key `(chapter_id, mode)`; Plainly moved to the shared player; `deploy_code` restarts Plainly when a change affects it.
+
+Timings, tap to content, before and after (ms): home 221 to 226, book 227 to 217, reader open 1481 to 887, page turn 2 to 6 (final run; home and page turn are within the 15 ms noise allowance).
+
+Rulings: Tasks 3 to 5 built as one change, not through a temporary compatibility layer. Timing delay comes from a local proxy because `page.route` turns off the HTTP cache; 15 ms noise allowance. Source tracks load before `setSource` (iPhone tap rule). `mode` is a trailing keyword on the audio store calls, default `summary`. `make_audio` stays in `distill/scripts`, with a small wrapper needed for Plainly. Back to audio and Play from here were removed by the design; paging back or starting a track resumes following. Generated speech uses book id `speech-<id>`. "Resume listening" label removed.
+
+Not verified: iPhone behaviour (audio across a swap, lock screen). The owner waived the gate while away; check on a device.
+
+Local style check against main: all reader variants identical. Home card differences come from this worktree's smaller reading history (1 continue card against 3), not code.
+
+Found in final checks: pressing Listen on a page that opens partway through a paragraph turned back a page, because the player reported 0:00 before its seek landed and the paragraph began on the page before. Now the position reports the seek target, and following never turns back for a paragraph already on screen (`reader_audio_stable.mjs`).

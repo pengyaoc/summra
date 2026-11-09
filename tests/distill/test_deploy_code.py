@@ -37,7 +37,7 @@ class FakeRun:
         elif 'diff --name-only' in line:
             out = self.changed
         elif 'curl' in line:
-            out = '401'
+            out = '200' if '127.0.0.1:5001' in line else '401'
         return subprocess.CompletedProcess(argv, 0, out, '')
 
     def lines(self):
@@ -128,3 +128,35 @@ def test_missing_setting_names_the_key():
     with pytest.raises(DeployError, match='DISTILL_VM_UNIT'):
         deploy_code(settings, run=run)
     assert run.calls == []
+
+
+PLAINLY = {**SETTINGS, 'DISTILL_VM_PLAINLY_UNIT': 'plainly.service', 'DISTILL_VM_PLAINLY_PORT': '5001'}
+
+
+@pytest.mark.parametrize('changed', ['plainly/app.py\n', 'shared/web.py\n', 'shared/templates/shared/reader/_player.html\n'])
+def test_plainly_is_restarted_and_checked_when_the_change_affects_it(changed):
+    run = FakeRun(changed=changed)
+    notes = deploy_code(PLAINLY, run=run)
+    assert run.index('restart distill.service') < run.index('restart plainly.service') < run.index('127.0.0.1:5001')
+    assert 'is-active plainly.service' in run.lines()[run.index('restart plainly.service')]
+    assert not any('restart it separately' in n for n in notes)
+    assert any('plainly.service restarted' in n for n in notes)
+
+
+def test_plainly_is_left_alone_when_the_change_does_not_affect_it():
+    run = FakeRun(changed='distill/routes.py\nshared/static/css/listen.css\n')
+    deploy_code(PLAINLY, run=run)
+    assert not run.has('restart plainly.service') and not run.has('127.0.0.1:5001')
+
+
+def test_plainly_failing_its_check_stops_the_deploy():
+    run = FakeRun({'127.0.0.1:5001': (0, '502')}, changed='plainly/app.py\n')
+    with pytest.raises(DeployError, match='Plainly'):
+        deploy_code(PLAINLY, run=run)
+
+
+def test_without_plainly_settings_the_operator_is_told_to_restart_it():
+    run = FakeRun(changed='plainly/app.py\n')
+    notes = deploy_code(SETTINGS, run=run)
+    assert not run.has('restart plainly.service')
+    assert any('restart it separately' in n for n in notes)

@@ -2656,18 +2656,15 @@ Server-side summarization, file upload in the browser, multiple users beyond the
   - English uses the Mac's system voice (`say`, Siri Voice 2). Chinese uses Mandarin Siri Voice 4 at rate 1.0.
   - Each chapter reads its title, then paragraphs, headings, quotes, lists and key points. Tables and images (captions included) are skipped.
 - **Listen:** a headphones button in the reader toolbar starts at the paragraph at the top of the page. If audio was paused in that paragraph, it resumes at the paused second instead. The button appears only when the book has audio.
-- **Player bar:** sits above the reading progress line, with:
-  - play/pause, back 15 s, forward 30 s;
-  - speed (1×, 1.25×, 1.5×, 1.75×, 2×);
-  - the chapter title, Next and close.
-  
-  Pages are cut above the bar, so it never covers text.
-- **Following the text:** hands off, the spoken paragraph is highlighted and the page turns by itself as the audio moves on, including partway through a paragraph that runs onto the next page.
-- **Closing the player:** the close button pauses the audio, hides the bar and removes the highlight; starting Listen again brings it back.
-- **Turning pages while listening (2026-11-08):** a page turn of your own (playing or paused) stops the page following, and the audio carries on as if you hadn't moved. While you're away from the playing page the bar offers **Back to audio** (jump to the playing paragraph and follow again) and **Play from here** (restart the audio at the top of the page you're on). Pause and Play just continue the audio; on their own they never move the page. Same model as Readwise Reader's return/jump; following never resumes by itself.
-- **Shared platform:** the player, highlight and page following are part of the reader platform shared by Plainly and Distill. Plainly will offer it once it has audio with per-paragraph timings.
+- **Audio follows you (2026-11-09):** audio keeps playing while you browse the library, open a book page or read another book, on phone and desktop. Distill pages load in place, and Back and direct links still work.
+- **Reader:** there is no player on the page, so audio never moves the text. The headphones button is plain when nothing is playing and starts this book from your reading position. When audio is going, in this book or any other, it is accent coloured and opens the full player.
+- **Full player:** cover, chapter and book title, scrub bar with times, previous chapter, back 15 s, play/pause, forward 30 s, next chapter, speed and Chapters. A down arrow closes it. **Listen from here instead** appears only when the book on screen is not the one playing; it saves the playing book's place and starts this one. Phone: full screen. Desktop: a panel along the right edge, with the reading column sliding left at the same width; below about 1,060 px the panel lies over the page.
+- **Mini player:** on non-reader pages only, with cover, chapter, book, time, pause and close. Tapping it opens the full player. Closing it stops the audio.
+- **Following the text:** only when the book and page on screen match the audio. Hands off, the spoken paragraph is highlighted and the page turns by itself as the audio moves on, including partway through a paragraph that runs onto the next page.
+- **Turning pages while listening:** turning away by hand leaves the highlight behind and never pulls you back. Paging back to the spoken page, or starting a chapter from the player, resumes following.
+- **Shared platform:** Plainly and Distill use the same player, highlight, page following and saved place. Plainly gets all of it as soon as a book has chapter recordings. Its summary speech already plays in this player.
 - **Lock screen:** shows the chapter, book and author, with play/pause, skip and seek. At the end of a chapter the next one plays, including while locked.
-- **Kill-safe resume:** the place is kept on the device every 5 s and on pause or leaving the app. Reopening shows "Resume listening · chapter, m:ss" in the reader and on the book page; one tap continues, since iOS needs a tap to start audio.
+- **Kill-safe resume:** the place is kept on the device every 5 s and on pause or leaving the app. Pressing Listen in the same paragraph resumes at the saved second.
 - **Shared position:** listening saves the summary's reading position (on pause, chapter change and every 30 s), so the text opens where the audio stopped, on any device.
 - **Failures:** a failed load, such as an expired sign-in, pauses and asks to sign in again. It never stops silently.
 - **Text edits:** audio for a chapter whose text has changed is hidden until it is re-rendered.

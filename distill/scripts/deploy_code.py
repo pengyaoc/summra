@@ -3,8 +3,9 @@
 Usage: python -m distill.scripts.deploy_code [--config PATH]
 
 Refuses unpushed local commits and a VM checkout that has diverged. Content goes
-through deploy_db instead. Plainly restarts and pip installs stay manual; the script
-says when a change needs them.
+through deploy_db instead. Plainly restarts too when the change affects it and
+DISTILL_VM_PLAINLY_UNIT and DISTILL_VM_PLAINLY_PORT are set. Pip installs stay manual;
+the script says when a change needs one.
 """
 import argparse
 import shlex
@@ -15,11 +16,13 @@ from pathlib import Path
 from distill.scripts.deploy_db import DEFAULT_CONFIG, REQUIRED_KEYS, DeployError, _gcloud_flags, load_settings
 
 
+def _affects_plainly(changed: list) -> bool:
+    python_or_template = lambda p: p.endswith('.py') or p.startswith('shared/templates/')
+    return any(p.startswith('plainly/') or (p.startswith('shared/') and python_or_template(p)) for p in changed)
+
+
 def _notes(changed: list) -> list:
     notes = []
-    python_or_template = lambda p: p.endswith('.py') or p.startswith('shared/templates/')
-    if any(p.startswith('plainly/') or (p.startswith('shared/') and python_or_template(p)) for p in changed):
-        notes.append('This change also affects Plainly: restart it separately.')
     if any(Path(p).name == 'requirements.txt' for p in changed):
         notes.append('A requirements file changed: run pip install on the VM, then deploy again.')
     return notes
@@ -70,6 +73,16 @@ def deploy_code(settings: dict, run=subprocess.run) -> list:
         ctl = f'sudo -u {svc} XDG_RUNTIME_DIR=/run/user/$(id -u {svc}) systemctl --user'
         ssh(f'{ctl} restart {unit} && sleep 3 && {ctl} is-active {unit}', f'restart of {unit}')
         notes.append(f'VM updated {before[:7]} -> {head[:7]} and {unit} restarted.')
+        if _affects_plainly(changed):
+            plainly_unit, plainly_port = settings.get('DISTILL_VM_PLAINLY_UNIT'), settings.get('DISTILL_VM_PLAINLY_PORT')
+            if plainly_unit and plainly_port:
+                ssh(f'{ctl} restart {plainly_unit} && sleep 4 && {ctl} is-active {plainly_unit}', f'restart of {plainly_unit}')
+                code = ssh(f"curl -s -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{plainly_port}/", 'Plainly check')
+                if code != '200':
+                    raise DeployError(f'expected HTTP 200 from Plainly, got {code!r}')
+                notes.append(f'{plainly_unit} restarted.')
+            else:
+                notes.append('This change also affects Plainly: restart it separately.')
         notes.extend(_notes(changed))
 
     port = settings['DISTILL_VM_PORT']

@@ -299,7 +299,10 @@ export class ReaderAudioLink {
             const page = reader.pagination?.pages?.length ? reader.findContinuousPageForMarker(marker) : -1;
             const loaded = page >= 0 && reader.pagination.pages[page]?.includes(`data-reader-anchor="${position.paragraph_id}"`);
             if (loaded) {
-                if (page !== reader.pagination.currentPage) {
+                const { currentPage } = reader.pagination;
+                // A paragraph continued from the page before is already on screen: never turn back for it.
+                const stillOnScreen = page < currentPage && reader.pagination.pages[currentPage]?.includes(`data-reader-anchor="${position.paragraph_id}"`);
+                if (page !== currentPage && !stillOnScreen) {
                     reader.continuousReader.forwardTurn = page === reader.pagination.currentPage + 1;
                     reader.pagination.currentPage = page;
                     reader.displayCurrentPage();
