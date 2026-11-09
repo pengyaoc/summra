@@ -99,8 +99,6 @@ export class Listener {
             this.chapters = data?.chapters || [];
         } catch (_) { this.chapters = []; }
         if (!this.chapters.length) return false;
-        // Inside the reader footer, so pages are cut above the player, never under it.
-        document.querySelector('.continuous-reader-footer')?.prepend(this.$('listen-bar'));
         this.addButton();
         this.bindBar();
         this.watchManualPaging();
@@ -171,7 +169,6 @@ export class Listener {
         if (bar.hidden !== visible) return;
         bar.hidden = !visible;
         this.highlight();
-        window.dispatchEvent(new Event('resize'));  // the reader re-cuts its pages
     }
 
     rate() { return this.audio?.playbackRate || this.saved()?.rate || 1; }

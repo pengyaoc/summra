@@ -1,5 +1,5 @@
-/* Listen: shared mini-player inside the reader footer (pages are cut above it). */
-.continuous-reader-footer:has(#listen-bar:not([hidden])) { flex-wrap: wrap; padding-bottom: calc(.42rem + env(safe-area-inset-bottom)); }
+/* Listen: the player floats over the reader, so audio can never change where pages are cut. */
+.on-reader-page .listen-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card-background); padding-bottom: calc(.35rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
 .listen-bar { flex: 1 0 100%; display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: .15rem 0 .35rem; border-bottom: 1px solid var(--rule); }
 .listen-bar[hidden] { display: none; }
 .listen-controls { display: flex; align-items: center; justify-content: center; gap: .35rem; width: 100%; max-width: 640px; }
