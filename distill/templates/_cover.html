@@ -15,3 +15,9 @@
 <div class="distill-cover book-cover-placeholder" lang="{{ book.lang or 'en' }}" aria-hidden="true"><span>{{ book.title }}</span></div>
 {%- endif %}
 {%- endmacro %}
+{# The URL of a book's cover, for the player. Empty when it has none. #}
+{% macro cover_url(book) -%}
+{% if book.cover_image -%}
+{% if book.cover_thumbnail_token %}{{ base_path }}/books/{{ book.slug }}/cover/{{ book.cover_thumbnail_token }}.jpg{% else %}{{ base_path }}/books/{{ book.slug }}/images/{{ book.cover_image|urlencode }}{% endif %}
+{%- endif %}
+{%- endmacro %}

@@ -265,9 +265,7 @@
 }
 
 /* Listen outside the reader: one player along the bottom of the page. */
-.distill-browse .listen-bar { position: fixed; right: 0; bottom: 0; left: 0; z-index: 30; padding: .5rem .75rem calc(.5rem + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--rule-strong); border-bottom: 0; }
-body.distill-browse:has(.listen-bar:not([hidden])) { padding-bottom: 72px; }
-.distill-browse .listen-resume { display: none; }
+body.distill-browse:has(#player-mini:not([hidden])) { padding-bottom: 72px; }
 
 /* Book page: same two actions as home, more room for the cover. */
 .distill-book { max-width: 1120px; grid-template-columns: 300px minmax(0, 1fr); column-gap: 64px; }

@@ -3,9 +3,8 @@
 //      that runs onto the next page.
 //   2. Turning a page yourself (playing or paused) stops following; the audio
 //      keeps its place.
-//   3. Away from the playing page, the bar offers "Back to audio" and "Play from here".
-//   4. Pause then play continues the audio and does not move the page;
-//      "Back to audio" does, and following resumes.
+//   3. Pause then play continues the audio and does not move the page.
+//   4. Paging back to the spoken page follows again.
 // Usage: BASE_URL=http://localhost:5003 node listen_follow.mjs
 import { webkit } from 'playwright';
 
@@ -29,14 +28,14 @@ await page.goto(`${BASE}/books/${SLUG}/read?chapter=${chapter.chapter_id}`);
 await page.waitForSelector('#continuous-reader-content [data-reader-anchor]', { timeout: 15000 });
 await page.waitForSelector('#listen-button', { state: 'visible', timeout: 10000 });
 await page.locator('#listen-button').click();
-await page.waitForFunction(() => window.distillListener?.audio?.currentTime > 0.3, null, { timeout: 15000 });
+await page.waitForFunction(() => window.distillAudio?.player?.audio?.currentTime > 0.3, null, { timeout: 15000 });
 await page.waitForTimeout(800);  // the bar's re-layout has settled
-check(await L(() => window.distillListener.following), 'showing the player (which re-cuts the pages) does not stop following');
+check(await L(() => window.distillAudio.link.following), 'showing the player (which re-cuts the pages) does not stop following');
 
-const currentPage = () => L(() => window.distillListener.reader.pagination.currentPage);
-const pagesWith = (pid) => L((p) => window.distillListener.reader.pagination.pages
+const currentPage = () => L(() => window.distillAudio.link.reader.pagination.currentPage);
+const pagesWith = (pid) => L((p) => window.distillAudio.link.reader.pagination.pages
   .map((html, i) => (html.includes(`data-reader-anchor="${p}"`) ? i : -1)).filter((i) => i >= 0), pid);
-const seek = (ms) => L((m) => window.distillListener.seekToMs(m), ms);
+const seek = (ms) => L((m) => window.distillAudio.player.seekToMs(m), ms);
 const settle = () => page.waitForTimeout(600);
 
 // 1. A paragraph that spans two pages: the page turns partway through it.
@@ -54,72 +53,62 @@ if (split) {
   await settle();
   check(await currentPage() === split.pages[split.pages.length - 1],
     `hands off, the page turns within the paragraph (page ${await currentPage()}, expected ${split.pages.at(-1)})`);
-  check(await page.locator('#listen-follow').isHidden(), 'an automatic turn does not stop following');
+  check(await L(() => window.distillAudio.link.following), 'an automatic turn does not stop following');
 }
 
 // 2 + 3. Paging by hand while paused stops following; the audio keeps its place.
-await L(() => window.distillListener.pause());
+await L(() => window.distillAudio.player.pause());
 await settle();
-const pausedAt = await L(() => window.distillListener.position().ms / 1000);
+const pausedAt = await L(() => window.distillAudio.player.position().ms / 1000);
 await page.keyboard.press('ArrowRight');
 await settle();
 await page.keyboard.press('ArrowRight');
 await settle();
 const handPage = await currentPage();
-check(await page.locator('#listen-follow').isVisible(), 'paging while paused offers "Back to audio"');
-check(await page.locator('#listen-here').isVisible(), 'paging away offers "Play from here"');
+check(!await L(() => window.distillAudio.link.following), 'paging while paused stops following');
 
 // 4. Play continues the audio where it was and leaves the page alone.
-await page.locator('#listen-play').click();
-await page.waitForFunction(() => window.distillListener.playing, null, { timeout: 5000 });
+await L(() => window.distillAudio.player.resume());
+await page.waitForFunction(() => window.distillAudio.player.playing, null, { timeout: 5000 });
 await settle();
-check(Math.abs(await L(() => window.distillListener.audio.currentTime) - pausedAt) < 2.5, 'play continues the audio where it paused');
+check(Math.abs(await L(() => window.distillAudio.player.audio.currentTime) - pausedAt) < 2.5, 'play continues the audio where it paused');
 const next = chapter.timings.find((unit) => unit.start_ms > pausedAt * 1000 + 1000);
 if (next) { await seek(next.start_ms + 100); await settle(); }
 check(await currentPage() === handPage, 'while not following, a new paragraph does not move the page');
 
-// "Back to audio" shows the playing paragraph and follows again.
-await page.locator('#listen-follow').click();
+// Headphones on the same book open the player; listening from a chapter jump follows again.
+await L(() => window.distillAudio.player.load(window.distillAudio.player.index, 0));
 await settle();
-const unit = await L(() => window.distillListener.unit);
-check((await pagesWith(unit)).includes(await currentPage()), 'Back to audio shows the playing paragraph');
-check(await page.locator('#listen-follow').isHidden() && await page.locator('#listen-here').isHidden(),
-  'following again hides both buttons');
-
-// "Play from here" restarts the audio at the page being read.
-await page.keyboard.press('ArrowRight');
-await settle();
-await page.keyboard.press('ArrowRight');
-await settle();
-const target = await L(() => document.querySelector('#continuous-reader-content .pagination-page-container [data-reader-anchor]')?.dataset.readerAnchor);
-await page.locator('#listen-here').click();
-await page.waitForFunction(() => window.distillListener.playing && window.distillListener.audio.currentTime > 0, null, { timeout: 10000 });
-await settle();
-check(await L(() => window.distillListener.startedAt) === target, `Play from here starts at this page (${target})`);
-check(await page.locator('#listen-here').isHidden(), 'Play from here resumes following');
+check(await L(() => window.distillAudio.link.following), 'starting a track from the player follows again');
 
 // 5. Closing the player clears the highlight, and paging does not bring it back.
 const highlighted = () => page.locator('#continuous-reader-content .listen-current').count();
-await L(() => window.distillListener.setFollowing(true));
+await L(() => window.distillAudio.link.setFollowing(true));
 await seek(chapter.timings[1].start_ms + 100);
 await settle();
 check(await highlighted() > 0, 'the spoken paragraph is highlighted before closing');
-await page.locator('#listen-close').click();
+await L(() => window.distillAudio.player.close());
 await settle();
-check(await page.locator('#listen-bar').isHidden(), 'the close button hides the player');
+check(!await L(() => window.distillAudio.player.active), 'closing ends listening');
 check(await highlighted() === 0, 'closing the player removes the highlight');
 await page.keyboard.press('ArrowRight');
 await settle();
 await page.keyboard.press('ArrowLeft');
 await settle();
 check(await highlighted() === 0, 'paging after closing does not bring the highlight back');
-await L(() => window.distillListener.audio.dispatchEvent(new Event('timeupdate')));
+await L(() => window.distillAudio.player.audio.dispatchEvent(new Event('timeupdate')));
 await settle();
 check(await highlighted() === 0, 'a late time update after closing does not bring it back');
 
+// detach leaves the reader as it found it.
+const detached = await L(() => { const { link } = window.distillAudio; const wrapped = link.reader.navigateToNextPage; link.detach(); const restored = link.reader.navigateToNextPage !== wrapped; return { restored, own: Object.hasOwn(link.reader, 'navigateToNextPage') ? link.reader.navigateToNextPage.name : '', button: !!document.getElementById('listen-button') }; });
+check(detached.restored && !detached.button, 'detach restores the reader and removes the headphones');
+await page.reload();
+await page.waitForSelector('#listen-button', { state: 'visible', timeout: 15000 });
+
 // 6. Starting again shows the highlight.
 await page.locator('#listen-button').click();
-await page.waitForFunction(() => window.distillListener.playing, null, { timeout: 15000 });
+await page.waitForFunction(() => window.distillAudio.player.playing, null, { timeout: 15000 });
 await page.waitForFunction(() => document.querySelector('#continuous-reader-content .listen-current'), null, { timeout: 10000 }).catch(() => {});
 check(await highlighted() > 0, 'listening again brings the highlight back');
 

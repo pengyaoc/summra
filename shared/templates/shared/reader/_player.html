@@ -1,0 +1,38 @@
+{# The shared mini and full players; shared/static/js/player_ui.js fills them in. #}
+<div id="player-message" class="player-message" role="status" hidden>
+    <span id="player-message-text"></span>
+    <button type="button" id="player-reload" hidden>Sign in again</button>
+</div>
+<div id="player-mini" class="player-mini" hidden>
+    <button type="button" id="player-mini-open" class="player-mini-open" aria-label="Open player">
+        <span id="player-mini-cover" class="player-cover player-mini-cover" aria-hidden="true"></span>
+        <span class="player-mini-text"><strong id="player-mini-title"></strong><em><span id="player-mini-book"></span>, <span id="player-mini-time"></span></em></span>
+    </button>
+    <button type="button" id="player-mini-play" class="player-icon" aria-label="Pause"><svg viewBox="0 0 24 24" class="player-solid" aria-hidden="true"></svg></button>
+    <button type="button" id="player-mini-close" class="player-icon" aria-label="Stop listening"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<section id="player-full" class="player-full" aria-label="Audio player" hidden>
+    <div class="player-full-top">
+        <button type="button" id="player-full-close" class="player-icon" aria-label="Close player"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+    </div>
+    <div class="player-full-body">
+        <div id="player-cover" class="player-cover player-full-cover" aria-hidden="true"></div>
+        <h2 id="player-title" class="player-title"></h2>
+        <p id="player-book" class="player-book"></p>
+        <input type="range" id="player-seek" class="player-seek" min="0" max="1" value="0" step="1000" aria-label="Position in chapter">
+        <div class="player-times"><span id="player-time">0:00</span><span id="player-duration"></span></div>
+        <div class="player-controls">
+            <button type="button" id="player-prev" class="player-icon" aria-label="Previous chapter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6 9 12l10 6zM5 6v12"/></svg></button>
+            <button type="button" id="player-back" class="player-icon player-skip" aria-label="Back 15 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v5h5"/><path d="M4.6 15a8 8 0 1 0 .9-7.4L4 10"/></svg><small>15</small></button>
+            <button type="button" id="player-play" class="player-play" aria-label="Pause"><svg viewBox="0 0 24 24" class="player-solid" aria-hidden="true"></svg></button>
+            <button type="button" id="player-fwd" class="player-icon player-skip" aria-label="Forward 30 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5v5h-5"/><path d="M19.4 15a8 8 0 1 1-.9-7.4L20 10"/></svg><small>30</small></button>
+            <button type="button" id="player-next" class="player-icon" aria-label="Next chapter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 10 6-10 6zM19 6v12"/></svg></button>
+        </div>
+        <button type="button" id="player-listen-here" class="player-listen-here" hidden>Listen from here instead<span id="player-listen-here-label"></span></button>
+        <div class="player-tools">
+            <button type="button" id="player-rate" aria-label="Playback speed">1×</button>
+            <button type="button" id="player-chapters">Chapters</button>
+        </div>
+        <div id="player-chapter-list" class="player-chapter-list" hidden></div>
+    </div>
+</section>

@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
 {% from '_cover.html' import cover with context %}
-{% from '_listen.html' import listen_button %}
+{% from '_listen.html' import listen_button with context %}
 {% from '_brand.html' import site_header with context %}
 {% block title %}Distill{% endblock %}
 {# While reading, the header sits inside the book panel; the page has no bar across it. #}
+{% block page_name %}library{% endblock %}
 {% block header %}{% if not lead %}{{ super() }}{% endif %}{% endblock %}
 {% block content %}
 <main class="home{% if lead %} home-reading{% endif %}">
@@ -81,121 +82,5 @@
         </div>
     </section>
 </main>
-{% include '_listen_player.html' %}
-{% endblock %}
-
-{% block scripts %}
-{% if lead %}{% include '_listen_scripts.html' %}{% endif %}
 <script id="distill-search-catalog" type="application/json">{{ search_catalog | tojson }}</script>
-<script>
-(function () {
-    try {
-        var key = 'distill-shelf:' + location.pathname + location.search;
-        if (sessionStorage.getItem('distill-restore-shelf') === key) {
-            sessionStorage.removeItem('distill-restore-shelf');
-            requestAnimationFrame(function () { scrollTo(0, Number(sessionStorage.getItem(key)) || 0); });
-        }
-        document.querySelectorAll('a[href*="/books/"]').forEach(function (link) {
-            link.addEventListener('click', function () { sessionStorage.setItem(key, String(scrollY)); sessionStorage.setItem('distill-restore-shelf', key); });
-        });
-    } catch (_) {}
-    window.addEventListener('pageshow', function (event) {
-        if (!event.persisted) return;
-        try { sessionStorage.setItem(key, String(scrollY)); sessionStorage.setItem('distill-restore-shelf', key); } catch (_) {}
-        location.reload();
-    });
-    var form = document.querySelector('.distill-filters');
-    if (!form) return;
-    var toggle = form.querySelector('.distill-filter-toggle');
-    var panel = form.querySelector('.distill-filter-panel');
-    toggle.addEventListener('click', function () {
-        toggle.setAttribute('aria-expanded', String(panel.classList.toggle('is-open')));
-    });
-    var selects = form.querySelectorAll('select');
-    for (var i = 0; i < selects.length; i++) {
-        selects[i].addEventListener('change', function () { form.submit(); });
-    }
-    var input = form.querySelector('[name="q"]');
-    var menu = form.querySelector('.distill-search-menu');
-    var list = document.getElementById('distill-search-options');
-    var feedback = form.querySelector('.distill-search-feedback');
-    var catalog = JSON.parse(document.getElementById('distill-search-catalog').textContent);
-    var matches = [], active = -1, composing = false;
-    function close() {
-        menu.hidden = true;
-        input.setAttribute('aria-expanded', 'false');
-        input.removeAttribute('aria-activedescendant');
-        active = -1;
-    }
-    function select(index) {
-        active = index;
-        for (var j = 0; j < list.children.length; j++) {
-            list.children[j].setAttribute('aria-selected', j === active ? 'true' : 'false');
-        }
-        if (active >= 0) {
-            input.setAttribute('aria-activedescendant', list.children[active].id);
-            list.children[active].scrollIntoView({block: 'nearest'});
-        } else input.removeAttribute('aria-activedescendant');
-    }
-    function openBook(index) {
-        if (matches[index]) window.location.assign((window.APP_BASE_PATH || '') + '/books/' + encodeURIComponent(matches[index].slug) + '?return=' + encodeURIComponent(location.pathname + location.search));
-    }
-    function suggest() {
-        if (composing) return;
-        var query = input.value.trim().toLocaleLowerCase();
-        list.textContent = '';
-        close();
-        if (!query) return;
-        matches = catalog.filter(function (book) {
-            return (book.title + ' ' + book.author).toLocaleLowerCase().indexOf(query) !== -1;
-        }).sort(function (a, b) {
-            // Prefer titles beginning with the query to matches inside a name.
-            return (b.title.toLocaleLowerCase().indexOf(query) === 0 ? 1 : 0) -
-                   (a.title.toLocaleLowerCase().indexOf(query) === 0 ? 1 : 0);
-        }).slice(0, 6);
-        matches.forEach(function (book, index) {
-            var option = document.createElement('li');
-            option.id = 'distill-suggestion-' + index;
-            option.setAttribute('role', 'option');
-            option.setAttribute('aria-selected', 'false');
-            var title = document.createElement('strong');
-            title.textContent = book.title;
-            title.lang = book.lang || 'en';
-            option.appendChild(title);
-            if (book.author && book.author.trim()) {
-                var author = document.createElement('span');
-                author.textContent = book.author;
-                option.appendChild(author);
-            }
-            option.addEventListener('mousedown', function (event) { event.preventDefault(); });
-            option.addEventListener('click', function () { openBook(index); });
-            list.appendChild(option);
-        });
-        feedback.textContent = matches.length ? matches.length + ' suggested ' + (matches.length === 1 ? 'book' : 'books') + '. Use arrow keys to choose.' : 'No matching books in the selected filters.';
-        menu.hidden = false;
-        input.setAttribute('aria-expanded', 'true');
-    }
-    input.addEventListener('input', suggest);
-    input.addEventListener('focus', suggest);
-    input.addEventListener('compositionstart', function () { composing = true; close(); });
-    input.addEventListener('compositionend', function () { composing = false; suggest(); });
-    input.addEventListener('keydown', function (event) {
-        if (composing || event.isComposing || event.keyCode === 229) return;
-        if (event.key === 'Escape') { close(); return; }
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            if (menu.hidden) suggest();
-            if (!matches.length || menu.hidden) return;
-            select((active + (event.key === 'ArrowDown' ? 1 : active < 0 ? 0 : -1) + matches.length) % matches.length);
-        } else if (event.key === 'Enter' && !menu.hidden && active >= 0) {
-            event.preventDefault();
-            openBook(active);
-        }
-    });
-    input.addEventListener('blur', close);
-    document.addEventListener('click', function (event) {
-        if (!form.querySelector('.distill-search-wrap').contains(event.target)) close();
-    });
-}());
-</script>
 {% endblock %}

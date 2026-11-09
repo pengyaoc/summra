@@ -104,7 +104,7 @@ const inspectPage = (pg = page) => pg.evaluate(() => {
 
 // Fetch every unit of a book and record which chapters hold which block types. Runs in the page.
 const scanBlocks = (pg) => pg.evaluate(async () => {
-  const id = window.DISTILL_BOOK.id;
+  const id = JSON.parse(document.getElementById('page-root').dataset.book).id;
   const api = withBasePath(window.READER_CONFIG.api_base);
   const manifest = (await (await fetch(`${api}/reader/books/${id}/manifest`)).json()).manifest;
   const kinds = new Map();
@@ -207,7 +207,7 @@ try {
   await page.screenshot({ path: `${SHOTS}distill_library.png`, fullPage: false });
 
   await page.click(`a.distill-tile[href*="/books/${SLUG}?"]`);
-  await page.waitForSelector('h1');
+  await page.waitForSelector('main.distill-book');
   check(/\/books\/[^/]+$/.test(new URL(page.url()).pathname) && (await page.locator('h1').innerText()).length > 0, 'library leads to the book page with an h1');
   check(await page.locator('.toc-part-title').count() > 0, 'book page has part headings');
   check(await page.evaluate(() => getComputedStyle(document.body).colorScheme.includes('light')), 'book page stays daylight with an OS dark preference');

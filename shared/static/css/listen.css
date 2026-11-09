@@ -1,19 +1,63 @@
-/* Listen: the player floats over the reader, so audio can never change where pages are cut. */
-.on-reader-page .listen-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card-background); padding-bottom: calc(.35rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
-.listen-bar { flex: 1 0 100%; display: flex; flex-direction: column; align-items: center; gap: .3rem; padding: .15rem 0 .35rem; border-bottom: 1px solid var(--rule); }
-.listen-bar[hidden] { display: none; }
-.listen-controls { display: flex; align-items: center; justify-content: center; gap: .35rem; width: 100%; max-width: 640px; }
-.listen-btn, .listen-resume, .listen-follow { min-height: 36px; padding: .3rem .6rem; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--card-background); color: var(--ink); font: inherit; font-size: .82rem; cursor: pointer; }
-.listen-play { min-width: 4.5rem; border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.listen-title { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink-muted); text-overflow: ellipsis; white-space: nowrap; }
-.listen-resume { border-color: var(--accent); color: var(--accent); }
-.listen-follow[hidden], .listen-resume[hidden] { display: none; }
-.listen-away { display: flex; gap: .4rem; justify-content: center; }
-.listen-away:not(:has(:not([hidden]))) { display: none; }
-.listen-message { margin: 0; color: var(--ink-muted); font-size: .8rem; }
-.listen-message:empty { display: none; }
+/* Shared audio player. It floats over the page, so audio can never change where reader pages are cut. */
+:root { --player-panel: 380px; }
 #continuous-reader-content .listen-current { background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 3px; box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--accent) 9%, transparent); }
-@media (max-width: 560px) {
-    .listen-title { display: none; }
-    .listen-btn { padding: .3rem .5rem; }
+.reader-toolbar-btn.is-listening { color: var(--accent); border-color: var(--accent); }
+
+.player-mini[hidden], .player-full[hidden], .player-message[hidden], .player-chapter-list[hidden], .player-listen-here[hidden], .player-icon[hidden], .player-tools [hidden] { display: none; }
+.on-reader-page .player-mini { display: none; }
+.player-icon { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.player-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.player-icon svg.player-solid, .player-play svg { fill: currentColor; stroke: none; }
+.player-icon:focus-visible, .player-play:focus-visible, .player-tools button:focus-visible, .player-mini-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.player-cover { display: grid; place-items: end start; overflow: hidden; border-radius: 6px; background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 80%, #000), color-mix(in srgb, var(--accent) 45%, #000)); color: #f4efe4; font-family: var(--font-serif); }
+.player-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.player-cover span { padding: .5rem; line-height: 1.25; }
+
+.player-mini { position: fixed; right: 0; bottom: 0; left: 0; z-index: 900; display: flex; align-items: center; gap: .25rem; padding: .4rem .5rem calc(.4rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); background: var(--card-background); }
+.player-mini-open { display: flex; flex: 1; align-items: center; gap: .65rem; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.player-mini-cover { flex: none; width: 34px; height: 48px; }
+.player-mini-cover span { display: none; }
+.player-mini-text { display: block; flex: 1; min-width: 0; }
+.player-mini-text strong, .player-mini-text em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-mini-text strong { font-size: .92rem; font-weight: 600; }
+.player-mini-text em { color: var(--ink-muted); font-size: .78rem; font-style: normal; font-variant-numeric: tabular-nums; }
+.player-message { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); left: 50%; z-index: 1110; display: flex; gap: .6rem; align-items: center; width: max-content; max-width: min(92vw, 420px); padding: .5rem .8rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--card-background); color: var(--ink); font-size: .85rem; transform: translateX(-50%); }
+.player-message button { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+
+.player-full { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column; overflow-y: auto; background: var(--background-color, var(--card-background)); color: var(--ink); padding-bottom: env(safe-area-inset-bottom); }
+.player-full-top { display: flex; flex: none; height: 52px; align-items: center; padding: env(safe-area-inset-top) 8px 0; }
+.player-full-body { display: flex; flex: 1; flex-direction: column; align-items: center; width: 100%; max-width: 420px; margin: 0 auto; padding: 4px 26px 20px; }
+.player-full-cover { flex: none; width: min(46vw, 180px); aspect-ratio: 2 / 3; font-size: 1.15rem; box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 18%, transparent); }
+.player-title { margin: 18px 0 2px; font-family: var(--font-serif); font-size: 1.25rem; font-weight: 600; line-height: 1.25; text-align: center; }
+.player-book { margin: 0; color: var(--ink-muted); font-size: .85rem; text-align: center; }
+.player-seek { width: 100%; margin: 20px 0 4px; accent-color: var(--accent); }
+.player-times { display: flex; justify-content: space-between; width: 100%; color: var(--ink-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.player-controls { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 12px; }
+.player-skip svg { width: 32px; height: 32px; stroke-width: 1.5; }
+.player-skip small { position: absolute; top: 50%; left: 50%; font-size: .56rem; font-weight: 700; transform: translate(-50%, -42%); }
+.player-play { display: grid; flex: none; place-items: center; width: 62px; height: 62px; border: 0; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer; }
+.player-play svg { width: 26px; height: 26px; }
+.player-listen-here { width: 100%; margin-top: 16px; padding: 11px 14px; border: 1px solid var(--rule-strong); border-radius: 10px; background: var(--card-background); color: var(--accent); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.player-listen-here span { display: block; color: var(--ink-muted); font-size: .78rem; font-weight: 400; }
+.player-tools { display: flex; justify-content: space-between; width: 100%; margin-top: auto; padding-top: 14px; }
+.player-tools button { min-height: 44px; padding: 0 10px; border: 0; background: none; color: var(--ink); font: inherit; font-size: .85rem; cursor: pointer; font-variant-numeric: tabular-nums; }
+.player-chapter-list { width: 100%; max-height: 40vh; overflow-y: auto; border-top: 1px solid var(--rule); }
+.player-chapter-list button { display: block; width: 100%; padding: .65rem .2rem; border: 0; border-bottom: 1px solid var(--rule); background: none; color: var(--ink); font: inherit; font-size: .88rem; text-align: left; cursor: pointer; }
+.player-chapter-list button[aria-current] { color: var(--accent); font-weight: 600; }
+
+/* Tablet widths: the panel lies over the page. */
+@media (min-width: 640px) {
+    .player-mini { right: 20px; bottom: 20px; left: auto; width: 350px; padding: .5rem; border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 6px 22px color-mix(in srgb, var(--ink) 14%, transparent); }
+    .player-full { inset: 0 0 0 auto; width: var(--player-panel); border-left: 1px solid var(--rule); }
+    .player-message { bottom: 96px; }
 }
+/* Wide enough for both: the reading column slides left at its same width, so nothing re-flows. */
+@media (min-width: 1060px) {
+    #continuous-reader-content { transition: transform .22s ease; }
+    body.player-panel-open.on-reader-page #continuous-reader-content { transform: translateX(calc(var(--player-panel) / -2)); }
+}
+@media (prefers-reduced-motion: reduce) { #continuous-reader-content { transition: none !important; } }
+
+/* In-place page loads: a thin line, only when the wait is noticeable. */
+.page-progress { position: fixed; top: 0; left: 0; z-index: 1120; width: 100%; height: 2px; background: var(--accent); transform-origin: left; animation: page-progress 1.2s ease-out forwards; }
+@keyframes page-progress { from { transform: scaleX(.1); } to { transform: scaleX(.85); } }

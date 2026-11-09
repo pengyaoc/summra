@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% from '_cover.html' import cover with context %}
-{% from '_listen.html' import listen_button %}
+{% from '_listen.html' import listen_button with context %}
 {% block lang %}{{ book.lang }}{% endblock %}
 {% block title %}{{ book.title }} · Distill{% endblock %}
+{% block page_name %}book{% endblock %}
 {% block content %}
 <main class="distill-main distill-book">
     <a class="distill-back" href="{{ return_url }}">Library</a>
@@ -57,22 +58,4 @@
     </section>
     </div>
 </main>
-{% include '_listen_player.html' %}
-{% endblock %}
-
-{% block scripts %}
-{% include '_listen_scripts.html' %}
-<script>
-const unfinished = document.querySelector('.distill-unfinish');
-unfinished?.addEventListener('click', async () => {
-    unfinished.disabled = true;
-    try {
-        const root = window.APP_BASE_PATH || '';
-        const id = Number(unfinished.dataset.bookId);
-        const response = await fetch(`${root}/api/progress/v2/books/${id}/status`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:unfinished.dataset.readingStatus})});
-        if (!response.ok) throw new Error();
-        location.reload();
-    } catch (_) { document.getElementById('distill-book-status').textContent = 'Could not update this book. Please try again.'; unfinished.disabled = false; }
-});
-</script>
 {% endblock %}

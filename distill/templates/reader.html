@@ -1,19 +1,10 @@
 {% extends 'base.html' %}
+{% from '_cover.html' import cover_url with context %}
 {% block lang %}{{ book.lang }}{% endblock %}
 {% block title %}{{ book.title }} · Distill{% endblock %}
-{% block body_attrs %} class="on-chapter-page on-reader-page"{% endblock %}
+{% block body_class %}on-chapter-page on-reader-page{% endblock %}
+{% block page_name %}reader{% endblock %}
+{% block reader_shell_attrs %}{% endblock %}
+{% block page_attrs %} data-book="{{ {'id': book.id, 'slug': book.slug, 'title': book.title, 'author': book.author, 'return_url': return_url, 'cover': cover_url(book)|trim}|tojson|forceescape }}"{% endblock %}
 {% block header %}{% endblock %}
-{% block content %}
-    <main class="main-content">
-{% set reader_hidden = False %}
-{% include 'shared/reader/_continuous_reader.html' %}
-{% include 'shared/reader/_settings_panel.html' %}
-{% include 'shared/reader/_listen_bar.html' %}
-    </main>
-{% endblock %}
-{% block scripts %}
-    <script>window.DISTILL_BOOK = {{ {'id': book.id, 'slug': book.slug, 'title': book.title, 'author': book.author, 'return_url': return_url}|tojson }};</script>
-    <script src="{{ url_for('static', filename='shared/js/base_path.js') }}{{ asset_v('shared/js/base_path.js') }}"></script>
-    <script src="{{ url_for('static', filename='shared/js/reader_state.js') }}{{ asset_v('shared/js/reader_state.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/distill_reader.js') }}{{ asset_v('js/distill_reader.js') }}"></script>
-{% endblock %}
+{% block content %}{% endblock %}

@@ -27,7 +27,17 @@
     <script defer src="{{ url_for('static', filename='js/pwa.js') }}{{ asset_v('js/pwa.js') }}"></script>
     {% endif %}
 </head>
-<body{% block body_attrs %} class="distill-browse"{% endblock %}>
+<body class="{% block body_class_outer %}{{ self.body_class() }}{% endblock %}">
+{% if not pwa_launch %}
+<div id="reader-shell"{% block reader_shell_attrs %} hidden{% endblock %}>
+    <main class="main-content">
+{% set reader_hidden = False %}
+{% include 'shared/reader/_continuous_reader.html' %}
+{% include 'shared/reader/_settings_panel.html' %}
+    </main>
+</div>
+{% endif %}
+<div id="page-root" data-page="{% block page_name %}other{% endblock %}" data-body-class="{% block body_class %}distill-browse{% endblock %}"{% block page_attrs %}{% endblock %}>
 {% block header %}
 {% if not pwa_launch %}
     {{ site_header() }}
@@ -74,6 +84,12 @@
 </script>
 {% endif %}
 {% endblock %}
-{% block scripts %}{% endblock %}
+</div>
+{% if not pwa_launch %}
+{% include 'shared/reader/_player.html' %}
+<script src="{{ url_for('static', filename='shared/js/base_path.js') }}{{ asset_v('shared/js/base_path.js') }}"></script>
+<script src="{{ url_for('static', filename='shared/js/reader_state.js') }}{{ asset_v('shared/js/reader_state.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/distill_shell.js') }}{{ asset_v('js/distill_shell.js') }}"></script>
+{% endif %}
 </body>
 </html>

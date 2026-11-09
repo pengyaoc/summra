@@ -13,7 +13,7 @@ const measure = (page) => page.evaluate(() => {
   const box = content.getBoundingClientRect();
   return JSON.stringify({
     contentHeight: Math.round(box.height),
-    pages: window.distillListener.reader.pagination.pages.length,
+    pages: window.distillAudio.link.reader.pagination.pages.length,
     anchors: [...content.querySelectorAll('[data-reader-anchor]')].map((el) => {
       const rect = el.getBoundingClientRect();
       return [el.dataset.readerAnchor, Math.round(rect.top), Math.round(rect.left), Math.round(rect.height)];
@@ -33,15 +33,15 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
   const before = await measure(page);
 
   await page.locator('#listen-button').click();
-  await page.waitForFunction(() => window.distillListener?.audio?.currentTime > 0.2, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.distillAudio?.player?.audio?.currentTime > 0.2, null, { timeout: 15000 });
   await page.waitForTimeout(200);
   check(await measure(page) === before, `${name}: text stays put when audio starts`);
 
-  await page.locator('#listen-play').click();
+  await page.evaluate(() => window.distillAudio.player.pause());
   await page.waitForTimeout(200);
   check(await measure(page) === before, `${name}: text stays put on pause`);
 
-  await page.locator('#listen-close').click();
+  await page.evaluate(() => window.distillAudio.player.close());
   await page.waitForTimeout(300);
   const after = await measure(page);
   check(after === before, `${name}: text stays put when the player closes`);

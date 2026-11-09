@@ -1,3 +1,4 @@
+import html as html_module
 import json
 import re
 
@@ -149,13 +150,13 @@ def test_reader_shell_has_platform_partials_and_no_mode_selector(app_env):
     assert 'id="reading-settings-panel"' in html
     assert 'reader-mode-settings' not in html and 'data-reader-settings-mode' not in html
     assert 'window.APP_BASE_PATH' in html
-    book = json.loads(re.search(r'window\.DISTILL_BOOK = (\{.*?\});', html).group(1))
-    assert book == {'id': 1, 'slug': 'my-book', 'title': 'My Book', 'author': 'A. Writer', 'return_url': '/'}
+    book = json.loads(html_module.unescape(re.search(r'data-book="([^"]*)"', html).group(1)))
+    assert book == {'id': 1, 'slug': 'my-book', 'title': 'My Book', 'author': 'A. Writer', 'return_url': '/', 'cover': ''}
     names = [s.split('?')[0] for s in re.findall(r'<script[^>]*src="([^"]+)"', html)]
     assert names.index('/static/shared/js/base_path.js') < names.index('/static/shared/js/reader_state.js') \
-        < names.index('/static/js/distill_reader.js')
+        < names.index('/static/js/distill_shell.js')
     assert html.index('window.READER_CONFIG') < html.index('/static/shared/js/reader_state.js')
-    assert '<script type="module" src="/static/js/distill_reader.js' in html
+    assert '<script type="module" src="/static/js/distill_shell.js' in html
 
 
 def test_reader_shell_serialises_distill_config(app_env):
@@ -424,7 +425,7 @@ def test_home_offers_listen_beside_continue(app_env):
     html = get(client, '/').get_data(as_text=True)
     now = _home_now(html)
     assert f'data-listen-book="{bid}"' in now and 'data-listen-slug="my-book"' in now
-    assert 'id="listen-bar"' in html and 'js/listen_page.js' in html and 'js/reader_state.js' in html
+    assert 'id="player-mini"' in html and 'js/distill_shell.js' in html and 'js/reader_state.js' in html
 
 
 def test_home_without_a_book_in_progress_is_just_the_library(app_env):
@@ -507,7 +508,7 @@ def test_home_keeps_the_deploy_prefix(app_env):
 def test_book_page_has_continue_and_listen_side_by_side(app_env):
     client, db, _, bid = app_env
     fresh = get(client, '/books/my-book').get_data(as_text=True)
-    assert '>Start</a>' in fresh and f'data-listen-book="{bid}"' in fresh and 'js/listen_page.js' in fresh
+    assert '>Start</a>' in fresh and f'data-listen-book="{bid}"' in fresh and 'js/distill_shell.js' in fresh
     assert 'distill-resume-listening' not in fresh
     _start_reading(client, db, bid)
     assert '>Continue</a>' in get(client, '/books/my-book').get_data(as_text=True)
