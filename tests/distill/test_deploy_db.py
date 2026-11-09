@@ -39,10 +39,22 @@ class FakeRun:
         self.media_members = []
         self.patch_sha = None
         self.patch = None
+        self.after_patch = None  # the VM's row hashes once the patch has been applied
+        self.applied = False
+        self.installed = []
+        self.lose_media = False
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
         line = ' '.join(argv)
+        self.applied = self.applied or 'db_patch apply' in line
+        if 'db_patch hashes' in line and self.applied and self.after_patch is not None:
+            return subprocess.CompletedProcess(argv, 0, self.after_patch, '')
+        if 'media_transfer install' in line and not self.lose_media:
+            self.installed = [name.split('/')[-1] for name in self.media_members]
+        if 'media_transfer list' in line and 'media_transfer list' not in self.failing():
+            held = self.overrides.get('media_transfer list', (0, ''))[1].split()
+            return subprocess.CompletedProcess(argv, 0, '\n'.join([*held, *self.installed]), '')
         for needle, (code, out) in self.overrides.items():
             if needle in line:
                 return subprocess.CompletedProcess(argv, code, out, '')
@@ -55,6 +67,9 @@ class FakeRun:
             from pathlib import Path
             self.patch_sha = hashlib.sha256(Path(argv[3]).read_bytes()).hexdigest()
             self.patch = json.loads(Path(argv[3]).read_text())
+            if self.after_patch is None:  # a healthy VM ends up exactly like the snapshot
+                with sqlite3.connect(Path(argv[3]).with_name('distill.db')) as snapshot:
+                    self.after_patch = json.dumps(row_hashes(snapshot))
         if 'sha256sum' in line:
             sha = self.patch_sha if 'distill.patch.json' in line else self.media_sha
             return subprocess.CompletedProcess(argv, 0, f'{sha}  upload', '')
@@ -63,6 +78,9 @@ class FakeRun:
         if 'curl' in line:
             return subprocess.CompletedProcess(argv, 0, '401', '')
         return subprocess.CompletedProcess(argv, 0, '', '')
+
+    def failing(self):
+        return [needle for needle, (code, _) in self.overrides.items() if code != 0]
 
     def audio(self):
         change = self.patch['upsert']['chapter_audio']
@@ -321,3 +339,62 @@ def test_deploy_ships_master_when_no_opus_yet(file_media_db):
     deploy_db(db.db_path, SETTINGS, run=run)
     assert f'{master[:2]}/{master}' in run.media_members
     assert run.audio() == [(master, None)]
+
+
+def test_every_deploy_rereads_the_vm_after_applying(db_path):
+    run = make_run(db_path)
+
+    summary = deploy_db(db_path, SETTINGS, run=run)
+
+    apply = run.index('db_patch apply')
+    check = run.index('db_patch check')
+    assert apply < check
+    assert 'sudo -u svc' in run.lines()[check] and '--db /opt/x/data/distill.db' in run.lines()[check]
+    assert sum('db_patch hashes' in line for line in run.lines()) == 2
+    assert [i for i, line in enumerate(run.lines()) if 'db_patch hashes' in line][-1] > apply
+    assert summary['changed'] > 0 and summary['rows'] >= summary['changed']
+
+
+def test_rerun_with_no_changes_still_verifies_the_vm(db_path):
+    with sqlite3.connect(db_path) as conn:
+        live = json.dumps(row_hashes(conn))
+    run = make_run(db_path, {'db_patch hashes': (0, live)})
+
+    summary = deploy_db(db_path, SETTINGS, run=run)
+
+    assert run.has('db_patch check') and not run.has('db_patch apply')
+    assert summary['changed'] == 0 and summary['rows'] > 0
+
+
+def test_vm_rows_that_still_differ_after_applying_fail_the_deploy(db_path):
+    run = make_run(db_path)
+    run.after_patch = EMPTY_LIVE  # the patch "applied" but the rows are not there
+
+    with pytest.raises(DeployError, match=r'row\(s\) still differ'):
+        deploy_db(db_path, SETTINGS, run=run)
+
+
+def test_vm_integrity_failure_fails_the_deploy(db_path):
+    run = make_run(db_path, {'db_patch check': (1, 'foreign key problem')})
+
+    with pytest.raises(DeployError, match='foreign key problem'):
+        deploy_db(db_path, SETTINGS, run=run)
+
+
+def test_media_missing_on_the_vm_after_install_fails_the_deploy(file_media_db):
+    run = make_run(file_media_db.db_path)
+    run.lose_media = True
+
+    with pytest.raises(DeployError, match=r'media file\(s\) missing'):
+        deploy_db(file_media_db.db_path, SETTINGS, run=run)
+
+
+def test_main_reports_what_was_verified(db_path, monkeypatch, capsys):
+    from distill.scripts import deploy_db as module
+    monkeypatch.setattr(module, 'deploy_db', lambda *a, **k: {'changed': 3, 'rows': 40, 'media': 7})
+    monkeypatch.setattr(module, 'load_settings', lambda path: SETTINGS)
+
+    assert module.main(['--db', str(db_path)]) == 0
+
+    out = capsys.readouterr().out
+    assert '3 row(s) changed' in out and '40 rows match' in out and '7 media files' in out

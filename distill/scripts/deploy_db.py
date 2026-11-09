@@ -5,6 +5,8 @@ Usage: python -m distill.scripts.deploy_db [--db PATH] [--config PATH]
 Only rows that differ and media the VM lacks are sent; the site keeps running, and
 books that exist only on the VM are left alone. Account/progress databases are backed
 up but never changed. The one latest metadata archive is atomically refreshed.
+
+Every run ends by reading the VM back, so a run with nothing to send is a full check.
 """
 import argparse
 from contextlib import closing
@@ -18,8 +20,8 @@ import shlex
 from pathlib import Path
 
 from distill import config
-from distill.scripts.db_patch import build_patch, patch_size
-from distill.scripts.media_transfer import media_archive, verify_media
+from distill.scripts.db_patch import build_patch, patch_size, row_hashes
+from distill.scripts.media_transfer import media_archive, media_keys, verify_media
 
 DEFAULT_CONFIG = config.BASE_DIR / 'deploy' / 'distill' / 'deploy.local.env'
 REQUIRED_KEYS = (
@@ -73,7 +75,7 @@ def _remote_media_keys(settings: dict, run) -> frozenset:
     return frozenset(line.strip() for line in (result.stdout or '').splitlines() if line.strip())
 
 
-def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
+def _deploy_db(db_path: Path, settings: dict, run, archive) -> dict:
     instance = settings['DISTILL_VM_INSTANCE']
     svc = settings['DISTILL_VM_SERVICE_USER']
     remote_db = settings['DISTILL_VM_REMOTE_DB']
@@ -127,6 +129,19 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
         ssh(f'{patcher} apply --db {shlex.quote(remote_db)} < ~/{REMOTE_PATCH}', 'applying the patch')
         ssh(f'rm -f ~/{REMOTE_PATCH}', 'temporary patch cleanup')
 
+    # Read the VM back: sound, every local row identical, every media file present.
+    ssh(f'{patcher} check --db {shlex.quote(remote_db)}', 'integrity check of the live database')
+    after = json.loads(ssh(f'{patcher} hashes --db {shlex.quote(remote_db)}', 're-reading live rows'))
+    with closing(sqlite3.connect(db_path)) as snapshot:
+        differing = patch_size(build_patch(snapshot, after))
+        rows = sum(len(table) for table in row_hashes(snapshot)['tables'].values())
+    if differing:
+        raise DeployError(f'{differing} row(s) still differ on the VM after the deploy')
+    wanted = media_keys(db_path)
+    absent = set(wanted) - _remote_media_keys(settings, run)
+    if absent:
+        raise DeployError(f'{len(absent)} media file(s) missing on the VM after the deploy')
+
     # Still up, and still behind auth.
     code = ssh(f"curl -s -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{port}/", 'local auth check').strip()
     if code != '401':
@@ -134,6 +149,7 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
 
     if archive is not None:
         ssh(f'rm -f ~/{REMOTE_MEDIA_UPLOAD}', 'temporary media upload cleanup')
+    return {'changed': patch_size(patch), 'rows': rows, 'media': len(wanted)}
 
 
 def _ship_deploy_audio(snapshot) -> None:
@@ -143,7 +159,7 @@ def _ship_deploy_audio(snapshot) -> None:
             snapshot.execute('UPDATE chapter_audio SET storage_key = deploy_key WHERE deploy_key IS NOT NULL')
 
 
-def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
+def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> dict:
     db_path = Path(db_path)
     missing = [key for key in REQUIRED_KEYS if not settings.get(key)]
     if missing:
@@ -164,7 +180,7 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
             verify_media(snapshot, media_dir)  # before any remote call
             present = _remote_media_keys(settings, run)
             with media_archive(snapshot, media_dir=media_dir, exclude=present) as archive:
-                _deploy_db(snapshot, settings, run, archive)
+                return _deploy_db(snapshot, settings, run, archive)
     except (ValueError, OSError, sqlite3.Error) as error:
         raise DeployError(f'Media preparation/deployment failed: {error}') from error
 
@@ -175,11 +191,12 @@ def main(argv: list) -> int:
     parser.add_argument('--config', type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
     try:
-        deploy_db(args.db, load_settings(args.config))
+        summary = deploy_db(args.db, load_settings(args.config))
     except DeployError as e:
         print(f'Deploy failed: {e}', file=sys.stderr)
         return 1
-    print('Deployed distill.db changes')
+    print(f'Deployed distill.db: {summary["changed"]} row(s) changed')
+    print(f'Verified on the VM: integrity ok, {summary["rows"]} rows match, {summary["media"]} media files present')
     return 0
 
 

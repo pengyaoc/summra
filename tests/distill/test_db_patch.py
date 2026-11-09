@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from distill.models import DistillDatabase
-from distill.scripts.db_patch import apply_patch, build_patch, row_hashes
+from distill.scripts.db_patch import apply_patch, build_patch, integrity_problems, main as patch_main, row_hashes
 
 
 @pytest.fixture
@@ -144,3 +144,40 @@ def test_a_changed_chapter_tells_the_reader_to_reindex(pair):
     apply_patch(live, patch_for(local, live))
     with sqlite3.connect(live) as conn:
         assert conn.execute('SELECT revision FROM reader_revision WHERE book_id = ?', (book_id,)).fetchone()[0] > before
+
+
+def test_a_healthy_database_has_no_integrity_problems(pair):
+    _, live_path, _ = pair
+    with sqlite3.connect(live_path) as live:
+        assert integrity_problems(live) == []
+
+
+def orphan_a_chapter(live_path):
+    with sqlite3.connect(live_path) as live:  # foreign keys are off by default on this connection
+        live.execute('UPDATE chapters SET book_id = 999999 WHERE id = (SELECT MIN(id) FROM chapters)')
+
+
+def test_a_row_pointing_at_a_missing_parent_is_a_problem(pair):
+    _, live_path, _ = pair
+    orphan_a_chapter(live_path)
+    with sqlite3.connect(live_path) as live:
+        assert any('chapters' in problem for problem in integrity_problems(live))
+
+
+def test_check_command_exits_nonzero_and_names_the_problem(pair, capsys):
+    _, live_path, _ = pair
+    orphan_a_chapter(live_path)
+
+    with pytest.raises(SystemExit) as stopped:
+        patch_main(['check', '--db', str(live_path)])
+
+    assert stopped.value.code == 1
+    assert 'chapters' in capsys.readouterr().out
+
+
+def test_check_command_passes_a_healthy_database(pair, capsys):
+    _, live_path, _ = pair
+
+    patch_main(['check', '--db', str(live_path)])
+
+    assert 'ok' in capsys.readouterr().out

@@ -131,6 +131,8 @@ restore metadata together with the separate private media store.
 
 ## Distill Listen: chapter audio (2026-11-07)
 
+**Paused hold (2026-11-08).** iOS freezes a paused web app, so lock-screen Play stops reaching it. `Listener.pause()` loops a generated silent WAV on the same element for `HOLD_MS` (30 min), with the place in `held`; `listener.playing` is the real state, since `audio.paused` is false during the hold. Audio events are ignored while held.
+
 Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `docs/superpowers/plans/2026-11-07-distill-listen.md`.
 
 - **Spoken text** (`distill/audio/spoken.py`):
@@ -160,6 +162,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
 - **Deploy:**
   - `media_transfer list --media-dir` prints the keys the VM has. `deploy_db` verifies all local media, lists the VM's keys, then uploads a tar of only the missing ones.
   - Content deploys are row patches (`distill/scripts/db_patch.py`): the VM prints a hash per row of `books`, `images`, `cover_thumbnails`, `chapters` and `chapter_audio`; `build_patch` sends only differing rows; `apply_patch` runs as the service user in one transaction with deferred foreign keys and no restart. Rows are deleted only for books present locally, so live-only books survive. Reader tables are not sent; revision triggers mark changed books and the VM reindexes on demand.
+  - Every `deploy_db` run ends by reading the VM back: `db_patch check` (SQLite `quick_check` and `foreign_key_check`), a fresh row-hash comparison that must find nothing to send, and every referenced media key present. Any failure fails the deploy; a run with nothing to send is therefore a full check of the live database.
   - Siri stops at about 26 s of speech per sentence (about 130 Chinese characters) and reports success. `SiriEngine` records pieces of at most 90 characters (`split_for_siri`, cut at sentence ends, then clause marks), joins them with 150 ms of silence, and fails any piece of 25.5 s or more. Audio recorded before this has voice `siri:zh-CN-D@1.0` (`CUT_OFF_VOICES`): it keeps playing, and `make_audio` treats it as stale.
   - `media_keys` includes `chapter_audio` (both keys locally).
   - In the shipped snapshot, `deploy_db` sets `storage_key = deploy_key` wherever it is set, so the VM DB references only Opus files and no AAC is uploaded. An AAC-only chapter ships its AAC until converted.

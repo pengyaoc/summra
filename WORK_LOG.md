@@ -11563,3 +11563,11 @@ Listen dry-run:40entries/~3.6hours spoken audio. Detached worker42375 (/tmp/dist
 Owner rejected the Reading/Library tabs and chose, after two rounds of mockups, one page: current book with equal Continue and Listen, Also reading, then the whole library; desktop pins the book left. Fixed app background, no swipe-up. Book page uses the same two buttons. Listen now plays on home and book pages (`listen_page.js`, shared Listener with a stand-in reader), saving the place to the server; navigating away stops audio. Old tab tests replaced because the tabs were removed on request; one race fixed in `distill_listen.mjs` setup. Not committed or deployed yet; not checked on a real iPhone.
 
 Header follow-up: on desktop the logo moved into the full-height book panel, removing the bar across the split page and the jump past it when choosing Unread or Finished. Status and search share a line; the three selects sit in a compact row that cannot overflow. Not committed or deployed yet.
+
+## 2026-11-08 — Listen: lock-screen Play after a pause
+
+Owner: lock-screen Pause worked but Play did nothing (with Plainly force-quit), or started Plainly. Code path was correct; matches iOS freezing a paused web app (WebKit bug 243258). `Listener.pause()` now loops silence on the same audio element for up to 30 minutes, keeping the place in `held`; resume reloads the chapter there. Lock-screen Pause while held resumes, because iOS may show Pause during silence. Not yet verified on a real iPhone, which is the only way to confirm it. Tests read `listener.playing` instead of `audio.paused`.
+
+## 2026-11-09 — Chinese audio deployed; VM check in deploy_db
+
+All 12 Chinese books re-recorded with Siri text pieces (no failures) and deployed with `deploy_db`. Owner asked for the VM to be validated: every `deploy_db` run now ends with `db_patch check` (`quick_check`, `foreign_key_check`), a second row-hash comparison that must find no differences, and all referenced media present on the VM; it prints what it verified. TDD in `tests/distill/test_deploy_db.py` and `test_db_patch.py`; full suite 1,352 passed.

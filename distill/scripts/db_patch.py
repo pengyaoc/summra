@@ -108,14 +108,28 @@ def _upsert(conn, table, change):
                      f'ON CONFLICT({", ".join(pk)}) DO UPDATE SET {updates}', rows)
 
 
+def integrity_problems(conn) -> list:
+    """What SQLite finds wrong with a database: damaged pages and rows with a missing parent."""
+    problems = [row[0] for row in conn.execute('PRAGMA quick_check') if row[0] != 'ok']
+    problems += [f'{table} row {rowid} points at a missing {parent} row'
+                 for table, rowid, parent, _ in conn.execute('PRAGMA foreign_key_check')]
+    return problems
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('hashes', 'apply'))
+    parser.add_argument('command', choices=('hashes', 'apply', 'check'))
     parser.add_argument('--db', required=True)
     args = parser.parse_args(argv)
     if args.command == 'hashes':
         with closing(sqlite3.connect(f'file:{args.db}?mode=ro', uri=True)) as conn:
             json.dump(row_hashes(conn), sys.stdout)
+    elif args.command == 'check':
+        with closing(sqlite3.connect(f'file:{args.db}?mode=ro', uri=True)) as conn:
+            problems = integrity_problems(conn)
+        print('\n'.join(problems[:20]) or 'ok')
+        if problems:
+            sys.exit(1)
     else:
         patch = json.load(sys.stdin)
         apply_patch(args.db, patch)
