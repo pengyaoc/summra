@@ -2600,7 +2600,7 @@ Distill is a private app for the owner's book summaries, the second app on the s
 
 - **Reading now**: started books most recent first, with cover, progress and saved location. Show six cards initially, with an expandable remainder.
 - Clicking anywhere on a Reading now or Finished card opens the reader at its saved position, including the cover, title, progress bar and empty card space. The whole card is also a keyboard-accessible link. Deployed and verified on 2026-10-26.
-- **Finished**, above All books: books explicitly marked Read, six initially with an expandable remainder. Finished cards resume the saved place.
+- **Home tabs (web):** Reading and Library, in the header on the same line as the icon, on phone and desktop. Home opens on Reading, or on Library when nothing is in progress or the URL carries filters. Reading shows the last-read book as a larger card and the others beneath it. Library holds search, an All / Unread / Finished switch, and language, category and sort filters: visible on desktop, behind a Filters button on phones, applied as soon as they change.
 - **All books**: status badges, language/category/status filters and newest/title/author/shortest sorting. Preserve filters and scroll position when returning from a book; refresh server progress when returning through the browser's back-forward cache.
 - Show approximate reading times using 220 English words or 400 CJK characters per minute.
 

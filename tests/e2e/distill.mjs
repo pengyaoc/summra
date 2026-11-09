@@ -183,6 +183,30 @@ try {
   // --- Library -> book page -> reader -------------------------------------
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   check(await page.locator('.distill-tile').count() > 0, 'library lists books');
+  // Tabs on top everywhere; filters visible on desktop and behind a button on phones.
+  check(await page.locator('.distill-tabs a').count() === 2, 'Reading and Library tabs show');
+  const tabsBottom = (await page.locator('.distill-tabs').boundingBox()).y;
+  const onOneLine = async () => {
+    const icon = await page.locator('.distill-wordmark').boundingBox();
+    const tabs = await page.locator('.distill-tabs').boundingBox();
+    return tabs.y < icon.y + icon.height && icon.y < tabs.y + tabs.height && tabs.x >= icon.x + icon.width;
+  };
+  check(await onOneLine(), 'desktop: tabs share the line with the icon');
+  check(tabsBottom < (await page.locator('.distill-tile').first().boundingBox()).y, 'tabs sit above the books');
+  const panel = page.locator('.distill-filter-panel');
+  check(await panel.isVisible() && await page.locator('.distill-filter-toggle').isHidden(), 'desktop: filters stay visible');
+  const desktopSize = page.viewportSize();
+  await page.setViewportSize({ width: 375, height: 667 });
+  check(await onOneLine(), 'phone: tabs share the line with the icon');
+  check(await panel.isHidden(), 'phone: filters start hidden');
+  await page.locator('.distill-filter-toggle').click();
+  check(await panel.isVisible(), 'phone: the Filters button opens them');
+  await page.setViewportSize(desktopSize);
+  await page.selectOption('select[name="lang"]', 'en');
+  await page.waitForURL(/lang=en/);
+  check(await page.locator('.distill-tile[lang="zh"]').count() === 0, 'choosing a filter applies at once');
+  check(/tab=library/.test(page.url()), 'a filter stays on Library');
+  await page.goto(`${BASE}/?tab=library`, { waitUntil: 'networkidle' });
   check(await page.locator('.distill-tile .distill-cover').count() === await page.locator('.distill-tile').count(), 'every book has a cover image or placeholder');
   await page.emulateMedia({ colorScheme: 'dark' });
   check(await page.evaluate(() => getComputedStyle(document.body).colorScheme.includes('light') && getComputedStyle(document.body).backgroundColor === 'rgb(246, 241, 231)'), 'home stays daylight with an OS dark preference');

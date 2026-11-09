@@ -28,7 +28,7 @@ def test_library_lists_books_newest_first(app_env, sample_book, write_book):
     sample_book.pop('cover')
     content_db.import_book(write_book(sample_book))
     html = get(client, '/').get_data(as_text=True)
-    assert 'All books' in html
+    assert 'id="library-heading"' in html
     assert html.index('/books/newer-book?') < html.index('/books/my-book?')
     # A book with no cover gets a title placeholder instead of a broken image.
     assert 'book-cover-placeholder' in html
@@ -58,7 +58,7 @@ def test_library_reading_now_shows_progress_label(app_env):
     assert 'Reading now' in html
     assert 'Chapter 1 of 4' in html
     assert 'href="/books/my-book/read?return=/"' in html
-    assert html.index('Reading now') < html.index('All books')
+    assert '<div class="distill-grid">' not in html
 
 
 def test_library_counts_chapters_without_loading_blocks(app_env, monkeypatch):
@@ -261,7 +261,6 @@ def test_library_status_sort_estimates_and_safe_return(app_env, sample_book, wri
     sample_book.update(slug='another-book', title='Another Book')
     db.import_book(write_book(sample_book))
     html = get(client, '/?sort=title&status=unread').get_data(as_text=True)
-    # Only the All books grid is filtered; Reading now remains available above it.
     grid = html.split('<div class="distill-grid">')[1].split('</section>')[0]
     assert '/books/another-book?' in grid and '/books/my-book?' not in grid
     assert 'About ' in grid and ' min' in grid
@@ -284,8 +283,9 @@ def test_finished_book_has_history_read_again_and_source_location(app_env):
     assert 'Finished · 100%' in html and 'Read from beginning' in html and 'Mark unfinished' in html
     assert 'restart=1' in html
     home = get(client, '/').get_data(as_text=True)
-    assert 'id="finished-heading"' in home and 'Resume' in home
-    assert home.index('id="finished-heading"') < home.index('id="all-books-heading"')
+    assert 'finished-heading' not in home  # Finished is a view inside Library, not a shelf
+    finished = get(client, '/?tab=library&status=finished').get_data(as_text=True)
+    assert '/books/my-book?' in finished
     from distill.routes import progress_label
     assert progress_label({'current_chapter': {'chapter_number': 4, 'chapter_title': 'Source'}}, 4) == 'Source'
 
@@ -326,9 +326,6 @@ def test_finished_book_default_action_keeps_newer_saved_place(app_env):
     assert 'restart=' not in primary
     assert 'Continue reading' in html and 'Saved place: 1. First' in html
     assert 'Read from beginning' in html and 'restart=1' in html
-    home = get(client, '/').get_data(as_text=True)
-    history = home.split('id="finished-heading"')[1].split('id="all-books-heading"')[0]
-    assert 'Resume' in history and '1. First' in history and 'restart=1' not in history
     assert get(client, f'/api/progress/v2/books/{bid}').get_json()['projection'] == before
 
 
@@ -395,8 +392,89 @@ def test_chinese_titles_keep_their_language_on_the_home_page(app_env, sample_boo
     client.post('/api/progress/v2/mutations', json=_mutation(book_id, chapter['id']), headers=HEADERS)
     home = get(client, '/').get_data(as_text=True)
     assert '<title>Distill</title>' in home
-    assert 'class="distill-tile" lang="zh"' in home
+    assert 'class="distill-tile" lang="zh"' in get(client, '/?tab=library').get_data(as_text=True)
     assert '<h3 lang="zh">全球通史——从史前史到21世纪</h3>' in home
     book = get(client, '/books/chinese-book').get_data(as_text=True)
     assert '<html lang="zh"' in book
     assert '<h1>全球通史<span class="distill-book-subtitle">从史前史到21世纪</span></h1>' in book
+
+
+def _start_reading(client, db, bid):
+    chapter = db.get_chapters(bid)[1]
+    assert client.post('/api/progress/v2/mutations', json=_mutation(bid, chapter['id']), headers=HEADERS).status_code == 200
+
+
+def _current(html, label):
+    return f'aria-current="page">{label}<' in html
+
+
+def test_home_opens_on_reading_when_a_book_is_in_progress(app_env):
+    client, db, _, bid = app_env
+    _start_reading(client, db, bid)
+    html = get(client, '/').get_data(as_text=True)
+    assert _current(html, 'Reading') and 'distill-reading-lead' in html
+    assert '<div class="distill-grid">' not in html and 'type="search"' not in html
+    assert 'Good ideas stay with you' not in html
+
+
+def test_home_opens_on_library_with_nothing_in_progress(app_env):
+    client = app_env[0]
+    html = get(client, '/').get_data(as_text=True)
+    assert _current(html, 'Library') and 'distill-grid' in html
+
+
+def test_library_tab_is_reachable_while_reading(app_env):
+    client, db, _, bid = app_env
+    _start_reading(client, db, bid)
+    html = get(client, '/?tab=library').get_data(as_text=True)
+    assert _current(html, 'Library') and '/books/my-book?' in html and 'distill-reading-lead' not in html
+
+
+def test_filters_in_the_url_open_library(app_env):
+    client, db, _, bid = app_env
+    _start_reading(client, db, bid)
+    assert _current(get(client, '/?lang=en').get_data(as_text=True), 'Library')
+
+
+def test_unknown_tab_falls_back_to_the_default(app_env):
+    client = app_env[0]
+    assert _current(get(client, '/?tab=nonsense').get_data(as_text=True), 'Library')
+
+
+def test_empty_reading_tab_points_to_library(app_env):
+    html = get(app_env[0], '/?tab=reading').get_data(as_text=True)
+    assert _current(html, 'Reading') and 'href="/?tab=library"' in html and 'distill-reading-lead' not in html
+
+
+def test_status_switch_replaces_the_dropdown_and_keeps_other_filters(app_env):
+    html = get(app_env[0], '/?tab=library&lang=en&status=unread').get_data(as_text=True)
+    assert 'name="status"' in html and '<select name="status"' not in html
+    switch = html.split('distill-status-switch')[1].split('</nav>')[0]
+    assert 'aria-current="page">Unread<' in switch
+    assert 'status=finished' in switch and switch.count('lang=en') == 3
+
+
+def test_library_filters_have_no_submit_button_and_a_toggle(app_env):
+    html = get(app_env[0], '/?tab=library&lang=zh&sort=title').get_data(as_text=True)
+    assert 'Find books</button>' not in html and 'distill-filter-panel' in html
+    toggle = html.split('distill-filter-toggle')[1].split('</button>')[0]
+    assert '中文' in toggle and 'Title' in toggle
+
+
+def test_clearing_filters_stays_on_library(app_env):
+    client, db, _, bid = app_env
+    _start_reading(client, db, bid)
+    html = get(client, '/?tab=library&lang=en').get_data(as_text=True)
+    summary = html.split('distill-filter-summary')[1].split('</div>')[0]
+    assert 'href="/?tab=library"' in summary
+
+
+def test_tabs_keep_the_deploy_prefix(app_env):
+    html = app_env[0].get('/?tab=library', headers={**HEADERS, 'X-Forwarded-Prefix': '/distill'}).get_data(as_text=True)
+    assert 'href="/distill/?tab=reading"' in html and 'href="/distill/?tab=library' in html
+
+
+def test_tabs_sit_in_the_header_beside_the_icon(app_env):
+    html = get(app_env[0], '/?tab=library').get_data(as_text=True)
+    header = html.split('<header class="distill-header">')[1].split('</header>')[0]
+    assert 'distill-wordmark' in header and 'class="distill-tabs"' in header

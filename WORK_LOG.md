@@ -1,5 +1,12 @@
 # Summra Work Log
 
+## 2026-11-08: Distill home page tabs (Option B)
+
+- Status: built and tested locally; not committed or deployed.
+- Home is now Reading and Library tabs (`?tab=`), in the header beside the icon on all web sizes; banner and Finished shelf removed. Reading: last-read book as a large card. Library: All / Unread / Finished switch, search, filters visible on desktop and behind a Filters button on phones, applied on change.
+- `tests/distill/test_pages.py` assertions on the removed shelf and All books heading were changed because the requested layout changed.
+- Checked phone and desktop screenshots with a local test user.
+
 ## 2026-11-08: `deploy_code` script
 
 - Added `distill/scripts/deploy_code.py`: one reviewed command for Distill code deploys, replacing hand-built SSH commands. Tests: `tests/distill/test_deploy_code.py`.

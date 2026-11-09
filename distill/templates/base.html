@@ -39,6 +39,7 @@
         <a class="distill-wordmark" href="{{ base_path }}/" aria-label="Distill home">
             <span id="distill-brand-mark">{{ brand_mark() }}</span><span>Distill<span class="distill-brand-dot">.</span></span>
         </a>
+        {% block header_nav %}{% endblock %}
         <span class="distill-header-caption">A little reading. A lot to keep.</span>
     </header>
 {% endif %}
