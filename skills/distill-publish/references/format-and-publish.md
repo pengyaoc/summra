@@ -79,7 +79,7 @@ After preflight and local backup:
 venv/bin/python -m distill.scripts.push_book /path/to/staged-entry --deploy
 ```
 
-This validates, imports into local `data/distill.db`, then uses `distill/scripts/deploy_db.py` to snapshot content, install verified media, back up live databases, upload/hash-check metadata, swap the content DB and restart Distill. Account/progress databases are backed up, not replaced. It is a full-catalog deployment, not a server-side single-article upload. There is no automatic concurrency lock or catalog-divergence guard in this command; perform the preflight yourself.
+This validates, imports into local `data/distill.db`, then uses `distill/scripts/deploy_db.py` to snapshot content, install verified media, back up live databases, and send only the rows that differ from the live site, applied in one transaction with Distill still running. Account/progress databases are backed up, not changed. Books that exist only on the live site are left alone, and a book whose id or slug means something different on each side stops the deploy. There is no automatic concurrency lock or catalog-divergence guard in this command; perform the preflight yourself.
 
 If import succeeded but deployment failed, local is now ahead. Inspect live state, backup status and service health; do not interpret that expected local difference as permission to discard remote changes. Fix the concrete failure and redeploy the verified content snapshot using the existing `deploy_db` command when appropriate. Stop on unresolved catalog conflicts or missing deployment access and report the actionable blocker.
 

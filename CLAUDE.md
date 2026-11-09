@@ -509,11 +509,11 @@ Distill is the owner-only summary reader at `/distill` on the same host. It shar
   - It sets `OIDCUnAuthAction auth`, so signed-out visitors go to Google sign-in.
   - Everything is proxied to gunicorn, static files included. There is no Apache `Alias`: Distill's static files must not skip sign-in or be cached `public`.
 - **App guard.** `distill.app_prod` refuses to start unless the auth mode is `required`, and the app returns 403 to any non-allow-listed email.
-- **Database.** `distill.db` holds the content and images. Push it from local with one command, which does the snapshot, scp to `~/distill.db.new`, md5 check, stop, mv, chown `<SERVICE_USER>` / chmod 664, start, `is-active`, a local `curl` that must return 401, and pruning to the newest 2 `*.bak-pre-push-*` snapshots:
-  - `venv/bin/python -m distill.scripts.deploy_db [--db PATH] [--config PATH]` pushes the DB alone.
+- **Database.** `distill.db` holds the content and images. Deploys are incremental: one command compares rows with the VM and sends only the changed books, chapters, images, covers and audio plus media the VM lacks, applied in one transaction with the service running. It backs up the live DB first, refuses a book whose id or slug means something different on each side, leaves books that exist only on the VM alone, checks that the app still returns 401, and lets the VM rebuild its reader index on demand. The VM needs the current `distill/scripts/db_patch.py`, so pull code before the first deploy that uses a change to it:
+  - `venv/bin/python -m distill.scripts.deploy_db [--db PATH] [--config PATH]` sends the content changes alone.
   - `venv/bin/python -m distill.scripts.push_book <folder> --deploy` imports the book locally, then runs the same push, and prints the book's URL. `--deploy` with `--dry-run` is an error.
   - Settings come from the gitignored `deploy/distill/deploy.local.env` (override with `--config`). Make it from `deploy/distill/deploy.local.env.example`. Keys: `DISTILL_VM_INSTANCE`, `_ZONE`, `_PROJECT`, `_ACCOUNT`, `_SERVICE_USER`, `_REMOTE_DB`, `_UNIT`, `_PORT`, and `DISTILL_SITE_URL`.
-  - An md5 mismatch aborts before the service is stopped. Never push `distill_user.db`: it holds reading progress.
+  - A SHA256 mismatch or a conflict stops before anything changes on the VM. Never push `distill_user.db`: it holds reading progress.
 
 **Chapter audio (Listen).** Audio is rendered on the Mac only (macOS voices), never on the VM.
 - English uses `say` with the system voice (Siri Voice 2). Chinese uses Mandarin Siri Voice 4 at rate 1.0, through InkChinese's `pipeline/siri_tts.py`; set `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy.local.env`.

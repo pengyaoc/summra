@@ -41,6 +41,10 @@ def _cover_variants(data: bytes) -> list:
             variants.append((fmt, mime, output.getvalue()))
     return variants
 
+# Recorded before long text was split: Siri cut off the end of long sentences.
+# Still served until re-recorded.
+CUT_OFF_VOICES = frozenset({'siri:zh-CN-D@1.0'})
+
 
 class DistillDatabase(ReaderIndexMixin):
     _reader_revision_tracking = True
@@ -229,7 +233,8 @@ class DistillDatabase(ReaderIndexMixin):
                 for c, row, current in self._audio_by_chapter(book_id) if current]
 
     def stale_or_missing_audio(self, book_id: int) -> List[int]:
-        return [c['id'] for c, _, current in self._audio_by_chapter(book_id) if not current]
+        return [c['id'] for c, row, current in self._audio_by_chapter(book_id)
+                if not current or row['voice'] in CUT_OFF_VOICES]
 
     def verify_media(self):
         keys = self.media_keys()

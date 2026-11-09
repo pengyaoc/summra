@@ -1,14 +1,16 @@
-"""Copy the local Distill content DB to the production VM and restart the service.
+"""Send the local Distill content changes to the production VM, row by row.
 
 Usage: python -m distill.scripts.deploy_db [--db PATH] [--config PATH]
 
-Content metadata and referenced media are pushed. Account/progress databases are
-backed up but never replaced. The one latest metadata archive is atomically refreshed.
+Only rows that differ and media the VM lacks are sent; the site keeps running, and
+books that exist only on the VM are left alone. Account/progress databases are backed
+up but never changed. The one latest metadata archive is atomically refreshed.
 """
 import argparse
 from contextlib import closing
 import tempfile
 import hashlib
+import json
 import sqlite3
 import subprocess
 import sys
@@ -16,6 +18,7 @@ import shlex
 from pathlib import Path
 
 from distill import config
+from distill.scripts.db_patch import build_patch, patch_size
 from distill.scripts.media_transfer import media_archive, verify_media
 
 DEFAULT_CONFIG = config.BASE_DIR / 'deploy' / 'distill' / 'deploy.local.env'
@@ -23,7 +26,7 @@ REQUIRED_KEYS = (
     'DISTILL_VM_INSTANCE', 'DISTILL_VM_ZONE', 'DISTILL_VM_PROJECT', 'DISTILL_VM_ACCOUNT',
     'DISTILL_VM_SERVICE_USER', 'DISTILL_VM_REMOTE_DB', 'DISTILL_VM_UNIT', 'DISTILL_VM_PORT',
 )
-REMOTE_UPLOAD = 'distill.db.new'  # relative to the ssh user's home: the VM's /tmp is small
+REMOTE_PATCH = 'distill.patch.json'  # relative to the ssh user's home: the VM's /tmp is small
 REMOTE_MEDIA_UPLOAD = 'distill-media.new.tar'
 
 
@@ -42,14 +45,6 @@ def load_settings(path: Path) -> dict:
             key, _, value = line.partition('=')
             settings[key.strip()] = value.strip()
     return settings
-
-
-def _md5(path: Path) -> str:
-    digest = hashlib.md5()
-    with path.open('rb') as f:
-        for chunk in iter(lambda: f.read(1 << 20), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _gcloud_flags(settings: dict) -> list:
@@ -79,16 +74,9 @@ def _remote_media_keys(settings: dict, run) -> frozenset:
 
 
 def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
-    missing = [key for key in REQUIRED_KEYS if not settings.get(key)]
-    if missing:
-        raise DeployError(f'missing deploy setting(s): {", ".join(missing)}')
-    if not db_path.is_file():
-        raise DeployError(f'database not found: {db_path}')
-
     instance = settings['DISTILL_VM_INSTANCE']
     svc = settings['DISTILL_VM_SERVICE_USER']
     remote_db = settings['DISTILL_VM_REMOTE_DB']
-    unit = settings['DISTILL_VM_UNIT']
     port = settings['DISTILL_VM_PORT']
     gcloud_flags = _gcloud_flags(settings)
 
@@ -101,54 +89,45 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> None:
     def ssh(command: str, what: str) -> str:
         return gcloud('ssh', instance, f'--command={command}', what=what)
 
-    # 1. Fold the WAL into the main file so the copy is complete, then fingerprint it.
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-    finally:
-        conn.close()
-    local_md5 = _md5(db_path)
+    def upload(local: Path, remote: str, what: str) -> None:
+        digest = hashlib.sha256(local.read_bytes()).hexdigest()
+        gcloud('scp', str(local), f'{instance}:{remote}', what=what)
+        ssh(f'chmod 600 ~/{remote}', f'{what} permissions')
+        if ssh(f'sha256sum ~/{remote}', f'{what} hash').split()[:1] != [digest]:
+            raise DeployError(f'{what}: SHA256 mismatch after upload; live site unchanged')
+
+    exists = run(['gcloud', 'compute', 'ssh', instance, f'--command=test -f {shlex.quote(remote_db)}', *gcloud_flags],
+                 capture_output=True, text=True)
+    if exists.returncode != 0:
+        raise DeployError(f'no live database at {remote_db}: nothing to apply changes to')
+
+    # What differs, before anything is uploaded: a conflict stops the deploy here.
+    helper, remote_media = _remote_media(settings)
+    repo_root = Path(settings.get('DISTILL_VM_REPO_ROOT') or Path(remote_db).parent.parent)
+    patcher = (f'sudo -u {shlex.quote(svc)} env PYTHONPATH={shlex.quote(str(repo_root))} '
+               f'{shlex.quote(str(repo_root / "venv/bin/python"))} -m distill.scripts.db_patch')
+    live = json.loads(ssh(f'{patcher} hashes --db {shlex.quote(remote_db)}', 'reading live rows'))
+    with closing(sqlite3.connect(db_path)) as snapshot:
+        patch = build_patch(snapshot, live)
 
     # Install verified immutable media before activating any references to it.
-    helper, remote_media = _remote_media(settings)
     if archive is not None:
-        archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
-        gcloud('scp', str(archive), f'{instance}:{REMOTE_MEDIA_UPLOAD}', what='media upload')
-        ssh(f'chmod 600 ~/{REMOTE_MEDIA_UPLOAD}', 'private media upload permissions')
-        uploaded_sha = ssh(f'sha256sum ~/{REMOTE_MEDIA_UPLOAD}', 'media upload hash').split()[:1]
-        if uploaded_sha != [archive_sha]:
-            raise DeployError('media SHA256 mismatch after upload; service untouched')
+        upload(archive, REMOTE_MEDIA_UPLOAD, 'media upload')
         ssh(f'{helper} install ~/{REMOTE_MEDIA_UPLOAD} --media-dir {shlex.quote(remote_media)} '
             f'--owner {shlex.quote(svc)}', 'verified media installation')
 
-    # One consistent archive includes existing content/accounts/pairing DBs.
-    exists = run(['gcloud', 'compute', 'ssh', instance, f'--command=test -f {shlex.quote(remote_db)}', *gcloud_flags],
-                 capture_output=True, text=True)
-    if exists.returncode == 0:
+    if patch_size(patch):
+        # One consistent archive includes existing content/accounts/pairing DBs.
         ssh(f'{helper} backup --db {shlex.quote(remote_db)} --owner {shlex.quote(svc)}',
             'snapshot of the live database')
+        patch_file = db_path.with_name('patch.json')
+        patch_file.write_text(json.dumps(patch, ensure_ascii=False), encoding='utf-8')
+        upload(patch_file, REMOTE_PATCH, 'patch upload')
+        # Run as the service user, so SQLite's WAL files stay writable by the app.
+        ssh(f'{patcher} apply --db {shlex.quote(remote_db)} < ~/{REMOTE_PATCH}', 'applying the patch')
+        ssh(f'rm -f ~/{REMOTE_PATCH}', 'temporary patch cleanup')
 
-    # 3-4. Upload, then verify before touching the service.
-    gcloud('scp', str(db_path), f'{instance}:{REMOTE_UPLOAD}', what='scp of the database')
-    remote_md5 = ssh(f'md5sum ~/{REMOTE_UPLOAD}', 'remote md5sum').split()[:1]
-    if remote_md5 != [local_md5]:
-        raise DeployError(f'md5 mismatch after upload (local {local_md5}, remote {remote_md5}); service untouched')
-
-    # 5. Swap the file in while the service is stopped.
-    ctl = f'sudo -u {svc} XDG_RUNTIME_DIR=/run/user/$(id -u {svc}) systemctl --user'
-    swap = ' && '.join([
-        f'{ctl} stop {unit}',
-        f'sudo rm -f {shlex.quote(remote_db + "-wal")} {shlex.quote(remote_db + "-shm")}',
-        f'sudo mv ~/{REMOTE_UPLOAD} {shlex.quote(remote_db)}',
-        f'sudo chown {shlex.quote(svc + ":" + svc)} {shlex.quote(remote_db)}',
-        f'sudo chmod 664 {shlex.quote(remote_db)}',
-        f'{ctl} start {unit}',
-        'sleep 3',
-        f'{ctl} is-active {unit}',
-    ])
-    ssh(swap, f'service swap/restart of {unit}')
-
-    # 6. Up, and still behind auth.
+    # Still up, and still behind auth.
     code = ssh(f"curl -s -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{port}/", 'local auth check').strip()
     if code != '401':
         raise DeployError(f'expected HTTP 401 from the app (up, auth required), got {code!r}')
@@ -191,7 +170,7 @@ def deploy_db(db_path: Path, settings: dict, run=subprocess.run) -> None:
 
 
 def main(argv: list) -> int:
-    parser = argparse.ArgumentParser(description='Push the local Distill DB to the VM.')
+    parser = argparse.ArgumentParser(description='Send local Distill content changes to the VM.')
     parser.add_argument('--db', type=Path, default=config.DATABASE_PATH)
     parser.add_argument('--config', type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args(argv)
@@ -200,7 +179,7 @@ def main(argv: list) -> int:
     except DeployError as e:
         print(f'Deploy failed: {e}', file=sys.stderr)
         return 1
-    print('Deployed distill.db')
+    print('Deployed distill.db changes')
     return 0
 
 

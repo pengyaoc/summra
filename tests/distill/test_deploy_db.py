@@ -1,4 +1,5 @@
 import hashlib
+import json
 import sqlite3
 import subprocess
 import tarfile
@@ -6,6 +7,7 @@ import tarfile
 import pytest
 
 from distill.scripts import push_book
+from distill.scripts.db_patch import row_hashes
 from distill.scripts.deploy_db import DeployError, deploy_db, load_settings
 
 SETTINGS = {
@@ -17,27 +19,26 @@ SETTINGS = {
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    path = tmp_path / 'distill.db'
-    conn = sqlite3.connect(path)
-    conn.execute('CREATE TABLE t (x)')
-    conn.execute('INSERT INTO t VALUES (1)')
-    conn.commit()
-    conn.close()
-    return path
+def db_path(tmp_path, sample_book, write_book):
+    from distill.models import DistillDatabase
+    db = DistillDatabase(tmp_path / 'distill.db')
+    db.import_book(write_book(sample_book))
+    return db.db_path
+
+
+EMPTY_LIVE = json.dumps({'tables': {}, 'slugs': {}})
 
 
 class FakeRun:
     """Records argv; scripted results are matched by a substring of the full command line."""
 
-    def __init__(self, md5, overrides=None):
-        self.md5 = md5
+    def __init__(self, overrides=None):
         self.overrides = overrides or {}
         self.calls = []
         self.media_sha = None
         self.media_members = []
-        self.uploaded_db_md5 = None
-        self.uploaded_audio = None
+        self.patch_sha = None
+        self.patch = None
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
@@ -50,19 +51,23 @@ class FakeRun:
             self.media_sha = hashlib.sha256(Path(argv[3]).read_bytes()).hexdigest()
             with tarfile.open(argv[3]) as tar:
                 self.media_members = tar.getnames()
-        if argv[:3] == ['gcloud', 'compute', 'scp'] and argv[4].endswith(':distill.db.new'):
+        if argv[:3] == ['gcloud', 'compute', 'scp'] and argv[4].endswith(':distill.patch.json'):
             from pathlib import Path
-            self.uploaded_db_md5 = hashlib.md5(Path(argv[3]).read_bytes()).hexdigest()
-            with sqlite3.connect(argv[3]) as uploaded:
-                if uploaded.execute("SELECT 1 FROM sqlite_master WHERE name='chapter_audio'").fetchone():
-                    self.uploaded_audio = uploaded.execute('SELECT storage_key, deploy_key FROM chapter_audio').fetchall()
+            self.patch_sha = hashlib.sha256(Path(argv[3]).read_bytes()).hexdigest()
+            self.patch = json.loads(Path(argv[3]).read_text())
         if 'sha256sum' in line:
-            return subprocess.CompletedProcess(argv, 0, f'{self.media_sha} media.tar', '')
-        if 'md5sum' in line:
-            return subprocess.CompletedProcess(argv, 0, f'{self.uploaded_db_md5 or self.md5}  /home/u/distill.db.new\n', '')
+            sha = self.patch_sha if 'distill.patch.json' in line else self.media_sha
+            return subprocess.CompletedProcess(argv, 0, f'{sha}  upload', '')
+        if 'db_patch hashes' in line:
+            return subprocess.CompletedProcess(argv, 0, EMPTY_LIVE, '')
         if 'curl' in line:
             return subprocess.CompletedProcess(argv, 0, '401', '')
         return subprocess.CompletedProcess(argv, 0, '', '')
+
+    def audio(self):
+        change = self.patch['upsert']['chapter_audio']
+        return [(dict(zip(change['columns'], row))['storage_key'], dict(zip(change['columns'], row))['deploy_key'])
+                for row in change['rows']]
 
     def lines(self):
         return [' '.join(c) for c in self.calls]
@@ -75,57 +80,69 @@ class FakeRun:
 
 
 def make_run(db_path, overrides=None):
-    # deploy_db checkpoints first, so hash the file in its checkpointed state.
-    conn = sqlite3.connect(db_path)
-    conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-    conn.close()
-    return FakeRun(hashlib.md5(db_path.read_bytes()).hexdigest(), overrides)
+    return FakeRun(overrides)
 
 
-def test_happy_path_command_sequence(db_path):
+def test_happy_path_sends_a_patch_without_touching_the_service(db_path):
     run = make_run(db_path)
 
     deploy_db(db_path, SETTINGS, run=run)
 
     order = [run.index(n) for n in (
-        'test -f /opt/x/data/distill.db',
+        'test -f /opt/x/data/distill.db', 'db_patch hashes',
         'media_transfer backup --db /opt/x/data/distill.db',
-        'compute scp', 'md5sum', 'systemctl --user stop distill.service',
-        'curl')]
+        'vm-1:distill.patch.json', 'sha256sum ~/distill.patch.json', 'db_patch apply', 'curl')]
     assert order == sorted(order)
     assert len(set(order)) == len(order)
     for call in run.calls:
         assert call[:3] in (['gcloud', 'compute', 'ssh'], ['gcloud', 'compute', 'scp'])
         assert '--zone=zone-a' in call and '--project=proj' in call and '--account=me@example.com' in call
-    scp = run.calls[run.index('compute scp')]
-    assert scp[3].endswith('/distill.db') and 'vm-1:distill.db.new' in scp
-    assert scp[3] != str(db_path)  # upload a consistent SQLite snapshot
-    service = run.lines()[run.index('systemctl --user stop')]
-    for fragment in ('id -u svc', 'XDG_RUNTIME_DIR=/run/user/', 'sudo mv', 'chown svc:svc',
-                     'chmod 664', 'systemctl --user start distill.service', 'sleep 3',
-                     'systemctl --user is-active distill.service'):
-        assert fragment in service
+    apply = run.lines()[run.index('db_patch apply')]
+    assert 'sudo -u svc' in apply and '< ~/distill.patch.json' in apply  # WAL files stay the service's
     assert 'http://127.0.0.1:5002/' in run.lines()[run.index('curl')]
-    assert not run.has('sudo mv ~/distill_user.db')
+    assert not run.has('systemctl') and not run.has('sudo mv') and not run.has('distill.db.new')
+    assert run.has('rm -f ~/distill.patch.json')
 
 
-def test_no_snapshot_when_remote_db_missing(db_path):
-    run = make_run(db_path, {'test -f': (1, '')})
+def test_nothing_changed_sends_nothing(db_path):
+    with sqlite3.connect(db_path) as conn:
+        live = json.dumps(row_hashes(conn))
+    run = make_run(db_path, {'db_patch hashes': (0, live), 'media_transfer list': (0, '')})
 
     deploy_db(db_path, SETTINGS, run=run)
 
-    assert not run.has('media_transfer backup')
-    assert run.has('systemctl --user stop')
+    assert not run.has('db_patch apply') and not run.has('media_transfer backup')
+    assert not run.has('distill.patch.json')
 
 
-def test_md5_mismatch_aborts_before_stop_or_mv(db_path):
-    run = make_run(db_path, {'md5sum': (0, 'deadbeef distill.db.new')})
+def test_missing_live_db_is_refused(db_path):
+    run = make_run(db_path, {'test -f': (1, '')})
 
-    with pytest.raises(DeployError, match='md5'):
+    with pytest.raises(DeployError, match='live database'):
         deploy_db(db_path, SETTINGS, run=run)
 
-    assert not run.has('systemctl')
-    assert not run.has('sudo mv')
+    assert not run.has('db_patch apply')
+
+
+def test_conflicting_live_book_stops_before_any_upload(db_path):
+    with sqlite3.connect(db_path) as conn:
+        live = row_hashes(conn)
+    live['slugs'] = {book_id: 'someone-else' for book_id in live['slugs']}
+    run = make_run(db_path, {'db_patch hashes': (0, json.dumps(live))})
+
+    with pytest.raises(DeployError, match='someone-else'):
+        deploy_db(db_path, SETTINGS, run=run)
+
+    assert not run.has('compute scp') and not run.has('db_patch apply')
+
+
+def test_sha_mismatch_aborts_before_apply(db_path):
+    run = make_run(db_path, {'sha256sum ~/distill.patch.json': (0, 'deadbeef x')})
+
+    with pytest.raises(DeployError, match='SHA256'):
+        deploy_db(db_path, SETTINGS, run=run)
+
+    assert not run.has('db_patch apply')
 
 
 @pytest.mark.parametrize('key', [k for k in sorted(SETTINGS) if k != 'DISTILL_SITE_URL'])
@@ -139,10 +156,10 @@ def test_missing_setting_names_the_key(db_path, key):
     assert run.calls == []
 
 
-def test_is_active_failure_raises(db_path):
-    run = make_run(db_path, {'systemctl --user stop': (3, 'inactive')})
+def test_apply_failure_raises(db_path):
+    run = make_run(db_path, {'db_patch apply': (1, 'boom')})
 
-    with pytest.raises(DeployError, match='service'):
+    with pytest.raises(DeployError, match='patch'):
         deploy_db(db_path, SETTINGS, run=run)
 
     assert not run.has('curl')
@@ -236,7 +253,7 @@ def test_media_verified_and_installed_before_database_activation(file_media_db):
     run = make_run(db.db_path)
     deploy_db(db.db_path, SETTINGS, run=run)
     assert sorted(run.media_members) == [f'{key[:2]}/{key}' for key in db.media_keys()]
-    assert run.index('sha256sum') < run.index('media_transfer install') < run.index('systemctl --user stop')
+    assert run.index('sha256sum') < run.index('media_transfer install') < run.index('db_patch apply')
     assert run.has('--media-dir /opt/x/data/distill-media')
     assert run.has('rm -f ~/distill-media.new.tar')
 
@@ -246,8 +263,7 @@ def test_bad_media_upload_never_stops_service(file_media_db, failure):
     run = make_run(file_media_db.db_path, {failure: (1, 'failed')})
     with pytest.raises(DeployError):
         deploy_db(file_media_db.db_path, SETTINGS, run=run)
-    assert not run.has('systemctl')
-    assert not run.has('sudo mv')
+    assert not run.has('db_patch apply')
 
 
 def test_missing_local_media_aborts_without_remote_calls(file_media_db):
@@ -274,14 +290,14 @@ def test_deploy_skips_media_upload_when_vm_has_everything(file_media_db):
     run = make_run(db.db_path, {'media_transfer list': (0, '\n'.join(db.media_keys()) + '\n')})
     deploy_db(db.db_path, SETTINGS, run=run)
     assert not run.has('distill-media.new.tar')
-    assert run.has('systemctl --user stop')
+    assert run.has('db_patch apply')
 
 
 def test_remote_media_list_failure_never_stops_service(file_media_db):
     run = make_run(file_media_db.db_path, {'media_transfer list': (1, 'boom')})
     with pytest.raises(DeployError):
         deploy_db(file_media_db.db_path, SETTINGS, run=run)
-    assert not run.has('systemctl')
+    assert not run.has('db_patch apply')
 
 
 def test_deploy_ships_opus_not_master(file_media_db):
@@ -293,7 +309,7 @@ def test_deploy_ships_opus_not_master(file_media_db):
     deploy_db(db.db_path, SETTINGS, run=run)
     assert f'{opus[:2]}/{opus}' in run.media_members
     assert f'{master[:2]}/{master}' not in run.media_members
-    assert run.uploaded_audio == [(opus, opus)]
+    assert run.audio() == [(opus, opus)]
     assert db.get_chapter_audio_key(chapter_id) == master  # local master untouched
 
 
@@ -304,4 +320,4 @@ def test_deploy_ships_master_when_no_opus_yet(file_media_db):
     run = make_run(db.db_path)
     deploy_db(db.db_path, SETTINGS, run=run)
     assert f'{master[:2]}/{master}' in run.media_members
-    assert run.uploaded_audio == [(master, None)]
+    assert run.audio() == [(master, None)]

@@ -153,6 +153,8 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
   - Saving audio does not change `reader_revision`.
 - **Deploy:**
   - `media_transfer list --media-dir` prints the keys the VM has. `deploy_db` verifies all local media, lists the VM's keys, then uploads a tar of only the missing ones.
+  - Content deploys are row patches (`distill/scripts/db_patch.py`): the VM prints a hash per row of `books`, `images`, `cover_thumbnails`, `chapters` and `chapter_audio`; `build_patch` sends only differing rows; `apply_patch` runs as the service user in one transaction with deferred foreign keys and no restart. Rows are deleted only for books present locally, so live-only books survive. Reader tables are not sent; revision triggers mark changed books and the VM reindexes on demand.
+  - Siri stops at about 26 s of speech per sentence (about 130 Chinese characters) and reports success. `SiriEngine` records pieces of at most 90 characters (`split_for_siri`, cut at sentence ends, then clause marks), joins them with 150 ms of silence, and fails any piece of 25.5 s or more. Audio recorded before this has voice `siri:zh-CN-D@1.0` (`CUT_OFF_VOICES`): it keeps playing, and `make_audio` treats it as stale.
   - `media_keys` includes `chapter_audio` (both keys locally).
   - In the shipped snapshot, `deploy_db` sets `storage_key = deploy_key` wherever it is set, so the VM DB references only Opus files and no AAC is uploaded. An AAC-only chapter ships its AAC until converted.
   - The VM must run this code before an audio push, since the push relies on its `list` command.

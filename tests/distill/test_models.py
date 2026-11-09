@@ -364,3 +364,17 @@ def test_save_audio_does_not_bump_reader_revision(db, sample_book, write_book):
     before = revision()
     _save_audio(db, db.get_chapters(bid)[0])
     assert revision() == before
+
+
+def test_audio_cut_off_by_siri_is_rerecorded_but_keeps_playing(db, sample_book, write_book):
+    from distill.audio.spoken import spoken_checksum, spoken_units
+    from distill.audio.engines import SiriEngine
+    bid = db.import_book(write_book(sample_book))
+    chapter = db.get_chapters(bid)[0]
+    checksum = spoken_checksum(spoken_units(chapter))
+    db.save_chapter_audio(chapter['id'], b'old', [], 1, checksum, 'siri:zh-CN-D@1.0', 'siri', 1.0)
+    assert chapter['id'] in db.stale_or_missing_audio(bid)
+    assert [row['chapter_id'] for row in db.book_audio(bid)] == [chapter['id']]  # until it is replaced
+    current = SiriEngine('/x', '/y').voice_id()
+    db.save_chapter_audio(chapter['id'], b'new', [], 1, checksum, current, 'siri', 1.0)
+    assert chapter['id'] not in db.stale_or_missing_audio(bid)

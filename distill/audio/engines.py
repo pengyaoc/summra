@@ -5,6 +5,7 @@ and every run first matches a reference clip recorded when the owner approved it
 """
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import wave
@@ -17,6 +18,14 @@ REFERENCE_TEXT = {
 }
 SAY_SAMPLE_RATE = 48000  # the voice has real detail above the default 22 kHz's 11 kHz ceiling
 ATTEMPTS = 3  # per text part; macOS voices occasionally hang or drop their helper
+# Siri stops at about 26 s of speech per sentence (roughly 130 Chinese characters) and
+# still reports success, so a long sentence loses its end. Keep every piece well under.
+SIRI_CHUNK_CHARS = 90
+SIRI_CUTOFF_MS = 25500  # a piece this long has probably been cut off
+SIRI_CHUNK_GAP_MS = 150
+_CLOSERS = '”"’）」』】》'
+_SENTENCE = re.compile(rf'.+?(?:[。！？；!?;…]+[{_CLOSERS}]*|$)', re.S)
+_CLAUSE = re.compile(rf'.+?(?:[，、：,:—]+[{_CLOSERS}]*|$)', re.S)
 
 
 def _timeout(text: str) -> float:
@@ -69,6 +78,24 @@ def _run(cmd, what, timeout=60, input=None):
     return result
 
 
+def split_for_siri(text: str, limit: int = SIRI_CHUNK_CHARS) -> list:
+    """Cut text into pieces of at most `limit` characters, at sentence ends if possible."""
+    atoms = []
+    for sentence in _SENTENCE.findall(text):
+        if len(sentence) <= limit:
+            atoms.append(sentence)
+            continue
+        for clause in _CLAUSE.findall(sentence):
+            atoms.extend(clause[i:i + limit] for i in range(0, len(clause), limit))
+    chunks = []
+    for atom in atoms:
+        if chunks and (len(chunks[-1]) + len(atom) <= limit or not re.search(r'\w', atom)):
+            chunks[-1] += atom  # a piece of bare punctuation would be unspeakable
+        else:
+            chunks.append(atom)
+    return chunks
+
+
 class SayEngine:
     """The Mac's system voice (Siri Voice 2), which `say -v` cannot name."""
     name, lang, repeatable = 'say', 'en', True
@@ -102,7 +129,7 @@ class SiriEngine:
         self._voice_checked = False
 
     def voice_id(self) -> str:
-        return f'siri:{self.voice}@{self.rate}'
+        return f'siri:{self.voice}@{self.rate}+split'
 
     def _script(self, body: str) -> list:
         prelude = f'import sys, json; sys.path.insert(0, {str(self.tts_path)!r}); import siri_tts; '
@@ -118,13 +145,34 @@ class SiriEngine:
 
     def render(self, text: str, out_wav: Path) -> Rendered:
         self._check_voice()
+        chunks = split_for_siri(text)
+        if len(chunks) == 1:
+            return self._render_chunk(chunks[0], out_wav)
+        with tempfile.TemporaryDirectory(prefix='distill-siri-') as tmp:
+            pcm, rate = [], None
+            for index, chunk in enumerate(chunks):
+                piece = self._render_chunk(chunk, Path(tmp) / f'{index}.wav')
+                rate = piece.sample_rate
+                with wave.open(str(piece.wav), 'rb') as audio:
+                    pcm.append(audio.readframes(audio.getnframes()))
+        with wave.open(str(out_wav), 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(rate)
+            out.writeframes((b'\x00\x00' * int(rate * SIRI_CHUNK_GAP_MS / 1000)).join(pcm))
+        return _wav_info(out_wav)
+
+    def _render_chunk(self, text: str, out_wav: Path) -> Rendered:
         body = (f'siri_tts.VOICE_NAME = {self.voice!r}; '
                 f'siri_tts.synthesize(sys.stdin.read(), "zh-CN", {str(out_wav)!r}, rate={self.rate!r})')
         error = None
         for _ in range(ATTEMPTS):
             try:
                 _run(self._script(body), 'Siri', timeout=_timeout(text), input=text)
-                return _wav_info(out_wav)
+                rendered = _wav_info(out_wav)
+                if rendered.duration_ms >= SIRI_CUTOFF_MS:
+                    raise RenderFailed(f'Siri reached its {SIRI_CUTOFF_MS} ms limit and probably cut off: {text[:30]}')
+                return rendered
             except RenderFailed as failure:
                 error = failure
         raise RenderFailed(f'Siri failed {ATTEMPTS} times: {error}')

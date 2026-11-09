@@ -1,5 +1,13 @@
 # Summra Work Log
 
+## 2026-11-08: Siri cut-off fix and incremental Distill deploys
+
+- Status: built and tested locally; not committed, VM code not updated. Chinese re-recording in progress, nothing deployed from it.
+- Bug: Chinese audio skipped text. Siri stops at about 26 s per sentence (flat from about 140 characters up) and reports success. Evidence: paragraph 1186.5 was 24.5 s whole and 39.4 s in pieces. Not a playback seek: audio position only changes on seeks, chapter changes and resume (from reading the code).
+- Fix: `split_for_siri` records pieces of at most 90 characters; a piece of 25.5 s or more fails the chapter. Real paragraphs now 41.2 s, 34.3 s, 51.9 s (were 24.5, 23.2, 32.5). Old Siri audio is marked stale by its voice id and keeps playing until replaced.
+- Deploys: `deploy_db` no longer swaps the whole DB or restarts the service. New `distill/scripts/db_patch.py` sends changed rows only and never touches books that exist only on the VM. `tests/distill/test_deploy_db.py` was rewritten for this behaviour because it asserted the file swap.
+- Tests: full pytest 1,313 passed, including `test_db_patch.py` (11).
+
 ## 2026-11-08: Listen highlight goes away when the player closes
 
 - Status: done locally, not committed or deployed.

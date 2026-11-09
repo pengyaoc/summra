@@ -148,3 +148,65 @@ def test_say_records_at_48khz(monkeypatch, tmp_path):
     monkeypatch.setattr(engines.subprocess, 'run', fake_run)
     SayEngine().render('Hello.', tmp_path / 'a.wav')
     assert '--data-format=BEI16@48000' in calls[0]
+
+
+# Siri stops at about 26 s of speech per sentence (roughly 130 Chinese characters)
+# and reports success, so a long sentence silently loses its end.
+LONG_SENTENCE = '，'.join(f'第{n}段很长的内容需要完整读出来' for n in range(30)) + '。'
+
+
+def test_split_for_siri_keeps_every_character_under_the_limit():
+    chunks = engines.split_for_siri(LONG_SENTENCE)
+    assert ''.join(chunks) == LONG_SENTENCE
+    assert len(chunks) > 1 and all(len(c) <= engines.SIRI_CHUNK_CHARS for c in chunks)
+    assert all(c[-1] in '，。' for c in chunks)  # cut at punctuation, not mid-phrase
+
+
+def test_split_for_siri_leaves_short_text_whole():
+    assert engines.split_for_siri('你好。') == ['你好。']
+
+
+def test_split_for_siri_prefers_sentence_ends():
+    first, second = '一' * 60 + '。', '二' * 60 + '，后面还有。'
+    assert engines.split_for_siri(first + second) == [first, second]
+
+
+def test_split_for_siri_cuts_text_with_no_punctuation():
+    text = '字' * 200
+    chunks = engines.split_for_siri(text)
+    assert ''.join(chunks) == text and all(len(c) <= engines.SIRI_CHUNK_CHARS for c in chunks)
+
+
+def test_split_for_siri_never_leaves_punctuation_alone():
+    text = '字' * engines.SIRI_CHUNK_CHARS + '”。'
+    assert all(any(ch == '字' for ch in c) for c in engines.split_for_siri(text))
+
+
+def _fake_siri(monkeypatch, seconds_for):
+    spoken = []
+
+    def fake_run(cmd, **kwargs):
+        if 'voices()' in cmd[-1]:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps([{'name': 'zh-CN-D'}]), '')
+        spoken.append(kwargs['input'])
+        out = cmd[-1].split('synthesize(sys.stdin.read(), "zh-CN", ')[1].split(',')[0].strip("'\"")
+        write_wav(Path(out), b'\x01\x00' * int(1000 * seconds_for(kwargs['input'])), rate=1000)
+        return subprocess.CompletedProcess(cmd, 0, '', '')
+
+    monkeypatch.setattr(engines.subprocess, 'run', fake_run)
+    return spoken
+
+
+def test_siri_records_long_text_in_pieces_and_joins_them(monkeypatch, tmp_path):
+    spoken = _fake_siri(monkeypatch, lambda text: 1)
+    rendered = SiriEngine(Path('/x/pipeline'), Path('/x/python')).render(LONG_SENTENCE, tmp_path / 'a.wav')
+    assert ''.join(spoken) == LONG_SENTENCE and len(spoken) > 1
+    gaps = (len(spoken) - 1) * engines.SIRI_CHUNK_GAP_MS
+    assert rendered.duration_ms == len(spoken) * 1000 + gaps
+    assert engines._wav_info(tmp_path / 'a.wav').duration_ms == rendered.duration_ms
+
+
+def test_siri_refuses_a_piece_that_reached_the_cutoff(monkeypatch, tmp_path):
+    _fake_siri(monkeypatch, lambda text: 26)
+    with pytest.raises(RenderFailed, match='cut'):
+        SiriEngine(Path('/x/pipeline'), Path('/x/python')).render('你好。', tmp_path / 'a.wav')
