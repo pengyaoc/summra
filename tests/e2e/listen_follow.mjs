@@ -98,6 +98,31 @@ await settle();
 check(await L(() => window.distillListener.startedAt) === target, `Play from here starts at this page (${target})`);
 check(await page.locator('#listen-here').isHidden(), 'Play from here resumes following');
 
+// 5. Closing the player clears the highlight, and paging does not bring it back.
+const highlighted = () => page.locator('#continuous-reader-content .listen-current').count();
+await L(() => window.distillListener.setFollowing(true));
+await seek(chapter.timings[1].start_ms + 100);
+await settle();
+check(await highlighted() > 0, 'the spoken paragraph is highlighted before closing');
+await page.locator('#listen-close').click();
+await settle();
+check(await page.locator('#listen-bar').isHidden(), 'the close button hides the player');
+check(await highlighted() === 0, 'closing the player removes the highlight');
+await page.keyboard.press('ArrowRight');
+await settle();
+await page.keyboard.press('ArrowLeft');
+await settle();
+check(await highlighted() === 0, 'paging after closing does not bring the highlight back');
+await L(() => window.distillListener.audio.dispatchEvent(new Event('timeupdate')));
+await settle();
+check(await highlighted() === 0, 'a late time update after closing does not bring it back');
+
+// 6. Starting again shows the highlight.
+await page.locator('#listen-button').click();
+await page.waitForFunction(() => !window.distillListener.audio.paused, null, { timeout: 15000 });
+await page.waitForFunction(() => document.querySelector('#continuous-reader-content .listen-current'), null, { timeout: 10000 }).catch(() => {});
+check(await highlighted() > 0, 'listening again brings the highlight back');
+
 check(problems.length === 0, `no page errors${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }

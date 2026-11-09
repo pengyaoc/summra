@@ -1,5 +1,12 @@
 # Summra Work Log
 
+## 2026-11-08: Listen highlight goes away when the player closes
+
+- Status: done locally, not committed or deployed.
+- Bug: closing the player left the spoken paragraph highlighted, and paging redrew it.
+- Fix (`shared/static/js/listen.js`): the highlight shows only while the bar is open; `showBar` redraws it, so listening again brings it back.
+- Tests: `listen_follow.mjs` gained close, paging, late time update and reopen checks (3 failed before the fix). `listen_follow`, `distill_listen`, `distill.mjs` and the 14 Plainly scripts pass. Not tried on a real iPhone.
+
 ## 2026-11-07: Distill Listen (audio for summaries)
 
 - Goal: listen to Distill summaries on the iPhone PWA and switch between

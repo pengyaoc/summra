@@ -2662,6 +2662,7 @@ Server-side summarization, file upload in the browser, multiple users beyond the
   
   Pages are cut above the bar, so it never covers text.
 - **Following the text:** hands off, the spoken paragraph is highlighted and the page turns by itself as the audio moves on, including partway through a paragraph that runs onto the next page.
+- **Closing the player:** the close button pauses the audio, hides the bar and removes the highlight; starting Listen again brings it back.
 - **Turning pages while listening (2026-11-08):** a page turn of your own (playing or paused) stops the page following, and the audio carries on as if you hadn't moved. While you're away from the playing page the bar offers **Back to audio** (jump to the playing paragraph and follow again) and **Play from here** (restart the audio at the top of the page you're on). Pause and Play just continue the audio; on their own they never move the page. Same model as Readwise Reader's return/jump; following never resumes by itself.
 - **Shared platform:** the player, highlight and page following are part of the reader platform shared by Plainly and Distill. Plainly will offer it once it has audio with per-paragraph timings.
 - **Lock screen:** shows the chapter, book and author, with play/pause, skip and seek. At the end of a chapter the next one plays, including while locked.

@@ -148,6 +148,7 @@ export class Listener {
         const bar = this.$('listen-bar');
         if (bar.hidden !== visible) return;
         bar.hidden = !visible;
+        this.highlight();
         window.dispatchEvent(new Event('resize'));  // the reader re-cuts its pages
     }
 
@@ -335,11 +336,12 @@ export class Listener {
     highlight() {
         const content = document.getElementById('continuous-reader-content');
         if (!content) return;
+        const unit = this.$('listen-bar').hidden ? null : this.unit;  // no highlight once the player is closed
         for (const element of content.querySelectorAll('.listen-current')) {
-            if (element.dataset.readerAnchor !== this.unit) element.classList.remove('listen-current');
+            if (element.dataset.readerAnchor !== unit) element.classList.remove('listen-current');
         }
-        if (!this.unit || !this.audio) return;
-        for (const element of content.querySelectorAll(`[data-reader-anchor="${this.unit}"]`)) element.classList.add('listen-current');
+        if (!unit || !this.audio) return;
+        for (const element of content.querySelectorAll(`[data-reader-anchor="${unit}"]`)) element.classList.add('listen-current');
     }
 
     // Show the page holding the spoken unit (loading its section if needed).
