@@ -11561,3 +11561,5 @@ Listen dry-run:40entries/~3.6hours spoken audio. Detached worker42375 (/tmp/dist
 ## 2026-11-08 — Distill home redesign (option A, keep scrolling)
 
 Owner rejected the Reading/Library tabs and chose, after two rounds of mockups, one page: current book with equal Continue and Listen, Also reading, then the whole library; desktop pins the book left. Fixed app background, no swipe-up. Book page uses the same two buttons. Listen now plays on home and book pages (`listen_page.js`, shared Listener with a stand-in reader), saving the place to the server; navigating away stops audio. Old tab tests replaced because the tabs were removed on request; one race fixed in `distill_listen.mjs` setup. Not committed or deployed yet; not checked on a real iPhone.
+
+Header follow-up: on desktop the logo moved into the full-height book panel, removing the bar across the split page and the jump past it when choosing Unread or Finished. Status and search share a line; the three selects sit in a compact row that cannot overflow. Not committed or deployed yet.

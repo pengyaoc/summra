@@ -209,7 +209,8 @@
 
 /* Home: the current book, then the library on the same page. Desktop pins the book on the left. */
 .home-search-link { display: flex; align-items: center; min-height: 44px; margin-left: auto; color: var(--ink-muted); text-decoration: none; }
-.home-now { padding: .5rem 1.5rem 1.5rem; }
+.home-now { padding: 0 1.5rem 1.5rem; }
+.home-now > .distill-header { margin: 0 -1.5rem 1rem; }
 .home-library { padding: 1.5rem 1.5rem 3rem; }
 .home-library .distill-shelf-heading h2 { margin: 0 0 1rem; font-family: var(--font-serif); font-size: 1.3rem; font-weight: 500; }
 .home-book { display: block; color: inherit; text-align: center; text-decoration: none; }
@@ -247,11 +248,20 @@
     .home-library { padding: 2rem 2.5rem 4rem; }
     .home-search-link { display: none; }
     .home-reading .distill-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-    body:has(.home-reading) .distill-header { padding-inline: 2.5rem; }
+    .home-now > .distill-header { margin: 0 0 1.75rem; padding: 0; background: none; border: 0; }
 }
 @media (max-width: 360px) {
     .distill-header { gap: .6rem; }
     .distill-wordmark { font-size: 1.4rem; }
+}
+
+/* Filters: status and search on one line, the three selects in a row beneath. */
+.distill-filters .distill-status-switch { flex: none; margin: 0; }
+@media (min-width: 761px) {
+    .distill-filter-panel { flex: 1 1 100%; }
+    .distill-filter-select { flex: 1 1 0; flex-direction: row; align-items: center; justify-content: flex-start; gap: .5rem; min-width: 0; min-height: 40px; padding: 0 .75rem; }
+    .distill-filter-select > span { flex: none; font-size: .8rem; letter-spacing: 0; text-transform: none; }
+    .distill-filter-select select { flex: 1 1 auto; width: 100%; min-width: 0; max-width: 100%; }
 }
 
 /* Listen outside the reader: one player along the bottom of the page. */

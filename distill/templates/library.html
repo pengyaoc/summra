@@ -1,13 +1,16 @@
 {% extends 'base.html' %}
 {% from '_cover.html' import cover with context %}
 {% from '_listen.html' import listen_button %}
+{% from '_brand.html' import site_header with context %}
 {% block title %}Distill{% endblock %}
-{% block header_nav %}{% if lead %}<a class="home-search-link" href="#library">Search</a>{% endif %}{% endblock %}
+{# While reading, the header sits inside the book panel; the page has no bar across it. #}
+{% block header %}{% if not lead %}{{ super() }}{% endif %}{% endblock %}
 {% block content %}
 <main class="home{% if lead %} home-reading{% endif %}">
     <h1 class="distill-sr-only">Distill</h1>
 {% if lead %}
     <section class="home-now" aria-label="Reading now">
+        {{ site_header(search_link=True) }}
         <a class="home-book" lang="{{ lead.lang or 'en' }}" href="{{ base_path }}/books/{{ lead.slug }}?return={{ return_url|urlencode }}">
             {{ cover(lead, eager=True) }}
             <span class="home-book-text"><h2>{{ lead.title }}</h2>{% if lead.author and lead.author|trim %}<span class="home-author">{{ lead.author }}</span>{% endif %}</span>
@@ -32,8 +35,8 @@
         <div class="distill-shelf-heading"><h2 id="library-heading">All {{ total_books }} {{ 'book' if total_books == 1 else 'books' }}</h2>
             {% if query or language or category or status or sort != 'newest' %}<p role="status">{{ books|length }} of {{ total_books }} {{ 'book' if total_books == 1 else 'books' }}</p>{% endif %}
         </div>
-        <nav class="distill-status-switch" aria-label="Show books">{% for value, text, href in status_links %}<a href="{{ href }}"{% if status == value %} aria-current="page"{% endif %}>{{ text }}</a>{% endfor %}</nav>
-        <form class="distill-filters" action="{{ base_path }}/#library" method="get" role="search" aria-label="Find books">
+        <form class="distill-filters" action="{{ base_path }}/{% if lead %}#library{% endif %}" method="get" role="search" aria-label="Find books">
+            <nav class="distill-status-switch" aria-label="Show books">{% for value, text, href in status_links %}<a href="{{ href }}"{% if status == value %} aria-current="page"{% endif %}>{{ text }}</a>{% endfor %}</nav>
             {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
             <div class="distill-search-wrap">
             <label class="distill-search"><span class="distill-sr-only">Search books or authors</span>
@@ -62,7 +65,7 @@
             </select></label>
             </div>
         </form>
-        {% if query or language or category or status or sort != 'newest' %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}{% if status %} · {{ {'unread': 'Unread', 'reading': 'Reading', 'finished': 'Finished'}[status] }}{% endif %}{% if sort != 'newest' %} · {{ {'title': 'Title order', 'author': 'Author order', 'shortest': 'Shortest first'}[sort] }}{% endif %}</span><a href="{{ base_path }}/#library">Clear filters</a></div>{% endif %}
+        {% if query or language or category or status or sort != 'newest' %}<div class="distill-filter-summary"><span>Showing{% if query %} “{{ query }}”{% endif %}{% if language %} · {{ 'English' if language == 'en' else '中文' }}{% endif %}{% if category %} · {{ category }}{% endif %}{% if status %} · {{ {'unread': 'Unread', 'reading': 'Reading', 'finished': 'Finished'}[status] }}{% endif %}{% if sort != 'newest' %} · {{ {'title': 'Title order', 'author': 'Author order', 'shortest': 'Shortest first'}[sort] }}{% endif %}</span><a href="{{ base_path }}/{% if lead %}#library{% endif %}">Clear filters</a></div>{% endif %}
         <div class="distill-grid">
 {% for book in books %}
             <a class="distill-tile" lang="{{ book.lang }}" href="{{ base_path }}/books/{{ book.slug }}?return={{ return_url|urlencode }}">
@@ -73,7 +76,7 @@
 {% else %}
             <div class="distill-empty"><h3>{{ 'No books match your filters.' if total_books else 'Your bookshelf is ready.' }}</h3>
             <p>{{ 'Try another title, author, language or category.' if total_books else 'Your imported books will appear here.' }}</p>
-            {% if total_books %}<a href="{{ base_path }}/#library">Show all books</a>{% endif %}</div>
+            {% if total_books %}<a href="{{ base_path }}/{% if lead %}#library{% endif %}">Show all books</a>{% endif %}</div>
 {% endfor %}
         </div>
     </section>

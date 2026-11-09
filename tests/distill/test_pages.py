@@ -463,13 +463,36 @@ def test_old_tab_links_still_open_home(app_env):
         assert 'class="home-now"' in html and 'distill-grid' in html
 
 
-def test_filtering_returns_to_the_library_section(app_env):
-    html = get(app_env[0], '/?lang=en&status=unread').get_data(as_text=True)
+def test_filtering_returns_to_the_library_section_while_reading(app_env):
+    client, db, _, bid = app_env
+    _start_reading(client, db, bid)
+    html = get(client, '/?lang=en&status=unread').get_data(as_text=True)
     assert 'action="/#library"' in html and 'name="tab"' not in html
     switch = html.split('distill-status-switch')[1].split('</nav>')[0]
     assert switch.count('#library"') == 3 and 'tab=' not in switch
     summary = html.split('distill-filter-summary')[1].split('</div>')[0]
     assert 'href="/#library"' in summary
+
+
+def test_filtering_does_not_jump_past_the_header_with_nothing_in_progress(app_env):
+    html = get(app_env[0], '/?lang=en&status=unread').get_data(as_text=True)
+    assert '#library' not in html.split('</main>')[0]
+    assert 'action="/"' in html
+
+
+def test_logo_sits_in_the_book_panel_while_reading(app_env):
+    client, db, _, bid = app_env
+    _start_reading(client, db, bid)
+    html = get(client, '/').get_data(as_text=True)
+    assert html.count('class="distill-header"') == 1
+    assert html.index('class="home-now"') < html.index('class="distill-header"') < html.index('class="home-book"')
+    assert 'home-search-link' in html.split('class="distill-header"')[1].split('</header>')[0]
+
+
+def test_status_switch_shares_the_filter_form(app_env):
+    html = get(app_env[0], '/').get_data(as_text=True)
+    form = html.split('class="distill-filters"')[1].split('</form>')[0]
+    assert 'distill-status-switch' in form and form.index('distill-status-switch') < form.index('type="search"')
 
 
 def test_home_keeps_the_deploy_prefix(app_env):

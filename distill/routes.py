@@ -190,7 +190,7 @@ def library():
     # The All / Unread / Finished switch keeps the other filters in place.
     kept = {key: value for key, value in (('q', query), ('lang', language), ('category', category), ('sort', sort))
             if value and not (key == 'sort' and value == 'newest')}
-    status_links = [(value, text, url_for('distill.library', _anchor='library', **kept, **({'status': value} if value else {})))
+    status_links = [(value, text, url_for('distill.library', _anchor='library' if reading else None, **kept, **({'status': value} if value else {})))
                     for value, text in (('', 'All'), ('unread', 'Unread'), ('finished', 'Finished'))]
     minutes = reading_estimates(db, books)
     filtered = [book for book in books

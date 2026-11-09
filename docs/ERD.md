@@ -125,7 +125,7 @@ restore metadata together with the separate private media store.
 
 ## Distill home and Listen outside the reader (2026-11-08)
 
-`distill/routes.py::library` no longer has a `tab` state (old `?tab=` links are ignored). `library.html` renders `.home-now` (the first `reading_cards` entry, `minutes_left`, other books in progress) followed by `#library`; filters and status links target `#library`. CSS grid and `position: sticky` give the desktop layout from 1000 px.
+`distill/routes.py::library` no longer has a `tab` state (old `?tab=` links are ignored). `library.html` renders `.home-now` (the first `reading_cards` entry, `minutes_left`, other books in progress) followed by `#library`; while a book is in progress, filters and status links target `#library` (at the top of the page on desktop, so only phones move). `_brand.html` holds the mark and `site_header`, which home renders inside `.home-now` while reading. CSS grid and `position: sticky` give the desktop layout from 1000 px.
 
 `distill/static/js/listen_page.js` reuses the shared `Listener` on home and book pages with a stand-in reader object: the real manifest and `/api/progress/v2` marker, no-op paging, and `saveContinuousReader` posting through `authModule.queueReaderMutation`. It loads audio data on page load, because iOS requires `play()` inside the tap. Audio lives in the page, so a full navigation stops it. `_listen.html` holds the button, `_listen_player.html` the shared bar, `_listen_scripts.html` the script tags.
 

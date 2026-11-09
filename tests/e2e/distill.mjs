@@ -313,6 +313,17 @@ try {
   check(Math.abs(await page.locator('.home-now').evaluate(el => el.getBoundingClientRect().top)) < 2, 'desktop: the book stays put while the library scrolls');
   await page.screenshot({ path: `${SHOTS}distill_home_desktop.png` });
   await page.evaluate(() => scrollTo(0, 0));
+  const logoInPanel = await page.evaluate(() => { const h = document.querySelector('.distill-header').getBoundingClientRect(), n = document.querySelector('.home-now').getBoundingClientRect(); return h.left >= n.left && h.right <= n.right && h.top >= n.top; });
+  check(logoInPanel, 'desktop: the logo sits inside the book panel');
+  check(await page.locator('#library').evaluate(el => el.getBoundingClientRect().top + scrollY) < 2, 'desktop: the library starts at the top of the window');
+  const fit = await page.evaluate(() => { const lib = document.getElementById('library').getBoundingClientRect(), box = s => document.querySelector(s).getBoundingClientRect(); return { sort: box('select[name="sort"]').right <= lib.right, sameLine: Math.abs(box('.distill-status-switch').top - box('.distill-search').top) < 24 && box('.distill-search').left >= box('.distill-status-switch').right, wide: document.documentElement.scrollWidth <= innerWidth }; });
+  check(fit.sort && fit.sameLine && fit.wide, `desktop: filters fit, status and search share a line (${JSON.stringify(fit)})`);
+  await page.locator('.distill-status-switch a', { hasText: 'Unread' }).click();
+  await page.waitForURL(/status=unread/);
+  await page.waitForTimeout(150);
+  check(await page.evaluate(() => scrollY) === 0 && await page.locator('.distill-header').isVisible(), 'desktop: Unread does not scroll the page');
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.evaluate(() => scrollTo(0, 0));
   const deskSize = page.viewportSize();
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
