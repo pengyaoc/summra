@@ -33,8 +33,6 @@
 
 /* The shared reader hides its panels and status line with .hidden but does not define it. */
 .hidden { display: none !important; }
-.distill-install-action[hidden] { display: none; }
-.distill-install-action { flex-shrink: 0; padding: .55rem .85rem; border: 1px solid var(--accent); border-radius: 7px; color: var(--accent); background: var(--surface); font: inherit; cursor: pointer; }
 .main-content { flex: 1; padding: 0 0 40px 0; }
 
 .distill-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule); background: var(--surface); }

@@ -531,6 +531,8 @@ Distill is the owner-only summary reader at `/distill` on the same host. It shar
 3. Copy the unit to `/home/<SERVICE_USER>/.config/systemd/user/`, then `daemon-reload` and `enable --now <DISTILL_UNIT>`.
 4. Copy `distill.conf` into `service-locations/`, run `apachectl configtest`, then `systemctl reload apache2`.
 
+**Code deploy:** after pushing `main`, run `venv/bin/python -m distill.scripts.deploy_code`. It refuses unpushed commits or a diverged VM checkout, fast-forwards the VM, restarts Distill, and checks the app returns 401. It says when a change also needs a Plainly restart or a pip install, which stay manual.
+
 **Restart:** the same service-control commands as Plainly, with `<DISTILL_UNIT>`.
 
 **Verify after deploy:**

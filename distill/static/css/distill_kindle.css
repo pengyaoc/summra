@@ -29,3 +29,24 @@
 .flow .reader-table-cell { text-indent: 0; text-align: left; margin: 0.4em 0; word-wrap: break-word; }
 
 .list li.part { padding: 14px 0 4px; font-family: "Amazon Ember", Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #000; }
+
+/* The library at twice the shared Kindle size: its small text was hard to read and tap. */
+.library { font-size: 40px; }
+.library .masthead { padding: 32px 0 20px; }
+.library .wordmark { font-size: 60px; }
+.library .mast-link { font-size: 36px; }
+.library .section { font-size: 40px; margin-top: 36px; padding-bottom: 12px; border-bottom-width: 6px; }
+.library .list li { border-bottom-width: 2px; }
+.library .list a { padding: 18px 0; min-height: 88px; }
+.library .list .title { font-size: 42px; line-height: 1.2; }
+.library .list .author { font-size: 34px; line-height: 1.25; }
+.library .list .progress { font-size: 32px; margin: 4px 0 12px; }
+.library .list .empty { padding: 32px 0; }
+.library .bar { height: 16px; border-width: 4px; border-radius: 10px; }
+.library .bar span { height: 16px; }
+.library .btn { min-height: 88px; line-height: 88px; padding: 0 28px; border-width: 4px; font-size: 36px; }
+.library .see-all { margin-top: 20px; }
+.library .pager { margin-top: 28px; }
+.library .pager-count { padding: 0 16px; font-size: 36px; }
+.library .account { margin-top: 44px; font-size: 34px; }
+.library .fineprint { margin-top: 48px; font-size: 32px; }

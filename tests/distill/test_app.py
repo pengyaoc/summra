@@ -38,11 +38,11 @@ def test_pwa_manifest_scope_credentials_and_icons(app_env, prefix):
             assert f'{image.width}x{image.height}' == icon['sizes'] and image.format == 'PNG'
     html = client.get('/', headers=headers).get_data(as_text=True)
     assert f'href="{prefix}/manifest.webmanifest" crossorigin="use-credentials"' in html
-    assert f'rel="apple-touch-icon" sizes="512x512" href="{prefix}/app-icons/icon-512.png?v=' in html
+    assert f'rel="apple-touch-icon" sizes="180x180" href="{prefix}/app-icons/icon-180.png?v=' in html
     assert 'apple-mobile-web-app-capable' in html
     launch = client.get('/launch', headers=headers).get_data(as_text=True)
-    assert f'rel="apple-touch-icon" sizes="512x512" href="{prefix}/app-icons/icon-512.png?v=' in launch
-    assert 'js/pwa.js' in html and 'Install app' in html
+    assert f'rel="apple-touch-icon" sizes="180x180" href="{prefix}/app-icons/icon-180.png?v=' in launch
+    assert 'js/pwa.js' in html and 'Install app' not in html
 
 
 def test_pwa_branding_is_public_but_worker_stays_private_and_scoped(client):
@@ -59,6 +59,20 @@ def test_pwa_branding_is_public_but_worker_stays_private_and_scoped(client):
     assert favicon.status_code == 200
     with Image.open(io.BytesIO(favicon.data)) as image:
         assert image.format == 'ICO'
+
+
+@pytest.mark.parametrize('name', ['favicon.ico', 'icon-32.png'])
+def test_favicon_background_is_transparent(name):
+    from PIL import Image
+    with Image.open(ROOT / 'distill/static/images' / name) as image:
+        pixels = image.convert('RGBA')
+        width, height = pixels.size
+        assert pixels.getpixel((0, 0))[3] == 0 and pixels.getpixel((width - 1, height - 1))[3] == 0
+        assert pixels.getpixel((width // 2, height // 2))[3] == 255
+
+
+def test_svg_favicon_has_no_background():
+    assert '<rect' not in (ROOT / 'distill/static/images/favicon.svg').read_text()
 
 
 def test_maskable_drop_icon_fits_the_safe_circle():

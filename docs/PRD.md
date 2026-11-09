@@ -2623,7 +2623,7 @@ Distill is a private app for the owner's book summaries, the second app on the s
 ### 17.5 Kindle mode
 
 When the browser is an e-ink Kindle, the same URLs serve the e-ink pages (see 12), signed in as the same account:
-- **Library**: Reading now (up to 3, with "See all") then All books, 7 per page.
+- **Library**: Reading now (up to 3, with "See all") then All books, 4 per page, with text and controls at twice the size of the other Kindle pages. A page with long titles or books in progress may need a short scroll.
 - **Book**: cover, saved-place resume, separate Read from beginning, Mark as read / Mark unfinished controls, and contents 8 per page with part headings and a "You are here" mark.
 - **Reader**: fixed pages, tap to turn, resumes at the saved place, and the page you reach is saved to your account, so the web reader picks up where the Kindle stopped.
 - There is one text (the summary), so no Text switch. Tables and figures are never split across pages.

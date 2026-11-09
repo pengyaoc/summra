@@ -14,7 +14,7 @@ from distill.reader_config import DISTILL_READER
 from distill.routes import _card_for, _db, newest_first, reading_cards
 from shared.kindle import pages as kindle_pages
 from shared.kindle.pages import (
-    CONTENTS_PAGE_SIZE, LIBRARY_PAGE_SIZE, READING_ON_HOME, account_user_id, cookie_path, font_family, font_size,
+    CONTENTS_PAGE_SIZE, READING_ON_HOME, account_user_id, cookie_path, font_family, font_size,
     not_found_page, page_number, paginate, register_kindle_pages, render_page, url,
 )
 from shared.kindle.progress import save_progress as shared_save_progress
@@ -26,6 +26,7 @@ from shared.reader.index import ReaderIndexMixin
 bp = Blueprint('distill_kindle', __name__)
 
 TEXT = 'summary'  # Distill's one text
+LIBRARY_PAGE_SIZE = 4  # the library's text is twice the shared size, so fewer rows fit a screen
 
 
 def _kindle_block(block, index):

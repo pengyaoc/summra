@@ -407,6 +407,16 @@ try {
   check(await kp.locator('html.kindle').count() === 1, 'Kindle UA gets the Kindle library');
   check(await kp.locator('script[type="module"]').count() === 0, 'Kindle library loads no module script');
   check(await kp.locator('.list li a').count() > 0, 'Kindle library lists books');
+  // The library's text and controls are twice the shared Kindle size.
+  const px = (sel, prop) => kp.locator(sel).first().evaluate((e, p) => parseFloat(getComputedStyle(e)[p]), prop);
+  check(await px('body', 'fontSize') === 40, 'Kindle library body text is 2x (40px)');
+  check(await px('.wordmark', 'fontSize') === 60, 'Kindle library wordmark is 2x (60px)');
+  check(await px('h2.section', 'fontSize') === 40, 'Kindle library section heading is 2x (40px)');
+  check(await px('.list .title', 'fontSize') === 42, 'Kindle library titles are 2x (42px)');
+  check(await px('.list .author', 'fontSize') === 34, 'Kindle library authors are 2x (34px)');
+  check(await px('.list a', 'minHeight') === 88, 'Kindle library rows are 2x tap targets (88px)');
+  check(await px('.pager .btn', 'minHeight') === 88 && await px('.pager .btn', 'fontSize') === 36, 'Kindle library pager buttons are 2x');
+  check(await kp.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Kindle library does not overflow sideways');
   await kp.screenshot({ path: `${SHOTS}distill_kindle_library.png` });
 
   await kp.goto(`${BASE}/books/${SLUG}`, { waitUntil: 'load' });

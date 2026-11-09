@@ -50,8 +50,8 @@ def test_kindle_library_paginates_all_books(app_env, sample_book, write_book):
         sample_book.update(slug=f'b{i}', title=f'Book {i}')
         content_db.import_book(write_book(sample_book))
     page1, page2 = body(kget(client, '/')), body(kget(client, '/?page=2'))
-    assert len(re.findall(r'href="/books/[^"/]+"', page1)) == 7 and 'page=2' in page1
-    assert len(re.findall(r'href="/books/[^"/]+"', page2)) == 2 and 'page=1' in page2
+    assert len(re.findall(r'href="/books/[^"/]+"', page1)) == 4 and 'page=2' in page1
+    assert len(re.findall(r'href="/books/[^"/]+"', page2)) == 4 and 'page=1' in page2
 
 
 def test_kindle_book_contents_has_part_headings_and_paginates(app_env, sample_book, write_book):

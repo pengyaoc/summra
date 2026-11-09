@@ -11,22 +11,7 @@
         else window.addEventListener('load', register, {once:true});
     }
 
-    const button = document.getElementById('distill-install-button');
-    let installPrompt;
     const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-    window.addEventListener('beforeinstallprompt', event => {
-        if (!button || standalone()) return;
-        event.preventDefault();
-        installPrompt = event;
-        button.hidden = false;
-    });
-    button?.addEventListener('click', async () => {
-        if (!installPrompt) return;
-        const prompt = installPrompt;
-        installPrompt = null;
-        button.hidden = true;
-        await prompt.prompt();
-    });
     const guide = document.getElementById('distill-ios-install');
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     let dismissed = false;
@@ -37,8 +22,6 @@
         try { localStorage.setItem('distill-install-dismissed', '1'); } catch (_) {}
     });
     window.addEventListener('appinstalled', () => {
-        installPrompt = null;
-        if (button) button.hidden = true;
         if (guide) guide.hidden = true;
     });
 })();
