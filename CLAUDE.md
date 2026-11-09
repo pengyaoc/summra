@@ -522,7 +522,7 @@ Distill is the owner-only summary reader at `/distill` on the same host. It shar
   - `... --book <slug> --deploy` renders only stale or missing chapters, then pushes the DB plus only the new media keys.
   - `--all` covers the library.
   - English records at 48 kHz and each chapter is stored only as Opus 24 kbps (ffmpeg; iPhones need iOS 17+). Chapters made before 2026-11-08 are AAC; `... --all --opus-only` converts them to Opus without re-rendering (their AAC stays local, only Opus deploys). `say` at 48 kHz needs its voice reference re-approved once (`--approve-voice`).
-  - Use `--jobs 1` for English: parallel `say` processes have hung (each voice call times out and retries 3 times, but serial is reliable).
+  - Use `--jobs 4` for every language (about 3× faster than one at a time on the M1 Pro; speed stops improving past 6–8). Run only one `make_audio` recording at a time. Each voice call times out and retries 3 times if one hangs.
 - A run stops if a voice no longer matches its approved reference clip (`data/distill-voice-refs/`). After listening to a sample, re-approve with `--approve-voice`.
 
 **First install** (as done 2026-10-26). Run as root via `gcloud compute ssh`:
