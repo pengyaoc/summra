@@ -17,6 +17,7 @@ import logging
 # package (see pyproject.toml), so it resolves from anywhere.
 from plainly import config
 from plainly import models
+from plainly import tts_utils
 from plainly.routes import common, pages, books, taxonomy, authors, blog, system, kindle
 
 from plainly.reader_config import PLAINLY_READER
@@ -170,6 +171,55 @@ def internal_error(error):
         'success': False,
         'error': 'Internal server error'
     }), 500
+
+
+@app.route('/api/tts/generate', methods=['POST'])
+def generate_tts():
+    """Find a pre-recorded summary (speech is never generated on request)"""
+    try:
+        data = request.json
+        audio_id = data.get('id')  # Unique identifier for caching
+
+        if not audio_id:
+            return jsonify({
+                'success': False,
+                'error': 'No audio ID provided'
+            }), 400
+
+        # Check for cached audio using shared utility function
+        cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.STATIC_DIR)
+        if cached_audio:
+            logger.info(f"Using cached audio: {cached_audio['provider']}")
+            return jsonify({
+                'success': True,
+                'audio_url': request.script_root + cached_audio['audio_url'],
+                'streaming': False,
+                'cached': cached_audio['cached'],
+                'provider': cached_audio['provider']
+            })
+
+        # No pre-generated audio found
+        return jsonify({
+            'success': False,
+            'error': 'No recording for this summary yet.',
+            'message': 'Please contact administrator if audio is missing.'
+        }), 404
+
+    except Exception as e:
+        logger.error(f"Error checking for pre-generated audio: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/tts/stop', methods=['POST'])
+def stop_tts():
+    """Nothing to stop: speech is never generated on request"""
+    return jsonify({
+        'success': True,
+        'message': 'Nothing to stop'
+    })
 
 
 def ensure_directories():

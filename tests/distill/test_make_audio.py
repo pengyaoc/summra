@@ -1,9 +1,9 @@
 import pytest
 
 from shared.audio.engines import RenderFailed, VoiceMismatch
+from shared.audio import make_audio
 from shared.audio.spoken import spoken_checksum, spoken_units
 from distill.models import DistillDatabase
-from distill.scripts import make_audio
 
 
 class FakeEngine:
@@ -24,9 +24,10 @@ def env(tmp_path, monkeypatch, sample_book, write_book):
     monkeypatch.setattr(make_audio, 'engine_for', lambda lang, settings: FakeEngine())
     monkeypatch.setattr(make_audio, 'check_reference', lambda engine, ref_dir, approve=False: checks.append(approve))
 
-    def fake_render(chapter, engine, work_dir):
-        rendered.append(chapter['id'])
-        return b'm4a-' + str(chapter['id']).encode(), [], 10, spoken_checksum(spoken_units(chapter))
+    def fake_render(units, engine, work_dir):
+        chapter_id = int(units[0].paragraph_id.split('.')[0])
+        rendered.append(chapter_id)
+        return b'm4a-' + str(chapter_id).encode(), [], 10, spoken_checksum(units)
 
     monkeypatch.setattr(make_audio, 'render_chapter', fake_render)
     monkeypatch.setattr(make_audio, 'encode_opus', lambda aac, work_dir: b'opus-' + aac)
@@ -34,7 +35,7 @@ def env(tmp_path, monkeypatch, sample_book, write_book):
 
 
 def run(db_path, *args):
-    return make_audio.main(['--db', str(db_path), '--jobs', '1', '--config', '/nonexistent', *args])
+    return make_audio.main(['--app', 'distill', '--db', str(db_path), '--jobs', '1', '--config', '/nonexistent', *args])
 
 
 def test_dry_run_writes_nothing(env, capsys):
@@ -77,11 +78,12 @@ def test_render_failure_stops_book_continues_next(env, monkeypatch):
     db, db_path, first, second, rendered, _ = env
     first_ids = {c['id'] for c in db.get_chapters(first)}
 
-    def flaky(chapter, engine, work_dir):
-        rendered.append(chapter['id'])
-        if chapter['id'] in first_ids:
+    def flaky(units, engine, work_dir):
+        chapter_id = int(units[0].paragraph_id.split('.')[0])
+        rendered.append(chapter_id)
+        if chapter_id in first_ids:
             raise RenderFailed('siri down')
-        return b'x' + str(chapter['id']).encode(), [], 10, spoken_checksum(spoken_units(chapter))
+        return b'x' + str(chapter_id).encode(), [], 10, spoken_checksum(units)
 
     monkeypatch.setattr(make_audio, 'render_chapter', flaky)
     assert run(db_path, '--all') == 1

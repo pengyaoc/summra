@@ -518,7 +518,7 @@ Distill is the owner-only summary reader at `/distill` on the same host. It shar
 **Chapter audio (Listen).** Audio is rendered on the Mac only (macOS voices), never on the VM.
 - English uses `say` with the system voice (Siri Voice 2). Chinese uses Mandarin Siri Voice 4 at rate 1.0, through InkChinese's `pipeline/siri_tts.py`; set `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy.local.env`.
 - Commands:
-  - `venv/bin/python -m distill.scripts.make_audio --book <slug> --dry-run` estimates the hours.
+  - `venv/bin/python -m shared.audio.make_audio --app distill --book <slug> --dry-run` estimates the hours.
   - `... --book <slug> --deploy` renders only stale or missing chapters, then pushes the DB plus only the new media keys.
   - `--all` covers the library.
   - English records at 48 kHz and each chapter is stored only as Opus 24 kbps (ffmpeg; iPhones need iOS 17+). Chapters made before 2026-11-08 are AAC; `... --all --opus-only` converts them to Opus without re-rendering (their AAC stays local, only Opus deploys). `say` at 48 kHz needs its voice reference re-approved once (`--approve-voice`).

@@ -112,4 +112,4 @@ class AudioStoreMixin:
 
     def stale_or_missing_audio(self, book_id: int, mode: str = DEFAULT_MODE) -> List[int]:
         return [c['id'] for c, row, current in self._audio_by_chapter(book_id, mode)
-                if not current or row['voice'] in CUT_OFF_VOICES]
+                if self.audio_spoken_units(c, mode) and (not current or row['voice'] in CUT_OFF_VOICES)]

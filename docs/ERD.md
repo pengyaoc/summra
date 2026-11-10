@@ -134,7 +134,7 @@ Supersedes the Player notes in the two Listen sections below. Design: `docs/supe
 - `player_ui.js` with `shared/templates/shared/reader/_player.html` and `listen.css`: mini player and full player. Controls hide from track data, not app checks. The player floats, so audio cannot change where reader pages are cut.
 - `page_swap.js` (Distill): fetches same-origin pages from an allow-list, parses them and swaps `#page-root`. Prefetches on hover and pointerdown, keeps scroll in history state, and falls back to a full load (saving audio first) on 401, redirect or failure. The reader DOM stays in `#reader-shell`, outside `#page-root`. `distill_shell.js` owns the player and exposes `window.distillAudio`; Plainly exposes `window.plainlyAudio`.
 
-**Backend (`shared/audio/`).** `store.py` (`AudioStoreMixin`, table `chapter_audio`, key `(chapter_id, mode)`, default mode `summary`), `routes.py` (`audio_blueprint(get_db, access_check)`), `engines.py`, `spoken.py`, `assemble.py`. An app supplies the hook `audio_spoken_units`. Plainly stores media under `data/plainly-media`. The `make_audio` command stays in `distill/scripts`, so recording Plainly needs a small command-line wrapper around the shared pipeline.
+**Backend (`shared/audio/`).** `store.py` (`AudioStoreMixin`, table `chapter_audio`, key `(chapter_id, mode)`, default mode `summary`), `routes.py` (`audio_blueprint(get_db, access_check)`), `engines.py`, `spoken.py`, `assemble.py`. An app supplies the hook `audio_spoken_units`. Plainly stores media under `data/plainly-media`. Recording is one shared command, `python -m shared.audio.make_audio --app {distill,plainly}`; each app describes itself in `<app>/audio_app.py` (database, reading modes, deploy). A book's `lang` picks the voice, English when it has none. Plainly's summaries are recorded by `plainly/scripts/audio/record_summaries.py` to `static/audio/book_<id>_<type>.m4a`, which `tts_utils.check_cached_audio` prefers over older Gemini files. Plainly no longer calls Gemini for speech: `/api/tts/generate` lives in `app_base.py` and, in dev as in production, only finds recordings. Shipping Plainly's recordings to the VM is not built yet.
 
 **Deploy order.** Run `deploy_code` before `deploy_db`, so the VM migrates `chapter_audio` to the two-column key before rows arrive.
 
@@ -184,7 +184,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
   - `media_keys` includes `chapter_audio` (both keys locally).
   - In the shipped snapshot, `deploy_db` sets `storage_key = deploy_key` wherever it is set, so the VM DB references only Opus files and no AAC is uploaded. An AAC-only chapter ships its AAC until converted.
   - The VM must run this code before an audio push, since the push relies on its `list` command.
-- **Command:** `python -m distill.scripts.make_audio (--book SLUG | --all) [--dry-run] [--approve-voice] [--opus-only] [--jobs N] [--deploy]`.
+- **Command:** `python -m shared.audio.make_audio --app distill (--book SLUG | --all) [--dry-run] [--approve-voice] [--opus-only] [--jobs N] [--deploy]`.
   - Renders only stale or missing chapters, so runs can resume. Stops a book on its first failure. Each render saves one Opus file.
   - `--opus-only` converts AAC-only chapters to Opus 24 (no voices, no rendering).
   - Siri paths come from `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy/distill/deploy.local.env`.

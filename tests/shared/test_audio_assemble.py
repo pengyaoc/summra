@@ -61,7 +61,7 @@ def fake_ffmpeg(monkeypatch):
 
 
 def test_render_chapter_uses_fake_engine(tmp_path, fake_ffmpeg):
-    audio, timings, duration_ms, checksum = render_chapter(CHAPTER, ToneEngine(), tmp_path)
+    audio, timings, duration_ms, checksum = render_chapter(spoken_units(CHAPTER), ToneEngine(), tmp_path)
     assert audio.startswith(b'OPUS' + b'RIFF')  # encoded straight from the raw WAV, no AAC step
     assert len(fake_ffmpeg) == 1
     cmd = fake_ffmpeg[0]
@@ -82,7 +82,7 @@ def test_render_chapter_rejects_mixed_rates(tmp_path, fake_ffmpeg):
             return super().render(text, out_wav)
 
     with pytest.raises(ValueError):
-        render_chapter(CHAPTER, Mixed(), tmp_path)
+        render_chapter(spoken_units(CHAPTER), Mixed(), tmp_path)
 
 
 def test_encode_opus_uses_libopus_24k_mp4(tmp_path, monkeypatch):

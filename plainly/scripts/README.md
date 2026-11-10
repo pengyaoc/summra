@@ -7,7 +7,7 @@ One-shot CLI tools, batch jobs, and data-maintenance scripts. Grouped by purpose
 | Subfolder | What lives here |
 |-----------|------|
 | `content/` | Summary generation, modern-English rewrite, chapter-text cleanup, slug generation, author bios. **`generate_summaries.py` is the main ingestion script.** |
-| `audio/` | TTS generation (offline Gemini, batch concise/medium, single-chapter), audio-metadata backfill, audio-filename migration. |
+| `audio/` | Record summaries (`record_summaries.py`), audio-metadata backfill; chapters use `shared.audio.make_audio --app plainly`, audio-filename migration. |
 | `images/` | Book covers, chapter illustrations (Gemini batch + sync), hero images, app icons, guide images, generic resize/recompress. |
 | `categorization/` | Book-category assignment (single, batch, bulk-backfill) and master-category generation. |
 | `migrations/` | One-shot schema or filename migrations (books, authors, covers, titles, JSON migration, blog-post import). Audio migration lives in `audio/`. |

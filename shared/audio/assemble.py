@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Sequence, Tuple
 
 from shared.audio.engines import Engine
-from shared.audio.spoken import spoken_checksum, spoken_units
+from shared.audio.spoken import SpokenUnit, spoken_checksum
 
 UNIT_GAP_MS = 350
 PART_GAP_MS = 250
@@ -35,10 +35,9 @@ def compute_timings(units: Sequence[Tuple[str, Sequence[float]]],
     return timings
 
 
-def render_chapter(chapter: dict, engine: Engine, work_dir: Path) -> Tuple[bytes, List[dict], int, str]:
-    """Return (Opus bytes, timings, duration_ms, spoken checksum) for one chapter."""
+def render_chapter(units: Sequence[SpokenUnit], engine: Engine, work_dir: Path) -> Tuple[bytes, List[dict], int, str]:
+    """Return (Opus bytes, timings, duration_ms, spoken checksum) for what a chapter says."""
     work_dir = Path(work_dir)
-    units = spoken_units(chapter)
     rendered = []  # per unit: list of PCM frame strings
     rate = None
     for u, unit in enumerate(units):

@@ -74,3 +74,12 @@ def test_expected_routes_are_registered():
     routes = {str(rule) for rule in app_prod.app.url_map.iter_rules()}
     for expected in ['/health', '/api/tts/generate', '/api/tts/stop', '/api/books']:
         assert any(expected in r for r in routes), f"missing route: {expected}"
+
+
+def test_dev_app_also_serves_recordings_only(client):
+    """The dev server shares production's route, so no speech is generated on request."""
+    from pathlib import Path
+    from plainly import app_base
+    assert '/api/tts/generate' not in Path(app_base.__file__).with_name('app.py').read_text()
+    assert '/api/tts/generate' in Path(app_base.__file__).read_text()
+    assert client.post('/api/tts/generate', json={'id': 'no-such-audio-id', 'text': 'Hello there world'}).status_code == 404

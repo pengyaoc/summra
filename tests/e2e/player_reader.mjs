@@ -120,6 +120,32 @@ check(open.left < shut.left, 'desktop panel: the column slides left');
 const textRight = await wide.evaluate(() => Math.max(...[...document.querySelectorAll('#continuous-reader-content [data-reader-anchor]')].map((a) => a.getBoundingClientRect().right)));
 check(textRight <= panel.x, `desktop panel: the text clears the panel (${Math.round(textRight)} <= ${Math.round(panel.x)})`);
 
+// Stop listening, from the full player on the reading page.
+await openReader(FIRST);
+await page.locator('#listen-button').click();
+await page.waitForFunction(() => window.distillAudio.player.audio?.currentTime > 0.2, null, { timeout: 20000 });
+await page.waitForFunction(() => document.querySelector('#continuous-reader-content .listen-current'), null, { timeout: 8000 }).catch(() => {});
+const pageBeforeStop = await P(() => window.distillAudio.link.reader.pagination.currentPage);
+await page.locator('#listen-button').click();
+await page.locator('#player-stop').click();
+await page.waitForTimeout(300);
+check(await page.locator('#player-full').isHidden(), 'stop: the full player closes');
+check(await P(() => !window.distillAudio.player.active && window.distillAudio.player.audio.paused), 'stop: the audio ends');
+check(await highlighted() === 0, 'stop: the highlight is gone');
+check(!await accent(), 'stop: the headphones are plain again');
+check(await P(() => window.distillAudio.link.reader.pagination.currentPage) === pageBeforeStop, 'stop: the page stays where it was');
+await page.waitForTimeout(1200);
+check(await P(() => window.distillAudio.link.reader.pagination.currentPage) === pageBeforeStop, 'stop: the page no longer follows');
+await page.locator('#listen-button').click();
+await page.waitForFunction(() => window.distillAudio.player.audio?.currentTime > 0.2 && !window.distillAudio.player.audio.paused, null, { timeout: 20000 });
+check(await accent(), 'stop: Listen starts again afterwards');
+await P(() => window.distillAudio.player.pause());
+await page.waitForTimeout(200);
+await page.locator('#listen-button').click();
+await page.locator('#player-stop').click();
+await page.waitForTimeout(300);
+check(await P(() => !window.distillAudio.player.active) && await highlighted() === 0, 'stop: also works while paused');
+
 check(problems.length === 0, `no page errors${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();
 console.log(failures ? `${failures} FAILED` : 'All passed');

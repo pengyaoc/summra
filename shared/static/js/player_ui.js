@@ -16,6 +16,7 @@ export class PlayerUI {
         on('player-mini-play', () => this.toggle());
         on('player-mini-close', () => player.close());
         on('player-full-close', () => this.closeFull());
+        on('player-stop', () => player.close());
         on('player-play', () => this.toggle());
         on('player-back', () => player.seekBy(-15));
         on('player-fwd', () => player.seekBy(30));

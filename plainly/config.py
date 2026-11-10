@@ -64,19 +64,10 @@ SUMMARY_CONFIGS = {
 # Flash-Lite: stable, free tier, lower latency, cheaper at paid tier.
 PLAIN_TEXT_MODEL = 'gemini-3.1-flash-lite'
 
-# TTS configuration (using VITS for real-time, Gemini for offline)
+# Pre-recorded summary speech
 TTS_OUTPUT_DIR = STATIC_DIR / 'audio'
 TTS_LANGUAGE = 'en'  # Default language for TTS
 
-# Gemini TTS API configuration (for offline generation only)
-GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts'
-GEMINI_TTS_VOICE = 'Kore'  # Default voice (options: Puck, Charon, Kore, Fenrir, Aoede, Sulafat)
-GEMINI_TTS_MAX_REQUESTS_PER_MINUTE = 3
-GEMINI_TTS_MAX_TOKENS_PER_MINUTE = 10000
-GEMINI_TTS_CHUNK_SIZE_WORDS = 900  # Larger chunks for API-based TTS
-
-# VITS TTS configuration (for real-time generation)
-VITS_TTS_CHUNK_SIZE_WORDS = 20  # Much smaller chunks for local TTS processing
 
 # Flask configuration
 FLASK_HOST = '0.0.0.0'

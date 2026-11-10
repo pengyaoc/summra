@@ -2,7 +2,7 @@
 Production Flask application with pre-generated TTS only.
 Imports common routes from app_base and adds production-specific features.
 """
-from flask import jsonify, request
+from flask import jsonify
 import os
 
 # Absolute imports work for both `python plainly/app.py` (dev) and gunicorn's
@@ -13,57 +13,6 @@ from plainly.app_base import app, logger, ensure_directories
 
 # Ensure production mode (IS_DEVELOPMENT = False is already set in app_base)
 app.config['IS_DEVELOPMENT'] = False
-
-
-@app.route('/api/tts/generate', methods=['POST'])
-def generate_tts():
-    """Check for pre-generated TTS audio (generation disabled in production)"""
-    try:
-        data = request.json
-        audio_id = data.get('id')  # Unique identifier for caching
-
-        if not audio_id:
-            return jsonify({
-                'success': False,
-                'error': 'No audio ID provided'
-            }), 400
-
-        # Check for cached audio using shared utility function
-        from plainly import tts_utils
-
-        cached_audio = tts_utils.check_cached_audio(audio_id, config.TTS_OUTPUT_DIR, config.STATIC_DIR)
-        if cached_audio:
-            logger.info(f"Using cached audio: {cached_audio['provider']}")
-            return jsonify({
-                'success': True,
-                'audio_url': request.script_root + cached_audio['audio_url'],
-                'streaming': False,
-                'cached': cached_audio['cached'],
-                'provider': cached_audio['provider']
-            })
-
-        # No pre-generated audio found
-        return jsonify({
-            'success': False,
-            'error': 'TTS generation is disabled in production. Audio files are pre-generated.',
-            'message': 'Please contact administrator if audio is missing.'
-        }), 404
-
-    except Exception as e:
-        logger.error(f"Error checking for pre-generated audio: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/tts/stop', methods=['POST'])
-def stop_tts():
-    """Stop TTS endpoint (no-op in production since no generation happens)"""
-    return jsonify({
-        'success': True,
-        'message': 'TTS stop requested (no action needed in production)'
-    })
 
 
 @app.route('/health')

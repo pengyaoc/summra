@@ -50,12 +50,12 @@ Read [references/format-and-publish.md](references/format-and-publish.md) for th
 Every published or republished entry gets chapter audio, recorded on this Mac with the macOS voices (English `say` at 48 kHz, Chinese Siri Voice 4) and stored only as Opus 24 kbps. Audio is never recorded on the VM. The publish request authorizes this step and its audio deploy.
 
 1. Do it after the text is live and verified, so a slow recording never holds up the publication. The entry is readable at once; the Listen button appears when the audio deploy lands.
-2. Run one `make_audio` recording at a time; it records 4 chapters at once. If `pgrep -f distill.scripts.make_audio` shows another recording (a library-wide run, or another session's book), wait for it to finish, or tell the user the entry is queued behind it. Also avoid deploying while another publisher is deploying.
+2. Run one `make_audio` recording at a time; it records 4 chapters at once. If `pgrep -f shared.audio.make_audio --app distill` shows another recording (a library-wide run, or another session's book), wait for it to finish, or tell the user the entry is queued behind it. Also avoid deploying while another publisher is deploying.
 3. Estimate first, then record and deploy only new or changed chapters, in the background:
 
 ```bash
-cd /Users/pengyao/Documents/dev/summra && venv/bin/python -m distill.scripts.make_audio --book <slug> --dry-run
-cd /Users/pengyao/Documents/dev/summra && venv/bin/python -m distill.scripts.make_audio --book <slug> --jobs 4 --deploy
+cd /Users/pengyao/Documents/dev/summra && venv/bin/python -m shared.audio.make_audio --app distill --book <slug> --dry-run
+cd /Users/pengyao/Documents/dev/summra && venv/bin/python -m shared.audio.make_audio --app distill --book <slug> --jobs 4 --deploy
 ```
 
    Use `--jobs 4` for every language. Chinese needs `DISTILL_SIRI_TTS_PATH` / `DISTILL_SIRI_PYTHON` in `deploy/distill/deploy.local.env`. English at 4 chapters at once runs about 14× faster than real time, so a 2-hour book takes about 10 minutes.

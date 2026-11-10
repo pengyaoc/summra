@@ -11589,3 +11589,14 @@ Local style check against main: all reader variants identical. Home card differe
 Found in final checks: pressing Listen on a page that opens partway through a paragraph turned back a page, because the player reported 0:00 before its seek landed and the paragraph began on the page before. Now the position reports the seek target, and following never turns back for a paragraph already on screen (`reader_audio_stable.mjs`).
 
 Deploy: `deploy_db` failed its own read-back (3,990 rows) because the local DB still had the old audio key. It now migrates its snapshot before comparing (`test_deploy_db.py`).
+
+## 2026-11-09 — Shared recording; Gemini speech removed from Plainly (branch feat/shared-make-audio)
+
+Owner: `make_audio` should be shared and replace Plainly's Gemini speech. Moved it to `shared/audio/make_audio.py` with `--app` and `<app>/audio_app.py` adapters, plus `--mode`. Added `plainly/scripts/audio/record_summaries.py`. `/api/tts/generate` moved to `app_base.py` and only finds recordings, in dev too. Deleted `gemini_tts_handler.py`, five Gemini audio scripts and `test_tts_streaming.py` (tested the removed streaming generator). Existing Gemini summary files still play until a recording replaces them. Chapters with nothing to say are skipped. Real macOS run on a scratch database produced Opus with timings for a chapter and a summary.
+
+Left: no script ships Plainly's recordings to the VM; no re-recording run done; the browser's chunk-waiting path in `generated_speech_source.js` is now unused by the server.
+
+## 2026-11-09 — Stop listening in the full player
+
+Owner could not turn audio off from the reading page: the only stop was the mini player's close, which is hidden there. Added Stop listening to the shared full player (`player-stop`, the same `player.close()`). Tests in `player_reader.mjs`.
+

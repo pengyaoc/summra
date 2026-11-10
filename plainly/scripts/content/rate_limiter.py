@@ -1,9 +1,4 @@
-"""Rate limiter for Gemini API calls, extracted from generate_summaries.py.
-
-Note: this is NOT the same implementation as plainly/gemini_tts_handler.py's
-RateLimiter — the two have diverged (different window-tracking logic) and
-that one is live production TTS code, not covered by this extraction.
-"""
+"""Rate limiter for Gemini API calls, extracted from generate_summaries.py."""
 import time
 
 from plainly.scripts.content.constants import APIConstants
