@@ -364,6 +364,10 @@ body.pagination-active {
         background-color: rgba(0, 0, 0, 0.04);
     }
 
+    [data-theme="dark"] .pagination-nav-button {
+        color: var(--reading-theme-dark-text);
+    }
+
     [data-theme="dark"] .pagination-nav-button:hover,
     [data-theme="dark"] .pagination-nav-button:focus-visible {
         background-color: rgba(255, 255, 255, 0.06);
@@ -479,7 +483,7 @@ html.pagination-active {
 
 .pagination-page-container strong {
     font-weight: 600;
-    color: var(--primary-color);
+    color: inherit;
 }
 
 .pagination-page-container em {
@@ -510,6 +514,10 @@ html.pagination-active {
 [data-theme="dark"] .pagination-page-container h5,
 [data-theme="dark"] .pagination-page-container h6 {
     color: var(--reading-theme-dark-text);
+}
+
+[data-theme="dark"] .pagination-page-container blockquote {
+    border-left-color: var(--reading-theme-dark-border);
 }
 
 [data-theme="dark"] .pagination-page-container code {

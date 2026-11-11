@@ -11609,3 +11609,12 @@ Owner could not turn audio off from the reading page: the only stop was the mini
 - `deploy_db` calls it last, after the read-back and auth checks. A failure only warns, since content is already live; until the VM runs this code the step reports "skipped".
 - One-off run on the VM 2026-11-11 with the same function: 575 files / 654.1 MB removed; `verify_media` then confirmed all 3,325 referenced objects present. Disk 11G → 9.4G (journal also vacuumed to 100M).
 - Tests: `test_file_media.py` (+3), `test_deploy_db.py` (+2); both files 58 passed.
+
+
+## 2026-11-11 — Dark theme: bold text and page arrows were invisible
+
+Found while recording the Distill demo for pengyaochen.com: in the dark reading theme, bold text (`<strong>`) disappeared. `shared/static/css/reader.css` set `.pagination-page-container strong` to `var(--primary-color)` (dark ink, #2B2622), and no dark rule overrode it. A scan of every visible text element in the dark reader also found the page-turn arrows (`.pagination-nav-button`, `color: var(--text-color)`) dark on dark.
+- Bold now uses `color: inherit`. In light mode that resolves to the same ink as before.
+- Dark rules added for the page-turn arrows (`--reading-theme-dark-text`) and the blockquote rule (`--reading-theme-dark-border`).
+- Shared CSS, so Plainly's reader gets the same fix.
+- Validation: local Distill on a library copy, *The Wealth of Nations* ch. 1. In dark, bold and arrows compute to #e0e0e0; in light, bold, arrows and body text are all #2B2622. Full suite 1388 passed. ERD and PRD theme notes updated. Not yet deployed.

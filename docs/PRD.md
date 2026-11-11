@@ -814,6 +814,7 @@ Kindle-inspired reading experience with customizable fonts, sizes, and color sch
   - Background: Dark gray (#1a1a1a)
   - Text: Light gray (#e0e0e0)
   - Use case: Low-light environments, night reading, reduced eye strain
+  - Bold text, blockquote rules and the page-turn arrows (‹ ›) all use the light text color (fixed 2026-11-11; bold and arrows were dark ink and unreadable)
 - **Sepia was merged into Light (2026-10-17):** the two warm-paper themes looked nearly identical. A saved Sepia choice opens as Light and is rewritten to Light.
 - **UI:** Visual theme preview squares with labels
 - **Application:**

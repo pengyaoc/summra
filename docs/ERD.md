@@ -557,7 +557,9 @@ design-system layer sits at the top of `:root` — `--paper`, `--surface`, `--in
 `--level-{easy,moderate,challenging}-{bg,fg}` tag colors. During migration the legacy token
 names (`--primary-color`, `--secondary-color`, `--background-color`, …) are re-pointed at the new
 tokens so un-migrated selectors pick up the new palette; each legacy alias is deleted once its last
-call site is migrated. The reader's dark/sepia themes keep their own tokens.
+call site is migrated. The reader's dark/sepia themes keep their own tokens. Inside the reading page, text elements
+must inherit their color (bold is `color: inherit`) or get a `[data-theme="dark"]` override; a
+hard-coded light-theme token such as `--primary-color` renders dark ink on the dark background.
 
 **Study cues** (`plainly/study_cues.py`, redesign phase 2): `level` (Easy / Moderate / Challenging
 from the upper bound of `books.cefr_level`, else null) and `reading_minutes` (ceil(words / 230)) are
