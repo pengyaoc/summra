@@ -11617,4 +11617,4 @@ Found while recording the Distill demo for pengyaochen.com: in the dark reading 
 - Bold now uses `color: inherit`. In light mode that resolves to the same ink as before.
 - Dark rules added for the page-turn arrows (`--reading-theme-dark-text`) and the blockquote rule (`--reading-theme-dark-border`).
 - Shared CSS, so Plainly's reader gets the same fix.
-- Validation: local Distill on a library copy, *The Wealth of Nations* ch. 1. In dark, bold and arrows compute to #e0e0e0; in light, bold, arrows and body text are all #2B2622. Full suite 1388 passed. ERD and PRD theme notes updated. Not yet deployed.
+- Validation: local Distill on a library copy, *The Wealth of Nations* ch. 1. In dark, bold and arrows compute to #e0e0e0; in light, bold, arrows and body text are all #2B2622. Full suite 1388 passed. ERD and PRD theme notes updated. Deployed 2026-11-11 (48373b0) with deploy_code; live shared reader.css on the VM has the fix, so Plainly gets it too.
