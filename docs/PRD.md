@@ -112,6 +112,11 @@ Kindle pairing data are not replaced. Operators retain one latest metadata
 backup per app and must preserve/back up its separate media files as well.
 Plainly's existing media storage and reader behavior are unchanged.
 
+Since 2026-11-11 each Distill content deploy also removes media files that
+neither the live library nor its one metadata backup uses (for example narration
+replaced by a re-recording), so restoring that backup still works and the VM
+does not accumulate superseded audio. The first manual run freed 654 MB.
+
 
 ## Generated media repository policy (2026-10-27)
 

@@ -426,3 +426,17 @@ def test_migrating_an_up_to_date_snapshot_changes_nothing():
     _ship_deploy_audio(conn)
     _ship_deploy_audio(conn)
     assert conn.execute('SELECT COUNT(*) FROM chapter_audio').fetchone() == (1,)
+
+
+def test_unused_media_is_pruned_last_after_the_vm_is_verified(file_media_db):
+    run = make_run(file_media_db.db_path, {'media_transfer prune': (0, 'Pruned unused media objects: 4 (1.0 MB)')})
+    summary = deploy_db(file_media_db.db_path, SETTINGS, run=run)
+    assert run.index('curl') < run.index('media_transfer prune')
+    assert run.has('prune --db /opt/x/data/distill.db --media-dir /opt/x/data/distill-media')
+    assert summary['prune'] == 'Pruned unused media objects: 4 (1.0 MB)'
+
+
+def test_prune_failure_only_warns(file_media_db):
+    run = make_run(file_media_db.db_path, {'media_transfer prune': (2, 'invalid choice: prune')})
+    summary = deploy_db(file_media_db.db_path, SETTINGS, run=run)
+    assert summary['prune'].startswith('skipped')

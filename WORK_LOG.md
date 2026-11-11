@@ -11600,3 +11600,12 @@ Left: no script ships Plainly's recordings to the VM; no re-recording run done; 
 
 Owner could not turn audio off from the reading page: the only stop was the mini player's close, which is hidden there. Added Stop listening to the shared full player (`player-stop`, the same `player.close()`). Tests in `player_reader.mjs`.
 
+
+
+## 2026-11-11: Prune unused Distill media on deploy
+
+- Why: `install_archive` never deletes, so every re-recording left the old narration behind. The VM held 575 unreferenced media objects (654 MB, almost all old chapter audio).
+- `media_transfer.prune_media` / `prune` command: keeps every key referenced by the live DB or by the content DB in the one `distill-latest.tar.gz` backup (so restoring it still works) and anything modified in the last 24 h; an unreadable backup raises before deleting anything.
+- `deploy_db` calls it last, after the read-back and auth checks. A failure only warns, since content is already live; until the VM runs this code the step reports "skipped".
+- One-off run on the VM 2026-11-11 with the same function: 575 files / 654.1 MB removed; `verify_media` then confirmed all 3,325 referenced objects present. Disk 11G → 9.4G (journal also vacuumed to 100M).
+- Tests: `test_file_media.py` (+3), `test_deploy_db.py` (+2); both files 58 passed.

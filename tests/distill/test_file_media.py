@@ -212,3 +212,58 @@ def test_missing_deploy_audio_lists_chapters_without_opus(tmp_path, sample_book,
     assert db.missing_deploy_audio() == []
     db.save_chapter_audio(chapter_id, b'master', [], 1, 'c', 'say:system', 'say', None)
     assert db.missing_deploy_audio() == [chapter_id]
+
+
+def _age(store, key, seconds):
+    import os, time
+    path = store.path(key)
+    old = time.time() - seconds
+    os.utime(path, (old, old))
+
+
+def test_prune_removes_only_media_unused_by_live_db_and_its_backup(tmp_path, sample_book, write_book):
+    from distill.scripts.media_transfer import prune_media
+    db = DistillDatabase(tmp_path / 'distill.db')
+    db.import_book(write_book(sample_book))
+    live = set(db.media_keys())
+    backed_up = db.media.put(b'only the backup references this')
+    with closing(db.get_connection()) as conn, conn:
+        conn.execute("UPDATE images SET storage_key=? WHERE id=(SELECT MIN(id) FROM images)", (backed_up,))
+    backup_metadata(db.db_path)  # the one backup now references `backed_up`
+    with closing(db.get_connection()) as conn, conn:  # live DB moves back to the original key
+        conn.execute("UPDATE images SET storage_key=? WHERE storage_key=?", (sorted(live)[0], backed_up))
+    orphan = db.media.put(b'replaced narration nobody references')
+    fresh = db.media.put(b'just written by the app, not yet referenced')
+    for key in [*live, backed_up, orphan]:
+        _age(db.media, key, 2 * 86400)
+
+    removed, freed = prune_media(db.db_path)
+
+    assert (removed, freed) == (1, len(b'replaced narration nobody references'))
+    assert not db.media.path(orphan).exists()
+    for key in [*live, backed_up, fresh]:
+        assert db.media.path(key).exists()
+
+
+def test_prune_without_a_backup_keeps_live_media(tmp_path, sample_book, write_book):
+    from distill.scripts.media_transfer import prune_media
+    db = DistillDatabase(tmp_path / 'distill.db')
+    db.import_book(write_book(sample_book))
+    orphan = db.media.put(b'orphan')
+    for key in [*db.media_keys(), orphan]:
+        _age(db.media, key, 2 * 86400)
+    assert prune_media(db.db_path)[0] == 1
+    assert db.verify_media() == len(db.media_keys())
+
+
+def test_prune_refuses_an_unreadable_backup(tmp_path, sample_book, write_book):
+    from distill.scripts.media_transfer import prune_media
+    db = DistillDatabase(tmp_path / 'distill.db')
+    db.import_book(write_book(sample_book))
+    orphan = db.media.put(b'orphan')
+    _age(db.media, orphan, 2 * 86400)
+    (tmp_path / 'backups').mkdir()
+    (tmp_path / 'backups' / 'distill-latest.tar.gz').write_bytes(b'not a tarball')
+    with pytest.raises(Exception):
+        prune_media(db.db_path)
+    assert db.media.path(orphan).exists()

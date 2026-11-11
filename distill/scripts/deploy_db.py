@@ -4,7 +4,8 @@ Usage: python -m distill.scripts.deploy_db [--db PATH] [--config PATH]
 
 Only rows that differ and media the VM lacks are sent; the site keeps running, and
 books that exist only on the VM are left alone. Account/progress databases are backed
-up but never changed. The one latest metadata archive is atomically refreshed.
+up but never changed. The one latest metadata archive is atomically refreshed, and
+media referenced by neither the live DB nor that archive is then deleted.
 
 Every run ends by reading the VM back, so a run with nothing to send is a full check.
 """
@@ -150,7 +151,15 @@ def _deploy_db(db_path: Path, settings: dict, run, archive) -> dict:
 
     if archive is not None:
         ssh(f'rm -f ~/{REMOTE_MEDIA_UPLOAD}', 'temporary media upload cleanup')
-    return {'changed': patch_size(patch), 'rows': rows, 'media': len(wanted)}
+
+    # Content is live and verified: drop media neither the live DB nor its one backup uses.
+    # A failure here leaves extra files behind, never a broken site, so it only warns.
+    pruned = run(['gcloud', 'compute', 'ssh', instance,
+                  f'--command={helper} prune --db {shlex.quote(remote_db)} --media-dir {shlex.quote(remote_media)}',
+                  *gcloud_flags], capture_output=True, text=True)
+    prune_note = ((pruned.stdout or '').strip() if pruned.returncode == 0
+                  else f'skipped ({(pruned.stderr or pruned.stdout or "").strip()[:200]})')
+    return {'changed': patch_size(patch), 'rows': rows, 'media': len(wanted), 'prune': prune_note}
 
 
 def _ship_deploy_audio(snapshot) -> None:
@@ -201,6 +210,8 @@ def main(argv: list) -> int:
         return 1
     print(f'Deployed distill.db: {summary["changed"]} row(s) changed')
     print(f'Verified on the VM: integrity ok, {summary["rows"]} rows match, {summary["media"]} media files present')
+    if summary.get('prune'):
+        print(f'Unused media: {summary["prune"]}')
     return 0
 
 

@@ -1,4 +1,4 @@
-"""Verified media transfer and one consistent metadata backup per Distill app."""
+"""Verified media transfer, one consistent metadata backup per Distill app, and pruning of unused media."""
 import argparse
 from contextlib import closing, contextmanager
 import hashlib
@@ -92,11 +92,55 @@ def install_archive(archive, media_dir, owner=None):
     return count
 
 
+PRUNE_GRACE_SECONDS = 24 * 3600  # never touch objects young enough to be mid-write by the app
+
+
+def _backup_media_keys(db_path):
+    """Keys referenced by the content DB inside the one `<stem>-latest.tar.gz` backup."""
+    db_path = Path(db_path)
+    archive = db_path.parent / 'backups' / f'{db_path.stem}-latest.tar.gz'
+    if not archive.is_file():
+        return set()
+    with tempfile.TemporaryDirectory(prefix='.distill-prune-', dir=archive.parent) as temporary:
+        with tarfile.open(archive, 'r:gz') as tar:
+            member = tar.getmember(db_path.name)  # KeyError: a backup we cannot read stops the prune
+            if not member.isfile():
+                raise ValueError('Unexpected backup member')
+            snapshot = Path(temporary) / db_path.name
+            with tar.extractfile(member) as source:
+                snapshot.write_bytes(source.read())
+        return set(media_keys(snapshot))
+
+
+def prune_media(db_path, media_dir=None, grace_seconds=PRUNE_GRACE_SECONDS, now=None):
+    """Delete media objects referenced by neither the live DB nor its one backup.
+
+    Keeps everything the latest metadata backup needs, so restoring it still works,
+    and anything modified within `grace_seconds`. Returns (count, bytes) removed.
+    """
+    import time
+    store = MediaStore(media_dir if media_dir is not None else config.media_dir_for(db_path))
+    keep = set(media_keys(db_path)) | _backup_media_keys(db_path)
+    cutoff = (time.time() if now is None else now) - grace_seconds
+    removed = freed = 0
+    for key in list_keys(store.root):
+        if key in keep:
+            continue
+        path = store.path(key)
+        stat = path.stat()
+        if stat.st_mtime > cutoff:
+            continue
+        path.unlink()
+        removed += 1
+        freed += stat.st_size
+    return removed, freed
+
+
 def backup_metadata(db_path, owner=None):
     """Atomically replace the one app archive after verifying SQLite snapshots.
 
-    File media is additive/immutable and backed up separately; old objects stay
-    available when restoring this metadata snapshot. No account/progress writes.
+    File media is immutable and backed up separately; `prune_media` keeps every
+    object this snapshot references, so restoring it still works. No account/progress writes.
     """
     db_path = Path(db_path)
     destination = db_path.parent / 'backups' / f'{db_path.stem}-latest.tar.gz'
@@ -147,10 +191,16 @@ def main(argv=None):
     backup = commands.add_parser('backup')
     backup.add_argument('--db', type=Path, required=True)
     backup.add_argument('--owner')
+    prune = commands.add_parser('prune', help='delete media referenced by neither the live DB nor its backup')
+    prune.add_argument('--db', type=Path, required=True)
+    prune.add_argument('--media-dir', type=Path)
     args = parser.parse_args(argv)
     if args.command == 'list':
         for key in list_keys(args.media_dir):
             print(key)
+    elif args.command == 'prune':
+        removed, freed = prune_media(args.db, args.media_dir)
+        print(f'Pruned unused media objects: {removed} ({freed / 2**20:.1f} MB)')
     elif args.command == 'install':
         print('Verified media objects:', install_archive(args.archive, args.media_dir, args.owner))
     else:
