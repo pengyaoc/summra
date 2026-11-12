@@ -2,7 +2,7 @@
 
 ## Work Log
 
-Keep a work log for all tasks completed and in progress in `WORK_LOG.md`. Update the work log when task starts and update the status along the way. The work log would be used as future development context.
+Keep a work log for all tasks completed and in progress in `WORK_LOG.md`. Update the work log when task starts and update the status along the way. The work log would be used as future development context. Entries before 2026-10 are in `docs/archive/WORK_LOG-2025-2026.md`.
 
 ## Documentation
 

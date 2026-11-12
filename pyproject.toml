@@ -27,3 +27,15 @@ exclude = ["plainly/scripts/archive", "venv", "data"]
 # rather than gating the packaging/CI rollout on a full lint pass.
 select = ["E", "F", "I"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+# Only collect tests from the tests/ directory
+# (prevents picking up CLI/debug scripts under scripts/ that are named test_*.py)
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselected by default)",
+    "content: validates the local curated content database (opt in with -m content)",
+]
+# External content audits and slow tests are opt-in.
+# Run with -m content or -m slow to select either group explicitly.
+addopts = '-m "not slow and not content"'

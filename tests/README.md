@@ -18,6 +18,6 @@ venv/bin/python -m pytest tests/ -v
 
 The whole pytest suite runs with no API keys and no content database. CI runs it on every push.
 
-Markers (`pytest.ini`): `slow` and `content` are deselected by default. `-m content` audits the locally provisioned Plainly content DB, for example `pytest tests/plainly/test_home_redesign.py -m content`.
+Markers (`[tool.pytest.ini_options]` in `pyproject.toml`): `slow` and `content` are deselected by default. `-m content` audits the locally provisioned Plainly content DB, for example `pytest tests/plainly/test_home_redesign.py -m content`.
 
 Shared fixtures live in `tests/conftest.py` and `tests/distill/conftest.py`.
