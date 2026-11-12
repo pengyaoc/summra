@@ -1,5 +1,27 @@
 # Summra Work Log
 
+## 2026-11-11: README restructure for the shared platform + two apps
+
+- Status: done locally, not committed.
+- Root `README.md` now presents Summra as a codename: shared platform plus Plainly and Distill, with a diagram, repo map, quick start, tests, deploy and docs index.
+- Plainly-specific content moved to new `plainly/README.md` and was corrected: `summra.db` lives in `data/`, `FEATURE_AUTH` is on, there is no Gemini TTS any more (audio is recorded on the Mac), and the old batch audio scripts are gone.
+- New `distill/README.md` and `shared/README.md` (package table: what each one does and how an app plugs in).
+- Structural cleanup applied (owner approved):
+  - `deploy/plainly/` now holds Plainly's `install.sh` (repo root is now `../..`), `summra.service`, `override.example.conf`, `summra.conf`, `service.env.example` and `requirements-prod.txt` (moved from the repo root). `deploy/archive/` holds `DEPLOY.md` and the unused nginx configs. `deploy/README.md` now opens with a map of the folder.
+  - `docs/archive/` gets `PROJECT_OVERVIEW.md`, `SYSTEM_ARCHITECTURE.md`, `USAGE.md` and `tests/{TEST,COVERAGE}_SUMMARY.md`. `docs/plainly/` gets the two Plain English workflows, the learnings, the Moby-Dick log and `marketing/`. References updated in CLAUDE.md, AGENTS.md, ERD, `passage_rewrite.py`, e2e and memory.
+  - `setup.sh` / `setup.bat` install both apps plus `pip install -e .` and print both ports. `pyproject.toml` description updated.
+  - GitHub: repo description and topics updated.
+  - Tests: `test_apache_conf.py` and `test_layout_paths.py` follow the moved `summra.conf`; `test_layering_names.py` also scans `docs/plainly/`. Full pytest: 1,388 passed.
+  - The VM is unaffected: its Apache fragment and unit are installed copies, and gunicorn still uses `deploy/gunicorn_config.py`.
+- Second cleanup round (owner approved items 1–6):
+  - `docs/tts/` → `docs/archive/tts/` (describes Coqui/Gemini speech, both gone). `tests/README.md` rewritten as a short map of the suites.
+  - `docs/CONTINUOUS_READER_LIBRARY_{PRD,ERD}.md` → `docs/shared/`.
+  - Local only, moved to `~/.Trash/summra-cleanup-20261111/`: `backend/`, `scripts/` (both just `__pycache__`), the unused uv `.venv/`, and `data/database.pre-bleak-house-plain-20261018.db` (174 MB). Root `node_modules/` stays (esbuild).
+  - `CLAUDE.md` 45 KB → 13 KB. Runbooks moved verbatim to `docs/plainly/ingestion_workflow.md`, `docs/plainly/plain_english_checklist.md`, `deploy/plainly/RUNBOOK.md` and `deploy/distill/RUNBOOK.md`, leaving short pointers with the key rules. References repointed.
+  - PRD/ERD split by top-level section into `docs/{shared,plainly,distill}/{PRD,ERD}.md` (PRD 21/20/7 sections, ERD 26/33/8). `docs/PRD.md` and `docs/ERD.md` are now indexes that list every section and its new file. A line-count check against HEAD shows no content lost. `CLAUDE.md` and `AGENTS.md` now say to update the part you changed.
+  - `test_layering_names.py` scans `docs/{shared,plainly,distill}/` and no longer reads the archived `docs/tts/`.
+  - Tests: full pytest 1,388 passed. `node --test tests/js/*.test.mjs` 63/65: 2 failures in `resolve_view_mode.test.mjs` (`document is not defined`) are pre-existing; no JS changed and they are not in CI.
+
 ## 2026-11-08: Distill home page tabs (Option B)
 
 - Status: built and tested locally; not committed or deployed.
@@ -11600,6 +11622,35 @@ Left: no script ships Plainly's recordings to the VM; no re-recording run done; 
 
 Owner could not turn audio off from the reading page: the only stop was the mini player's close, which is hidden there. Added Stop listening to the shared full player (`player-stop`, the same `player.close()`). Tests in `player_reader.mjs`.
 
+
+## 2026-11-09 — 最好的告别 reading companion
+
+User requested book-summary workflow and Distill publication from supplied Chinese EPUB. Verified original cover and copyright: Atul Gawande/阿图·葛文德著，彭小华译，王一方主编，浙江人民出版社2015年8月纸版，湛庐授权大陆简体电子版；English copyright2014. Staging /private/tmp/distill-being-mortal retains source hash, extracted spine, original NCX map and per-section CJK lengths. Three parallel writers cover all eight chapters and41named source sections including front/back matter; independent fresh review pending. Reflowable EPUB has no reliable page count. Extracted original cover and three substantive decline diagrams; no online sourcing. Short-source summaries will preserve content without padding to a disproportionate floor. Initial local/live content catalogs match across68books; audio matches after normalizing the new mode=summary schema default and deploy-key representation. No application code/schema/product changes; content-only publication, no commit requested. Final review, preview, preflight/backup, deployment and audio pending.
+
+All three drafts assembled into41source sections plus8chapter introductions, Overview and Source (51reader entries). Gate PASS41/41; D1/D2/D3=5;38/41depth bands, three transparent short-source exceptions;minimum291word-equivalent, no stubs. D6=1mechanically for leaves, N/A: all three actual embedded figures belong to chapter02introduction, while all leaf sections are unillustrated; original cover retained. Independent full-summary review active. Isolated preview HTTP checks pass for7reader segments,51Kindle sections,4assets and3cover derivatives; SQLite integrity/foreign keys pass. Desktop1280x900,phone390x844,Kindle1072x1448 screenshots checked; no JS errors. Kindle font6→7and page away/back retain3loaded diagrams fitting viewport. No physical Kindle test or application changes. Publication pending reviewer closure and final catalog preflight/SQLite backup.
+
+Independent reviewer completed full41-section review: D4/D5/D7=5, no blocking factual errors. Sole finding resolved against source27:51: explicitly restricted70%depleted-savings statistic to NewBridge residents, then rebuilt/revalidated; reviewer confirmed finalJSON fix. Extended existing skill quantitative-claim guidance to preserve facility/sample scope (skill frontmatter unchanged; automated validator unavailable in repo venv because PyYAML is absent). Score unchanged: Gate PASS,D1–D5/D7=5,D6=1with online-off/intro-figure caveat. Final publication preflight and backup starting; no application changes.
+
+Published https://pengyaochen.com/distill/books/being-mortal-zh (book78), categories Science & technology and Psychology & philosophy. Live owner VM-loopback web/Kindle detail and reader200; all7segments,51Kindle entries,4images including cover and3cover derivatives200; anonymous web/Kindle401. SQLite integrity/foreign keys pass. Local/live normalized inventories identical at69books; exact preservation verifies all68prior books,1995chapters,1033images,204cover derivatives and1995audio rows unchanged. Source EPUB SHA256 unchanged. Original2015Chinese edition fully read across three writers (~133863CJK extracted; no fixed pages) and fresh independent reviewer. No app code/schema/product behavior changes, commit or physical Kindle test.
+
+Listen dry-run estimates51entries/~3.2hours spoken audio. Recording began with approved existing Chinese voice and4workers via shared.audio.make_audio --app distill --book being-mortal-zh --jobs4 --deploy; voice check passed. Background verification watcher checks all51live audio entries and private access after recorder/deployer exits; status and verification artifacts under /private/tmp/distill-being-mortal. Text available immediately; audio pending completion.
+
+
+## 2026-11-09 — 信任 reading companion
+
+User requested book-summary skill and Distill publication of supplied Chinese EPUB. Verified copyright/cover: Francis Fukuyama著，郭华译，广西师范大学出版社2016年3月第1版，ISBN978-7-5495-7853-5，original1995. Staging /private/tmp/distill-trust-fukuyama includes original source SHA256, extracted EPUB spine, real31-chapter map with CJK source lengths, five original part divisions. Chinese drafts dispatched to source-reading writers, separate fresh review required before publication. Original cover plus all five substantive embedded tables retained (chapters3/14/22/27); online images off. Overview distinguishes郭于华导读2016from正文1995. No fixed EPUB pages. Initial69-book local/live content matches; local audio is ahead due an unrelated recording, so preserve live audio during publication and queue this book behind active recording. No app code/schema/product changes or commit requested. Validation/deployment pending.
+
+Listen completion for 最好的告别: all51reader entries recorded/deployed; VM-loopback audio API lists51, sample track200audio/mp4, anonymous API/track401. Automated post-recording verification stored in /private/tmp/distill-being-mortal/audio-verification.json.
+
+All five source chunks fully read by three writers (219514CJK across31chapters, plus front matter handled in Overview). Assembled31chapter summaries+Overview+Source=33reader entries, original5parts. GatePASS31/31; D1/D2/D3=5, all depth bands,minimum722word-equivalent; D6=1mechanically/partialN/A because only4chapters illustrated in source, all5tables kept. Scratch import HTTP checks pass for7segments,33Kindle entries,6assets includingcover,3cover derivatives; SQLite integrity/foreign keys pass. Desktop1280x900,phone390x844,Kindle1072x1448 screenshots inspected with noJSerrors; Kindle chapter14font6→7and page away/back retains both tables within viewport. No physical Kindle test. Fresh independent full-book content review underway. Preflight after prior recording confirms local/live inventories fully equal including audio at69books. No app-code changes.
+
+Independent fresh reviewer read all31summaries+Overview+Sources+finalJSON, checked raw source statistics/captions/coherence and closed two confirmed issues: ch3now names the author’s1995China/Japan prediction rather than vague “strongclaim”, explicitly noting ch29uncertainty; ch25now preserves author’s broad group comparisons and distinguishes counterexamples/editorial caution rather than falsely narrowing his claim. Final GatePASS31/31; D1–D5/D7=5,D6=1partialN/A. Added narrow source-claim/editorial-caution and explicit-prediction check to existing book-summary skill; quick_validate passes. Reassembled/finaldryrun and scratchHTTP checks pass. Final69-book preflight fully equal including audio, no active recorder/publisher; SQLite before-import.db created. Text deployment underway.
+
+Published https://pengyaochen.com/distill/books/trust-fukuyama (book79), categories Society & economics and Psychology & philosophy. Live owner VM-loopback web/Kindle detail+reader200, all7segments,33Kindle entries,6images incl.cover,3cover derivatives200; anonymous web/Kindle401. SQLite integrity/foreign keys pass. Local/live inventories fully equal at70books; exact preservation checks retain all69prior books,2046chapters,1037images,207cover derivatives and2046audio rows. Original EPUB hash unchanged. Final audit /private/tmp/distill-trust-fukuyama/review.md; no required reviewer issues remain. No app code/schema/product changes, commit or physical Kindle test.
+
+Listen dry-run:33entries/~2.9hours spoken audio. Detached worker95998 (/private/tmp/distill-trust-fukuyama/record_when_idle.py) launched with4workers, approved existing voice only, one recorder at a time, automatic audio deploy and authenticated/anonymous VM verification; status audio-status.json, log audio.log. Text immediately available; audio recording pending completion. Worker stops on voice mismatch/failure without self-approving.
+
+Listen completion for 信任: all33reader entries recorded/deployed; VM-loopback audio API lists33, sample track200audio/mp4, anonymous API/track401. Evidence /private/tmp/distill-trust-fukuyama/audio-verification.json.
 
 
 ## 2026-11-11: Prune unused Distill media on deploy

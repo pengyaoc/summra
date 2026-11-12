@@ -15,7 +15,7 @@ backlog = 64
 workers = int(os.getenv('GUNICORN_WORKERS', '1'))
 # gthread (stdlib threading, no C extension) replaces gevent: the app is
 # sync WSGI with zero async I/O, so gevent's cooperative sockets bought
-# nothing, while its pinned version (gevent==24.2.1 in requirements-prod.txt)
+# nothing, while its pinned version (gevent==24.2.1 in the old requirements-prod.txt)
 # has no wheel for newer Python and fails to build from source.
 worker_class = 'gthread'
 threads = int(os.getenv('GUNICORN_THREADS', '4'))

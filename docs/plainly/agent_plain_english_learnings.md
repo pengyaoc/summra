@@ -1,6 +1,6 @@
 # Agent Plain English: Learnings
 
-What each Plain English run taught us, and why `docs/agent_plain_english_workflow.md` has the rules it has. The workflow doc is the process; this doc is the evidence. Add a section per book.
+What each Plain English run taught us, and why `docs/plainly/agent_plain_english_workflow.md` has the rules it has. The workflow doc is the process; this doc is the evidence. Add a section per book.
 
 ## Lessons across books
 

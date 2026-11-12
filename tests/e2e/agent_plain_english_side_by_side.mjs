@@ -1,5 +1,5 @@
 // Books whose Plain English was written by subagents
-// (docs/agent_plain_english_workflow.md) work in Side by Side: every
+// (docs/plainly/agent_plain_english_workflow.md) work in Side by Side: every
 // original paragraph has its Plain English beside it, the cleanup left no
 // footnote markers or image tags, and the reader opens a chapter on paired
 // rows under its heading, with no gaps or overflow.

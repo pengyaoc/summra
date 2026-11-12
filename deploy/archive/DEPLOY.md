@@ -1,5 +1,7 @@
 # Summra Production Deployment Guide
 
+> **Archived 2026-11-11.** Kept for the standalone dedicated-VM path only. Current deploys: `deploy/README.md` (Plainly, `deploy/plainly/`) and `deploy/distill/`. Paths below predate the move (`deploy/install.sh` is now `deploy/plainly/install.sh`).
+
 Complete guide for deploying Summra to Google Cloud Platform. Covers both e2-micro (FREE) and e2-small (~$13/month) instance types.
 
 > **This guide predates the isolated-service convention now used for the actual production

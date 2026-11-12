@@ -14,11 +14,11 @@
 # place under /opt/summra, it does not run in-place.
 #
 # Usage:
-#   sudo deploy/install.sh [--user summra] [--prefix ""] [--bind 127.0.0.1:5000]
+#   sudo deploy/plainly/install.sh [--user summra] [--prefix ""] [--bind 127.0.0.1:5000]
 #
 # --prefix ""            standalone (mounted at /, default)
 # --prefix /plainly    cohosted behind Apache at this path — also
-#                         installs deploy/apache/summra.conf and requires
+#                         installs deploy/plainly/summra.conf and requires
 #                         Apache with mod_proxy/mod_headers/mod_expires
 
 set -euo pipefail
@@ -27,7 +27,7 @@ SERVICE_USER="summra"
 INSTALL_ROOT="/opt/summra"
 BIND="127.0.0.1:5000"
 PREFIX=""
-REPO_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -39,7 +39,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Run as root (sudo deploy/install.sh ...)" >&2
+    echo "Run as root (sudo deploy/plainly/install.sh ...)" >&2
     exit 1
 fi
 
@@ -71,11 +71,11 @@ fi
 if [ ! -d "$INSTALL_ROOT/venv" ]; then
     sudo -u "$SERVICE_USER" python3 -m venv "$INSTALL_ROOT/venv"
 fi
-sudo -u "$SERVICE_USER" "$INSTALL_ROOT/venv/bin/pip" install -q -r "$INSTALL_ROOT/requirements-prod.txt"
+sudo -u "$SERVICE_USER" "$INSTALL_ROOT/venv/bin/pip" install -q -r "$INSTALL_ROOT/deploy/plainly/requirements-prod.txt"
 
 echo "== 4. service.env (per-host EnvironmentFile) =="
 if [ ! -f "$INSTALL_ROOT/service.env" ]; then
-    cp "$INSTALL_ROOT/deploy/service.env.example" "$INSTALL_ROOT/service.env"
+    cp "$INSTALL_ROOT/deploy/plainly/service.env.example" "$INSTALL_ROOT/service.env"
     if [ -n "$PREFIX" ]; then
         echo "GUNICORN_BIND=$BIND" >> "$INSTALL_ROOT/service.env"
     fi
@@ -87,9 +87,9 @@ chmod 600 "$INSTALL_ROOT/service.env"
 echo "== 5. systemd --user unit =="
 USER_HOME=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
 sudo -u "$SERVICE_USER" mkdir -p "$USER_HOME/.config/systemd/user/summra.service.d"
-cp "$INSTALL_ROOT/deploy/systemd/summra.service" "$USER_HOME/.config/systemd/user/summra.service"
+cp "$INSTALL_ROOT/deploy/plainly/summra.service" "$USER_HOME/.config/systemd/user/summra.service"
 if [ ! -f "$USER_HOME/.config/systemd/user/summra.service.d/override.conf" ]; then
-    cp "$INSTALL_ROOT/deploy/systemd/override.example.conf" \
+    cp "$INSTALL_ROOT/deploy/plainly/override.example.conf" \
        "$USER_HOME/.config/systemd/user/summra.service.d/override.conf"
 fi
 chown -R "$SERVICE_USER:$SERVICE_USER" "$USER_HOME/.config/systemd"
@@ -97,14 +97,14 @@ chown -R "$SERVICE_USER:$SERVICE_USER" "$USER_HOME/.config/systemd"
 echo "== 6. Front-end proxy fragment =="
 if [ -n "$PREFIX" ] && [ -d /etc/apache2 ]; then
     mkdir -p /etc/apache2/service-locations
-    sed "s#\${SUMMRA_PREFIX}#$PREFIX#g" "$INSTALL_ROOT/deploy/apache/summra.conf" \
+    sed "s#\${SUMMRA_PREFIX}#$PREFIX#g" "$INSTALL_ROOT/deploy/plainly/summra.conf" \
         > /etc/apache2/service-locations/summra.conf
     echo "installed /etc/apache2/service-locations/summra.conf"
     echo "REMINDER: the host vhost must define SUMMRA_PREFIX and IncludeOptional"
     echo "  this directory — see wordpress-vm-pages-setup.md in the vault."
 elif [ -z "$PREFIX" ]; then
-    echo "standalone (--prefix not set) — see deploy/nginx-summra-standalone.conf"
-    echo "  and deploy/nginx-summra-common.conf for the nginx equivalent."
+    echo "standalone (--prefix not set) — see deploy/archive/nginx-summra-standalone.conf"
+    echo "  and deploy/archive/nginx-summra-common.conf for the nginx equivalent."
 fi
 
 echo "== 7. Enable + start =="

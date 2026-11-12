@@ -1,46 +1,53 @@
-# Deployment Files for Summra
+# Deployment
 
-This directory contains everything needed to deploy Summra — standalone on its own VM, or
-cohosted alongside other services (the actual production case: `wordpress-2-vm` runs
-WordPress, OpenReader, and Summra together). Both paths use the same committed files; only
-`deploy/service.env` (per-host, never committed) differs.
+Both Summra apps run on one VM, each as its own gunicorn service behind the host's Apache.
+This folder is organised the same way:
+
+| Path | What it is |
+|---|---|
+| `gunicorn_config.py` | The one gunicorn config for every service. It reads `GUNICORN_BIND`, `GUNICORN_WORKERS`, `GUNICORN_THREADS`, `GUNICORN_PROC_NAME` and `GUNICORN_PIDFILE` from the environment |
+| [`plainly/`](plainly/) | Plainly's installer, systemd unit, Apache fragment, env template and production requirements (this page). The live-VM runbook is [`plainly/RUNBOOK.md`](plainly/RUNBOOK.md) |
+| [`distill/`](distill/) | Distill's systemd unit, Apache fragment and env/deploy templates. Deploy with `python -m distill.scripts.deploy_code` and `deploy_db`; the runbook is [`distill/RUNBOOK.md`](distill/RUNBOOK.md) |
+| [`kindle/`](kindle/README.md) | Kindle Home-screen launchers for both apps |
+| `hardening_check_vm.sh`, `hardening_check_gcp.sh`, `HARDENING.md` | VM security posture checks (SSH, ports, GCP firewall) |
+| `archive/` | Superseded files: the dedicated-VM `DEPLOY.md` (e2-micro/e2-small) and the unused nginx configs |
+
+The rest of this page covers Plainly's service and the VM-wide media notes. Plainly can run
+standalone on its own VM or cohosted with other services; both use the same committed files,
+and only `service.env` (per-host, never committed) differs.
 
 See `01-projects/personal-brand/vm-service-convention.md` in the vault for the isolation and
 portability principles this follows, and `wordpress-vm-pages-setup.md` for the live production
 setup and its host-owned Apache vhost.
 
-## Files
+## Plainly files (`deploy/plainly/`)
 
 | File | Purpose |
 |---|---|
-| `install.sh` | Idempotent installer — creates the `summra` user, `/opt/summra`, venv, `service.env`, systemd unit, and (if `--prefix` given) the Apache fragment |
-| `gunicorn_config.py` | The one gunicorn config for every deployment — reads `GUNICORN_BIND`/`GUNICORN_WORKERS`/`GUNICORN_THREADS` from the environment |
-| `service.env.example` | Template for the per-host `EnvironmentFile` — the installer copies this to `/opt/summra/service.env` (mode `600`, never committed) |
-| `systemd/summra.service` | `systemd --user` unit — sandboxed (`ProtectSystem=strict`), literal `/opt/summra` paths |
-| `systemd/override.example.conf` | Template for the per-host `MemoryMax` drop-in |
-| `apache/summra.conf` | Cohosted reverse-proxy + static-file fragment, installed to `/etc/apache2/service-locations/` when `--prefix` is used |
-| `nginx-summra-standalone.conf` + `nginx-summra-common.conf` | Standalone nginx alternative to the Apache fragment |
-| `requirements-prod.txt` | Python dependencies (no TTS — `app_prod.py` only serves pre-generated audio) |
-| `DEPLOY.md` | Full walkthrough for a dedicated GCP VM (e2-micro/e2-small), predates cohosting — see the note at its top |
-| `hardening_check_vm.sh` / `hardening_check_gcp.sh` / `HARDENING.md` | Security posture checks (SSH, ports, GCP firewall) |
+| `install.sh` | Idempotent installer. Creates the `summra` user, `/opt/summra`, the venv, `service.env`, the systemd unit and, if `--prefix` is given, the Apache fragment |
+| `service.env.example` | Template for the per-host `EnvironmentFile`. The installer copies it to `/opt/summra/service.env` (mode `600`, never committed) |
+| `summra.service` | `systemd --user` unit, sandboxed (`ProtectSystem=strict`), with literal `/opt/summra` paths |
+| `override.example.conf` | Template for the per-host `MemoryMax` drop-in |
+| `summra.conf` | Cohosted reverse-proxy and static-file fragment, installed to `/etc/apache2/service-locations/` when `--prefix` is used |
+| `requirements-prod.txt` | Production Python dependencies. `app_prod.py` only serves audio that was recorded ahead of time |
 
 ## Quick start
 
-**Standalone** (Summra is the only thing on the box):
+**Standalone** (Plainly is the only thing on the box):
 ```bash
 git clone <repo> /tmp/summra-src && cd /tmp/summra-src
-sudo deploy/install.sh
+sudo deploy/plainly/install.sh
 ```
-Serves on `127.0.0.1:5000`. Put nginx (`nginx-summra-standalone.conf` +
-`nginx-summra-common.conf`) or Apache in front of it and point DNS at the box.
+Serves on `127.0.0.1:5000`. Put Apache in front of it (or adapt the nginx configs in
+`archive/`) and point DNS at the box.
 
-**Cohosted** (adding Summra to a VM that already runs other services behind Apache):
+**Cohosted** (adding Plainly to a VM that already runs other services behind Apache):
 ```bash
-sudo deploy/install.sh --prefix /plainly --bind 127.0.0.1:5001
+sudo deploy/plainly/install.sh --prefix /plainly --bind 127.0.0.1:5001
 ```
-This also drops `deploy/apache/summra.conf` into `/etc/apache2/service-locations/`. The host's
+This also drops `deploy/plainly/summra.conf` into `/etc/apache2/service-locations/`. The host's
 shared vhost (TLS, `ServerName`, `ProxyPreserveHost`, `Define SUMMRA_PREFIX`,
-`IncludeOptional /etc/apache2/service-locations/*.conf`) is **not** installed by this script —
+`IncludeOptional /etc/apache2/service-locations/*.conf`) is **not** installed by this script:
 it's host-level config owned outside any single service's repo. See
 `wordpress-vm-pages-setup.md` for the live example.
 
@@ -107,7 +114,7 @@ journalctl --user -u summra -f
 ```bash
 cd /opt/summra
 sudo -u summra git pull
-sudo -u summra venv/bin/pip install -r requirements-prod.txt
+sudo -u summra venv/bin/pip install -r deploy/plainly/requirements-prod.txt
 sudo -u summra env XDG_RUNTIME_DIR=/run/user/$(id -u summra) systemctl --user restart summra
 ```
 
@@ -122,7 +129,7 @@ matches what the Apache/nginx fragment proxies to, and that the unit is actually
 
 **Out of memory:** check `journalctl --user -u summra` for OOM kills, then raise
 `~/.config/systemd/user/summra.service.d/override.conf`'s `MemoryMax` — see
-`systemd/override.example.conf` for the standalone-vs-cohosted guidance.
+`plainly/override.example.conf` for the standalone-vs-cohosted guidance.
 
 
 ## Kindle launchers and phone-assisted login

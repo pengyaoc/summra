@@ -1,6 +1,6 @@
 # Summra systemd --user unit.
 #
-# Installed by deploy/install.sh to:
+# Installed by deploy/plainly/install.sh to:
 #   ~/.config/systemd/user/summra.service
 # for a dedicated `summra` Linux user (not www-data — see deploy/README.md
 # for the isolation rationale shared with this VM's other services).
@@ -10,7 +10,7 @@
 # file needs no per-host templating. The one thing that legitimately
 # varies per host (bind port, thread count, prefix-specific env) lives in
 # service.env — see service.env.example. Host-specific memory limits live
-# in a systemd drop-in — see systemd/override.example.conf — since
+# in a systemd drop-in — see override.example.conf — since
 # MemoryMax can't come from an EnvironmentFile.
 
 [Unit]

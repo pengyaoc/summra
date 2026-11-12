@@ -2,7 +2,7 @@
 """
 Plain English written by an agent (not the Gemini generator), one
 paragraph per original paragraph, gated before it reaches the database.
-Process doc: docs/agent_plain_english_workflow.md.
+Process doc: docs/plainly/agent_plain_english_workflow.md.
 
 Paragraphs are the blank-line blocks of chapter_text (prose paragraphs, or
 verse passages from plainly/scripts/content/segment_verse_passages.py). Workflow:

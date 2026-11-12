@@ -848,7 +848,7 @@ These decisions do not change the product contract and should be resolved in tec
 
 ## 26. References
 
-- Existing product PRD: `docs/PRD.md`
+- Existing product PRD: `docs/PRD.md` (now an index of `docs/{shared,plainly,distill}/PRD.md`)
 - Existing reading-progress implementation: `shared/auth/user_models.py`, `shared/progress/routes.py`, `plainly/frontend/static/js/auth.js`
 - Existing reader and pagination: `plainly/frontend/static/js/reader.js`, `shared/static/js/pagination.js`
 - [Kindle User's Guide](https://kindle.s3.amazonaws.com/Kindle_User%27s_Guide_English.pdf) — reading progress/location and adjustable presentation precedents

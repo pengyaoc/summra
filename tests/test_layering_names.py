@@ -42,7 +42,8 @@ def test_no_stale_command_paths_in_agent_and_doc_files():
     pat = re.compile(r"PYTHONPATH=backend|(?<![\w./-])scripts/(content|audits|tts|ingest|maintenance)/\S+\.py"
                      r"|python3? scripts/")
     files = list((ROOT / '.claude' / 'agents').glob('*.md')) + list((ROOT / 'docs').glob('*.md'))
-    files += list((ROOT / 'docs' / 'tts').glob('*.md'))
+    for part in ('shared', 'plainly', 'distill'):
+        files += list((ROOT / 'docs' / part).glob('*.md'))
     files += [ROOT / 'plainly' / 'scripts' / 'content' / 'README_MODERN_ENGLISH.md',
               ROOT / 'plainly' / 'frontend' / 'static' / 'js' / 'README.md']
     bad = [str(p.relative_to(ROOT)) for p in files if p.exists() and pat.search(p.read_text(errors='ignore'))]

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Summra Setup Script
+# Summra setup: one venv for the shared platform, Plainly and Distill
 
 echo "================================"
 echo "  Summra Setup"
@@ -9,7 +9,7 @@ echo ""
 
 # Check if Python is installed
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.8 or higher."
+    echo "❌ Python 3 is not installed. Please install Python 3.11 or higher."
     exit 1
 fi
 
@@ -28,7 +28,8 @@ source venv/bin/activate
 echo ""
 echo "Installing dependencies..."
 pip install --upgrade pip
-pip install -r plainly/requirements.txt
+pip install -r plainly/requirements.txt -r distill/requirements.txt
+pip install -e .
 
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
@@ -55,11 +56,13 @@ echo "  Setup Complete!"
 echo "================================"
 echo ""
 echo "Next steps:"
-echo "1. Edit .env and add your GEMINI_API_KEY"
-echo "2. Place book .txt files in data/books/"
-echo "3. Generate summaries: python -m plainly.scripts.content.generate_summaries data/books/your_book.txt"
-echo "4. Start the server: python plainly/app.py"
-echo "5. Open http://localhost:5000 in your browser"
+echo "  Plainly (classics, :5001)"
+echo "    1. Edit .env and add your GEMINI_API_KEY (needed only to ingest books)"
+echo "    2. Restore data/database.db, or ingest a book (see plainly/README.md)"
+echo "    3. python plainly/app.py  ->  http://localhost:5001"
+echo "  Distill (private summaries, :5003)"
+echo "    1. Import a book folder: python -m distill.scripts.push_book <folder>"
+echo "    2. python -m distill.app  ->  http://localhost:5003"
 echo ""
 echo "For more information, see README.md"
 echo ""

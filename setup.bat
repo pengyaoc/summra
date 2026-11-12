@@ -8,7 +8,7 @@ echo.
 REM Check if Python is installed
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo X Python is not installed. Please install Python 3.8 or higher.
+    echo X Python is not installed. Please install Python 3.11 or higher.
     pause
     exit /b 1
 )
@@ -29,7 +29,8 @@ REM Install dependencies
 echo.
 echo Installing dependencies...
 python -m pip install --upgrade pip
-pip install -r plainly\requirements.txt
+pip install -r plainly\requirements.txt -r distill\requirements.txt
+pip install -e .
 
 REM Create .env file if it doesn't exist
 if not exist .env (
@@ -58,11 +59,13 @@ echo   Setup Complete!
 echo ================================
 echo.
 echo Next steps:
-echo 1. Edit .env and add your GEMINI_API_KEY
-echo 2. Place book .txt files in data\books\
-echo 3. Generate summaries: python -m plainly.scripts.content.generate_summaries data\books\your_book.txt
-echo 4. Start the server: python plainly\app.py
-echo 5. Open http://localhost:5000 in your browser
+echo   Plainly (classics, :5001)
+echo     1. Edit .env and add your GEMINI_API_KEY (needed only to ingest books)
+echo     2. Restore data\database.db, or ingest a book (see plainly\README.md)
+echo     3. python plainly\app.py  -^>  http://localhost:5001
+echo   Distill (private summaries, :5003)
+echo     1. Import a book folder: python -m distill.scripts.push_book ^<folder^>
+echo     2. python -m distill.app  -^>  http://localhost:5003
 echo.
 echo For more information, see README.md
 echo.

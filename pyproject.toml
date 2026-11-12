@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "summra"
 version = "0.1.0"
-description = "Read the classics in plain English"
+description = "Summra: a shared reading platform with two apps, Plainly (classics in Plain English) and Distill (private book summaries)"
 requires-python = ">=3.11"
-# Runtime dependencies stay in plainly/requirements.txt / requirements-prod.txt
+# Runtime dependencies stay in plainly/requirements.txt / deploy/plainly/requirements-prod.txt
 # (installed separately) — this project file exists to make `plainly` and
 # `plainly.scripts` importable as real packages via `pip install -e .`, replacing the
 # sys.path hacks and try/except ImportError shims that used to be needed for

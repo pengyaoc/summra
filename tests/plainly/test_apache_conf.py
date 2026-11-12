@@ -1,4 +1,4 @@
-"""deploy/apache/summra.conf moves old /summrabook links to the current prefix.
+"""deploy/plainly/summra.conf moves old /summrabook links to the current prefix.
 
 Production moved from pengyaochen.com/summrabook to pengyaochen.com/plainly
 on 2026-10-18. Bookmarks, search results and shared links still point at
@@ -10,11 +10,11 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CONF = ROOT / 'deploy/apache/summra.conf'
+CONF = ROOT / 'deploy/plainly/summra.conf'
 
 
 def _render(prefix):
-    """Render the fragment the way deploy/install.sh does."""
+    """Render the fragment the way deploy/plainly/install.sh does."""
     return subprocess.run(
         ['sed', f's#${{SUMMRA_PREFIX}}#{prefix}#g', str(CONF)],
         check=True, capture_output=True, text=True).stdout

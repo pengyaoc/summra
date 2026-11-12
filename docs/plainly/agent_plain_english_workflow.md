@@ -1,10 +1,10 @@
 # Plain English by Subagents (Codex or Claude, no Gemini)
 
-How to write a book's `chapters.modern_english_text` with subagents and make sure Side-by-Side pairs every paragraph. Use the host-specific writer below; a **separate, fresh** subagent then verifies it against the original. First run: The Iliad (book 66), 2026-10-16, with Haiku writers. Haiku left too many meaning errors, so the writer is now Sonnet (see `docs/agent_plain_english_learnings.md`).
+How to write a book's `chapters.modern_english_text` with subagents and make sure Side-by-Side pairs every paragraph. Use the host-specific writer below; a **separate, fresh** subagent then verifies it against the original. First run: The Iliad (book 66), 2026-10-16, with Haiku writers. Haiku left too many meaning errors, so the writer is now Sonnet (see `docs/plainly/agent_plain_english_learnings.md`).
 
-Lessons from each run, and why these rules exist, are in `docs/agent_plain_english_learnings.md`.
+Lessons from each run, and why these rules exist, are in `docs/plainly/agent_plain_english_learnings.md`.
 
-This is an alternative to Step 1 and Step 6 of `docs/plain_english_workflow.md` (the Gemini generator). The cleanup steps (2, 3, 5e) and the audit (Step 4) are the same.
+This is an alternative to Step 1 and Step 6 of `docs/plainly/plain_english_workflow.md` (the Gemini generator). The cleanup steps (2, 3, 5e) and the audit (Step 4) are the same.
 
 ## Agent selection by host (required)
 
@@ -101,7 +101,7 @@ Size verifier assignments like writers: about 60–80K characters of original te
 
 The assignment names the run dir, book id, chapter, paragraph range and the writer's doubts. Always paste the writer's own "unsure" list: writers admit where they compressed ("condensed the phrasing", "shortened a little"), and those are exactly the places to check.
 
-**This step is not optional.** The gate checks shape; it cannot see meaning. On the Iliad, every chapter passed the gate, and Sonnet still fixed 317 paragraphs: 5–22 per Book, 7 in the prose Introduction (see `docs/agent_plain_english_learnings.md`).
+**This step is not optional.** The gate checks shape; it cannot see meaning. On the Iliad, every chapter passed the gate, and Sonnet still fixed 317 paragraphs: 5–22 per Book, 7 in the prose Introduction (see `docs/plainly/agent_plain_english_learnings.md`).
 
 ### 6. Apply and audit
 
@@ -110,7 +110,7 @@ venv/bin/python -m plainly.scripts.content.passage_rewrite apply --book-id $BOOK
 venv/bin/python -m plainly.scripts.content.passage_rewrite apply --book-id $BOOK --dir $DIR
 ```
 
-Then run the CLAUDE.md Step 4 audit snippet. Every chapter must be EXACT with a ratio of 50–110%.
+Then run the Step 4 audit snippet in `docs/plainly/plain_english_checklist.md`. Every chapter must be EXACT with a ratio of 50–110%.
 
 Before applying, make apostrophes consistent with the source. Agents mix `Nestor's` and `Nestor’s`; a one-off regex over the JSON files, `(?<=\w)'(?=\w|\s|[.,;:!?”’]|$)` → `’`, fixes word apostrophes and leaves quotation marks alone. Re-run the gate afterwards.
 

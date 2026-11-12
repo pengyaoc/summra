@@ -17,6 +17,6 @@ def test_covers_live_in_plainly_frontend():
 
 
 def test_apache_static_alias_matches_flask_static_dir():
-    conf = (ROOT / 'deploy' / 'apache' / 'summra.conf').read_text()
+    conf = (ROOT / 'deploy' / 'plainly' / 'summra.conf').read_text()
     alias = re.search(r'Alias \$\{SUMMRA_PREFIX\}/static/ (\S+)', conf)[1]
     assert alias == '/opt/summra/plainly/frontend/static/'
