@@ -2216,7 +2216,7 @@ available. Removed rather than fixed.
 
 ### Library routing, progress visibility, and card UX follow-up — DONE
 
-- Production diagnosis confirmed that Pride and Prejudice progress is persisted for `pychen007@gmail.com`: the book is `in_progress`, has five accepted sequential boundaries, and the live Library API returns it alongside Frankenstein. The reader write path is therefore healthy.
+- Production diagnosis confirmed that Pride and Prejudice progress is persisted for `<OWNER_EMAIL>`: the book is `in_progress`, has five accepted sequential boundaries, and the live Library API returns it alongside Frankenstein. The reader write path is therefore healthy.
 - Identified the visibility failures: the public server canonicalizes `/library` to `/library/`, but the client route matcher accepted only the no-trailing-slash spelling and rendered Home after a direct Library visit; and Library could run before the asynchronous identity probe completed, leaving an old device cache onscreen. The route helper now normalizes terminal slashes after stripping `/summrabook`, and Library awaits a shared authentication-ready promise before requesting its account-scoped projection. A focused trailing-route regression test covers the former.
 - Reworked the Library into a compact, responsive reading shelf: reliable existing cover fallback, explicit Continue action to the reader, card click to the editorial book page, readable progress/location treatment, no oversized empty hero gap, and a bounded desktop card width so a single book does not become a blank, full-width panel.
 
@@ -2260,7 +2260,7 @@ The client request itself also now uses `cache: 'no-store'` for those personal e
 
 **Catalog note.** `PRAGMA integrity_check` is `ok`. `PRAGMA foreign_key_check` reports 97 pre-existing findings in unrelated legacy catalog/audio/category rows; no reader-table finding was introduced or altered by this work.
 
-**Deployment and VM acceptance.** The implementation was committed as `32d0976`, deployment status as `c042dfa`, and both were pushed to `origin/main`. The previous local metadata mistakenly targeted the retired dedicated VM. The live target is `wordpress-2-vm` under `pychen007@gmail.com`, project `pelagic-magpie-277922`, and `/opt/summra`; its established update method is `git pull --ff-only origin main` followed by the `summra` user's systemd service restart. That pull completed successfully without changing the two untracked, VM-local `service.env` files.
+**Deployment and VM acceptance.** The implementation was committed as `32d0976`, deployment status as `c042dfa`, and both were pushed to `origin/main`. The previous local metadata mistakenly targeted the retired dedicated VM. The live target is `wordpress-2-vm` under `<OWNER_EMAIL>`, project `<GCP_PROJECT>`, and `/opt/summra`; its established update method is `git pull --ff-only origin main` followed by the `summra` user's systemd service restart. That pull completed successfully without changing the two untracked, VM-local `service.env` files.
 
 The VM's catalog counts matched local (`books=90`, `chapters=4,159`, `authors=57`) before activation. Its original catalog was retained as a timestamped backup. The first temporary transfer exposed that VM `/tmp` is only 483 MB: the 684 MB catalog was truncated and rejected on checksum/integrity checks. The verified retry used `/home/pengyao/database.db.new`, matched the local MD5 exactly, then replaced `/opt/summra/data/database.db` during a controlled service stop. The explicitly disposable `data/summra.db` plus SQLite sidecars were reset, the service restarted successfully, and the malformed `/tmp` artifact was removed.
 
@@ -9998,7 +9998,7 @@ Deployed by pushing `feat/consolidated-login` to GitHub and checking it out dire
 `/opt/summra` (`git fetch && git checkout feat/consolidated-login` — `install.sh`'s own
 `git clone` step is first-run only; this is the update path), then
 `pip install -r requirements-prod.txt` and `systemctl --user restart summra`. Set
-`SUMMRA_AUTH_MODE=optional` and `SUMMRA_ALLOWED_EMAILS=pychen007@gmail.com,cassyheng@gmail.com`
+`SUMMRA_AUTH_MODE=optional` and `SUMMRA_ALLOWED_EMAILS=<OWNER_EMAIL>,<INVITED_EMAIL>`
 in `service.env` alongside the deploy (backed up first,
 `service.env.bak-pre-oidc-20260906`).
 
@@ -10020,7 +10020,7 @@ in `deploy/apache/summra.conf`, redeployed to `/etc/apache2/service-locations/su
 
 **Fully verified live**: after signing in once via `/pages/` (real Google account),
 `/summrabook/api/auth/check` correctly returned
-`{"authenticated":true,"user":{"email":"pychen007@gmail.com",...}}` with zero additional
+`{"authenticated":true,"user":{"email":"<OWNER_EMAIL>",...}}` with zero additional
 login prompt — confirming both the fix and, for the first time, genuine silent
 cross-service SSO. Anonymous access and write-gating re-confirmed unaffected.
 
@@ -10215,7 +10215,7 @@ Local instructions now route Codex to `gpt-6.1-sol` low writing/medium fresh ver
 
 ### GitHub and production deployment — in progress
 
-User authorized commit/push and VM update. Production: `wordpress-2-vm`, `us-west1-a`, project `pelagic-magpie-277922`, app `/opt/summra`, public prefix `/plainly`. Confirmed no tracked VM edits; existing untracked service config/backups preserved. VM book 61 has the expected original source and no Plain English. Deploy only book 61 chapter source/Plain English with source-hash guards and a full content-DB backup; keep unrelated content and user DB intact. Local gate rechecked: 10/10 pass, no warnings.
+User authorized commit/push and VM update. Production: `wordpress-2-vm`, `us-west1-a`, project `<GCP_PROJECT>`, app `/opt/summra`, public prefix `/plainly`. Confirmed no tracked VM edits; existing untracked service config/backups preserved. VM book 61 has the expected original source and no Plain English. Deploy only book 61 chapter source/Plain English with source-hash guards and a full content-DB backup; keep unrelated content and user DB intact. Local gate rechecked: 10/10 pass, no warnings.
 
 ### Beyond Good and Evil — deployed to production
 
@@ -11239,7 +11239,7 @@ User reports visible chapter-start render/flash/re-render and images with blank
 upper halves. Code inspection confirms initial pagination/show followed by a
 second native PW3 pagination/show after 200 ms, with neither waiting for image
 requests; figure/image layout also relied on HTML5/default inline formatting.
-The previously configured device at 192.168.1.133:2222 timed out, so no physical
+The previously configured device at <KINDLE_IP>:2222 timed out, so no physical
 reproduction or verification is claimed.
 
 Implemented head-time visibility gating with a 15-second failure fallback,
@@ -11344,7 +11344,7 @@ documentation-only sync.
 
 ## 2026-11-03 — Physical Kindle verification and image painting follow-up
 
-Connected to the owner's PW3 at 192.168.1.133:2222 using its existing key-only
+Connected to the owner's PW3 at <KINDLE_IP>:2222 using its existing key-only
 SSH. Owner opened Distill Fullscreen after the initial KOReader screen prevented
 normal browser focus. Used XTest pointer input through existing LuaJIT/X11 and
 vendor framebuffer screenshots; no browser/root-filesystem/launcher/SSH settings
@@ -11506,11 +11506,11 @@ At the user's request, deployed the pushed redesign commit `42763f9` to `/opt/su
 
 Live authenticated VM-loopback verification: home HTTP 200 with exact title `Distill` and daylight browsing; Chinese global-history and English Atomic Habits details HTTP 200 with Reading desk, overview excerpt, expandable parts and `/distill/` return links. Live CSS contains the fixed light scheme and Kai face; authenticated self-hosted WOFF2 returns 200 and its SHA256 matches the local tested 7,231,496-byte asset. Anonymous private-book access remains 401. Plainly home returns 200 on its configured port 5001; an initial check landed before its listener was ready and the follow-up passed. Runtime HEAD is `42763f9`. Desktop/mobile/Kindle browser regressions passed locally before this deployment; live verification here is HTTP/source/hash, not a new physical-device trial.
 
-## 2026-11-07 — Authorize Cassy across personal-site apps
+## 2026-11-07 — Authorize an invited reader across personal-site apps
 
-User explicitly authorized cassyheng@gmail.com for Distill, Plainly and other apps on pengyaochen.com. Read-only production inventory found Cassy already present in Plainly's SUMMRA_ALLOWED_EMAILS, OpenReader's READER_ALLOWED_EMAILS and Apache's protected /pages/, /mathpad/ and /inkchinese/ policies. Public personal-site and Explainer routes require no invitation. Distill's DISTILL_ALLOWED_EMAILS contains only the owner and is the identified missing entry; its service is active. Checking InkChinese's secondary application gate before final verification. Planned scoped change: preserve all existing Distill environment settings and allowlist members, make a private rollback backup, add Cassy, restart only Distill, then verify allowed/denied/anonymous responses through trusted VM-loopback requests and inspect the unchanged site policies. ERD/PRD now describe invited-reader access and separate account progress; no application code or schema change. Existing uncommitted documentation changes are preserved.
+User explicitly authorized <INVITED_EMAIL> for Distill, Plainly and other apps on pengyaochen.com. Read-only production inventory found the invited reader already present in Plainly's SUMMRA_ALLOWED_EMAILS, OpenReader's READER_ALLOWED_EMAILS and Apache's protected /pages/, /mathpad/ and /inkchinese/ policies. Public personal-site and Explainer routes require no invitation. Distill's DISTILL_ALLOWED_EMAILS contains only the owner and is the identified missing entry; its service is active. Checking InkChinese's secondary application gate before final verification. Planned scoped change: preserve all existing Distill environment settings and allowlist members, make a private rollback backup, add the invited reader, restart only Distill, then verify allowed/denied/anonymous responses through trusted VM-loopback requests and inspect the unchanged site policies. ERD/PRD now describe invited-reader access and separate account progress; no application code or schema change. Existing uncommitted documentation changes are preserved.
 
-Completed live: added cassyheng@gmail.com to /opt/summra/distill.env's existing DISTILL_ALLOWED_EMAILS, with every other line and existing allowlist member preserved. Private rollback backup: /opt/summra/distill.env.before-cassy-20261107T234123Z. Restarted only distill.service; readiness and active status pass. VM-loopback trusted-identity checks: Cassy/owner 200 and unlisted 403 for Distill, Plainly, OpenReader /api/me and InkChinese /api/me; anonymous remains 401 for private Distill/InkChinese and 200 for intentionally public Plainly/OpenReader browsing. Distill book, reader and manifest each pass Cassy=200/unlisted=403/anonymous=401. OpenReader recognizes Cassy's existing account (its display username differs from her email); InkChinese's active INKCHINESE_ALLOWED_EMAILS already includes her. MathPad backend healthy; existing MathPad/InkChinese/protected-pages Apache email-claim policies include Cassy, and apache2ctl configtest passes. No Apache changes/reload, other service restart, content deployment, admin grant, Google/email changes, or user-progress migration. These are VM-local authorization checks and policy inspection, not a real Google sign-in as Cassy; trusted identity headers were never sent to the public site. Initial probes were adjusted to OpenReader's protected account endpoint and existing display-name semantics. ERD/PRD/worklog updated; no commit requested or made.
+Completed live: added <INVITED_EMAIL> to /opt/summra/distill.env's existing DISTILL_ALLOWED_EMAILS, with every other line and existing allowlist member preserved. Private rollback backup: /opt/summra/distill.env.before-invite-20261107T234123Z. Restarted only distill.service; readiness and active status pass. VM-loopback trusted-identity checks: the invited reader/owner 200 and unlisted 403 for Distill, Plainly, OpenReader /api/me and InkChinese /api/me; anonymous remains 401 for private Distill/InkChinese and 200 for intentionally public Plainly/OpenReader browsing. Distill book, reader and manifest each pass the invited reader=200/unlisted=403/anonymous=401. OpenReader recognizes the invited reader's existing account (its display username differs from her email); InkChinese's active INKCHINESE_ALLOWED_EMAILS already includes her. MathPad backend healthy; existing MathPad/InkChinese/protected-pages Apache email-claim policies include the invited reader, and apache2ctl configtest passes. No Apache changes/reload, other service restart, content deployment, admin grant, Google/email changes, or user-progress migration. These are VM-local authorization checks and policy inspection, not a real Google sign-in as the invited reader; trusted identity headers were never sent to the public site. Initial probes were adjusted to OpenReader's protected account endpoint and existing display-name semantics. ERD/PRD/worklog updated; no commit requested or made.
 
 ## 2026-11-07 — Good Strategy/Bad Strategy reading companion
 
