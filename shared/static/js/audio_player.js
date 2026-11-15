@@ -65,7 +65,7 @@ export class AudioPlayer {
     }
 
     subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
-    emit(what) { for (const fn of [...this.listeners]) fn(what); }
+    emit(what, detail) { for (const fn of [...this.listeners]) fn(what, detail); }
 
     get book() { return this.source?.book || null; }
     get track() { return this.tracks[this.index] || null; }
@@ -122,7 +122,9 @@ export class AudioPlayer {
     }
 
     // Load track `index` at `ms` and play. Resolves once playback was requested.
-    async load(index, ms, { part = 0, partOffset = 0 } = {}) {
+    // resumed: Play after a pause reloads the track (the pause held a silent loop); listeners
+    // must not treat it as a new start.
+    async load(index, ms, { part = 0, partOffset = 0, resumed = false } = {}) {
         const track = this.tracks[index];
         if (!track) return;
         const audio = this.ensureAudio();
@@ -152,13 +154,13 @@ export class AudioPlayer {
             const seek = () => { audio.currentTime = start; this.pendingStart = null; };
             if (audio.readyState >= 1) seek(); else audio.addEventListener('loadedmetadata', seek, { once: true });
         }
-        this.emit('track');
+        this.emit('track', { resumed });
         try { await audio.play(); } catch (error) { if (error?.name !== 'AbortError') this.fail(error); }
     }
 
     resume() {
         if (!this.audio || this.index < 0) return Promise.resolve();
-        if (this.held) return this.load(this.index, this.held.ms, { part: this.part, partOffset: this.partOffset });
+        if (this.held) return this.load(this.index, this.held.ms, { part: this.part, partOffset: this.partOffset, resumed: true });
         return this.audio.play().catch(error => { if (error?.name !== 'AbortError') this.fail(error); });
     }
 

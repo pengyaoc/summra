@@ -82,23 +82,25 @@ await settle();
 check(await L(() => window.distillAudio.link.following), 'starting a track from the player follows again');
 
 // 5. Closing the player clears the highlight, and paging does not bring it back.
-const highlighted = () => page.locator('#continuous-reader-content .listen-current').count();
+// Older recordings highlight the paragraph; recordings with sentence timings, the sentence.
+const anyHighlight = () => document.querySelector('#continuous-reader-content .listen-current')
+  || (window.CSS?.highlights?.get('listen-sentence')?.size > 0);
 await L(() => window.distillAudio.link.setFollowing(true));
 await seek(chapter.timings[1].start_ms + 100);
 await settle();
-check(await highlighted() > 0, 'the spoken paragraph is highlighted before closing');
+check(await page.evaluate(anyHighlight), 'the spoken paragraph is highlighted before closing');
 await L(() => window.distillAudio.player.close());
 await settle();
 check(!await L(() => window.distillAudio.player.active), 'closing ends listening');
-check(await highlighted() === 0, 'closing the player removes the highlight');
+check(!await page.evaluate(anyHighlight), 'closing the player removes the highlight');
 await page.keyboard.press('ArrowRight');
 await settle();
 await page.keyboard.press('ArrowLeft');
 await settle();
-check(await highlighted() === 0, 'paging after closing does not bring the highlight back');
+check(!await page.evaluate(anyHighlight), 'paging after closing does not bring the highlight back');
 await L(() => window.distillAudio.player.audio.dispatchEvent(new Event('timeupdate')));
 await settle();
-check(await highlighted() === 0, 'a late time update after closing does not bring it back');
+check(!await page.evaluate(anyHighlight), 'a late time update after closing does not bring it back');
 
 // detach leaves the reader as it found it.
 const detached = await L(() => { const { link } = window.distillAudio; const wrapped = link.reader.navigateToNextPage; link.detach(); const restored = link.reader.navigateToNextPage !== wrapped; return { restored, own: Object.hasOwn(link.reader, 'navigateToNextPage') ? link.reader.navigateToNextPage.name : '', button: !!document.getElementById('listen-button') }; });
@@ -109,8 +111,8 @@ await page.waitForSelector('#listen-button', { state: 'visible', timeout: 15000 
 // 6. Starting again shows the highlight.
 await page.locator('#listen-button').click();
 await page.waitForFunction(() => window.distillAudio.player.playing, null, { timeout: 15000 });
-await page.waitForFunction(() => document.querySelector('#continuous-reader-content .listen-current'), null, { timeout: 10000 }).catch(() => {});
-check(await highlighted() > 0, 'listening again brings the highlight back');
+await page.waitForFunction(anyHighlight, null, { timeout: 10000 }).catch(() => {});
+check(await page.evaluate(anyHighlight), 'listening again brings the highlight back');
 
 check(problems.length === 0, `no page errors${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();

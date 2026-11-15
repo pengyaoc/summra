@@ -29,3 +29,18 @@ export function locateSentences(text, sentences) {
     }
     return ranges;
 }
+
+// The character the voice has reached in a sentence at `ms`, spread evenly over its
+// text by time: follows a long sentence onto the next page as it is read.
+export function readingPoint([start, end], [from, to], ms) {
+    const share = end > start ? Math.max(0, Math.min(1, (ms - start) / (end - start))) : 0;
+    return Math.min(to - 1, from + Math.floor((to - from) * share));
+}
+
+// Which sentence Listen starts at on a page showing text [pageStart, pageEnd) of the
+// unit: the first one that starts there, else the one that runs across it; -1 for none.
+export function sentenceForPage(ranges, pageStart, pageEnd) {
+    const starting = ranges.findIndex(([from]) => from >= pageStart && from < pageEnd);
+    if (starting >= 0) return starting;
+    return ranges.findIndex(([from, to]) => from < pageStart && to > pageStart);
+}

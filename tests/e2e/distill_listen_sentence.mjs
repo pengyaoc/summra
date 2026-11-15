@@ -9,7 +9,7 @@
 
 import { webkit } from 'playwright';
 import { mkdirSync } from 'node:fs';
-import { sentenceAt, locateSentences } from '../../shared/static/js/sentence_follow.js';
+import { sentenceAt, locateSentences, readingPoint, sentenceForPage } from '../../shared/static/js/sentence_follow.js';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5003';
 const SLUG = process.env.DISTILL_LISTEN_SLUG || 'abundance-klein-thompson';
@@ -32,6 +32,18 @@ check(JSON.stringify(locateSentences('1.One.2.Twoapples•Three', unit.sentences
 check(locateSentences('One.Three', unit.sentences) === null, 'locateSentences: a missing sentence gives null (paragraph highlight)');
 check(locateSentences('One.', [[0, 1, 'One.', 7]]) === null, 'locateSentences: a sentence running past the text gives null');
 check(locateSentences('', []) === null, 'locateSentences: nothing to find gives null');
+
+// Where the voice is inside a sentence: spread evenly over its text, by time.
+check(readingPoint([1000, 2000, 'x', 10], [100, 110], 1000) === 100, 'readingPoint: the sentence start at its start time');
+check(readingPoint([1000, 2000, 'x', 10], [100, 110], 1500) === 105, 'readingPoint: halfway through the time, halfway through the text');
+check(readingPoint([1000, 2000, 'x', 10], [100, 110], 9999) === 109, 'readingPoint: after its end, its last character');
+check(readingPoint([1000, 1000, 'x', 10], [100, 110], 1000) === 100, 'readingPoint: a zero-length timing stays at the start');
+// Where Listen starts on a page whose paragraph runs on from the page before.
+const R = [[0, 40], [40, 90], [90, 130]];
+check(sentenceForPage(R, 50, 200) === 2, 'sentenceForPage: the first sentence that starts on the page');
+check(sentenceForPage(R, 0, 60) === 0, 'sentenceForPage: a page starting the paragraph starts at its first sentence');
+check(sentenceForPage(R, 45, 85) === 1, 'sentenceForPage: a page inside one sentence starts at that sentence');
+check(sentenceForPage(R, 200, 220) === -1, 'sentenceForPage: a page past the sentences gives -1');
 
 const browser = await webkit.launch({ headless: !process.env.HEADED });
 const problems = [];
@@ -157,6 +169,50 @@ await page.evaluate((id) => {
 await seek(s1[0] + 40);
 shown = await sentenceHighlight();
 check(shown.text === null && shown.paragraphs > 0, 'unmatched sentences fall back to the paragraph highlight');
+await page.evaluate(() => window.distillAudio.player.pause());
+
+// Listen resumes at the paused second when the paused paragraph is on the page on screen,
+// and otherwise starts at the page's first paragraph.
+const listenWith = (savedUnit) => page.evaluate(async (pid) => {
+  const { player, link } = window.distillAudio;
+  player.pause();
+  const timing = player.timings.find((t) => t.paragraph_id === pid);
+  const chapterId = Number(pid.split('.')[0]);
+  const real = link.place.saved;
+  link.place.saved = () => ({ chapter_id: chapterId, paragraph_id: pid, ms: timing.start_ms + 300 });
+  try { await link.listenFromReadingPosition(); } finally { link.place.saved = real; }
+  await new Promise((r) => setTimeout(r, 700));
+  const top = link.reader.continuousReader.currentMarker?.paragraph_id;
+  return { startedAt: player.startedAt, ms: player.position().ms, savedMs: timing.start_ms + 300, top,
+    topStart: player.timings.find((t) => t.paragraph_id === top)?.start_ms };
+}, savedUnit);
+const onPage = await page.evaluate(async () => {
+  const { link, player } = window.distillAudio;
+  player.pause();
+  const { pagination } = link.reader;
+  const unitsOn = (html) => player.timings.filter((t) => html.includes(`data-reader-anchor="${t.paragraph_id}"`));
+  const target = pagination.pages.findIndex((html) => unitsOn(html).length > 1);
+  link.navigating = true;  // a test turn, not one by the reader
+  pagination.currentPage = target;
+  link.reader.displayCurrentPage();
+  link.navigating = false;
+  await new Promise((r) => setTimeout(r, 300));
+  const html = pagination.pages[pagination.currentPage];
+  const top = link.reader.continuousReader.currentMarker?.paragraph_id;
+  const here = player.timings.filter((t) => html.includes(`data-reader-anchor="${t.paragraph_id}"`)).map((t) => t.paragraph_id);
+  const away = player.timings.map((t) => t.paragraph_id).filter((id) => !here.includes(id)).pop();
+  return { lower: here.find((id) => id !== top), away };
+});
+if (onPage.lower) {
+  const r = await listenWith(onPage.lower);
+  check(r.startedAt === onPage.lower && Math.abs(r.ms - r.savedMs) < 1500,
+    `Listen resumes at the paused second of a paragraph lower on the page (${onPage.lower} @ ${r.ms} ms, saved ${r.savedMs})`);
+} else {
+  check(false, 'the page on screen holds a second paragraph to pause in');
+}
+const r = await listenWith(onPage.away);
+check(r.startedAt !== onPage.away && r.startedAt === r.top && Math.abs(r.ms - r.topStart) < 1500,
+  `a pause on another page starts at the page's first paragraph (${r.startedAt}, top ${r.top})`);
 await page.evaluate(() => window.distillAudio.player.pause());
 
 check(problems.length === 0, `no page errors${problems.length ? ': ' + problems.join('; ') : ''}`);

@@ -25,7 +25,9 @@ const openReader = async (slug) => {
 };
 const accent = () => page.locator('#listen-button').evaluate((el) => el.classList.contains('is-listening'));
 const P = (fn, arg) => page.evaluate(fn, arg);
-const highlighted = () => page.locator('#continuous-reader-content .listen-current').count();
+// Older recordings highlight the paragraph; recordings with sentence timings, the sentence.
+const anyHighlight = () => document.querySelector('#continuous-reader-content .listen-current')
+  || (window.CSS?.highlights?.get('listen-sentence')?.size > 0);
 
 await openReader(FIRST);
 check(!await accent(), 'idle: the headphones are plain');
@@ -35,8 +37,8 @@ await page.waitForFunction(() => window.distillAudio.player.audio?.currentTime >
 check(await P(() => window.distillAudio.player.source.book.slug) === FIRST, 'idle: the headphones start this book');
 check(await accent(), 'playing: the headphones turn accent');
 check(await page.locator('#player-mini').isHidden() && await page.locator('#player-full').isHidden(), 'playing: still no player on the reader page');
-await page.waitForFunction(() => document.querySelector('#continuous-reader-content .listen-current'), null, { timeout: 8000 }).catch(() => {});
-check(await highlighted() > 0, 'the spoken sentence is highlighted when book and page match');
+await page.waitForFunction(anyHighlight, null, { timeout: 8000 }).catch(() => {});
+check(await page.evaluate(anyHighlight), 'the spoken sentence is highlighted when book and page match');
 
 await page.locator('#listen-button').click();
 check(await page.locator('#player-full').isVisible(), 'audio in this book: the headphones open the full player');
@@ -47,7 +49,7 @@ await page.keyboard.press('ArrowRight');
 await page.waitForTimeout(300);
 await page.keyboard.press('ArrowRight');
 await page.waitForTimeout(400);
-check(await highlighted() === 0, 'turned away: the highlight stays behind');
+check(!await page.evaluate(anyHighlight), 'turned away: the highlight stays behind');
 const away = await P(() => window.distillAudio.link.reader.pagination.currentPage);
 await page.waitForTimeout(1500);
 check(await P(() => window.distillAudio.link.following) === false, 'turned away: following stops');
@@ -67,7 +69,7 @@ await page.waitForSelector('#listen-button', { state: 'visible', timeout: 15000 
 await page.waitForTimeout(400);
 check(!await P(() => window.distillAudio.player.audio.paused), 'another book: audio keeps playing');
 check(await accent(), 'another book: the headphones are accent');
-check(await highlighted() === 0, 'another book: no highlight');
+check(!await page.evaluate(anyHighlight), 'another book: no highlight');
 await page.locator('#listen-button').click();
 check(await page.locator('#player-full').isVisible(), 'another book: the headphones open the full player');
 check(await page.locator('#player-listen-here').isVisible(), 'another book: "Listen from here instead" is offered');
@@ -131,7 +133,7 @@ await page.locator('#player-stop').click();
 await page.waitForTimeout(300);
 check(await page.locator('#player-full').isHidden(), 'stop: the full player closes');
 check(await P(() => !window.distillAudio.player.active && window.distillAudio.player.audio.paused), 'stop: the audio ends');
-check(await highlighted() === 0, 'stop: the highlight is gone');
+check(!await page.evaluate(anyHighlight), 'stop: the highlight is gone');
 check(!await accent(), 'stop: the headphones are plain again');
 check(await P(() => window.distillAudio.link.reader.pagination.currentPage) === pageBeforeStop, 'stop: the page stays where it was');
 await page.waitForTimeout(1200);
@@ -144,7 +146,7 @@ await page.waitForTimeout(200);
 await page.locator('#listen-button').click();
 await page.locator('#player-stop').click();
 await page.waitForTimeout(300);
-check(await P(() => !window.distillAudio.player.active) && await highlighted() === 0, 'stop: also works while paused');
+check(await P(() => !window.distillAudio.player.active) && !await page.evaluate(anyHighlight), 'stop: also works while paused');
 
 check(problems.length === 0, `no page errors${problems.length ? `: ${problems.join(' | ')}` : ''}`);
 await browser.close();

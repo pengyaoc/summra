@@ -6,7 +6,7 @@
 // A page turn by the reader stops following until the reader is back on the spoken page.
 import { unitAt } from './audio_player.js';
 import { RecordedBookSource } from './audio_sources.js';
-import { sentenceAt, locateSentences } from './sentence_follow.js';
+import { sentenceAt, locateSentences, readingPoint, sentenceForPage } from './sentence_follow.js';
 
 export { unitAt };
 
@@ -39,7 +39,7 @@ function readingOrder(manifest, mode, tracks) {
 // Start `source` from a reading marker: the saved second if the reader is still on the
 // paragraph the audio stopped in, otherwise the start of the paragraph being read.
 // Must be called inside the tap, so nothing here waits on the network.
-export function listenFrom(player, source, marker, manifest, mode) {
+export function listenFrom(player, source, marker, manifest, mode, startMs = null) {
     const { tracks, place } = source;
     const saved = place.saved();
     const chapterId = Number(String(marker?.paragraph_id || '').split('.')[0]) || tracks[0].id;
@@ -57,7 +57,7 @@ export function listenFrom(player, source, marker, manifest, mode) {
         && saved.paragraph_id === nearestUnit(timings, marker.paragraph_id)?.paragraph_id) {
         ms = saved.ms;  // still on the paragraph the audio was paused in
     } else {
-        ms = marker ? nearestUnit(timings, marker.paragraph_id).start_ms : 0;
+        ms = startMs ?? (marker ? nearestUnit(timings, marker.paragraph_id).start_ms : 0);
     }
     if (player.source !== source) { player.saveAll(); player.setSource(source); }
     player.startedAt = unitAt(timings, ms).paragraph_id;
@@ -171,7 +171,7 @@ export class ReaderAudioLink {
         if (this.detached) return;
         this.place.bindReader(this.reader);
         this.wrapPaging();
-        const unsubscribe = this.player.subscribe(what => this.onPlayer(what));
+        const unsubscribe = this.player.subscribe((what, detail) => this.onPlayer(what, detail));
         this.restore.push(unsubscribe);
         this.ui.setPageContext({
             bookId: this.book.id,
@@ -267,8 +267,8 @@ export class ReaderAudioLink {
         return layout;
     }
 
-    // The sentence being said (recordings with sentence timings): the page where it
-    // starts and its place in the unit's text. Null for older recordings, or when the
+    // The sentence being said (recordings with sentence timings): the page the voice
+    // has reached in it and its place in the unit's text. Null for older recordings, or when the
     // page text does not hold the recorded sentences.
     spokenSentence() {
         const position = this.player.position();
@@ -279,8 +279,9 @@ export class ReaderAudioLink {
         const ranges = layout && locateSentences(layout.text, timing.sentences);
         if (!ranges) return null;
         const [from, to] = ranges[index];
-        const start = layout.pages.find(page => from < page.start + page.length) || layout.pages[layout.pages.length - 1];
-        return { paragraph_id: timing.paragraph_id, page: start.index, from, to, layout };
+        const at = readingPoint(timing.sentences[index], ranges[index], position.ms);
+        const reading = layout.pages.find(page => at < page.start + page.length) || layout.pages[layout.pages.length - 1];
+        return { paragraph_id: timing.paragraph_id, page: reading.index, from, to, layout };
     }
 
     // A DOM Range over the part of the sentence on the page on screen.
@@ -310,9 +311,10 @@ export class ReaderAudioLink {
         return range;
     }
 
-    onPlayer(what) {
+    onPlayer(what, detail) {
         if (what === 'state') this.renderButton();
-        if (what === 'track') { if (this.matches) this.setFollowing(true); this.renderButton(); }
+        // A track started from the player follows again; Play after a pause leaves the page alone.
+        if (what === 'track') { if (this.matches && !detail?.resumed) this.setFollowing(true); this.renderButton(); }
         if (what === 'time' || what === 'track') { if (!this.navigating) this.follow(); }
         if (what !== 'error') this.highlight();
     }
@@ -339,7 +341,35 @@ export class ReaderAudioLink {
     listenFromReadingPosition() {
         this.setFollowing(true);
         const state = this.reader.continuousReader;
-        return listenFrom(this.player, this.source, state?.currentMarker, state?.manifest, this.mode);
+        const marker = this.resumeMarker(state?.currentMarker);
+        return listenFrom(this.player, this.source, marker, state?.manifest, this.mode, this.pageStartMs(marker));
+    }
+
+    // With sentence timings, a page whose paragraph runs on from the page before starts
+    // at the first sentence on it, not at the paragraph's start on the page before.
+    pageStartMs(marker) {
+        const id = marker?.paragraph_id;
+        const track = this.source.tracks.find(item => item.id === Number(String(id || '').split('.')[0]));
+        const timing = track?.timings?.find(item => item.paragraph_id === id);
+        if (!timing?.sentences?.length) return null;
+        const layout = this.unitLayout(id);
+        const ranges = layout && locateSentences(layout.text, timing.sentences);
+        const shown = layout?.pages.find(page => page.index === this.reader.pagination.currentPage);
+        if (!ranges || !shown || shown.start === 0) return null;
+        const index = sentenceForPage(ranges, shown.start, shown.start + shown.length);
+        return index >= 0 ? timing.sentences[index][0] : null;
+    }
+
+    // The reading position is the page's first paragraph. When the audio was paused
+    // further down the page on screen, Listen resumes there instead of starting over.
+    resumeMarker(marker) {
+        const saved = this.place.saved();
+        const { pagination } = this.reader;
+        const shown = pagination?.pages?.[pagination.currentPage];
+        if (saved?.paragraph_id && shown?.includes(`data-reader-anchor="${saved.paragraph_id}"`)) {
+            return { ...marker, paragraph_id: saved.paragraph_id };
+        }
+        return marker;
     }
 
     clearHighlight() {
