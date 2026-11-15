@@ -2,6 +2,14 @@
 
 > Entries dated before 2026-10-01 moved to [`docs/archive/WORK_LOG-2025-2026.md`](docs/archive/WORK_LOG-2025-2026.md) on 2026-11-11.
 
+## 2026-11-14: Published *The Undercover Economist* (Tim Harford) to Distill
+
+- Status: live at `/distill/books/undercover-economist` (book 81), with audio.
+- Source: the owner's MOBI, converted with Calibre; text is the Oxford University Press 2006 US edition (ISBN 9780195189773). The embedded cover is the later UK revised edition's; `sources` says so.
+- Book-summary skill: 11 chapters (Introduction + 10, no Parts) read by 5 parallel agents; a fresh review agent found 3 must-fix errors (a figure attached to the wrong chapter, a wrong year in a caption, a misattributed driver) and 4 dropped qualifications, all fixed. Scorecard: gate pass, D1 5, D2 5, D3 5, D4 5, D5 4, D7 5; D6 1 (6 of the book's own figures in 5 chapters; online sourcing skipped by default). Lessons added to `~/.claude/skills/book-summary/SKILL.md` (hedged causal claims, one spelling convention, map images by chapter marker, place images inline).
+- Audio: first book recorded with sentence timings (13 chapters, 811 sentences, all aligned with the audio's pauses). Deployed after `deploy_code` (`016348d`).
+- Verified on the VM: anonymous 401, owner book page 200, audio API lists 13 chapters with sentences, owner audio `audio/mp4`, anonymous audio 401, images 200. Local content DB backed up first to `data/backups/`.
+
 ## 2026-11-14: Listen follows the spoken sentence (new recordings)
 
 - Status: done locally, not committed. Not deployed. Existing audio is not re-recorded: the owner chose sentence following for future recordings only.
