@@ -137,6 +137,14 @@ Exit code is non-zero on any non-200, console error, or failed first-party reque
 
 The 14 Plainly e2e scripts to run after any change under `shared/` or `plainly/`: `smoke`, `kindle_mode`, `reader_progress`, `reader_themes`, `reader_last_line_visible`, `reader_opens_at_chapter`, `reader_segments_fast_open`, `reader_illustrations`, `reader_font_figtree`, `reader_nav_mouse`, `sxs_row_split`, `text_size_adjust`, `redesign_home`, `redesign_reader` (each `node <name>.mjs` against your Plainly server's `BASE_URL`).
 
+## Reader content: tables and scrolling
+
+**Tables must split into pages. Nothing in the reader view may scroll.** The reader turns pages by swipe, tap and keys; a nested scroll box (`overflow: auto` / `scroll`, a fixed `max-height` with scrolling, a sticky header inside a scroller) takes the swipe on mobile web and traps the reader on that page.
+- Add a table to reader content only as a structured `table` block (header + rows of plain cell text; `presentation: "grid"` for a research grid). Never raw HTML, an image of a table, or one cell holding a whole table.
+- The paginator splits a table between its body rows and repeats the header row on each continuation page (`splitTableToFit` in `shared/static/js/pagination.js`). A single row taller than a page cannot split, so keep cells short.
+- Wide tables wrap their cells to the page width. Never add a horizontal scroller.
+- Never add `overflow: auto/scroll` to anything inside the reader page, and never exempt an element from page-turn gestures. `tests/e2e/distill_tables.mjs` (375×667, NVIDIA research report) guards this.
+
 ## Parallel Sessions (Git Worktrees)
 
 Run multiple Claude sessions on this repo by giving each its own git worktree. **Never share a working directory** — sessions will silently overwrite each other's edits.

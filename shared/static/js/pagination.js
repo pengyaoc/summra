@@ -79,7 +79,6 @@ export const paginationMixin = {
         // Handle wheel events for scroll-to-turn-page
         const handleWheel = (e) => {
             if (this.continuousPanelOpen?.()) return;
-            if (e.target.closest?.('.reader-grid')) return;
             const chapterSection = document.getElementById('chapter-detail-section');
             if ((!chapterSection || chapterSection.classList.contains('hidden')) && !this.continuousReader?.active) {
                 return;
@@ -388,11 +387,6 @@ export const paginationMixin = {
                 // a mode switch) in the previous chapter.
                 if (pageBlocks.length > 0 && block.matches?.('h2.reader-chapter-heading')) break;
                 const clone = block.cloneNode(true);
-                if (block.matches?.('table.reader-grid')) {
-                    // Bound the scrollable grid to the actual page, including
-                    // short landscape viewports and enlarged reader fonts.
-                    block.style.maxHeight = clone.style.maxHeight = `${Math.max(1, this.pagination.containerHeight - 40)}px`;
-                }
                 pageDiv.appendChild(clone);
 
                 // Check for overflow using native scrollHeight (pixel-perfect!)
@@ -419,6 +413,19 @@ export const paginationMixin = {
                             blockIndex++;
                         }
                         break;
+                    }
+
+                    // A table splits between its rows, also to fill the rest
+                    // of a partly used page. It is never a scroll box.
+                    if (block.tagName === 'TABLE') {
+                        const splitResult = this.splitTableToFit(block, pageDiv, this.pagination.containerHeight);
+                        if (splitResult.firstPart) {
+                            pageDiv.appendChild(splitResult.firstPart);
+                            pageBlocks.push(splitResult.firstPart.outerHTML);
+                            blocks.splice(blockIndex + 1, 0, splitResult.remainder);
+                            blockIndex++;
+                            break;
+                        }
                     }
 
                     // Try to split if it's a paragraph (regardless of page being empty or not)
@@ -602,6 +609,39 @@ export const paginationMixin = {
      * page, a split leaving under three lines is refused.
      * Returns {firstRow, remainderRow} or {firstRow: null}.
      */
+    /**
+     * Split a table between its body rows: the rows that fit stay on this
+     * page, the rest continue on the next page under a repeated header row.
+     * The reader never shows a table as a scroll box, which on a touch
+     * screen takes the swipe meant to turn the page.
+     * Returns { firstPart, remainder }; firstPart is null when not even one
+     * row fits (the caller moves the table to the next page, or forces it
+     * onto an empty page).
+     */
+    splitTableToFit(table, pageDiv, pageHeight) {
+        const rows = Array.from(table.tBodies[0]?.rows || []);
+        const firstPart = table.cloneNode(true);
+        const body = firstPart.tBodies[0];
+        if (!body || rows.length < 2) return { firstPart: null, remainder: null };
+        body.replaceChildren();
+        pageDiv.appendChild(firstPart);
+        let fit = 0;
+        for (const row of rows) {
+            body.appendChild(row.cloneNode(true));
+            if (pageDiv.scrollHeight > pageHeight) {
+                body.lastChild.remove();
+                break;
+            }
+            fit++;
+        }
+        firstPart.remove();
+        if (fit === 0 || fit === rows.length) return { firstPart: null, remainder: null };
+        const remainder = table.cloneNode(true);
+        Array.from(remainder.tBodies[0].rows).slice(0, fit).forEach(row => row.remove());
+        remainder.classList.add('reader-table-continuation');
+        return { firstPart, remainder };
+    },
+
     splitSideBySideRowToFit(row, pageDiv, pageHeight, pageIsEmpty = true) {
         const members = this.readerConfig().modes.find(mode => mode.layout === 'side_by_side')?.members;
         const cellClasses = members?.length ? members.map(member => member.cell_class) : ['original', 'modern'];
@@ -853,7 +893,7 @@ export const paginationMixin = {
 
         wrapperElement.addEventListener('touchstart', (e) => {
             const selection = window.getSelection();
-            if (e.target.closest?.('.reader-grid') || e.touches.length !== 1 || this.pagination.isNavigating || (selection && !selection.isCollapsed)) {
+            if (e.touches.length !== 1 || this.pagination.isNavigating || (selection && !selection.isCollapsed)) {
                 drag = null;
                 return;
             }

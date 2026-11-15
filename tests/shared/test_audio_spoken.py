@@ -35,3 +35,36 @@ def test_checksum_changes_with_text():
     assert same == spoken_checksum(spoken_units(CHAPTER))
     edited = {**CHAPTER, 'blocks': [{'type': 'p', 'text': 'Hello world!'}] + CHAPTER['blocks'][1:]}
     assert spoken_checksum(spoken_units(edited)) != same
+
+
+# Sentences: what the reader highlights while a new recording plays.
+from shared.audio.spoken import split_sentences  # noqa: E402
+
+
+def test_split_sentences_english():
+    assert split_sentences('One thing. Two things! Three? Four') == ['One thing.', 'Two things!', 'Three?', 'Four']
+
+
+def test_split_sentences_keeps_abbreviations_initials_and_decimals():
+    text = 'Mr. Smith met Dr. Jones in the U.S. last year, e.g. in May. It cost 3.5 dollars. J. K. Rowling agreed.'
+    assert split_sentences(text) == ['Mr. Smith met Dr. Jones in the U.S. last year, e.g. in May.',
+                                     'It cost 3.5 dollars.', 'J. K. Rowling agreed.']
+
+
+def test_split_sentences_keeps_closing_quotes_and_brackets():
+    assert split_sentences('He said, “Stop.” Then he left. (It was late.) Done.') == [
+        'He said, “Stop.”', 'Then he left.', '(It was late.)', 'Done.']
+
+
+def test_split_sentences_lowercase_after_period_is_not_a_new_sentence():
+    assert split_sentences('See p. 5 and fig. three for more.') == ['See p. 5 and fig. three for more.']
+
+
+def test_split_sentences_chinese():
+    assert split_sentences('读书很好。运动也好！为什么？“对。”最后') == ['读书很好。', '运动也好！', '为什么？', '“对。”', '最后']
+
+
+def test_split_sentences_empty_and_whitespace():
+    assert split_sentences('') == []
+    assert split_sentences('   \n ') == []
+    assert split_sentences('  Only one  ') == ['Only one']

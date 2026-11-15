@@ -67,7 +67,8 @@ def test_render_chapter_uses_fake_engine(tmp_path, fake_ffmpeg):
     cmd = fake_ffmpeg[0]
     assert cmd[cmd.index('-c:a') + 1] == 'libopus' and cmd[cmd.index('-b:a') + 1] == '24k'
     assert cmd[cmd.index('-application') + 1] == 'audio'
-    assert timings == compute_timings([('5.0', [50, 160]), ('5.1', [70]), ('5.3', [30, 30])])
+    units = [{k: v for k, v in t.items() if k != 'sentences'} for t in timings]  # sentences: tested below
+    assert units == compute_timings([('5.0', [50, 160]), ('5.1', [70]), ('5.3', [30, 30])])
     assert duration_ms == timings[-1]['end_ms']
     assert checksum == spoken_checksum(spoken_units(CHAPTER))
 
@@ -121,3 +122,44 @@ def test_encode_opus_real_ffmpeg_makes_smaller_mp4(tmp_path):
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(source), '-c:a', 'aac', '-b:a', '32k', str(m4a)], check=True)
     opus = encode_opus(m4a.read_bytes(), tmp_path / 'work')
     assert opus[4:8] == b'ftyp' and b'Opus' in opus
+
+
+def test_render_chapter_records_each_sentence_on_its_own(tmp_path, fake_ffmpeg):
+    chapter = {'id': 6, 'title': 'Title. Two', 'blocks': [
+        {'type': 'p', 'text': 'One two. Three four five!'},
+        {'type': 'ol', 'items': ['Item one. Item two.', 'Last']},
+    ]}
+    texts = []
+
+    class Recording(ToneEngine):
+        def render(self, text, out_wav):
+            texts.append(text)
+            return super().render(text, out_wav)
+
+    _, timings, duration_ms, _ = render_chapter(spoken_units(chapter), Recording(), tmp_path)
+    # The title is said whole; every other part sentence by sentence.
+    assert texts == ['Title. Two', 'One two.', 'Three four five!', 'Item one.', 'Item two.', 'Last']
+    gap = assemble.SENTENCE_GAP_MS
+    title, first, second = 100, 80, 160
+    p_start = title + assemble.UNIT_GAP_MS
+    assert timings[0]['sentences'] == [
+        [p_start, p_start + first, 'Onetwo.', 7],
+        [p_start + first + gap, p_start + first + gap + second, 'Threefourfive!', 14],
+    ]
+    assert timings[0]['end_ms'] == p_start + first + gap + second
+    l_start = timings[0]['end_ms'] + assemble.UNIT_GAP_MS
+    after_item = l_start + 90 + gap + 90
+    assert timings[1]['sentences'] == [
+        [l_start, l_start + 90, 'Itemone.', 8],
+        [l_start + 90 + gap, after_item, 'Itemtwo.', 8],
+        [after_item + assemble.PART_GAP_MS, after_item + assemble.PART_GAP_MS + 40, 'Last', 4],
+    ]
+    assert timings[1]['end_ms'] == duration_ms
+
+
+def test_sentence_heads_are_cut_to_head_length(tmp_path, fake_ffmpeg):
+    chapter = {'id': 8, 'title': 'T', 'blocks': [{'type': 'p', 'text': 'A sentence that is much longer than the head.'}]}
+    _, timings, _, _ = render_chapter(spoken_units(chapter), ToneEngine(), tmp_path)
+    _, _, head, chars = timings[0]['sentences'][0]
+    assert head == 'Asentencethatism'[:assemble.SENTENCE_HEAD_CHARS] and ' ' not in head
+    assert chars == len('Asentencethatismuchlongerthanthehead.')

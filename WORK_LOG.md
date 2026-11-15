@@ -2,6 +2,29 @@
 
 > Entries dated before 2026-10-01 moved to [`docs/archive/WORK_LOG-2025-2026.md`](docs/archive/WORK_LOG-2025-2026.md) on 2026-11-11.
 
+## 2026-11-14: Listen follows the spoken sentence (new recordings)
+
+- Status: done locally, not committed. Not deployed. Existing audio is not re-recorded: the owner chose sentence following for future recordings only.
+- Problem: the reader highlighted and followed the whole paragraph, and a list counts as one paragraph, sometimes a whole page.
+- Recording (`shared/audio/assemble.py`): every part except the chapter title is now split by `split_sentences` (`shared/audio/spoken.py`; English abbreviations, initials and decimals kept, Chinese 。！？…) and said one sentence at a time, joined by `SENTENCE_GAP_MS` = 150 ms (with `say`'s own ~120 ms trailing silence this is close to its natural ~290 ms pause). Each unit timing gains `sentences: [[start_ms, end_ms, head, chars]]`. `spoken_units` and `spoken_checksum` are unchanged, so existing audio stays current.
+- Reader (`shared/static/js/sentence_follow.js`, `reader_audio_link.js`, `listen.css`): the sentence is found in the unit's page text by its head and length (skipping "1.", "•" and "Key points" that the page adds) and highlighted with the CSS Custom Highlight API (`::highlight(listen-sentence)`), with no DOM change. Following shows the page where the sentence starts. Older recordings, unmatched text and browsers without the API (Kindle) keep the paragraph highlight.
+- Tests first: pytest sentence splitting (6) and per-sentence recording (2), red before the code. `test_render_chapter_uses_fake_engine` now compares unit fields only, since timings carry `sentences`. New `tests/e2e/distill_listen_sentence.mjs` (WebKit, 375×667, sentence timings injected into a real book): 20 checks, red before the module existed.
+- Verified: pytest 1,396 passed. Distill e2e `distill_listen_sentence`, `distill_listen`, `reader_audio_stable`, `player_reader`, `player_ui`, `distill_in_place`, `listen_follow`, `distill` all passed. The 14 Plainly scripts and `plainly_player` exit 0 with no FAIL.
+- Real recording test (*The Undercover Economist*, book 81, `say`): 13 chapters, 1.5 h of audio in about 3 min per chapter batch, 811 sentences recorded. A decode check found every sentence start preceded by silence and followed by speech within 400 ms (0 misaligned). `distill_listen_sentence.mjs` passes on its recorded timings (`DISTILL_LISTEN_SLUG=undercover-economist`) and on injected timings for an older book. Not listened to by ear; Siri (Chinese) not yet recorded this way, and one Siri subprocess per sentence will make it slower.
+- Test changes: `distill_listen_sentence.mjs` uses a book's recorded sentence timings when it has them and picks a paragraph whose sentences start on two pages. `distill_listen.mjs` accepts the sentence highlight inside the spoken paragraph as well as the paragraph highlight.
+- Known, not changed: on *The Undercover Economist* `distill_listen.mjs` fails "resume continues at the saved second", because the pause lands in a short heading halfway down the first page and Listen after a reload starts at the top paragraph of the page (`listenFrom`, unchanged; same behavior before this work).
+- Both apps: the recorder (`shared/audio`), reader code (`shared/static/js`) and style (`shared/static/css/listen.css`) are shared; Plainly serves `shared/static` through `plainly/frontend/static/shared` and its player e2e passes.
+
+
+- Status: done locally, not committed.
+- Problem: on mobile web a tall grid table (NVIDIA equity research report, book 63) was a scroll box, and the reader's touch handler ignored swipes that started on it, so the reader could not turn past it.
+- Test first: new `tests/e2e/distill_tables.mjs` (375×667) on the 15-row risk table and the 10-column comps table. Before the fix: 8 FAIL (table scrollable, swipe did not turn the page, rows cut off below the page, table wider than the page).
+- Fix: `splitTableToFit` in `shared/static/js/pagination.js` splits any table page block between body rows, header repeated on each continuation page. Removed the grid `maxHeight` cap and the `.reader-grid` exemptions in the wheel and touch handlers. `reader.css`: `.reader-table` is no longer `display: block; overflow: auto`; cells wrap (`overflow-wrap: anywhere`); smaller type on phones, smaller still for 7+ column grids (`reader-grid-wide`, from `blocks.js`). Rebuilt `plainly/frontend/static/js/app.min.js`.
+- Guidance: `CLAUDE.md` and `AGENTS.md` gain "Reader content: tables and scrolling" (tables only as structured, splittable `table` blocks; no scrollable element in the reader view). `skills/distill-publish/SKILL.md` and the book-summary skill say the same; the publish check no longer asks to verify that a table scrolls.
+- Docs: `docs/shared/ERD.md` and `PRD.md` (new section, table rows); superseded notes on the 2026-11-02 sections of `docs/distill/ERD.md` and `PRD.md`.
+- Verified: `distill_tables.mjs` all passed; `distill.mjs` 101 ok, passed; the 14 Plainly scripts all exit 0 with no FAIL (plus `reader_nav_touch` 25 PASS); pytest `tests/shared/test_block_parity.py tests/shared/test_shared_ui.py tests/distill` 353 passed.
+- Plainly: its classifier never produces `table` blocks, so its reading is unchanged (the 14 scripts confirm). Not deployed.
+
 ## 2026-11-11: Root file cleanup and work log split
 
 - Status: done.

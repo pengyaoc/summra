@@ -1,18 +1,21 @@
-"""Render a chapter's spoken units and join them into one Opus file with unit timings.
+"""Render a chapter's spoken units and join them into one Opus file with unit and sentence timings.
 
 Units are rendered part by part and joined with fixed silences, so each unit's
 start and end are known exactly; no forced alignment is needed.
 """
+import re
 import subprocess
 import wave
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
 from shared.audio.engines import Engine
-from shared.audio.spoken import SpokenUnit, spoken_checksum
+from shared.audio.spoken import SpokenUnit, spoken_checksum, split_sentences
 
 UNIT_GAP_MS = 350
 PART_GAP_MS = 250
+SENTENCE_GAP_MS = 150  # with `say`'s own trailing silence, close to its natural pause
+SENTENCE_HEAD_CHARS = 16
 OPUS_BITRATE = '24k'  # approved by ear 2026-11-08; AAC 32 kbps sounded dull
 
 
@@ -36,47 +39,76 @@ def compute_timings(units: Sequence[Tuple[str, Sequence[float]]],
 
 
 def render_chapter(units: Sequence[SpokenUnit], engine: Engine, work_dir: Path) -> Tuple[bytes, List[dict], int, str]:
-    """Return (Opus bytes, timings, duration_ms, spoken checksum) for what a chapter says."""
+    """Return (Opus bytes, timings, duration_ms, spoken checksum) for what a chapter says.
+
+    The title is said whole. Every other part is said sentence by sentence, joined by
+    a short silence, so each unit's timing also lists its sentences:
+    `[start_ms, end_ms, head, chars]`: head is the sentence's first characters without
+    whitespace and chars its length without whitespace, for the reader to find it on the page.
+    """
     work_dir = Path(work_dir)
-    rendered = []  # per unit: list of PCM frame strings
+    rendered = []  # per unit, per part: [(PCM, text without whitespace, or None for the title)] per sentence
     rate = None
     for u, unit in enumerate(units):
-        frames = []
+        parts = []
         for p, text in enumerate(unit.parts):
-            result = engine.render(text, work_dir / f'u{u}_p{p}.wav')
-            with wave.open(str(result.wav), 'rb') as audio:
-                if audio.getnchannels() != 1 or audio.getsampwidth() != 2:
-                    raise ValueError('Expected mono 16-bit speech')
-                if rate is None:
-                    rate = audio.getframerate()
-                elif audio.getframerate() != rate:
-                    raise ValueError('Parts of one chapter came back at different sample rates')
-                frames.append(audio.readframes(audio.getnframes()))
-        rendered.append(frames)
+            title = u == 0 and p == 0
+            sentences = []
+            for s, sentence in enumerate([text] if title else split_sentences(text)):
+                result = engine.render(sentence, work_dir / f'u{u}_p{p}_s{s}.wav')
+                with wave.open(str(result.wav), 'rb') as audio:
+                    if audio.getnchannels() != 1 or audio.getsampwidth() != 2:
+                        raise ValueError('Expected mono 16-bit speech')
+                    if rate is None:
+                        rate = audio.getframerate()
+                    elif audio.getframerate() != rate:
+                        raise ValueError('Parts of one chapter came back at different sample rates')
+                    shown = None if title else re.sub(r'\s', '', sentence)
+                    sentences.append((audio.readframes(audio.getnframes()), shown))
+            parts.append(sentences)
+        rendered.append(parts)
 
-    unit_gap = b'\x00\x00' * int(rate * UNIT_GAP_MS / 1000)
-    part_gap = b'\x00\x00' * int(rate * PART_GAP_MS / 1000)
+    def silence(ms_long: float) -> bytes:
+        return b'\x00\x00' * int(rate * ms_long / 1000)
+
+    unit_gap, part_gap, sentence_gap = silence(UNIT_GAP_MS), silence(PART_GAP_MS), silence(SENTENCE_GAP_MS)
+
+    def ms(size: int) -> float:
+        return size / 2 * 1000 / rate
+
     pcm = bytearray()
-    for u, frames in enumerate(rendered):
+    spans = []  # per unit: [[start_ms, end_ms, head, chars]]
+    part_durations = []
+    for u, parts in enumerate(rendered):
         if u:
             pcm += unit_gap
-        for p, part in enumerate(frames):
+        spans.append([])
+        durations = []
+        for p, sentences in enumerate(parts):
             if p:
                 pcm += unit_gap if (u == 0 and p == 1) else part_gap
-            pcm += part
+            part_start = len(pcm)
+            for s, (frames, shown) in enumerate(sentences):
+                if s:
+                    pcm += sentence_gap
+                start = len(pcm)
+                pcm += frames
+                if shown is not None:
+                    spans[-1].append([round(ms(start)), round(ms(len(pcm))), shown[:SENTENCE_HEAD_CHARS], len(shown)])
+            durations.append(ms(len(pcm) - part_start))
+        part_durations.append(durations)
 
-    def ms(data: bytes) -> float:
-        return len(data) / 2 * 1000 / rate
-
-    timings = compute_timings([(unit.paragraph_id, [ms(f) for f in frames]) for unit, frames in zip(units, rendered)],
-                              unit_gap_ms=ms(unit_gap), part_gap_ms=ms(part_gap))
+    timings = compute_timings([(unit.paragraph_id, durations) for unit, durations in zip(units, part_durations)],
+                              unit_gap_ms=ms(len(unit_gap)), part_gap_ms=ms(len(part_gap)))
+    for timing, sentences in zip(timings, spans):
+        timing['sentences'] = sentences
     joined = work_dir / 'chapter.wav'
     with wave.open(str(joined), 'wb') as out:
         out.setnchannels(1)
         out.setsampwidth(2)
         out.setframerate(rate)
         out.writeframes(bytes(pcm))
-    return _to_opus(joined, work_dir / 'chapter.mp4'), timings, round(ms(bytes(pcm))), spoken_checksum(units)
+    return _to_opus(joined, work_dir / 'chapter.mp4'), timings, round(ms(len(pcm))), spoken_checksum(units)
 
 
 def _to_opus(source: Path, encoded: Path) -> bytes:

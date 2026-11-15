@@ -1,5 +1,11 @@
 # Shared platform — Product Requirements
 
+## 2026-11-14: Tables turn like pages
+
+A table in the web reader is part of the page, never a box that scrolls on its own. A table taller than the page continues on the next page, split between rows, with its header row repeated at the top of each continuation page. A wide table fits the page width (cells wrap; on a phone the type is smaller, smallest for tables of 7 or more columns). A swipe, tap, key or wheel that starts on a table turns the page like anywhere else.
+
+Acceptance: at 375×667, the NVIDIA report's risk and comps tables have no scrollable element, every row is reachable by turning pages, no row is cut off, the header repeats, and a swipe that starts on the table turns the page (`tests/e2e/distill_tables.mjs`).
+
 > Split out of `docs/PRD.md` on 2026-11-11. The reader, Kindle e-ink mode, sign-in and progress, audio player, media policy and repository layout that both apps use. Newest dated entries are at the top; the reference sections follow.
 
 ## 2026-11-07: Kindle back/forward viewport stability

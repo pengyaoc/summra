@@ -55,10 +55,15 @@ check(topAnchor && topAnchor.startsWith(`${first.chapter_id}.`), `listening star
 
 const second = first.timings[1];
 await page.evaluate((ms) => window.distillAudio.player.seekToMs(ms), second.start_ms + 100);
-await page.waitForFunction((pid) => document.querySelector(`#continuous-reader-content .listen-current[data-reader-anchor="${pid}"]`),
-  second.paragraph_id, { timeout: 10000 }).catch(() => {});
-check(await page.locator(`#continuous-reader-content .listen-current[data-reader-anchor="${second.paragraph_id}"]`).count() > 0,
-  'the spoken paragraph is highlighted');
+// Older recordings highlight the paragraph; recordings with sentence timings, a sentence inside it.
+const spokenHighlighted = (pid) => {
+  if (document.querySelector(`#continuous-reader-content .listen-current[data-reader-anchor="${pid}"]`)) return true;
+  const range = window.CSS?.highlights?.get('listen-sentence') && [...CSS.highlights.get('listen-sentence')][0];
+  const node = range?.startContainer;
+  return !!(node && (node.nodeType === 1 ? node : node.parentElement).closest(`[data-reader-anchor="${pid}"]`));
+};
+await page.waitForFunction(spokenHighlighted, second.paragraph_id, { timeout: 10000 }).catch(() => {});
+check(await page.evaluate(spokenHighlighted, second.paragraph_id), 'the spoken paragraph (or its spoken sentence) is highlighted');
 check(await page.evaluate(() => navigator.mediaSession?.metadata?.title) === first.title, 'lock-screen metadata names the chapter');
 check(await page.evaluate(() => window.distillAudio.link.following), 'starting audio does not count as paging away');
 await page.keyboard.press('ArrowRight');

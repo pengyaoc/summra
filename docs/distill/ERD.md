@@ -19,7 +19,9 @@ Table blocks may opt into `presentation: "grid"` (validated by the format loader
 Distill's web reader keeps these as semantic tables, explicitly includes them in
 pagination, and caps each scrolling grid to its measured page height. Wheel and
 touch gestures within a grid scroll its cells; page navigation remains outside
-the grid. Existing table blocks retain their paragraph-flow behavior. Kindle
+the grid. *(Superseded 2026-11-14: grids are no longer scroll boxes; the
+paginator splits them between rows, header repeated, and gestures on a grid
+turn the page. See `docs/shared/ERD.md`.)* Existing table blocks retain their paragraph-flow behavior. Kindle
 server rendering expands opted-in grids into splittable cell paragraphs with
 repeated row/column labels and the original block index, preventing narrow,
 tall tables from clipping without depending on modern browser APIs. No SQL
@@ -63,6 +65,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
   - `p`, `h` and `quote` blocks give one part each. `ul`, `ol` and `keypoints` give one part per item. `table` and `image` are skipped.
   - The chapter title is the first part of the first unit. A chapter with nothing spoken gets one unit, `<id>.0`, holding the title.
   - `spoken_checksum` hashes the units. A mismatch makes the audio stale.
+  - `split_sentences(text)` (2026-11-14): sentences of one part. Chinese 。！？… always end one; English .!? end one when a space and a capital, digit or opening mark follow, except after an abbreviation (`_ABBREVIATIONS`), an initial or `U.S.`-style letters. Closing quotes and brackets stay with the sentence.
 - **Engines** (`shared/audio/engines.py`):
   - `SayEngine`: `say -o`, system voice, 22,050 Hz. Output is byte-identical between runs.
   - `SiriEngine`: InkChinese's `pipeline/siri_tts.py`, run in InkChinese's venv (PyObjC) one unit per subprocess. Voice `zh-CN-D`, rate 1.0, 48 kHz.
@@ -74,6 +77,7 @@ Design: `docs/superpowers/specs/2026-11-07-distill-listen-design.md`. Plan: `doc
 - **Assembly** (`shared/audio/assemble.py`):
   - Each part is rendered and joined with silence: 350 ms between units and after the title, 250 ms between list items.
   - `compute_timings` gives each unit's start and end in ms from exact frame counts.
+  - Sentences (2026-11-14, new recordings only): the title is said whole; every other part is said one sentence at a time, joined by `SENTENCE_GAP_MS` (150 ms). Each unit timing gains `sentences: [[start_ms, end_ms, head, chars]]`: head is the sentence's first `SENTENCE_HEAD_CHARS` (16) characters and chars its length, both without whitespace. Audio recorded before has no `sentences` and stays current (the checksum is unchanged).
   - `say` records at 48 kHz (`--data-format=BEI16@48000`); the default 22 kHz cut everything above 11 kHz and sounded dull. Siri keeps its own rate.
   - The joined raw WAV is encoded once with ffmpeg to Opus 24 kbps (`-application audio`) in an MP4 container (about 12 MB per hour). That is the only file a new chapter keeps; no AAC. Chosen by ear on 2026-11-08 over AAC 32 kbps (dull) and Opus 16 kbps (8 kHz bandwidth). iPhones play Opus in MP4 from iOS 17.
   - Chapters rendered before 2026-11-08 are AAC-LC 32 kbps at 22 kHz. `encode_opus` converts that AAC to Opus 24 without re-rendering, and the AAC stays on the Mac.

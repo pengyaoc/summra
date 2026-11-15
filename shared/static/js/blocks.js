@@ -90,7 +90,9 @@ export function renderFlowBlocks(block, options = {}) {
         // Research documents retain their comparison grid. Other books keep
         // the existing paragraph flow and its page-turn behavior.
         if (block.presentation === 'grid') {
-            return [{...renderBlock(block, options), className: 'reader-table reader-grid'}];
+            // Many columns get smaller type on a phone (see reader.css).
+            const wide = (block.header?.length || block.rows?.[0]?.length || 0) >= 7 ? ' reader-grid-wide' : '';
+            return [{...renderBlock(block, options), className: `reader-table reader-grid${wide}`}];
         }
         const header = block.header || [];
         if (!block.rows?.length) {

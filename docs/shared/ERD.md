@@ -1,5 +1,25 @@
 # Shared platform — Engineering Reference
 
+## 2026-11-14: Listen highlights the spoken sentence
+
+For recordings whose unit timings carry `sentences` (see `docs/distill/ERD.md`, Assembly).
+
+- `shared/static/js/sentence_follow.js` (pure, imported by Node tests): `sentenceAt(unit, ms)` gives the index of the sentence said (a sentence keeps the silence after it), or -1. `locateSentences(text, sentences)` finds each sentence in order in the unit's shown text without whitespace, by head, and returns `[from, to)` ranges, or null if one is missing. Searching by head skips text the page adds, such as "1.", "•" and the Key points label.
+- `ReaderAudioLink.unitLayout(id)` joins the unit's text from every page in `pagination.pages` (parsed in an inert `<template>`, in the `highlightCell` column for side by side) and records where each page's part starts. It is cached per pages array and unit.
+- `spokenSentence()` gives the page where the sentence starts and its range. `sentenceRange()` turns the part of it on the page on screen into a DOM `Range`, and `highlight()` sets it as `CSS.highlights['listen-sentence']` (`::highlight(listen-sentence)` in `listen.css`). The DOM is not changed, so `pagination.pages` string checks still hold. `follow()` and `spokenOnScreen()` use the sentence's start page; without sentences they use the paragraph offset as before.
+- Fallback to the `.listen-current` paragraph: no `sentences` (older recordings), a sentence not found in the page text, or no `Highlight` in the browser (Kindle).
+- Test: `tests/e2e/distill_listen_sentence.mjs`.
+
+## 2026-11-14: Tables split across pages; no scroll box in the reader
+
+A grid table (`table.reader-grid`, Distill research documents) used to be a scroll box capped to the page height, and the wheel and touch handlers in `pagination.js` ignored gestures that started on it. On mobile web the table took the swipe, so the reader could not turn past it.
+
+- `calculatePages` treats any `TABLE` page block like a paragraph: when it overflows, `splitTableToFit(table, pageDiv, pageHeight)` adds body rows one by one to a clone in the measuring page until the next row would overflow. The rows that fit stay on this page; the remainder is a clone of the table with those rows removed and class `reader-table-continuation`, inserted as the next block. Both parts keep the `thead`, so the header row repeats on every page. Like a split paragraph, both parts keep the table's attributes, including `data-reader-anchor`. If not even one row fits, the table moves to the next page; a single row taller than an empty page is forced (and clipped) as before.
+- The `maxHeight` cap on grids and the `.reader-grid` exemptions in the wheel and `touchstart` handlers are removed. A swipe or wheel that starts on a table turns the page.
+- `reader.css`: `.reader-table` is a normal table (`width: 100%`), no `display: block`, `overflow`, `max-height`, sticky header or `overscroll-behavior`. Cells use `overflow-wrap: anywhere` so a wide table shrinks to the page width. Below 600px, tables use `.8em` type, and grids with 7 or more columns (`reader-grid-wide`, added by `renderFlowBlocks`) use `.68em`.
+- Rule (also in `CLAUDE.md` / `AGENTS.md`): reader content adds tables only as structured `table` blocks, and nothing inside the reader page may have `overflow: auto/scroll`.
+- Test: `tests/e2e/distill_tables.mjs` (375×667, the NVIDIA report's 15-row risk table and 10-column comps table) checks that no element in the reader page can scroll, a swipe that starts on the table turns the page, every row is reachable, no row is cut off, the header repeats, and the table fits the page width.
+
 > Split out of `docs/ERD.md` on 2026-11-11. The reader, Kindle e-ink mode, sign-in and progress, audio player, media policy and repository layout that both apps use. Newest dated entries are at the top; the reference sections follow.
 
 ## 2026-11-07: Native Kindle viewport stabilization
@@ -603,7 +623,7 @@ One frozen `ReaderConfig` per app, declared in `<app>/reader_config.py` (`PLAINL
 | `settings` | `ReaderSettings`, below. Defaults to `DEFAULT_SETTINGS`. |
 | `kindle` | `KindleOptions`, required when `features.kindle` is on. |
 | `api_base` | Prefix of the reader and progress APIs (`/api`). `platform.js` sets `this.apiBase = withBasePath(api_base)` and `reader_state.js` builds its URLs from it. |
-| `extra_page_blocks` | CSS selector list of extra elements pagination treats as page blocks (Distill: `table.reader-table, figure.reader-figure`). |
+| `extra_page_blocks` | CSS selector list of extra elements pagination treats as page blocks (Distill: `figure.reader-figure, table.reader-grid`). A table page block is split between rows by `splitTableToFit`. |
 | `hint_keys` | The one-time hints the app's `UserDatabase(valid_hints=...)` accepts. Distill passes `reader_swipe_mobile`, `reader_nav_desktop`. |
 | `inline` | `markdown` (marked when loaded, else regexes; Plainly) or `strict` (escape, then only `**bold**` and `*italic*`; Distill). |
 | `image_base` | Prefix put before an `image` block's `src` (Distill: `''`, so `images/x.jpg` resolves against `/books/<slug>/read`). |
@@ -655,7 +675,7 @@ The block types, one renderer per language: `shared/static/js/blocks.js` (web re
 | `quote` | `text` | `<blockquote class="reader-quote">` |
 | `ul`, `ol` | `items` | `<ul>` or `<ol class="reader-list">` of `<li>` |
 | `keypoints` | `items` | `<ul class="reader-keypoints">` (the "Key points" label comes from CSS `::before` in `distill.css`, since it is app copy) |
-| `table` | `header`?, `rows` | `<table class="reader-table">` with `thead` and `tbody`; cells are inline text |
+| `table` | `header`?, `rows` | `<table class="reader-table">` with `thead` and `tbody`; cells are inline text. Never a scroll box: as a page block it splits between rows, header repeated |
 | `image` | `src`, `caption`? | `<figure class="reader-figure"><img src="{image_base}{src}" alt="">` plus `figcaption` |
 
 Distill books use `p h ul ol quote keypoints table image` (format v1). `verse` and `li` exist for Plainly's classifier. Inline text is escaped first (spaces become `&nbsp;`) and then formatted per `inline`; `image_base` and `src` are attribute-escaped. A block's content never contains an element the paginator selects as a page block, except a list's own `<li>`. `block_text` (Python) is the text a block shows, used for word counts and quote recovery. The rendered DOM text must equal it, which a test checks for every type including CJK.

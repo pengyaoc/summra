@@ -21,7 +21,8 @@ order from the contents page. All prose, figures, tables and source URLs remain.
 
 Research tables retain their row/column grids in the web reader. Readers can
 scroll within wide or tall tables on desktop and phones without turning the
-page. Kindle presents each row as labeled cells with repeated row/column context,
+page. *(Superseded 2026-11-14: tables no longer scroll; a tall table splits
+across pages by rows with its header repeated. See `docs/shared/PRD.md`.)* Kindle presents each row as labeled cells with repeated row/column context,
 so every value remains readable across e-ink pages without tiny ten-column text
 or clipped rows. This also works in the server-rendered no-JavaScript view.
 Existing book table presentation is unchanged. Published and production-verified
@@ -146,6 +147,7 @@ Server-side summarization, file upload in the browser, multiple users beyond the
 - **Full player:** cover, chapter and book title, scrub bar with times, previous chapter, back 15 s, play/pause, forward 30 s, next chapter, speed, Chapters and Stop listening. A down arrow closes it. **Stop listening** ends the audio, removes the highlight and page following, saves your place and leaves the page where it is. **Listen from here instead** appears only when the book on screen is not the one playing; it saves the playing book's place and starts this one. Phone: full screen. Desktop: a panel along the right edge, with the reading column sliding left at the same width; below about 1,060 px the panel lies over the page.
 - **Mini player:** on non-reader pages only, with cover, chapter, book, time, pause and close. Tapping it opens the full player. Closing it stops the audio.
 - **Following the text:** only when the book and page on screen match the audio. Hands off, the spoken paragraph is highlighted and the page turns by itself as the audio moves on, including partway through a paragraph that runs onto the next page.
+  - **Sentence by sentence (2026-11-14):** chapters recorded from 2026-11-14 highlight just the sentence being said, list items included, and turn the page when the next sentence starts on it. A sentence that runs onto the next page is highlighted to the bottom of its first page. Chapters recorded earlier, and Kindle's browser, keep the paragraph highlight.
 - **Turning pages while listening:** turning away by hand leaves the highlight behind and never pulls you back. Paging back to the spoken page, or starting a chapter from the player, resumes following.
 - **Recording:** both apps record on the owner's Mac with the same command and voices, in English or Chinese. Plainly no longer uses Gemini for speech.
 - **Shared platform:** Plainly and Distill use the same player, highlight, page following and saved place. Plainly gets all of it as soon as a book has chapter recordings. Its summary speech already plays in this player.

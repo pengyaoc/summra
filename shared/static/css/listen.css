@@ -1,6 +1,8 @@
 /* Shared audio player. It floats over the page, so audio can never change where reader pages are cut. */
 :root { --player-panel: 380px; }
 #continuous-reader-content .listen-current { background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 3px; box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--accent) 9%, transparent); }
+/* The spoken sentence, for recordings with sentence timings (CSS Custom Highlight API). */
+::highlight(listen-sentence) { background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
 .reader-toolbar-btn.is-listening { color: var(--accent); border-color: var(--accent); }
 
 .player-mini[hidden], .player-full[hidden], .player-message[hidden], .player-chapter-list[hidden], .player-listen-here[hidden], .player-icon[hidden], .player-tools [hidden] { display: none; }

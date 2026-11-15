@@ -6,6 +6,7 @@
 // A page turn by the reader stops following until the reader is back on the spoken page.
 import { unitAt } from './audio_player.js';
 import { RecordedBookSource } from './audio_sources.js';
+import { sentenceAt, locateSentences } from './sentence_follow.js';
 
 export { unitAt };
 
@@ -232,9 +233,81 @@ export class ReaderAudioLink {
         const position = this.player.position();
         const { reader } = this;
         if (!position?.paragraph_id || !reader.pagination?.pages?.length) return false;
+        const sentence = this.spokenSentence();
+        if (sentence) return sentence.page === reader.pagination.currentPage;
         const page = reader.findContinuousPageForMarker({ paragraph_id: position.paragraph_id, offset: position.offset });
         return page === reader.pagination.currentPage
             && !!reader.pagination.pages[page]?.includes(`data-reader-anchor="${position.paragraph_id}"`);
+    }
+
+    // Where a unit's text is shown, in the column the audio reads.
+    unitRoots(container, paragraphId) {
+        return [...container.querySelectorAll(`[data-reader-anchor="${paragraphId}"]`)]
+            .map(anchor => (this.highlightCell && anchor.querySelector(`.side-by-side-cell.${this.highlightCell}`)) || anchor);
+    }
+
+    // A unit's shown text without whitespace, and where each page's part of it starts.
+    unitLayout(paragraphId) {
+        const pages = this.reader.pagination?.pages;
+        if (!pages?.length) return null;
+        const cached = this.layoutCache;
+        if (cached?.pages === pages && cached.count === pages.length && cached.id === paragraphId) return cached.layout;
+        const fragments = [];
+        let text = '';
+        pages.forEach((html, index) => {
+            if (!html.includes(`data-reader-anchor="${paragraphId}"`)) return;
+            const page = document.createElement('template');  // inert: images do not load
+            page.innerHTML = html;
+            const shown = this.unitRoots(page.content, paragraphId).map(root => root.textContent).join('').replace(/\s/g, '');
+            fragments.push({ index, start: text.length, length: shown.length });
+            text += shown;
+        });
+        const layout = fragments.length ? { text, pages: fragments } : null;
+        this.layoutCache = { pages, count: pages.length, id: paragraphId, layout };
+        return layout;
+    }
+
+    // The sentence being said (recordings with sentence timings): the page where it
+    // starts and its place in the unit's text. Null for older recordings, or when the
+    // page text does not hold the recorded sentences.
+    spokenSentence() {
+        const position = this.player.position();
+        const timing = position?.paragraph_id && this.player.timings[position.index];
+        const index = sentenceAt(timing, position?.ms);
+        if (index < 0) return null;
+        const layout = this.unitLayout(timing.paragraph_id);
+        const ranges = layout && locateSentences(layout.text, timing.sentences);
+        if (!ranges) return null;
+        const [from, to] = ranges[index];
+        const start = layout.pages.find(page => from < page.start + page.length) || layout.pages[layout.pages.length - 1];
+        return { paragraph_id: timing.paragraph_id, page: start.index, from, to, layout };
+    }
+
+    // A DOM Range over the part of the sentence on the page on screen.
+    sentenceRange(sentence) {
+        const { pagination } = this.reader;
+        const shown = sentence.layout.pages.find(page => page.index === pagination.currentPage);
+        const container = pagination.activeWrapper?.querySelector('.pagination-page-container');
+        if (!shown || !container || sentence.to <= shown.start || sentence.from >= shown.start + shown.length) return null;
+        const range = document.createRange();
+        let at = shown.start;
+        let started = false;
+        let last = null;
+        for (const root of this.unitRoots(container, sentence.paragraph_id)) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                for (let i = 0; i < node.data.length; i += 1) {
+                    if (/\s/.test(node.data[i])) continue;
+                    if (!started && at >= sentence.from) { range.setStart(node, i); started = true; }
+                    at += 1;
+                    last = { node, end: i + 1 };
+                    if (started && at >= sentence.to) { range.setEnd(node, i + 1); return range; }
+                }
+            }
+        }
+        if (!started) return null;
+        range.setEnd(last.node, last.end);  // the sentence continues on the next page
+        return range;
     }
 
     onPlayer(what) {
@@ -270,13 +343,21 @@ export class ReaderAudioLink {
     }
 
     clearHighlight() {
+        if (typeof CSS !== 'undefined' && CSS.highlights) CSS.highlights.delete('listen-sentence');
         for (const element of document.querySelectorAll('#continuous-reader-content .listen-current')) element.classList.remove('listen-current');
     }
 
     highlight() {
         const content = document.getElementById('continuous-reader-content');
         if (!content) return;
-        const unit = this.matches ? this.player.unit : null;
+        const highlights = typeof CSS !== 'undefined' && typeof Highlight !== 'undefined' ? CSS.highlights : null;
+        let unit = this.matches ? this.player.unit : null;
+        // Recordings with sentence timings highlight the sentence; others (and browsers
+        // without the CSS Custom Highlight API, such as Kindle's) the paragraph.
+        const sentence = unit && highlights ? this.spokenSentence() : null;
+        const range = sentence && this.sentenceRange(sentence);
+        if (range) highlights.set('listen-sentence', new Highlight(range)); else highlights?.delete('listen-sentence');
+        if (sentence) unit = null;
         for (const element of content.querySelectorAll('.listen-current')) {
             if (element.closest('[data-reader-anchor]')?.dataset.readerAnchor !== unit) element.classList.remove('listen-current');
         }
@@ -296,12 +377,15 @@ export class ReaderAudioLink {
         const marker = { paragraph_id: position.paragraph_id, offset: position.offset };
         this.navigating = true;
         try {
-            const page = reader.pagination?.pages?.length ? reader.findContinuousPageForMarker(marker) : -1;
+            // With sentence timings, show the page where the spoken sentence starts.
+            const sentence = this.spokenSentence();
+            const page = sentence ? sentence.page
+                : (reader.pagination?.pages?.length ? reader.findContinuousPageForMarker(marker) : -1);
             const loaded = page >= 0 && reader.pagination.pages[page]?.includes(`data-reader-anchor="${position.paragraph_id}"`);
             if (loaded) {
                 const { currentPage } = reader.pagination;
                 // A paragraph continued from the page before is already on screen: never turn back for it.
-                const stillOnScreen = page < currentPage && reader.pagination.pages[currentPage]?.includes(`data-reader-anchor="${position.paragraph_id}"`);
+                const stillOnScreen = !sentence && page < currentPage && reader.pagination.pages[currentPage]?.includes(`data-reader-anchor="${position.paragraph_id}"`);
                 if (page !== currentPage && !stillOnScreen) {
                     reader.continuousReader.forwardTurn = page === reader.pagination.currentPage + 1;
                     reader.pagination.currentPage = page;
